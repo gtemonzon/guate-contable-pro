@@ -113,6 +113,14 @@ export function EnterpriseDialog({
 
   const onSubmit = async (values: FormValues) => {
     try {
+      // Verify user is authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log("Current user:", user?.id, user?.email);
+      
+      if (authError || !user) {
+        throw new Error("Usuario no autenticado");
+      }
+
       const dataToSave: Database['public']['Tables']['tab_enterprises']['Insert'] = {
         nit: values.nit,
         business_name: values.business_name,
@@ -124,6 +132,8 @@ export function EnterpriseDialog({
         phone: values.phone || null,
         email: values.email || null,
       };
+
+      console.log("Attempting to insert enterprise:", dataToSave);
 
       if (enterprise) {
         const { error } = await supabase
