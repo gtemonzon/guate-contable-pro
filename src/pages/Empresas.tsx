@@ -60,6 +60,19 @@ const Empresas = () => {
     fetchEnterprises();
   };
 
+  // Auto-select first enterprise if none is selected
+  useEffect(() => {
+    const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!currentEnterpriseId && enterprises.length > 0) {
+      const firstEnterprise = enterprises[0];
+      localStorage.setItem("currentEnterpriseId", firstEnterprise.id.toString());
+      toast({
+        title: "Empresa seleccionada automáticamente",
+        description: `${firstEnterprise.business_name} está ahora activa`,
+      });
+    }
+  }, [enterprises, toast]);
+
   const filteredEnterprises = enterprises.filter((enterprise) =>
     enterprise.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     enterprise.nit.includes(searchQuery) ||

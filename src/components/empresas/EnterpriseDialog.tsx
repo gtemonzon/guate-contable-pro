@@ -113,22 +113,10 @@ export function EnterpriseDialog({
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Verify session and user
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log("=== AUTH DEBUG ===");
-      console.log("Session:", session);
-      console.log("User:", session?.user);
-      console.log("Access token exists:", !!session?.access_token);
-      console.log("User ID:", session?.user?.id);
-      console.log("User email:", session?.user?.email);
-      console.log("=================");
+      // Verify user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
       
-      if (sessionError) {
-        console.error("Session error:", sessionError);
-        throw new Error("Error de sesión: " + sessionError.message);
-      }
-      
-      if (!session || !session.user) {
+      if (!user) {
         throw new Error("Usuario no autenticado. Por favor, inicia sesión nuevamente.");
       }
 
@@ -143,8 +131,6 @@ export function EnterpriseDialog({
         phone: values.phone || null,
         email: values.email || null,
       };
-
-      console.log("Attempting to insert enterprise:", dataToSave);
 
       if (enterprise) {
         const { error } = await supabase
@@ -168,11 +154,6 @@ export function EnterpriseDialog({
 
         if (enterpriseError) throw enterpriseError;
 
-        // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) throw new Error("Usuario no autenticado");
-
         // Link user to enterprise as admin
         const { error: linkError } = await supabase
           .from("tab_user_enterprises")
@@ -184,9 +165,12 @@ export function EnterpriseDialog({
 
         if (linkError) throw linkError;
 
+        // Auto-select the new enterprise
+        localStorage.setItem("currentEnterpriseId", newEnterprise.id.toString());
+
         toast({
           title: "Empresa creada",
-          description: "La empresa se registró exitosamente",
+          description: "La empresa se registró exitosamente y está ahora seleccionada",
         });
       }
 

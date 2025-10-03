@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -19,8 +21,27 @@ const TAX_REGIME_LABELS: Record<string, string> = {
 };
 
 export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
+  const { toast } = useToast();
+  const [isSelected, setIsSelected] = useState(false);
+
+  useEffect(() => {
+    const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+    setIsSelected(currentEnterpriseId === enterprise.id.toString());
+  }, [enterprise.id]);
+
+  const handleSelectEnterprise = () => {
+    localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
+    setIsSelected(true);
+    toast({
+      title: "Empresa seleccionada",
+      description: `${enterprise.business_name} está ahora activa`,
+    });
+    // Trigger a storage event for other components to react
+    window.dispatchEvent(new Event("storage"));
+  };
+
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className={`hover:shadow-lg transition-shadow ${isSelected ? "ring-2 ring-primary" : ""}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -78,13 +99,30 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
         )}
 
         <div className="flex gap-2 pt-2">
+          {!isSelected ? (
+            <Button 
+              className="w-full"
+              onClick={handleSelectEnterprise}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Seleccionar
+            </Button>
+          ) : (
+            <Button 
+              variant="outline" 
+              className="w-full"
+              disabled
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Empresa Seleccionada
+            </Button>
+          )}
           <Button 
             variant="outline" 
-            className="w-full"
+            size="icon"
             onClick={() => onEdit(enterprise)}
           >
-            <Edit className="mr-2 h-4 w-4" />
-            Editar
+            <Edit className="h-4 w-4" />
           </Button>
         </div>
 
