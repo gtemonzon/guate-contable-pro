@@ -38,8 +38,26 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
-    const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
-    setIsSelected(currentEnterpriseId === enterprise.id.toString());
+    const checkSelection = () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      setIsSelected(currentEnterpriseId === enterprise.id.toString());
+    };
+
+    // Check on mount
+    checkSelection();
+
+    // Listen for enterprise selection changes
+    const handleEnterpriseChange = () => {
+      checkSelection();
+    };
+
+    window.addEventListener("storage", handleEnterpriseChange);
+    window.addEventListener("enterpriseChanged", handleEnterpriseChange);
+
+    return () => {
+      window.removeEventListener("storage", handleEnterpriseChange);
+      window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
+    };
   }, [enterprise.id]);
 
   const handleSelectEnterprise = () => {
@@ -49,8 +67,9 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       title: "Empresa seleccionada",
       description: `${enterprise.business_name} está ahora activa`,
     });
-    // Trigger a storage event for other components to react
+    // Trigger events for other components to react
     window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new CustomEvent("enterpriseChanged"));
   };
 
   const handleDeleteEnterprise = async () => {
