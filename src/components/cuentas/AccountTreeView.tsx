@@ -16,6 +16,7 @@ interface TreeNodeProps {
   children: Account[];
   onEdit: (account: Account) => void;
   level: number;
+  allAccounts: Account[];
 }
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -36,7 +37,7 @@ const ACCOUNT_TYPE_COLORS: Record<string, string> = {
   costo: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
 };
 
-function TreeNode({ account, children, onEdit, level }: TreeNodeProps) {
+function TreeNode({ account, children, onEdit, level, allAccounts }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 3);
   const hasChildren = children.length > 0;
   const paddingLeft = `${level * 1.5}rem`;
@@ -103,9 +104,10 @@ function TreeNode({ account, children, onEdit, level }: TreeNodeProps) {
             <TreeNode
               key={child.id}
               account={child}
-              children={[]}
+              children={allAccounts.filter(acc => acc.parent_account_id === child.id)}
               onEdit={onEdit}
               level={level + 1}
+              allAccounts={allAccounts}
             />
           ))}
         </div>
@@ -121,19 +123,24 @@ export function AccountTreeView({ accounts, onEdit }: AccountTreeViewProps) {
       .sort((a, b) => a.account_code.localeCompare(b.account_code));
   };
 
-  const rootAccounts = buildTree(null);
+  const renderTree = (parentId: number | null, level: number = 0): JSX.Element[] => {
+    const accountsAtLevel = buildTree(parentId);
+    
+    return accountsAtLevel.map((account) => (
+      <TreeNode
+        key={account.id}
+        account={account}
+        children={buildTree(account.id)}
+        onEdit={onEdit}
+        level={level}
+        allAccounts={accounts}
+      />
+    ));
+  };
 
   return (
     <div className="space-y-1">
-      {rootAccounts.map((account) => (
-        <TreeNode
-          key={account.id}
-          account={account}
-          children={buildTree(account.id)}
-          onEdit={onEdit}
-          level={0}
-        />
-      ))}
+      {renderTree(null, 0)}
     </div>
   );
 }

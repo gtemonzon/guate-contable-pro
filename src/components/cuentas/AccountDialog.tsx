@@ -172,6 +172,20 @@ export function AccountDialog({
       return;
     }
 
+    // Validar código duplicado
+    const existingAccount = accounts.find(
+      acc => acc.account_code === values.account_code && acc.id !== account?.id
+    );
+    
+    if (existingAccount) {
+      toast({
+        variant: "destructive",
+        title: "Código Duplicado",
+        description: "Este código de cuenta ya existe para esta empresa, no se puede duplicar",
+      });
+      return;
+    }
+
     try {
       const dataToSave: Database['public']['Tables']['tab_accounts']['Insert'] = {
         enterprise_id: enterpriseId,
