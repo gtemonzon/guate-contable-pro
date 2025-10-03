@@ -81,6 +81,30 @@ export function AccountDialog({
     },
   });
 
+  // Calcular el siguiente código sugerido
+  const getNextSuggestedCode = () => {
+    if (accounts.length === 0) return "1";
+    
+    const sortedCodes = accounts
+      .map(acc => acc.account_code)
+      .sort((a, b) => {
+        const aParts = a.split('.').map(Number);
+        const bParts = b.split('.').map(Number);
+        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+          const aVal = aParts[i] || 0;
+          const bVal = bParts[i] || 0;
+          if (aVal !== bVal) return aVal - bVal;
+        }
+        return 0;
+      });
+    
+    const lastCode = sortedCodes[sortedCodes.length - 1];
+    const parts = lastCode.split('.');
+    const lastPart = parseInt(parts[parts.length - 1]) + 1;
+    parts[parts.length - 1] = lastPart.toString().padStart(parts[parts.length - 1].length, '0');
+    return parts.join('.');
+  };
+
   useEffect(() => {
     if (account) {
       form.reset({
@@ -95,19 +119,42 @@ export function AccountDialog({
         is_active: account.is_active ?? true,
       });
     } else {
+      const suggestedCode = getNextSuggestedCode();
       form.reset({
-        account_code: "",
+        account_code: suggestedCode,
         account_name: "",
         account_type: "activo",
         parent_account_id: null,
-        level: 1,
+        level: suggestedCode.split('.').length,
         is_detail_account: false,
         allows_movement: true,
         requires_cost_center: false,
         is_active: true,
       });
     }
-  }, [account, form]);
+  }, [account, form, accounts]);
+
+  // Calcular nivel y cuenta padre automáticamente basado en el código
+  const handleCodeChange = (code: string) => {
+    form.setValue('account_code', code);
+    
+    // Calcular nivel basado en la cantidad de puntos
+    const level = code.split('.').length;
+    form.setValue('level', level);
+    
+    // Buscar cuenta padre automáticamente
+    if (level > 1) {
+      const parentCode = code.split('.').slice(0, -1).join('.');
+      const parentAccount = accounts.find(acc => acc.account_code === parentCode);
+      if (parentAccount) {
+        form.setValue('parent_account_id', parentAccount.id);
+      } else {
+        form.setValue('parent_account_id', null);
+      }
+    } else {
+      form.setValue('parent_account_id', null);
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     if (!enterpriseId) {
@@ -197,7 +244,11 @@ export function AccountDialog({
                   <FormItem>
                     <FormLabel>Código</FormLabel>
                     <FormControl>
-                      <Input placeholder="1.1.1.01" {...field} />
+                      <Input 
+                        placeholder="1.1.1.01" 
+                        {...field}
+                        onChange={(e) => handleCodeChange(e.target.value)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -209,14 +260,13 @@ export function AccountDialog({
                 name="level"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nivel</FormLabel>
+                    <FormLabel>Nivel (automático)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        min="1"
-                        max="10"
                         {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        disabled
+                        className="bg-muted"
                       />
                     </FormControl>
                     <FormMessage />
@@ -269,32 +319,22 @@ export function AccountDialog({
               <FormField
                 control={form.control}
                 name="parent_account_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cuenta Padre</FormLabel>
-                    <Select
-                      onValueChange={(value) =>
-                        field.onChange(value === "null" ? null : parseInt(value))
-                      }
-                      value={field.value?.toString() || "null"}
-                    >
+                render={({ field }) => {
+                  const parentAccount = accounts.find(acc => acc.id === field.value);
+                  return (
+                    <FormItem>
+                      <FormLabel>Cuenta Padre (automático)</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sin cuenta padre" />
-                        </SelectTrigger>
+                        <Input
+                          value={parentAccount ? `${parentAccount.account_code} - ${parentAccount.account_name}` : "Sin cuenta padre"}
+                          disabled
+                          className="bg-muted"
+                        />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="null">Sin cuenta padre</SelectItem>
-                        {parentAccounts.map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id.toString()}>
-                            {acc.account_code} - {acc.account_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 
