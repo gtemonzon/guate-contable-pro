@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Empresas from "./pages/Empresas";
+import Cuentas from "./pages/Cuentas";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 
@@ -26,7 +27,7 @@ const App = () => (
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/empresas" element={<Empresas />} />
-            <Route path="/cuentas" element={<div>Catálogo de Cuentas (próximamente)</div>} />
+            <Route path="/cuentas" element={<Cuentas />} />
             <Route path="/periodos" element={<div>Períodos Contables (próximamente)</div>} />
             <Route path="/partidas" element={<div>Partidas (próximamente)</div>} />
             <Route path="/compras" element={<div>Libro de Compras (próximamente)</div>} />
