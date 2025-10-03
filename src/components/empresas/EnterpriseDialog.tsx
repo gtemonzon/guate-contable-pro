@@ -138,11 +138,30 @@ export function EnterpriseDialog({
           description: "Los datos se guardaron correctamente",
         });
       } else {
-        const { error } = await supabase
+        // Insert the enterprise and get the id
+        const { data: newEnterprise, error: enterpriseError } = await supabase
           .from("tab_enterprises")
-          .insert([dataToSave]);
+          .insert([dataToSave])
+          .select()
+          .single();
 
-        if (error) throw error;
+        if (enterpriseError) throw enterpriseError;
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) throw new Error("Usuario no autenticado");
+
+        // Link user to enterprise as admin
+        const { error: linkError } = await supabase
+          .from("tab_user_enterprises")
+          .insert([{
+            user_id: user.id,
+            enterprise_id: newEnterprise.id,
+            role: "admin_empresa"
+          }]);
+
+        if (linkError) throw linkError;
 
         toast({
           title: "Empresa creada",
