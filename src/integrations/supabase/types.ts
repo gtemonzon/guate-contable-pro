@@ -630,6 +630,7 @@ export type Database = {
       tab_journal_entry_details: {
         Row: {
           account_id: number | null
+          bank_reference: string | null
           cost_center: string | null
           credit_amount: number | null
           debit_amount: number | null
@@ -640,6 +641,7 @@ export type Database = {
         }
         Insert: {
           account_id?: number | null
+          bank_reference?: string | null
           cost_center?: string | null
           credit_amount?: number | null
           debit_amount?: number | null
@@ -650,6 +652,7 @@ export type Database = {
         }
         Update: {
           account_id?: number | null
+          bank_reference?: string | null
           cost_center?: string | null
           credit_amount?: number | null
           debit_amount?: number | null

@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Empresas from "./pages/Empresas";
 import Cuentas from "./pages/Cuentas";
 import PeriodosContables from "./pages/PeriodosContables";
+import Partidas from "./pages/Partidas";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 
@@ -30,7 +31,7 @@ const App = () => (
             <Route path="/empresas" element={<Empresas />} />
             <Route path="/cuentas" element={<Cuentas />} />
             <Route path="/periodos" element={<PeriodosContables />} />
-            <Route path="/partidas" element={<div>Partidas (próximamente)</div>} />
+            <Route path="/partidas" element={<Partidas />} />
             <Route path="/compras" element={<div>Libro de Compras (próximamente)</div>} />
             <Route path="/ventas" element={<div>Libro de Ventas (próximamente)</div>} />
             <Route path="/conciliacion" element={<div>Conciliación Bancaria (próximamente)</div>} />
