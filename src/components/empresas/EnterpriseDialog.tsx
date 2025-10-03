@@ -113,11 +113,28 @@ export function EnterpriseDialog({
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Verify user is authenticated
-      const { data: { user } } = await supabase.auth.getUser();
+      // Verify session is valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (!user) {
-        throw new Error("Usuario no autenticado. Por favor, inicia sesión nuevamente.");
+      if (sessionError || !session) {
+        toast({
+          variant: "destructive",
+          title: "Sesión expirada",
+          description: "Por favor, cierra sesión e inicia sesión nuevamente",
+        });
+        return;
+      }
+
+      // Get user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        toast({
+          variant: "destructive",
+          title: "Error de autenticación",
+          description: "No se pudo verificar el usuario. Por favor, inicia sesión nuevamente",
+        });
+        return;
       }
 
       const dataToSave: Database['public']['Tables']['tab_enterprises']['Insert'] = {
@@ -152,7 +169,16 @@ export function EnterpriseDialog({
           .select()
           .single();
 
-        if (enterpriseError) throw enterpriseError;
+        if (enterpriseError) {
+          console.error("Enterprise insert error:", enterpriseError);
+          console.error("Error details:", {
+            code: enterpriseError.code,
+            message: enterpriseError.message,
+            details: enterpriseError.details,
+            hint: enterpriseError.hint,
+          });
+          throw enterpriseError;
+        }
 
         // Link user to enterprise as admin
         const { error: linkError } = await supabase
