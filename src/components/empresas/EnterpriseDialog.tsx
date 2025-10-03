@@ -113,12 +113,23 @@ export function EnterpriseDialog({
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Verify user is authenticated
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      console.log("Current user:", user?.id, user?.email);
+      // Verify session and user
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log("=== AUTH DEBUG ===");
+      console.log("Session:", session);
+      console.log("User:", session?.user);
+      console.log("Access token exists:", !!session?.access_token);
+      console.log("User ID:", session?.user?.id);
+      console.log("User email:", session?.user?.email);
+      console.log("=================");
       
-      if (authError || !user) {
-        throw new Error("Usuario no autenticado");
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+        throw new Error("Error de sesión: " + sessionError.message);
+      }
+      
+      if (!session || !session.user) {
+        throw new Error("Usuario no autenticado. Por favor, inicia sesión nuevamente.");
       }
 
       const dataToSave: Database['public']['Tables']['tab_enterprises']['Insert'] = {
