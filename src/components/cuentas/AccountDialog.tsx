@@ -81,6 +81,24 @@ export function AccountDialog({
     },
   });
 
+  // Calcular nivel y cuenta padre automáticamente basado en el código
+  const calculateLevelAndParent = (code: string) => {
+    // Calcular nivel basado en la cantidad de puntos
+    const level = code.split('.').length;
+    
+    // Buscar cuenta padre automáticamente
+    let parentAccountId = null;
+    if (level > 1) {
+      const parentCode = code.split('.').slice(0, -1).join('.');
+      const parentAccount = accounts.find(acc => acc.account_code === parentCode);
+      if (parentAccount) {
+        parentAccountId = parentAccount.id;
+      }
+    }
+    
+    return { level, parentAccountId };
+  };
+
   // Calcular el siguiente código sugerido
   const getNextSuggestedCode = () => {
     if (accounts.length === 0) return "1";
@@ -120,40 +138,28 @@ export function AccountDialog({
       });
     } else {
       const suggestedCode = getNextSuggestedCode();
+      const { level, parentAccountId } = calculateLevelAndParent(suggestedCode);
+      
       form.reset({
         account_code: suggestedCode,
         account_name: "",
         account_type: "activo",
-        parent_account_id: null,
-        level: suggestedCode.split('.').length,
+        parent_account_id: parentAccountId,
+        level: level,
         is_detail_account: false,
         allows_movement: true,
         requires_cost_center: false,
         is_active: true,
       });
     }
-  }, [account, form, accounts]);
+  }, [account, accounts]);
 
-  // Calcular nivel y cuenta padre automáticamente basado en el código
+  // Manejar cambio de código
   const handleCodeChange = (code: string) => {
     form.setValue('account_code', code);
-    
-    // Calcular nivel basado en la cantidad de puntos
-    const level = code.split('.').length;
+    const { level, parentAccountId } = calculateLevelAndParent(code);
     form.setValue('level', level);
-    
-    // Buscar cuenta padre automáticamente
-    if (level > 1) {
-      const parentCode = code.split('.').slice(0, -1).join('.');
-      const parentAccount = accounts.find(acc => acc.account_code === parentCode);
-      if (parentAccount) {
-        form.setValue('parent_account_id', parentAccount.id);
-      } else {
-        form.setValue('parent_account_id', null);
-      }
-    } else {
-      form.setValue('parent_account_id', null);
-    }
+    form.setValue('parent_account_id', parentAccountId);
   };
 
   const onSubmit = async (values: FormValues) => {
