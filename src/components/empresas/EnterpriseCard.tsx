@@ -2,8 +2,19 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2 } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -11,6 +22,7 @@ type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 interface EnterpriseCardProps {
   enterprise: Enterprise;
   onEdit: (enterprise: Enterprise) => void;
+  onDelete?: () => void;
 }
 
 const TAX_REGIME_LABELS: Record<string, string> = {
@@ -20,9 +32,10 @@ const TAX_REGIME_LABELS: Record<string, string> = {
   exenta_ong: "Exenta ONG",
 };
 
-export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
+export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardProps) {
   const { toast } = useToast();
   const [isSelected, setIsSelected] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -38,6 +51,39 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
     });
     // Trigger a storage event for other components to react
     window.dispatchEvent(new Event("storage"));
+  };
+
+  const handleDeleteEnterprise = async () => {
+    try {
+      const { error } = await supabase
+        .from("tab_enterprises")
+        .delete()
+        .eq("id", enterprise.id);
+
+      if (error) throw error;
+
+      // If the deleted enterprise was selected, clear the selection
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (currentEnterpriseId === enterprise.id.toString()) {
+        localStorage.removeItem("currentEnterpriseId");
+        window.dispatchEvent(new Event("storage"));
+      }
+
+      toast({
+        title: "Empresa eliminada",
+        description: `${enterprise.business_name} ha sido eliminada exitosamente`,
+      });
+
+      onDelete?.();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al eliminar",
+        description: error.message,
+      });
+    } finally {
+      setShowDeleteDialog(false);
+    }
   };
 
   return (
@@ -101,7 +147,7 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
         <div className="flex gap-2 pt-2">
           {!isSelected ? (
             <Button 
-              className="w-full"
+              className="flex-1"
               onClick={handleSelectEnterprise}
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -110,7 +156,7 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
           ) : (
             <Button 
               variant="outline" 
-              className="w-full"
+              className="flex-1"
               disabled
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -124,6 +170,13 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
           >
             <Edit className="h-4 w-4" />
           </Button>
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="flex items-center justify-center">
@@ -132,6 +185,24 @@ export function EnterpriseCard({ enterprise, onEdit }: EnterpriseCardProps) {
           </Badge>
         </div>
       </CardContent>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar empresa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente la empresa{" "}
+              <strong>{enterprise.business_name}</strong> y todos sus datos asociados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEnterprise}>
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

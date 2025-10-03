@@ -24,22 +24,29 @@ const Cuentas = () => {
 
   useEffect(() => {
     fetchEnterprises();
+    
+    // Listen for enterprise changes
+    const handleStorageChange = () => {
+      fetchEnterprises();
+    };
+    
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   const fetchEnterprises = async () => {
     try {
-      const { data, error } = await supabase
-        .from('tab_enterprises')
-        .select('id, business_name')
-        .eq('is_active', true)
-        .limit(1)
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setSelectedEnterprise(data.id);
-        fetchAccounts(data.id);
+      // Get the selected enterprise from localStorage
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      
+      if (!currentEnterpriseId) {
+        setLoading(false);
+        return;
       }
+
+      const enterpriseId = parseInt(currentEnterpriseId);
+      setSelectedEnterprise(enterpriseId);
+      fetchAccounts(enterpriseId);
     } catch (error: any) {
       toast({
         variant: "destructive",

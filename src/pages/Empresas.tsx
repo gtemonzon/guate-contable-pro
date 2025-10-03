@@ -143,6 +143,7 @@ const Empresas = () => {
               key={enterprise.id}
               enterprise={enterprise}
               onEdit={handleEdit}
+              onDelete={fetchEnterprises}
             />
           ))}
         </div>
