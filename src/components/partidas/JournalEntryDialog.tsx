@@ -410,11 +410,15 @@ export default function JournalEntryDialog({
                   <SelectValue placeholder="Seleccionar período" />
                 </SelectTrigger>
                 <SelectContent>
-                  {periods.map((period) => (
-                    <SelectItem key={period.id} value={period.id.toString()}>
-                      {period.year} ({new Date(period.start_date).toLocaleDateString()} - {new Date(period.end_date).toLocaleDateString()})
-                    </SelectItem>
-                  ))}
+                  {periods.map((period) => {
+                    const startDate = new Date(period.start_date + 'T00:00:00');
+                    const endDate = new Date(period.end_date + 'T00:00:00');
+                    return (
+                      <SelectItem key={period.id} value={period.id.toString()}>
+                        {period.year} ({startDate.toLocaleDateString('es-GT')} - {endDate.toLocaleDateString('es-GT')})
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -515,6 +519,7 @@ export default function JournalEntryDialog({
                             min="0"
                             value={line.debit_amount || ""}
                             onChange={(e) => updateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)}
+                            disabled={line.credit_amount > 0}
                           />
                         </TableCell>
                         <TableCell>
@@ -524,6 +529,7 @@ export default function JournalEntryDialog({
                             min="0"
                             value={line.credit_amount || ""}
                             onChange={(e) => updateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)}
+                            disabled={line.debit_amount > 0}
                           />
                         </TableCell>
                         <TableCell>

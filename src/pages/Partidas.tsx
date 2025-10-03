@@ -272,7 +272,7 @@ export default function Partidas() {
                             {entry.description}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Fecha: {new Date(entry.entry_date).toLocaleDateString()} • 
+                            Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
                             Debe: Q{entry.total_debit.toFixed(2)} • 
                             Haber: Q{entry.total_credit.toFixed(2)}
                           </p>
