@@ -8,6 +8,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Empresas from "./pages/Empresas";
 import Cuentas from "./pages/Cuentas";
+import PeriodosContables from "./pages/PeriodosContables";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 
@@ -28,7 +29,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/empresas" element={<Empresas />} />
             <Route path="/cuentas" element={<Cuentas />} />
-            <Route path="/periodos" element={<div>Períodos Contables (próximamente)</div>} />
+            <Route path="/periodos" element={<PeriodosContables />} />
             <Route path="/partidas" element={<div>Partidas (próximamente)</div>} />
             <Route path="/compras" element={<div>Libro de Compras (próximamente)</div>} />
             <Route path="/ventas" element={<div>Libro de Ventas (próximamente)</div>} />
