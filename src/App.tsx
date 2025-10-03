@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Empresas from "./pages/Empresas";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 
@@ -24,7 +25,7 @@ const App = () => (
           
           <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/empresas" element={<div>Empresas (próximamente)</div>} />
+            <Route path="/empresas" element={<Empresas />} />
             <Route path="/cuentas" element={<div>Catálogo de Cuentas (próximamente)</div>} />
             <Route path="/periodos" element={<div>Períodos Contables (próximamente)</div>} />
             <Route path="/partidas" element={<div>Partidas (próximamente)</div>} />
