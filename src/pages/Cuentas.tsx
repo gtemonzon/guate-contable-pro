@@ -120,10 +120,35 @@ const Cuentas = () => {
     });
   };
 
-  const filteredAccounts = accounts.filter((account) =>
-    account.account_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    account.account_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredAccounts = (() => {
+    if (!searchQuery.trim()) {
+      return accounts;
+    }
+
+    // Encontrar todas las cuentas que coinciden con la búsqueda
+    const matchingAccounts = accounts.filter((account) =>
+      account.account_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      account.account_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Incluir todos los ancestros de las cuentas coincidentes
+    const accountsToShow = new Set<number>();
+    
+    matchingAccounts.forEach((account) => {
+      accountsToShow.add(account.id);
+      
+      // Agregar todos los ancestros
+      let currentAccount = account;
+      while (currentAccount.parent_account_id) {
+        accountsToShow.add(currentAccount.parent_account_id);
+        const parent = accounts.find(acc => acc.id === currentAccount.parent_account_id);
+        if (!parent) break;
+        currentAccount = parent;
+      }
+    });
+
+    return accounts.filter(account => accountsToShow.has(account.id));
+  })();
 
   if (loading) {
     return (
