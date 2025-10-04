@@ -44,6 +44,7 @@ const formSchema = z.object({
   is_detail_account: z.boolean().default(false),
   allows_movement: z.boolean().default(true),
   requires_cost_center: z.boolean().default(false),
+  is_bank_account: z.boolean().default(false),
   is_active: z.boolean().default(true),
 });
 
@@ -79,6 +80,7 @@ export function AccountDialog({
       is_detail_account: false,
       allows_movement: true,
       requires_cost_center: false,
+      is_bank_account: false,
       is_active: true,
     },
   });
@@ -137,6 +139,7 @@ export function AccountDialog({
         is_detail_account: account.is_detail_account ?? false,
         allows_movement: account.allows_movement ?? true,
         requires_cost_center: account.requires_cost_center ?? false,
+        is_bank_account: account.is_bank_account ?? false,
         is_active: account.is_active ?? true,
       });
     } else {
@@ -153,6 +156,7 @@ export function AccountDialog({
         is_detail_account: false,
         allows_movement: true,
         requires_cost_center: false,
+        is_bank_account: false,
         is_active: true,
       });
     }
@@ -202,6 +206,7 @@ export function AccountDialog({
         is_detail_account: values.is_detail_account,
         allows_movement: values.allows_movement,
         requires_cost_center: values.requires_cost_center,
+        is_bank_account: values.is_bank_account,
         is_active: values.is_active,
       };
 
@@ -442,6 +447,27 @@ export function AccountDialog({
                       <FormLabel>Requiere Centro de Costo</FormLabel>
                       <FormDescription>
                         Obliga a especificar centro de costo
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="is_bank_account"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Cuenta Bancaria</FormLabel>
+                      <FormDescription>
+                        Marca si es una cuenta de banco para conciliación
                       </FormDescription>
                     </div>
                     <FormControl>
