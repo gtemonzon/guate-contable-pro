@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 
@@ -27,6 +27,7 @@ export default function Partidas() {
   const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   
   // Filtros
@@ -255,7 +256,7 @@ export default function Partidas() {
           ) : (
             <div className="space-y-2">
               {filteredEntries.map((entry) => (
-                <Card key={entry.id} className="hover:bg-accent/50 transition-colors cursor-pointer">
+                <Card key={entry.id} className="hover:bg-accent/50 transition-colors">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1">
@@ -278,6 +279,15 @@ export default function Partidas() {
                           </p>
                         </div>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingEntry(entry)}
+                        disabled={entry.is_posted}
+                        title={entry.is_posted ? "No se pueden editar partidas contabilizadas" : "Editar partida"}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -287,15 +297,19 @@ export default function Partidas() {
         </CardContent>
       </Card>
 
-      {showDialog && (
+      {(showDialog || editingEntry) && (
         <JournalEntryDialog
-          open={showDialog}
-          onOpenChange={setShowDialog}
+          open={showDialog || !!editingEntry}
+          onOpenChange={(open) => {
+            setShowDialog(open);
+            if (!open) setEditingEntry(null);
+          }}
           onSuccess={() => {
             if (currentEnterpriseId) {
               fetchEntries(currentEnterpriseId);
             }
           }}
+          entryToEdit={editingEntry}
         />
       )}
     </div>

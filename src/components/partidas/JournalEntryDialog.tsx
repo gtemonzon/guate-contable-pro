@@ -48,12 +48,23 @@ interface JournalEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  entryToEdit?: {
+    id: number;
+    entry_number: string;
+    entry_date: string;
+    entry_type: string;
+    description: string;
+    total_debit: number;
+    total_credit: number;
+    is_posted: boolean;
+  } | null;
 }
 
 export default function JournalEntryDialog({
   open,
   onOpenChange,
   onSuccess,
+  entryToEdit = null,
 }: JournalEntryDialogProps) {
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -362,7 +373,7 @@ export default function JournalEntryDialog({
       if (account.balance_type === 'deudor' && newBalance < 0) {
         toast({
           title: "Sobregiro detectado",
-          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. No se pueden crear sobregiros en la cuenta.`,
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: Q${currentBalance.toFixed(2)}. No se pueden crear sobregiros en la cuenta.`,
           variant: "destructive",
         });
         return;
@@ -371,7 +382,7 @@ export default function JournalEntryDialog({
       if (account.balance_type === 'acreedor' && newBalance > 0) {
         toast({
           title: "Sobregiro detectado",
-          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. No se pueden crear sobregiros en la cuenta.`,
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: Q${Math.abs(currentBalance).toFixed(2)}. No se pueden crear sobregiros en la cuenta.`,
           variant: "destructive",
         });
         return;
