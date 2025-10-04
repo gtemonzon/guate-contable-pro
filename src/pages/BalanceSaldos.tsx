@@ -165,7 +165,7 @@ export default function BalanceSaldos() {
 
       if (entriesError) throw entriesError;
 
-      // Calcular saldos por cuenta
+      // Calcular saldos por cuenta de detalle (movimientos directos)
       const balances: Record<number, { debit: number; credit: number }> = {};
 
       entries?.forEach((entry: any) => {
@@ -178,11 +178,35 @@ export default function BalanceSaldos() {
         });
       });
 
-      // Combinar cuentas con sus saldos
+      // Crear mapa de cuentas por ID para acceso rápido
+      const accountMap: Record<number, any> = {};
+      accountsData.forEach((account: any) => {
+        accountMap[account.id] = {
+          ...account,
+          debit: balances[account.id]?.debit || 0,
+          credit: balances[account.id]?.credit || 0,
+        };
+      });
+
+      // Propagar saldos hacia arriba en la jerarquía
+      // Ordenar por nivel descendente para procesar desde las hojas hacia arriba
+      const sortedAccounts = [...accountsData].sort((a, b) => b.level - a.level);
+      
+      sortedAccounts.forEach((account: any) => {
+        const currentAccount = accountMap[account.id];
+        
+        // Si tiene cuenta padre, sumar sus saldos al padre
+        if (account.parent_account_id && accountMap[account.parent_account_id]) {
+          accountMap[account.parent_account_id].debit += currentAccount.debit;
+          accountMap[account.parent_account_id].credit += currentAccount.credit;
+        }
+      });
+
+      // Combinar cuentas con sus saldos propagados
       const accountsWithBalances: Account[] = accountsData.map((account: any) => {
-        const accountBalance = balances[account.id] || { debit: 0, credit: 0 };
-        const debit = accountBalance.debit;
-        const credit = accountBalance.credit;
+        const accountData = accountMap[account.id];
+        const debit = accountData.debit;
+        const credit = accountData.credit;
         
         // Calcular balance según tipo de cuenta
         let balance = 0;
