@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ export default function BalanceSaldos() {
   const [previousBalance, setPreviousBalance] = useState<number>(0);
 
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const totals = useMemo(() => {
     // Solo sumar cuentas detalle (que no tienen hijos)
@@ -324,6 +326,16 @@ export default function BalanceSaldos() {
     return accounts;
   }, [accounts]);
 
+  const handleViewDetails = (accountId: number) => {
+    // Navegar a Mayor General con la cuenta y fechas preseleccionadas
+    const params = new URLSearchParams({
+      accountId: accountId.toString(),
+      startDate: startDate,
+      endDate: endDate,
+    });
+    navigate(`/mayor?${params.toString()}`);
+  };
+
   if (!currentEnterpriseId) {
     return (
       <div className="p-8">
@@ -413,7 +425,7 @@ export default function BalanceSaldos() {
             <p className="text-center text-muted-foreground py-8">No hay cuentas para mostrar</p>
           ) : (
             <div className="space-y-4">
-              <BalanceTreeView accounts={filteredAccounts} />
+              <BalanceTreeView accounts={filteredAccounts} onViewDetails={handleViewDetails} />
               
               <div className="flex justify-end gap-8 pt-4 pr-3 border-t-2 bg-muted/30 rounded-lg p-4">
                 <div className="text-right">

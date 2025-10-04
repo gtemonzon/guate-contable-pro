@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, FileText } from "lucide-react";
+import { Trash2, FileText, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export default function LibroCompras() {
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [journalType, setJournalType] = useState<"mes" | "cheque">("mes");
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const { toast } = useToast();
 
@@ -435,6 +437,14 @@ export default function LibroCompras() {
           <div className="flex justify-between items-center">
             <CardTitle>Facturas de {monthNames[selectedMonth - 1]} {selectedYear}</CardTitle>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImportDialog(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Importar
+              </Button>
               <Dialog open={showJournalDialog} onOpenChange={setShowJournalDialog}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -717,6 +727,17 @@ export default function LibroCompras() {
           )}
         </CardContent>
       </Card>
+
+      <ImportPurchasesDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
+        onSuccess={() => {
+          if (currentEnterpriseId) {
+            fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
+          }
+        }}
+      />
     </div>
   );
 }

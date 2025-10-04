@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Circle } from "lucide-react";
+import { ChevronRight, ChevronDown, Circle, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Account {
   id: number;
@@ -16,6 +17,7 @@ interface Account {
 
 interface BalanceTreeViewProps {
   accounts: Account[];
+  onViewDetails?: (accountId: number) => void;
 }
 
 interface TreeNodeProps {
@@ -23,9 +25,10 @@ interface TreeNodeProps {
   children: Account[];
   level: number;
   allAccounts: Account[];
+  onViewDetails?: (accountId: number) => void;
 }
 
-function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
+function TreeNode({ account, children, level, allAccounts, onViewDetails }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 3);
   const hasChildren = children.length > 0;
   const paddingLeft = `${level * 1.5}rem`;
@@ -51,7 +54,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
           )}
         </button>
 
-        <div className="flex-1 grid grid-cols-11 gap-4 items-center">
+        <div className="flex-1 grid grid-cols-12 gap-4 items-center">
           <div className="col-span-2">
             <span className="font-mono text-sm text-muted-foreground">
               {account.account_code}
@@ -87,6 +90,18 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
               {account.balance !== 0 ? `Q ${Math.abs(account.balance).toFixed(2)}` : "-"}
             </span>
           </div>
+
+          <div className="col-span-1 text-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onViewDetails?.(account.id)}
+              title="Ver detalle en Mayor General"
+              className="h-8 w-8"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -99,6 +114,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
               children={allAccounts.filter(acc => acc.parent_account_id === child.id)}
               level={level + 1}
               allAccounts={allAccounts}
+              onViewDetails={onViewDetails}
             />
           ))}
         </div>
@@ -107,7 +123,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
   );
 }
 
-export function BalanceTreeView({ accounts }: BalanceTreeViewProps) {
+export function BalanceTreeView({ accounts, onViewDetails }: BalanceTreeViewProps) {
   const buildTree = (parentId: number | null = null): Account[] => {
     return accounts
       .filter((account) => account.parent_account_id === parentId)
@@ -124,6 +140,7 @@ export function BalanceTreeView({ accounts }: BalanceTreeViewProps) {
         children={buildTree(account.id)}
         level={level}
         allAccounts={accounts}
+        onViewDetails={onViewDetails}
       />
     ));
   };
@@ -131,13 +148,14 @@ export function BalanceTreeView({ accounts }: BalanceTreeViewProps) {
   return (
     <div className="space-y-0">
       {/* Header */}
-      <div className="grid grid-cols-11 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
+      <div className="grid grid-cols-12 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
         <div className="col-span-2 pl-8">Código</div>
         <div className="col-span-4">Nombre de Cuenta</div>
         <div className="col-span-1 text-right">Saldo Ant.</div>
         <div className="col-span-1 text-right">Debe</div>
         <div className="col-span-1 text-right">Haber</div>
         <div className="col-span-2 text-right">Saldo</div>
+        <div className="col-span-1 text-center">Acciones</div>
       </div>
       
       {/* Tree */}

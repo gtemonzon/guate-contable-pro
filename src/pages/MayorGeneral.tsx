@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +63,7 @@ interface JournalEntryDetail {
 }
 
 export default function MayorGeneral() {
+  const [searchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
   const [startDate, setStartDate] = useState<string>("");
@@ -80,11 +82,26 @@ export default function MayorGeneral() {
     
     if (enterpriseId) {
       fetchAccounts(enterpriseId);
-      // Establecer fechas por defecto (año actual)
-      const today = new Date();
-      const firstDay = new Date(today.getFullYear(), 0, 1);
-      setStartDate(firstDay.toISOString().split('T')[0]);
-      setEndDate(today.toISOString().split('T')[0]);
+      
+      // Verificar si vienen parámetros de URL
+      const accountIdParam = searchParams.get("accountId");
+      const startDateParam = searchParams.get("startDate");
+      const endDateParam = searchParams.get("endDate");
+      
+      if (accountIdParam) {
+        setSelectedAccount(parseInt(accountIdParam));
+      }
+      
+      if (startDateParam && endDateParam) {
+        setStartDate(startDateParam);
+        setEndDate(endDateParam);
+      } else {
+        // Establecer fechas por defecto (año actual)
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), 0, 1);
+        setStartDate(firstDay.toISOString().split('T')[0]);
+        setEndDate(today.toISOString().split('T')[0]);
+      }
     } else {
       toast({
         title: "Selecciona una empresa",
@@ -111,7 +128,18 @@ export default function MayorGeneral() {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("enterpriseChanged", handleStorageChange);
     };
-  }, []);
+  }, [searchParams]);
+
+  // Auto-consultar cuando se seleccione cuenta desde URL
+  useEffect(() => {
+    if (selectedAccount && startDate && endDate && currentEnterpriseId) {
+      const accountIdParam = searchParams.get("accountId");
+      if (accountIdParam && parseInt(accountIdParam) === selectedAccount) {
+        // Solo auto-consultar si viene de URL
+        fetchLedger();
+      }
+    }
+  }, [selectedAccount, startDate, endDate]);
 
   const fetchAccounts = async (enterpriseId: string) => {
     try {
