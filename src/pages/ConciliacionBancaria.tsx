@@ -12,36 +12,52 @@ import { BadgeCheck, Building2, Calendar, Landmark } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
-type AccountingPeriod = Database['public']['Tables']['tab_accounting_periods']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
 
 const ConciliacionBancaria = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
-  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [movements, setMovements] = useState<BankMovement[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const [bankBalance, setBankBalance] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
   const [selectedEnterprise, setSelectedEnterprise] = useState<string | null>(null);
+
+  const months = [
+    { value: "1", label: "Enero" },
+    { value: "2", label: "Febrero" },
+    { value: "3", label: "Marzo" },
+    { value: "4", label: "Abril" },
+    { value: "5", label: "Mayo" },
+    { value: "6", label: "Junio" },
+    { value: "7", label: "Julio" },
+    { value: "8", label: "Agosto" },
+    { value: "9", label: "Septiembre" },
+    { value: "10", label: "Octubre" },
+    { value: "11", label: "Noviembre" },
+    { value: "12", label: "Diciembre" },
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 10 }, (_, i) => (currentYear - 5 + i).toString());
 
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
     if (currentEnterpriseId) {
       setSelectedEnterprise(currentEnterpriseId);
       fetchBankAccounts(currentEnterpriseId);
-      fetchPeriods(currentEnterpriseId);
     }
   }, []);
 
   useEffect(() => {
-    if (selectedAccount && selectedPeriod) {
+    if (selectedAccount && selectedMonth && selectedYear) {
       fetchMovements();
     }
-  }, [selectedAccount, selectedPeriod]);
+  }, [selectedAccount, selectedMonth, selectedYear]);
 
   const fetchBankAccounts = async (enterpriseId: string) => {
     try {
@@ -64,32 +80,22 @@ const ConciliacionBancaria = () => {
     }
   };
 
-  const fetchPeriods = async (enterpriseId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('tab_accounting_periods')
-        .select('*')
-        .eq('enterprise_id', parseInt(enterpriseId))
-        .order('start_date', { ascending: false });
-
-      if (error) throw error;
-      setPeriods(data || []);
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error al cargar períodos",
-        description: error.message,
-      });
-    }
-  };
 
   const fetchMovements = async () => {
     try {
       setLoading(true);
+      
+      // Calculate start and end dates for the selected month/year
+      const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+      const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+      const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
+      
       const { data, error } = await supabase
         .from('tab_bank_movements')
         .select('*')
         .eq('bank_account_id', parseInt(selectedAccount))
+        .gte('movement_date', startDate)
+        .lte('movement_date', endDate)
         .order('movement_date', { ascending: false });
 
       if (error) throw error;
@@ -134,11 +140,11 @@ const ConciliacionBancaria = () => {
   };
 
   const handleReconcile = async () => {
-    if (!selectedAccount || !selectedPeriod || !bankBalance) {
+    if (!selectedAccount || !selectedMonth || !selectedYear || !bankBalance) {
       toast({
         variant: "destructive",
         title: "Datos incompletos",
-        description: "Debes seleccionar cuenta, período e ingresar el saldo bancario",
+        description: "Debes seleccionar cuenta, mes, año e ingresar el saldo bancario",
       });
       return;
     }
@@ -207,7 +213,8 @@ const ConciliacionBancaria = () => {
 
       // Reset form
       setSelectedAccount("");
-      setSelectedPeriod("");
+      setSelectedMonth("");
+      setSelectedYear("");
       setBankBalance("");
       setNotes("");
       setSelectedMovements(new Set());
@@ -277,28 +284,46 @@ const ConciliacionBancaria = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Período Contable
+              Período de Conciliación
             </CardTitle>
-            <CardDescription>Selecciona el período a conciliar</CardDescription>
+            <CardDescription>Selecciona mes y año a conciliar</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un período" />
-              </SelectTrigger>
-              <SelectContent>
-                {periods.map((period) => (
-                  <SelectItem key={period.id} value={period.id.toString()}>
-                    {period.year} - {new Date(period.start_date).toLocaleDateString()} al {new Date(period.end_date).toLocaleDateString()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Mes</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Año</Label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {selectedAccount && selectedPeriod && (
+      {selectedAccount && selectedMonth && selectedYear && (
         <>
           <Card>
             <CardHeader>

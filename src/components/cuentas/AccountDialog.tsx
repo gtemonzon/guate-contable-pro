@@ -472,7 +472,7 @@ export function AccountDialog({
                     </div>
                     <FormControl>
                       <Switch
-                        checked={field.value}
+                        checked={field.value || false}
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>
