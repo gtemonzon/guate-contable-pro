@@ -705,6 +705,45 @@ export type Database = {
           },
         ]
       }
+      tab_purchase_books: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string | null
+          created_by: string | null
+          enterprise_id: number
+          id: number
+          month: number
+          notes: string | null
+          status: string | null
+          year: number
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          enterprise_id: number
+          id?: number
+          month: number
+          notes?: string | null
+          status?: string | null
+          year: number
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          enterprise_id?: number
+          id?: number
+          month?: number
+          notes?: string | null
+          status?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
       tab_purchase_ledger: {
         Row: {
           accounting_period_id: number | null
@@ -722,6 +761,7 @@ export type Database = {
           invoice_series: string | null
           journal_entry_id: number | null
           net_amount: number
+          purchase_book_id: number | null
           purchase_type: string | null
           supplier_name: string
           supplier_nit: string
@@ -744,6 +784,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount: number
+          purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name: string
           supplier_nit: string
@@ -766,6 +807,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount?: number
+          purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name?: string
           supplier_nit?: string
@@ -799,6 +841,13 @@ export type Database = {
             columns: ["journal_entry_id"]
             isOneToOne: false
             referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_purchase_ledger_purchase_book_id_fkey"
+            columns: ["purchase_book_id"]
+            isOneToOne: false
+            referencedRelation: "tab_purchase_books"
             referencedColumns: ["id"]
           },
         ]

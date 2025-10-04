@@ -282,7 +282,10 @@ export default function Partidas() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setEditingEntry(entry)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingEntry(entry);
+                        }}
                         disabled={entry.is_posted}
                         title={entry.is_posted ? "No se pueden editar partidas contabilizadas" : "Editar partida"}
                       >
