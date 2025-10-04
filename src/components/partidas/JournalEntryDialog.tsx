@@ -10,6 +10,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Save, CheckCircle } from "lucide-react";
@@ -314,7 +318,6 @@ export default function JournalEntryDialog({
           description: headerDescription,
           total_debit: getTotalDebit(),
           total_credit: getTotalCredit(),
-          is_balanced: isBalanced(),
           is_posted: post,
           posted_at: post ? new Date().toISOString() : null,
           created_by: user.id,
@@ -474,21 +477,50 @@ export default function JournalEntryDialog({
                     return (
                       <TableRow key={line.id}>
                         <TableCell>
-                          <Select
-                            value={line.account_id?.toString() || ""}
-                            onValueChange={(v) => updateLine(line.id, "account_id" as keyof DetailLine, parseInt(v) as any)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {accounts.map((acc) => (
-                                <SelectItem key={acc.id} value={acc.id.toString()}>
-                                  {acc.account_code} - {acc.account_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between font-normal"
+                              >
+                                {line.account_id
+                                  ? (() => {
+                                      const acc = accounts.find(a => a.id === line.account_id);
+                                      return acc ? `${acc.account_code} - ${acc.account_name}` : "Seleccionar";
+                                    })()
+                                  : "Seleccionar"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Buscar cuenta..." />
+                                <CommandList>
+                                  <CommandEmpty>No se encontró la cuenta.</CommandEmpty>
+                                  <CommandGroup>
+                                    {accounts.map((acc) => (
+                                      <CommandItem
+                                        key={acc.id}
+                                        value={`${acc.account_code} ${acc.account_name}`}
+                                        onSelect={() => {
+                                          updateLine(line.id, "account_id" as keyof DetailLine, acc.id as any);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            line.account_id === acc.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        {acc.account_code} - {acc.account_name}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                         <TableCell>
                           <Input

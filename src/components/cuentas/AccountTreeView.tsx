@@ -38,7 +38,7 @@ const ACCOUNT_TYPE_COLORS: Record<string, string> = {
 };
 
 function TreeNode({ account, children, onEdit, level, allAccounts }: TreeNodeProps) {
-  const [isExpanded, setIsExpanded] = useState(level < 3);
+  const [isExpanded, setIsExpanded] = useState(level < 4);
   const hasChildren = children.length > 0;
   const paddingLeft = `${level * 1.5}rem`;
 
