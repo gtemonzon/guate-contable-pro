@@ -6,26 +6,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, BookOpen } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-interface PurchaseBook {
+interface FELDocumentType {
   id: number;
-  month: number;
-  year: number;
-  status: string;
-  created_at: string;
+  code: string;
+  name: string;
 }
 
 interface PurchaseEntry {
-  id: number;
-  invoice_series: string | null;
+  id?: number;
+  invoice_series: string;
   invoice_number: string;
   invoice_date: string;
   fel_document_type: string;
@@ -34,19 +34,20 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
-  batch_reference: string | null;
+  batch_reference: string;
   journal_entry_id: number | null;
+  purchase_book_id?: number;
+  isNew?: boolean;
 }
 
 export default function LibroCompras() {
-  const [books, setBooks] = useState<PurchaseBook[]>([]);
-  const [selectedBook, setSelectedBook] = useState<PurchaseBook | null>(null);
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
-  const [showNewBookDialog, setShowNewBookDialog] = useState(false);
-  const [newBookMonth, setNewBookMonth] = useState(new Date().getMonth() + 1);
-  const [newBookYear, setNewBookYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
+  const [currentBookId, setCurrentBookId] = useState<number | null>(null);
 
   const { toast } = useToast();
 
@@ -60,7 +61,7 @@ export default function LibroCompras() {
     setCurrentEnterpriseId(enterpriseId);
     
     if (enterpriseId) {
-      fetchBooks(enterpriseId);
+      fetchFELDocTypes();
     } else {
       setLoading(false);
       toast({
@@ -74,10 +75,9 @@ export default function LibroCompras() {
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
-        fetchBooks(newEnterpriseId);
+        fetchFELDocTypes();
+        fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
       } else {
-        setBooks([]);
-        setSelectedBook(null);
         setPurchases([]);
       }
     };
@@ -91,21 +91,67 @@ export default function LibroCompras() {
     };
   }, []);
 
-  const fetchBooks = async (enterpriseId: string) => {
+  useEffect(() => {
+    if (currentEnterpriseId) {
+      fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
+    }
+  }, [selectedMonth, selectedYear]);
+
+  const fetchFELDocTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_fel_document_types")
+        .select("*")
+        .eq("is_active", true)
+        .order("code");
+
+      if (error) throw error;
+      setFelDocTypes(data || []);
+    } catch (error: any) {
+      console.error("Error loading FEL doc types:", error);
+    }
+  };
+
+  const fetchOrCreateBook = async (enterpriseId: string, month: number, year: number) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Buscar libro existente
+      let { data: book, error: fetchError } = await supabase
         .from("tab_purchase_books")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .order("year", { ascending: false })
-        .order("month", { ascending: false });
+        .eq("month", month)
+        .eq("year", year)
+        .maybeSingle();
 
-      if (error) throw error;
-      setBooks(data || []);
+      if (fetchError) throw fetchError;
+
+      // Si no existe, crear uno nuevo
+      if (!book) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Usuario no autenticado");
+
+        const { data: newBook, error: createError } = await supabase
+          .from("tab_purchase_books")
+          .insert({
+            enterprise_id: parseInt(enterpriseId),
+            month,
+            year,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        book = newBook;
+      }
+
+      setCurrentBookId(book.id);
+      await fetchPurchases(book.id);
     } catch (error: any) {
       toast({
-        title: "Error al cargar libros",
+        title: "Error al cargar libro",
         description: error.message,
         variant: "destructive",
       });
@@ -116,13 +162,12 @@ export default function LibroCompras() {
 
   const fetchPurchases = async (bookId: number) => {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
         .select("*")
         .eq("purchase_book_id", bookId)
-        .order("invoice_date", { ascending: false })
-        .order("invoice_number", { ascending: false });
+        .order("invoice_date", { ascending: true })
+        .order("invoice_number", { ascending: true });
 
       if (error) throw error;
       setPurchases(data || []);
@@ -132,52 +177,136 @@ export default function LibroCompras() {
         description: error.message,
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const createNewBook = async () => {
-    if (!currentEnterpriseId) return;
+  const addNewRow = () => {
+    const newEntry: PurchaseEntry = {
+      invoice_series: "",
+      invoice_number: "",
+      invoice_date: new Date().toISOString().split('T')[0],
+      fel_document_type: felDocTypes[0]?.code || "",
+      supplier_nit: "",
+      supplier_name: "",
+      total_amount: 0,
+      base_amount: 0,
+      vat_amount: 0,
+      batch_reference: "",
+      journal_entry_id: null,
+      isNew: true,
+    };
+    setPurchases([...purchases, newEntry]);
+  };
+
+  const updateRow = (index: number, field: keyof PurchaseEntry, value: any) => {
+    const updated = [...purchases];
+    updated[index] = { ...updated[index], [field]: value };
+
+    // Auto-calcular IVA cuando cambia total_amount
+    if (field === "total_amount") {
+      const total = parseFloat(value) || 0;
+      const base = total / 1.12;
+      const vat = total - base;
+      updated[index].base_amount = parseFloat(base.toFixed(2));
+      updated[index].vat_amount = parseFloat(vat.toFixed(2));
+    }
+
+    setPurchases(updated);
+  };
+
+  const saveRow = async (index: number) => {
+    const entry = purchases[index];
+    if (!currentBookId || !currentEnterpriseId) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      const { data, error } = await supabase
-        .from("tab_purchase_books")
-        .insert({
-          enterprise_id: parseInt(currentEnterpriseId),
-          month: newBookMonth,
-          year: newBookYear,
-          created_by: user.id,
-        })
-        .select()
-        .single();
+      const entryData = {
+        purchase_book_id: currentBookId,
+        enterprise_id: parseInt(currentEnterpriseId),
+        invoice_series: entry.invoice_series || null,
+        invoice_number: entry.invoice_number,
+        invoice_date: entry.invoice_date,
+        fel_document_type: entry.fel_document_type,
+        supplier_nit: entry.supplier_nit,
+        supplier_name: entry.supplier_name,
+        total_amount: entry.total_amount,
+        base_amount: entry.base_amount,
+        vat_amount: entry.vat_amount,
+        net_amount: entry.base_amount,
+        batch_reference: entry.batch_reference || null,
+      };
 
-      if (error) throw error;
+      if (entry.isNew) {
+        const { data, error } = await supabase
+          .from("tab_purchase_ledger")
+          .insert(entryData)
+          .select()
+          .single();
 
-      toast({
-        title: "Libro creado",
-        description: `Libro de ${monthNames[newBookMonth - 1]} ${newBookYear} creado exitosamente`,
-      });
+        if (error) throw error;
 
-      setShowNewBookDialog(false);
-      fetchBooks(currentEnterpriseId);
-      setSelectedBook(data);
-      fetchPurchases(data.id);
+        const updated = [...purchases];
+        updated[index] = { ...data, isNew: false };
+        setPurchases(updated);
+
+        toast({
+          title: "Factura guardada",
+          description: "La factura se guardó correctamente",
+        });
+      } else if (entry.id) {
+        const { error } = await supabase
+          .from("tab_purchase_ledger")
+          .update(entryData)
+          .eq("id", entry.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Factura actualizada",
+          description: "Los cambios se guardaron correctamente",
+        });
+      }
     } catch (error: any) {
       toast({
-        title: "Error al crear libro",
+        title: "Error al guardar",
         description: error.message,
         variant: "destructive",
       });
     }
   };
 
-  const handleSelectBook = (book: PurchaseBook) => {
-    setSelectedBook(book);
-    fetchPurchases(book.id);
+  const deleteRow = async (index: number) => {
+    const entry = purchases[index];
+    
+    if (entry.isNew) {
+      setPurchases(purchases.filter((_, i) => i !== index));
+      return;
+    }
+
+    if (!entry.id) return;
+
+    try {
+      const { error } = await supabase
+        .from("tab_purchase_ledger")
+        .delete()
+        .eq("id", entry.id);
+
+      if (error) throw error;
+
+      setPurchases(purchases.filter((_, i) => i !== index));
+      toast({
+        title: "Factura eliminada",
+        description: "La factura se eliminó correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error al eliminar",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   if (!currentEnterpriseId) {
@@ -199,174 +328,203 @@ export default function LibroCompras() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Libro de Compras</h1>
-          <p className="text-muted-foreground">Gestiona las facturas de compra mensuales</p>
+          <p className="text-muted-foreground">Registro mensual de facturas de compra</p>
         </div>
-        <Button onClick={() => setShowNewBookDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Libro Mensual
-        </Button>
+        <div className="flex gap-4 items-end">
+          <div>
+            <Label htmlFor="month-select">Mes</Label>
+            <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+              <SelectTrigger id="month-select" className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthNames.map((name, index) => (
+                  <SelectItem key={index + 1} value={String(index + 1)}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="year-select">Año</Label>
+            <Input
+              id="year-select"
+              type="number"
+              className="w-[100px]"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              min="2020"
+              max="2099"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Libros mensuales */}
       <Card>
         <CardHeader>
-          <CardTitle>Libros Mensuales</CardTitle>
+          <div className="flex justify-between items-center">
+            <CardTitle>Facturas de {monthNames[selectedMonth - 1]} {selectedYear}</CardTitle>
+            <Button onClick={addNewRow} size="sm">
+              Agregar Línea
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          {loading && books.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Cargando libros...</p>
-          ) : books.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No hay libros de compras. Crea uno nuevo para comenzar.
-            </p>
+          {loading ? (
+            <p className="text-center text-muted-foreground py-8">Cargando...</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {books.map((book) => (
-                <Card 
-                  key={book.id} 
-                  className={`cursor-pointer transition-colors ${
-                    selectedBook?.id === book.id ? 'border-primary' : 'hover:bg-accent/50'
-                  }`}
-                  onClick={() => handleSelectBook(book)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <BookOpen className="h-8 w-8 text-primary" />
-                      <div className="flex-1">
-                        <h3 className="font-semibold">
-                          {monthNames[book.month - 1]} {book.year}
-                        </h3>
-                        <Badge variant={book.status === 'abierto' ? 'default' : 'secondary'}>
-                          {book.status === 'abierto' ? 'Abierto' : 'Cerrado'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Serie</TableHead>
+                    <TableHead className="w-[120px]">Número</TableHead>
+                    <TableHead className="w-[130px]">Fecha</TableHead>
+                    <TableHead className="w-[120px]">Tipo Doc</TableHead>
+                    <TableHead className="w-[130px]">NIT</TableHead>
+                    <TableHead className="min-w-[200px]">Proveedor</TableHead>
+                    <TableHead className="w-[120px]">Total c/IVA</TableHead>
+                    <TableHead className="w-[120px]">Base s/IVA</TableHead>
+                    <TableHead className="w-[100px]">IVA</TableHead>
+                    <TableHead className="w-[120px]">Lote</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {purchases.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                        No hay facturas. Haz clic en "Agregar Línea" para comenzar.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    purchases.map((purchase, index) => (
+                      <TableRow key={purchase.id || `new-${index}`}>
+                        <TableCell>
+                          <Input
+                            value={purchase.invoice_series}
+                            onChange={(e) => updateRow(index, "invoice_series", e.target.value)}
+                            placeholder="A"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={purchase.invoice_number}
+                            onChange={(e) => updateRow(index, "invoice_number", e.target.value)}
+                            placeholder="12345"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="date"
+                            value={purchase.invoice_date}
+                            onChange={(e) => updateRow(index, "invoice_date", e.target.value)}
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={purchase.fel_document_type}
+                            onValueChange={(v) => updateRow(index, "fel_document_type", v)}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {felDocTypes.map((type) => (
+                                <SelectItem key={type.code} value={type.code}>
+                                  {type.code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={purchase.supplier_nit}
+                            onChange={(e) => updateRow(index, "supplier_nit", e.target.value)}
+                            placeholder="12345678"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={purchase.supplier_name}
+                            onChange={(e) => updateRow(index, "supplier_name", e.target.value)}
+                            placeholder="Nombre del proveedor"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={purchase.total_amount}
+                            onChange={(e) => updateRow(index, "total_amount", e.target.value)}
+                            onBlur={() => saveRow(index)}
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={purchase.base_amount}
+                            readOnly
+                            className="h-8 bg-muted"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={purchase.vat_amount}
+                            readOnly
+                            className="h-8 bg-muted"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={purchase.batch_reference}
+                            onChange={(e) => updateRow(index, "batch_reference", e.target.value)}
+                            placeholder="Lote"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => saveRow(index)}
+                              title="Guardar"
+                            >
+                              ✓
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => deleteRow(index)}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Facturas del libro seleccionado */}
-      {selectedBook && (
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>
-                Facturas de {monthNames[selectedBook.month - 1]} {selectedBook.year}
-              </CardTitle>
-              {selectedBook.status === 'abierto' && (
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agregar Factura
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p className="text-center text-muted-foreground py-8">Cargando facturas...</p>
-            ) : purchases.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                No hay facturas registradas en este libro
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {purchases.map((purchase) => (
-                  <Card key={purchase.id} className="hover:bg-accent/50 transition-colors">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold">
-                                {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}
-                              </h3>
-                              <Badge variant="outline">{purchase.fel_document_type}</Badge>
-                              {purchase.journal_entry_id && (
-                                <Badge variant="default">Contabilizado</Badge>
-                              )}
-                              {purchase.batch_reference && (
-                                <Badge variant="secondary">{purchase.batch_reference}</Badge>
-                              )}
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {purchase.supplier_name} (NIT: {purchase.supplier_nit})
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Fecha: {new Date(purchase.invoice_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
-                              Base: Q{purchase.base_amount.toFixed(2)} • 
-                              IVA: Q{purchase.vat_amount.toFixed(2)} • 
-                              Total: Q{purchase.total_amount.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                        {selectedBook.status === 'abierto' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Editar factura"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Dialog para nuevo libro */}
-      <Dialog open={showNewBookDialog} onOpenChange={setShowNewBookDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Crear Nuevo Libro de Compras</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <Label htmlFor="month">Mes</Label>
-              <Select value={String(newBookMonth)} onValueChange={(v) => setNewBookMonth(parseInt(v))}>
-                <SelectTrigger id="month">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthNames.map((name, index) => (
-                    <SelectItem key={index + 1} value={String(index + 1)}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="year">Año</Label>
-              <Input
-                id="year"
-                type="number"
-                value={newBookYear}
-                onChange={(e) => setNewBookYear(parseInt(e.target.value))}
-                min="2020"
-                max="2099"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowNewBookDialog(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={createNewBook}>
-                Crear Libro
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

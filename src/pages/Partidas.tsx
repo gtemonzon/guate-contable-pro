@@ -285,6 +285,7 @@ export default function Partidas() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setEditingEntry(entry);
+                          setShowDialog(true);
                         }}
                         disabled={entry.is_posted}
                         title={entry.is_posted ? "No se pueden editar partidas contabilizadas" : "Editar partida"}
