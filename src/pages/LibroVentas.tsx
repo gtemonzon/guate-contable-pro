@@ -37,7 +37,6 @@ interface SaleEntry {
   invoice_number: string;
   invoice_date: string;
   fel_document_type: string;
-  authorization_number: string;
   customer_nit: string;
   customer_name: string;
   total_amount: number;
@@ -170,7 +169,6 @@ export default function LibroVentas() {
       invoice_number: "",
       invoice_date: new Date().toISOString().split('T')[0],
       fel_document_type: felDocTypes[0]?.code || "",
-      authorization_number: "",
       customer_nit: "",
       customer_name: "",
       total_amount: 0,
@@ -212,7 +210,7 @@ export default function LibroVentas() {
         invoice_number: entry.invoice_number,
         invoice_date: entry.invoice_date,
         fel_document_type: entry.fel_document_type,
-        authorization_number: entry.authorization_number,
+        authorization_number: `AUTH-${entry.invoice_number}`,
         customer_nit: entry.customer_nit,
         customer_name: entry.customer_name,
         total_amount: entry.total_amount,
@@ -337,7 +335,6 @@ export default function LibroVentas() {
           description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
           total_debit: parseFloat(totals.totalWithVAT),
           total_credit: parseFloat(totals.totalWithVAT),
-          is_balanced: true,
           created_by: user.id,
         })
         .select()
@@ -511,7 +508,6 @@ export default function LibroVentas() {
                     <TableHead className="w-[120px]">Número</TableHead>
                     <TableHead className="w-[130px]">Fecha</TableHead>
                     <TableHead className="w-[120px]">Tipo Doc</TableHead>
-                    <TableHead className="w-[150px]">Autorización</TableHead>
                     <TableHead className="w-[130px]">NIT</TableHead>
                     <TableHead className="min-w-[200px]">Cliente</TableHead>
                     <TableHead className="w-[120px]">Total c/IVA</TableHead>
@@ -523,7 +519,7 @@ export default function LibroVentas() {
                 <TableBody>
                   {sales.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         No hay facturas. Haz clic en "Agregar Línea" para comenzar.
                       </TableCell>
                     </TableRow>
@@ -570,14 +566,6 @@ export default function LibroVentas() {
                               ))}
                             </SelectContent>
                           </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={sale.authorization_number}
-                            onChange={(e) => updateRow(index, "authorization_number", e.target.value)}
-                            placeholder="123456789"
-                            className="h-8"
-                          />
                         </TableCell>
                         <TableCell>
                           <Input

@@ -490,7 +490,6 @@ export default function LibroCompras() {
                               description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
                               total_debit: parseFloat(totals.totalWithVAT),
                               total_credit: parseFloat(totals.totalWithVAT),
-                              is_balanced: true,
                               created_by: user.id,
                             })
                             .select()
