@@ -38,6 +38,7 @@ interface LedgerEntry {
   credit_amount: number;
   balance: number;
   journal_entry_id: number;
+  previous_balance?: number;
 }
 
 interface JournalEntry {
@@ -119,7 +120,6 @@ export default function MayorGeneral() {
         .select("id, account_code, account_name")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("is_active", true)
-        .eq("is_detail_account", true)
         .order("account_code");
 
       if (error) throw error;
@@ -168,14 +168,48 @@ export default function MayorGeneral() {
         .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
         .eq("tab_journal_entries.is_posted", true)
         .gte("tab_journal_entries.entry_date", startDate)
-        .lte("tab_journal_entries.entry_date", endDate)
-        .order("tab_journal_entries.entry_date", { ascending: true });
+        .lte("tab_journal_entries.entry_date", endDate);
 
       if (detailsError) throw detailsError;
 
-      // Calcular balance acumulado
-      let runningBalance = 0;
-      const entries: LedgerEntry[] = (details || []).map((detail: any) => {
+      // Ordenar por fecha (en JavaScript ya que no podemos ordenar por tabla relacionada)
+      const sortedDetails = (details || []).sort((a: any, b: any) => {
+        const dateA = new Date(a.tab_journal_entries.entry_date).getTime();
+        const dateB = new Date(b.tab_journal_entries.entry_date).getTime();
+        return dateA - dateB;
+      });
+
+      // Calcular saldo anterior (antes del startDate)
+      const { data: previousDetails, error: prevError } = await supabase
+        .from("tab_journal_entry_details")
+        .select(`
+          debit_amount,
+          credit_amount,
+          tab_journal_entries!inner (
+            entry_date,
+            is_posted,
+            enterprise_id,
+            accounting_period_id
+          )
+        `)
+        .eq("account_id", selectedAccount)
+        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+        .eq("tab_journal_entries.is_posted", true)
+        .lt("tab_journal_entries.entry_date", startDate);
+
+      if (prevError) throw prevError;
+
+      // Calcular saldo inicial
+      let previousBalance = 0;
+      (previousDetails || []).forEach((detail: any) => {
+        const debit = Number(detail.debit_amount) || 0;
+        const credit = Number(detail.credit_amount) || 0;
+        previousBalance += debit - credit;
+      });
+
+      // Calcular balance acumulado comenzando con el saldo anterior
+      let runningBalance = previousBalance;
+      const entries: LedgerEntry[] = sortedDetails.map((detail: any) => {
         const debit = Number(detail.debit_amount) || 0;
         const credit = Number(detail.credit_amount) || 0;
         runningBalance += debit - credit;
@@ -189,10 +223,16 @@ export default function MayorGeneral() {
           credit_amount: credit,
           balance: runningBalance,
           journal_entry_id: detail.journal_entry_id,
+          previous_balance: previousBalance,
         };
       });
 
       setLedgerEntries(entries);
+      
+      // Guardar saldo anterior para mostrarlo
+      if (entries.length > 0) {
+        entries[0].previous_balance = previousBalance;
+      }
     } catch (error: any) {
       toast({
         title: "Error al cargar movimientos",
@@ -335,6 +375,12 @@ export default function MayorGeneral() {
             <div className="flex justify-between items-center">
               <CardTitle>Movimientos de la Cuenta</CardTitle>
               <div className="flex gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Saldo Anterior: </span>
+                  <Badge variant="outline">
+                    Q {Math.abs(ledgerEntries[0]?.previous_balance || 0).toFixed(2)}
+                  </Badge>
+                </div>
                 <div>
                   <span className="text-muted-foreground">Total Debe: </span>
                   <Badge variant="secondary">Q {totalDebit.toFixed(2)}</Badge>

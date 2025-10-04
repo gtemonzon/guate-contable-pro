@@ -14,6 +14,7 @@ interface Account {
   account_name: string;
   balance_type: string;
   level: number;
+  previous_balance: number;
   debit: number;
   credit: number;
   balance: number;
@@ -34,9 +35,9 @@ export default function BalanceSaldos() {
   const [selectedPeriod, setSelectedPeriod] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
-  const [filterLevel, setFilterLevel] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [previousBalance, setPreviousBalance] = useState<number>(0);
 
   const { toast } = useToast();
 
@@ -172,6 +173,37 @@ export default function BalanceSaldos() {
 
       if (entriesError) throw entriesError;
 
+      // Calcular saldos anteriores (antes del dateFrom)
+      const { data: prevEntries, error: prevEntriesError } = await supabase
+        .from("tab_journal_entries")
+        .select(`
+          id,
+          entry_date,
+          tab_journal_entry_details (
+            account_id,
+            debit_amount,
+            credit_amount
+          )
+        `)
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("accounting_period_id", periodId)
+        .eq("is_posted", true)
+        .lt("entry_date", dateFrom);
+
+      if (prevEntriesError) throw prevEntriesError;
+
+      // Calcular saldos anteriores por cuenta de detalle
+      const previousBalances: Record<number, { debit: number; credit: number }> = {};
+      prevEntries?.forEach((entry: any) => {
+        entry.tab_journal_entry_details?.forEach((detail: any) => {
+          if (!previousBalances[detail.account_id]) {
+            previousBalances[detail.account_id] = { debit: 0, credit: 0 };
+          }
+          previousBalances[detail.account_id].debit += detail.debit_amount || 0;
+          previousBalances[detail.account_id].credit += detail.credit_amount || 0;
+        });
+      });
+
       // Calcular saldos por cuenta de detalle (movimientos directos)
       const balances: Record<number, { debit: number; credit: number }> = {};
 
@@ -188,11 +220,24 @@ export default function BalanceSaldos() {
       // Crear mapa de cuentas por ID para acceso rápido
       const accountMap: Record<number, any> = {};
       accountsData.forEach((account: any) => {
+        const prevBal = previousBalances[account.id] || { debit: 0, credit: 0 };
         accountMap[account.id] = {
           ...account,
+          previous_debit: prevBal.debit,
+          previous_credit: prevBal.credit,
           debit: balances[account.id]?.debit || 0,
           credit: balances[account.id]?.credit || 0,
         };
+      });
+
+      // Propagar saldos anteriores hacia arriba en la jerarquía
+      const sortedAccountsForPrev = [...accountsData].sort((a, b) => b.level - a.level);
+      sortedAccountsForPrev.forEach((account: any) => {
+        const currentAccount = accountMap[account.id];
+        if (account.parent_account_id && accountMap[account.parent_account_id]) {
+          accountMap[account.parent_account_id].previous_debit += currentAccount.previous_debit;
+          accountMap[account.parent_account_id].previous_credit += currentAccount.previous_credit;
+        }
       });
 
       // Propagar saldos hacia arriba en la jerarquía
@@ -212,10 +257,20 @@ export default function BalanceSaldos() {
       // Combinar cuentas con sus saldos propagados
       const accountsWithBalances: Account[] = accountsData.map((account: any) => {
         const accountData = accountMap[account.id];
+        const prevDebit = accountData.previous_debit;
+        const prevCredit = accountData.previous_credit;
         const debit = accountData.debit;
         const credit = accountData.credit;
         
-        // Calcular balance según tipo de cuenta
+        // Calcular balance anterior según tipo de cuenta
+        let previousBalance = 0;
+        if (account.balance_type === "deudor") {
+          previousBalance = prevDebit - prevCredit;
+        } else {
+          previousBalance = prevCredit - prevDebit;
+        }
+        
+        // Calcular balance actual según tipo de cuenta
         let balance = 0;
         if (account.balance_type === "deudor") {
           balance = debit - credit;
@@ -229,6 +284,7 @@ export default function BalanceSaldos() {
           account_name: account.account_name,
           balance_type: account.balance_type,
           level: account.level,
+          previous_balance: previousBalance,
           debit,
           credit,
           balance,
@@ -265,9 +321,8 @@ export default function BalanceSaldos() {
   };
 
   const filteredAccounts = useMemo(() => {
-    if (filterLevel === "all") return accounts;
-    return accounts.filter(acc => acc.level === parseInt(filterLevel));
-  }, [accounts, filterLevel]);
+    return accounts;
+  }, [accounts]);
 
   if (!currentEnterpriseId) {
     return (
@@ -344,22 +399,6 @@ export default function BalanceSaldos() {
           <Button onClick={handleDateFilterChange} variant="outline">
             Filtrar
           </Button>
-          
-          <div>
-            <Label htmlFor="level-filter">Nivel</Label>
-            <Select value={filterLevel} onValueChange={setFilterLevel}>
-              <SelectTrigger id="level-filter" className="w-[120px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="1">Nivel 1</SelectItem>
-                <SelectItem value="2">Nivel 2</SelectItem>
-                <SelectItem value="3">Nivel 3</SelectItem>
-                <SelectItem value="4">Nivel 4</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
       </div>
 
