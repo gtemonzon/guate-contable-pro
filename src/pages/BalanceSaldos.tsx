@@ -35,12 +35,20 @@ export default function BalanceSaldos() {
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [filterLevel, setFilterLevel] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   const { toast } = useToast();
 
   const totals = useMemo(() => {
-    const totalDebit = accounts.reduce((sum, acc) => sum + acc.debit, 0);
-    const totalCredit = accounts.reduce((sum, acc) => sum + acc.credit, 0);
+    // Solo sumar cuentas detalle (que no tienen hijos)
+    const detailAccounts = accounts.filter(acc => {
+      const hasChildren = accounts.some(child => child.parent_account_id === acc.id);
+      return !hasChildren;
+    });
+    
+    const totalDebit = detailAccounts.reduce((sum, acc) => sum + acc.debit, 0);
+    const totalCredit = detailAccounts.reduce((sum, acc) => sum + acc.credit, 0);
     
     return {
       totalDebit: totalDebit.toFixed(2),
@@ -102,7 +110,9 @@ export default function BalanceSaldos() {
         const openPeriod = data.find(p => p.status === "abierto");
         const defaultPeriod = openPeriod || data[0];
         setSelectedPeriod(String(defaultPeriod.id));
-        await fetchBalances(enterpriseId, defaultPeriod.id);
+        setStartDate(defaultPeriod.start_date);
+        setEndDate(defaultPeriod.end_date);
+        await fetchBalances(enterpriseId, defaultPeriod.id, defaultPeriod.start_date, defaultPeriod.end_date);
       }
     } catch (error: any) {
       toast({
@@ -115,9 +125,12 @@ export default function BalanceSaldos() {
     }
   };
 
-  const fetchBalances = async (enterpriseId: string, periodId: number) => {
+  const fetchBalances = async (enterpriseId: string, periodId: number, fromDate?: string, toDate?: string) => {
     try {
       setLoading(true);
+
+      const dateFrom = fromDate || startDate;
+      const dateTo = toDate || endDate;
 
       // Obtener todas las cuentas de la empresa
       const { data: accountsData, error: accountsError } = await supabase
@@ -138,7 +151,7 @@ export default function BalanceSaldos() {
 
       if (periodError) throw periodError;
 
-      // Obtener todos los movimientos del período
+      // Obtener todos los movimientos del período y rango de fechas
       const { data: entries, error: entriesError } = await supabase
         .from("tab_journal_entries")
         .select(`
@@ -154,8 +167,8 @@ export default function BalanceSaldos() {
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("accounting_period_id", periodId)
         .eq("is_posted", true)
-        .gte("entry_date", period.start_date)
-        .lte("entry_date", period.end_date);
+        .gte("entry_date", dateFrom)
+        .lte("entry_date", dateTo);
 
       if (entriesError) throw entriesError;
 
@@ -237,8 +250,17 @@ export default function BalanceSaldos() {
 
   const handlePeriodChange = (periodId: string) => {
     setSelectedPeriod(periodId);
-    if (currentEnterpriseId) {
-      fetchBalances(currentEnterpriseId, parseInt(periodId));
+    const period = periods.find(p => p.id === parseInt(periodId));
+    if (currentEnterpriseId && period) {
+      setStartDate(period.start_date);
+      setEndDate(period.end_date);
+      fetchBalances(currentEnterpriseId, parseInt(periodId), period.start_date, period.end_date);
+    }
+  };
+
+  const handleDateFilterChange = () => {
+    if (currentEnterpriseId && selectedPeriod && startDate && endDate) {
+      fetchBalances(currentEnterpriseId, parseInt(selectedPeriod), startDate, endDate);
     }
   };
 
@@ -280,7 +302,7 @@ export default function BalanceSaldos() {
           </div>
         </div>
         
-        <div className="flex gap-4 items-end">
+        <div className="flex gap-4 items-end flex-wrap">
           <div>
             <Label htmlFor="period-select">Período Contable</Label>
             <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
@@ -296,11 +318,37 @@ export default function BalanceSaldos() {
               </SelectContent>
             </Select>
           </div>
+
+          <div>
+            <Label htmlFor="start-date">Desde</Label>
+            <Input
+              id="start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-[150px]"
+            />
+          </div>
+          
+          <div>
+            <Label htmlFor="end-date">Hasta</Label>
+            <Input
+              id="end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-[150px]"
+            />
+          </div>
+
+          <Button onClick={handleDateFilterChange} variant="outline">
+            Filtrar
+          </Button>
           
           <div>
             <Label htmlFor="level-filter">Nivel</Label>
             <Select value={filterLevel} onValueChange={setFilterLevel}>
-              <SelectTrigger id="level-filter" className="w-[150px]">
+              <SelectTrigger id="level-filter" className="w-[120px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

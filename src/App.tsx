@@ -13,6 +13,7 @@ import Partidas from "./pages/Partidas";
 import LibroCompras from "./pages/LibroCompras";
 import LibroVentas from "./pages/LibroVentas";
 import BalanceSaldos from "./pages/BalanceSaldos";
+import MayorGeneral from "./pages/MayorGeneral";
 import ConciliacionBancaria from "./pages/ConciliacionBancaria";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
@@ -40,7 +41,7 @@ const App = () => (
             <Route path="/ventas" element={<LibroVentas />} />
             <Route path="/conciliacion" element={<ConciliacionBancaria />} />
             <Route path="/saldos" element={<BalanceSaldos />} />
-            <Route path="/mayor" element={<div>Mayor General (próximamente)</div>} />
+            <Route path="/mayor" element={<MayorGeneral />} />
             <Route path="/reportes" element={<div>Reportes (próximamente)</div>} />
             <Route path="/importar" element={<div>Importación (próximamente)</div>} />
           </Route>

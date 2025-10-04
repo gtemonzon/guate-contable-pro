@@ -205,10 +205,20 @@ export default function LibroCompras() {
   };
 
   const addNewRow = () => {
+    // Copiar fecha de la última entrada o usar el último día del mes seleccionado
+    let defaultDate = new Date().toISOString().split('T')[0];
+    if (purchases.length > 0) {
+      defaultDate = purchases[purchases.length - 1].invoice_date;
+    } else {
+      // Último día del mes seleccionado
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
+
     const newEntry: PurchaseEntry = {
       invoice_series: "",
       invoice_number: "",
-      invoice_date: new Date().toISOString().split('T')[0],
+      invoice_date: defaultDate,
       fel_document_type: felDocTypes[0]?.code || "",
       supplier_nit: "",
       supplier_name: "",
@@ -224,6 +234,22 @@ export default function LibroCompras() {
 
   const updateRow = (index: number, field: keyof PurchaseEntry, value: any) => {
     const updated = [...purchases];
+    
+    // Validar fecha si se está cambiando
+    if (field === "invoice_date") {
+      const enteredDate = new Date(value);
+      const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0);
+      
+      if (enteredDate > lastDayOfMonth) {
+        toast({
+          title: "Fecha inválida",
+          description: `No puede ingresar una fecha posterior a ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     updated[index] = { ...updated[index], [field]: value };
 
     // Auto-calcular IVA cuando cambia total_amount
@@ -544,16 +570,16 @@ export default function LibroCompras() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[100px]">Serie</TableHead>
-                    <TableHead className="w-[120px]">Número</TableHead>
-                    <TableHead className="w-[130px]">Fecha</TableHead>
-                    <TableHead className="w-[120px]">Tipo Doc</TableHead>
-                    <TableHead className="w-[130px]">NIT</TableHead>
-                    <TableHead className="min-w-[200px]">Proveedor</TableHead>
-                    <TableHead className="w-[120px]">Total c/IVA</TableHead>
-                    <TableHead className="w-[120px]">Base s/IVA</TableHead>
-                    <TableHead className="w-[100px]">IVA</TableHead>
-                    <TableHead className="w-[120px]">Lote</TableHead>
+                    <TableHead className="w-[140px]">Serie</TableHead>
+                    <TableHead className="w-[140px]">Número</TableHead>
+                    <TableHead className="w-[140px]">Fecha</TableHead>
+                    <TableHead className="w-[130px]">Tipo Doc</TableHead>
+                    <TableHead className="w-[140px]">NIT</TableHead>
+                    <TableHead className="min-w-[220px]">Proveedor</TableHead>
+                    <TableHead className="w-[130px]">Total c/IVA</TableHead>
+                    <TableHead className="w-[130px]">Base s/IVA</TableHead>
+                    <TableHead className="w-[120px]">IVA</TableHead>
+                    <TableHead className="w-[150px]">Ref. Pago</TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -656,7 +682,7 @@ export default function LibroCompras() {
                           <Input
                             value={purchase.batch_reference}
                             onChange={(e) => updateRow(index, "batch_reference", e.target.value)}
-                            placeholder="Lote"
+                            placeholder="ej. ch. 123"
                             className="h-8"
                           />
                         </TableCell>

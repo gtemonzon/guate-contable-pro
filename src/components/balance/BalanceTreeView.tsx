@@ -50,7 +50,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
           )}
         </button>
 
-        <div className="flex-1 grid grid-cols-12 gap-4 items-center">
+        <div className="flex-1 grid grid-cols-10 gap-4 items-center">
           <div className="col-span-2">
             <span className="font-mono text-sm text-muted-foreground">
               {account.account_code}
@@ -60,16 +60,6 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
           <div className="col-span-4">
             <span className={`font-medium ${hasChildren ? 'font-semibold' : ''}`}>
               {account.account_name}
-            </span>
-          </div>
-
-          <div className="col-span-1 text-center">
-            <span className="text-sm">{account.level}</span>
-          </div>
-
-          <div className="col-span-1 text-center">
-            <span className={`text-sm ${account.balance_type === "deudor" ? "text-blue-600 dark:text-blue-400" : "text-green-600 dark:text-green-400"}`}>
-              {account.balance_type === "deudor" ? "Deudor" : "Acreedor"}
             </span>
           </div>
 
@@ -134,11 +124,9 @@ export function BalanceTreeView({ accounts }: BalanceTreeViewProps) {
   return (
     <div className="space-y-0">
       {/* Header */}
-      <div className="grid grid-cols-12 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
+      <div className="grid grid-cols-10 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
         <div className="col-span-2 pl-8">Código</div>
         <div className="col-span-4">Nombre de Cuenta</div>
-        <div className="col-span-1 text-center">Nivel</div>
-        <div className="col-span-1 text-center">Tipo</div>
         <div className="col-span-1 text-right">Debe</div>
         <div className="col-span-1 text-right">Haber</div>
         <div className="col-span-2 text-right">Saldo</div>
