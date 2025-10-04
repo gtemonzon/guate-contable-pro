@@ -11,6 +11,7 @@ import Cuentas from "./pages/Cuentas";
 import PeriodosContables from "./pages/PeriodosContables";
 import Partidas from "./pages/Partidas";
 import LibroCompras from "./pages/LibroCompras";
+import LibroVentas from "./pages/LibroVentas";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 
@@ -34,7 +35,7 @@ const App = () => (
             <Route path="/periodos" element={<PeriodosContables />} />
             <Route path="/partidas" element={<Partidas />} />
             <Route path="/compras" element={<LibroCompras />} />
-            <Route path="/ventas" element={<div>Libro de Ventas (próximamente)</div>} />
+            <Route path="/ventas" element={<LibroVentas />} />
             <Route path="/conciliacion" element={<div>Conciliación Bancaria (próximamente)</div>} />
             <Route path="/saldos" element={<div>Saldos de Cuentas (próximamente)</div>} />
             <Route path="/mayor" element={<div>Mayor General (próximamente)</div>} />

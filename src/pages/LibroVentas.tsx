@@ -31,49 +31,47 @@ interface FELDocumentType {
   name: string;
 }
 
-interface PurchaseEntry {
+interface SaleEntry {
   id?: number;
   invoice_series: string;
   invoice_number: string;
   invoice_date: string;
   fel_document_type: string;
-  supplier_nit: string;
-  supplier_name: string;
+  authorization_number: string;
+  customer_nit: string;
+  customer_name: string;
   total_amount: number;
-  base_amount: number;
   vat_amount: number;
-  batch_reference: string;
+  net_amount: number;
   journal_entry_id: number | null;
-  purchase_book_id?: number;
   isNew?: boolean;
 }
 
-export default function LibroCompras() {
-  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
+export default function LibroVentas() {
+  const [sales, setSales] = useState<SaleEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
-  const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [journalType, setJournalType] = useState<"mes" | "cheque">("mes");
 
   const { toast } = useToast();
 
   const totals = useMemo(() => {
-    const totalWithVAT = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    const totalVAT = purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0);
-    const totalBase = purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0);
-    const documentCount = purchases.length;
+    const totalWithVAT = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const totalVAT = sales.reduce((sum, s) => sum + (s.vat_amount || 0), 0);
+    const totalNet = sales.reduce((sum, s) => sum + (s.net_amount || 0), 0);
+    const documentCount = sales.length;
 
     return {
       totalWithVAT: totalWithVAT.toFixed(2),
       totalVAT: totalVAT.toFixed(2),
-      totalBase: totalBase.toFixed(2),
+      totalNet: totalNet.toFixed(2),
       documentCount,
     };
-  }, [purchases]);
+  }, [sales]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -86,6 +84,7 @@ export default function LibroCompras() {
     
     if (enterpriseId) {
       fetchFELDocTypes();
+      fetchSales(enterpriseId, selectedMonth, selectedYear);
     } else {
       setLoading(false);
       toast({
@@ -100,9 +99,9 @@ export default function LibroCompras() {
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
-        fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
+        fetchSales(newEnterpriseId, selectedMonth, selectedYear);
       } else {
-        setPurchases([]);
+        setSales([]);
       }
     };
 
@@ -117,7 +116,7 @@ export default function LibroCompras() {
 
   useEffect(() => {
     if (currentEnterpriseId) {
-      fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
+      fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
     }
   }, [selectedMonth, selectedYear]);
 
@@ -136,46 +135,27 @@ export default function LibroCompras() {
     }
   };
 
-  const fetchOrCreateBook = async (enterpriseId: string, month: number, year: number) => {
+  const fetchSales = async (enterpriseId: string, month: number, year: number) => {
     try {
       setLoading(true);
       
-      // Buscar libro existente
-      let { data: book, error: fetchError } = await supabase
-        .from("tab_purchase_books")
+      const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from("tab_sales_ledger")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("month", month)
-        .eq("year", year)
-        .maybeSingle();
+        .gte("invoice_date", startDate)
+        .lte("invoice_date", endDate)
+        .order("invoice_date", { ascending: true })
+        .order("invoice_number", { ascending: true });
 
-      if (fetchError) throw fetchError;
-
-      // Si no existe, crear uno nuevo
-      if (!book) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Usuario no autenticado");
-
-        const { data: newBook, error: createError } = await supabase
-          .from("tab_purchase_books")
-          .insert({
-            enterprise_id: parseInt(enterpriseId),
-            month,
-            year,
-            created_by: user.id,
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        book = newBook;
-      }
-
-      setCurrentBookId(book.id);
-      await fetchPurchases(book.id);
+      if (error) throw error;
+      setSales(data || []);
     } catch (error: any) {
       toast({
-        title: "Error al cargar libro",
+        title: "Error al cargar facturas",
         description: error.message,
         variant: "destructive",
       });
@@ -184,96 +164,74 @@ export default function LibroCompras() {
     }
   };
 
-  const fetchPurchases = async (bookId: number) => {
-    try {
-      const { data, error } = await supabase
-        .from("tab_purchase_ledger")
-        .select("*")
-        .eq("purchase_book_id", bookId)
-        .order("invoice_date", { ascending: true })
-        .order("invoice_number", { ascending: true });
-
-      if (error) throw error;
-      setPurchases(data || []);
-    } catch (error: any) {
-      toast({
-        title: "Error al cargar facturas",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
   const addNewRow = () => {
-    const newEntry: PurchaseEntry = {
+    const newEntry: SaleEntry = {
       invoice_series: "",
       invoice_number: "",
       invoice_date: new Date().toISOString().split('T')[0],
       fel_document_type: felDocTypes[0]?.code || "",
-      supplier_nit: "",
-      supplier_name: "",
+      authorization_number: "",
+      customer_nit: "",
+      customer_name: "",
       total_amount: 0,
-      base_amount: 0,
       vat_amount: 0,
-      batch_reference: "",
+      net_amount: 0,
       journal_entry_id: null,
       isNew: true,
     };
-    setPurchases([...purchases, newEntry]);
+    setSales([...sales, newEntry]);
   };
 
-  const updateRow = (index: number, field: keyof PurchaseEntry, value: any) => {
-    const updated = [...purchases];
+  const updateRow = (index: number, field: keyof SaleEntry, value: any) => {
+    const updated = [...sales];
     updated[index] = { ...updated[index], [field]: value };
 
     // Auto-calcular IVA cuando cambia total_amount
     if (field === "total_amount") {
       const total = parseFloat(value) || 0;
-      const base = total / 1.12;
-      const vat = total - base;
-      updated[index].base_amount = parseFloat(base.toFixed(2));
+      const net = total / 1.12;
+      const vat = total - net;
+      updated[index].net_amount = parseFloat(net.toFixed(2));
       updated[index].vat_amount = parseFloat(vat.toFixed(2));
     }
 
-    setPurchases(updated);
+    setSales(updated);
   };
 
   const saveRow = async (index: number) => {
-    const entry = purchases[index];
-    if (!currentBookId || !currentEnterpriseId) return;
+    const entry = sales[index];
+    if (!currentEnterpriseId) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
       const entryData = {
-        purchase_book_id: currentBookId,
         enterprise_id: parseInt(currentEnterpriseId),
         invoice_series: entry.invoice_series || null,
         invoice_number: entry.invoice_number,
         invoice_date: entry.invoice_date,
         fel_document_type: entry.fel_document_type,
-        supplier_nit: entry.supplier_nit,
-        supplier_name: entry.supplier_name,
+        authorization_number: entry.authorization_number,
+        customer_nit: entry.customer_nit,
+        customer_name: entry.customer_name,
         total_amount: entry.total_amount,
-        base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
-        net_amount: entry.base_amount,
-        batch_reference: entry.batch_reference || null,
+        net_amount: entry.net_amount,
       };
 
       if (entry.isNew) {
         const { data, error } = await supabase
-          .from("tab_purchase_ledger")
+          .from("tab_sales_ledger")
           .insert(entryData)
           .select()
           .single();
 
         if (error) throw error;
 
-        const updated = [...purchases];
+        const updated = [...sales];
         updated[index] = { ...data, isNew: false };
-        setPurchases(updated);
+        setSales(updated);
 
         toast({
           title: "Factura guardada",
@@ -281,7 +239,7 @@ export default function LibroCompras() {
         });
       } else if (entry.id) {
         const { error } = await supabase
-          .from("tab_purchase_ledger")
+          .from("tab_sales_ledger")
           .update(entryData)
           .eq("id", entry.id);
 
@@ -302,10 +260,10 @@ export default function LibroCompras() {
   };
 
   const deleteRow = async (index: number) => {
-    const entry = purchases[index];
+    const entry = sales[index];
     
     if (entry.isNew) {
-      setPurchases(purchases.filter((_, i) => i !== index));
+      setSales(sales.filter((_, i) => i !== index));
       return;
     }
 
@@ -313,13 +271,13 @@ export default function LibroCompras() {
 
     try {
       const { error } = await supabase
-        .from("tab_purchase_ledger")
+        .from("tab_sales_ledger")
         .delete()
         .eq("id", entry.id);
 
       if (error) throw error;
 
-      setPurchases(purchases.filter((_, i) => i !== index));
+      setSales(sales.filter((_, i) => i !== index));
       toast({
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
@@ -333,13 +291,97 @@ export default function LibroCompras() {
     }
   };
 
+  const generateJournalEntry = async () => {
+    try {
+      if (!currentEnterpriseId) {
+        toast({
+          title: "Error",
+          description: "No se puede generar la póliza",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      // Obtener período contable activo
+      const { data: period, error: periodError } = await supabase
+        .from("tab_accounting_periods")
+        .select("id")
+        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .eq("status", "abierto")
+        .eq("year", selectedYear)
+        .maybeSingle();
+
+      if (periodError) throw periodError;
+      if (!period) {
+        toast({
+          title: "Error",
+          description: "No hay período contable abierto para este año",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Crear póliza
+      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+      const { data: journalEntry, error: journalError } = await supabase
+        .from("tab_journal_entries")
+        .insert({
+          enterprise_id: parseInt(currentEnterpriseId),
+          accounting_period_id: period.id,
+          entry_number: entryNumber,
+          entry_date: new Date().toISOString().split('T')[0],
+          entry_type: "diario",
+          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+          total_debit: parseFloat(totals.totalWithVAT),
+          total_credit: parseFloat(totals.totalWithVAT),
+          is_balanced: true,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (journalError) throw journalError;
+
+      // Marcar facturas con el journal_entry_id
+      const saleIds = sales.filter(s => s.id).map(s => s.id);
+      if (saleIds.length > 0) {
+        const { error: updateError } = await supabase
+          .from("tab_sales_ledger")
+          .update({ journal_entry_id: journalEntry.id })
+          .in("id", saleIds);
+
+        if (updateError) throw updateError;
+      }
+
+      toast({
+        title: "Póliza generada",
+        description: `Póliza ${entryNumber} creada exitosamente`,
+      });
+      setShowJournalDialog(false);
+      
+      // Recargar facturas
+      if (currentEnterpriseId) {
+        await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error al generar póliza",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!currentEnterpriseId) {
     return (
       <div className="p-8">
         <Card>
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
-              Selecciona una empresa para ver el libro de compras
+              Selecciona una empresa para ver el libro de ventas
             </p>
           </CardContent>
         </Card>
@@ -351,8 +393,8 @@ export default function LibroCompras() {
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Libro de Compras</h1>
-          <p className="text-muted-foreground">Registro mensual de facturas de compra</p>
+          <h1 className="text-3xl font-bold">Libro de Ventas</h1>
+          <p className="text-muted-foreground">Registro mensual de facturas de venta</p>
           
           <div className="mt-4 flex gap-6 text-sm">
             <div>
@@ -360,8 +402,8 @@ export default function LibroCompras() {
               <Badge variant="secondary">{totals.documentCount}</Badge>
             </div>
             <div>
-              <span className="text-muted-foreground">Base: </span>
-              <span className="font-semibold">Q {totals.totalBase}</span>
+              <span className="text-muted-foreground">Neto: </span>
+              <span className="font-semibold">Q {totals.totalNet}</span>
             </div>
             <div>
               <span className="text-muted-foreground">IVA: </span>
@@ -438,93 +480,13 @@ export default function LibroCompras() {
                     </div>
                     <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
                       <p><strong>Documentos:</strong> {totals.documentCount}</p>
-                      <p><strong>Base:</strong> Q {totals.totalBase}</p>
+                      <p><strong>Neto:</strong> Q {totals.totalNet}</p>
                       <p><strong>IVA:</strong> Q {totals.totalVAT}</p>
                       <p><strong>Total:</strong> Q {totals.totalWithVAT}</p>
                     </div>
                     <Button 
                       className="w-full" 
-                      onClick={async () => {
-                        try {
-                          if (!currentEnterpriseId || !currentBookId) {
-                            toast({
-                              title: "Error",
-                              description: "No se puede generar la póliza",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          const { data: { user } } = await supabase.auth.getUser();
-                          if (!user) throw new Error("Usuario no autenticado");
-
-                          // Obtener período contable activo
-                          const { data: period, error: periodError } = await supabase
-                            .from("tab_accounting_periods")
-                            .select("id")
-                            .eq("enterprise_id", parseInt(currentEnterpriseId))
-                            .eq("status", "abierto")
-                            .eq("year", selectedYear)
-                            .maybeSingle();
-
-                          if (periodError) throw periodError;
-                          if (!period) {
-                            toast({
-                              title: "Error",
-                              description: "No hay período contable abierto para este año",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          // Crear póliza
-                          const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-                          const { data: journalEntry, error: journalError } = await supabase
-                            .from("tab_journal_entries")
-                            .insert({
-                              enterprise_id: parseInt(currentEnterpriseId),
-                              accounting_period_id: period.id,
-                              entry_number: entryNumber,
-                              entry_date: new Date().toISOString().split('T')[0],
-                              entry_type: "diario",
-                              description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                              total_debit: parseFloat(totals.totalWithVAT),
-                              total_credit: parseFloat(totals.totalWithVAT),
-                              is_balanced: true,
-                              created_by: user.id,
-                            })
-                            .select()
-                            .single();
-
-                          if (journalError) throw journalError;
-
-                          // Marcar facturas con el journal_entry_id
-                          const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
-                          if (purchaseIds.length > 0) {
-                            const { error: updateError } = await supabase
-                              .from("tab_purchase_ledger")
-                              .update({ journal_entry_id: journalEntry.id })
-                              .in("id", purchaseIds);
-
-                            if (updateError) throw updateError;
-                          }
-
-                          toast({
-                            title: "Póliza generada",
-                            description: `Póliza ${entryNumber} creada exitosamente`,
-                          });
-                          setShowJournalDialog(false);
-                          
-                          // Recargar facturas
-                          await fetchPurchases(currentBookId);
-                        } catch (error: any) {
-                          toast({
-                            title: "Error al generar póliza",
-                            description: error.message,
-                            variant: "destructive",
-                          });
-                        }
-                      }}
+                      onClick={generateJournalEntry}
                     >
                       Generar
                     </Button>
@@ -549,28 +511,28 @@ export default function LibroCompras() {
                     <TableHead className="w-[120px]">Número</TableHead>
                     <TableHead className="w-[130px]">Fecha</TableHead>
                     <TableHead className="w-[120px]">Tipo Doc</TableHead>
+                    <TableHead className="w-[150px]">Autorización</TableHead>
                     <TableHead className="w-[130px]">NIT</TableHead>
-                    <TableHead className="min-w-[200px]">Proveedor</TableHead>
+                    <TableHead className="min-w-[200px]">Cliente</TableHead>
                     <TableHead className="w-[120px]">Total c/IVA</TableHead>
-                    <TableHead className="w-[120px]">Base s/IVA</TableHead>
                     <TableHead className="w-[100px]">IVA</TableHead>
-                    <TableHead className="w-[120px]">Lote</TableHead>
+                    <TableHead className="w-[120px]">Neto</TableHead>
                     <TableHead className="w-[100px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {purchases.length === 0 ? (
+                  {sales.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         No hay facturas. Haz clic en "Agregar Línea" para comenzar.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    purchases.map((purchase, index) => (
-                      <TableRow key={purchase.id || `new-${index}`}>
+                    sales.map((sale, index) => (
+                      <TableRow key={sale.id || `new-${index}`}>
                         <TableCell>
                           <Input
-                            value={purchase.invoice_series}
+                            value={sale.invoice_series}
                             onChange={(e) => updateRow(index, "invoice_series", e.target.value)}
                             placeholder="A"
                             className="h-8"
@@ -578,7 +540,7 @@ export default function LibroCompras() {
                         </TableCell>
                         <TableCell>
                           <Input
-                            value={purchase.invoice_number}
+                            value={sale.invoice_number}
                             onChange={(e) => updateRow(index, "invoice_number", e.target.value)}
                             placeholder="12345"
                             className="h-8"
@@ -587,14 +549,14 @@ export default function LibroCompras() {
                         <TableCell>
                           <Input
                             type="date"
-                            value={purchase.invoice_date}
+                            value={sale.invoice_date}
                             onChange={(e) => updateRow(index, "invoice_date", e.target.value)}
                             className="h-8"
                           />
                         </TableCell>
                         <TableCell>
                           <Select
-                            value={purchase.fel_document_type}
+                            value={sale.fel_document_type}
                             onValueChange={(v) => updateRow(index, "fel_document_type", v)}
                           >
                             <SelectTrigger className="h-8">
@@ -611,17 +573,25 @@ export default function LibroCompras() {
                         </TableCell>
                         <TableCell>
                           <Input
-                            value={purchase.supplier_nit}
-                            onChange={(e) => updateRow(index, "supplier_nit", e.target.value)}
+                            value={sale.authorization_number}
+                            onChange={(e) => updateRow(index, "authorization_number", e.target.value)}
+                            placeholder="123456789"
+                            className="h-8"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={sale.customer_nit}
+                            onChange={(e) => updateRow(index, "customer_nit", e.target.value)}
                             placeholder="12345678"
                             className="h-8"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
-                            value={purchase.supplier_name}
-                            onChange={(e) => updateRow(index, "supplier_name", e.target.value)}
-                            placeholder="Nombre del proveedor"
+                            value={sale.customer_name}
+                            onChange={(e) => updateRow(index, "customer_name", e.target.value)}
+                            placeholder="Nombre del cliente"
                             className="h-8"
                           />
                         </TableCell>
@@ -629,7 +599,7 @@ export default function LibroCompras() {
                           <Input
                             type="number"
                             step="0.01"
-                            value={purchase.total_amount}
+                            value={sale.total_amount}
                             onChange={(e) => updateRow(index, "total_amount", e.target.value)}
                             onBlur={() => saveRow(index)}
                             className="h-8"
@@ -639,7 +609,7 @@ export default function LibroCompras() {
                           <Input
                             type="number"
                             step="0.01"
-                            value={purchase.base_amount}
+                            value={sale.vat_amount}
                             readOnly
                             className="h-8 bg-muted"
                           />
@@ -648,17 +618,9 @@ export default function LibroCompras() {
                           <Input
                             type="number"
                             step="0.01"
-                            value={purchase.vat_amount}
+                            value={sale.net_amount}
                             readOnly
                             className="h-8 bg-muted"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={purchase.batch_reference}
-                            onChange={(e) => updateRow(index, "batch_reference", e.target.value)}
-                            placeholder="Lote"
-                            className="h-8"
                           />
                         </TableCell>
                         <TableCell>
