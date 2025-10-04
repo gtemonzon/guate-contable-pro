@@ -38,6 +38,7 @@ const formSchema = z.object({
   account_code: z.string().min(1, "Código es requerido"),
   account_name: z.string().min(1, "Nombre es requerido"),
   account_type: z.enum(["activo", "pasivo", "capital", "ingreso", "gasto", "costo"]),
+  balance_type: z.enum(["deudor", "acreedor"]),
   parent_account_id: z.number().nullable(),
   level: z.number().min(1).max(10),
   is_detail_account: z.boolean().default(false),
@@ -72,6 +73,7 @@ export function AccountDialog({
       account_code: "",
       account_name: "",
       account_type: "activo",
+      balance_type: "deudor",
       parent_account_id: null,
       level: 1,
       is_detail_account: false,
@@ -129,6 +131,7 @@ export function AccountDialog({
         account_code: account.account_code,
         account_name: account.account_name,
         account_type: account.account_type as any,
+        balance_type: (account.balance_type as any) || "deudor",
         parent_account_id: account.parent_account_id,
         level: account.level,
         is_detail_account: account.is_detail_account ?? false,
@@ -144,6 +147,7 @@ export function AccountDialog({
         account_code: suggestedCode,
         account_name: "",
         account_type: "activo",
+        balance_type: "deudor",
         parent_account_id: parentAccountId,
         level: level,
         is_detail_account: false,
@@ -192,6 +196,7 @@ export function AccountDialog({
         account_code: values.account_code,
         account_name: values.account_name,
         account_type: values.account_type,
+        balance_type: values.balance_type,
         parent_account_id: values.parent_account_id,
         level: values.level,
         is_detail_account: values.is_detail_account,
@@ -336,6 +341,33 @@ export function AccountDialog({
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="balance_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo de Saldo</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="deudor">Deudor</SelectItem>
+                        <SelectItem value="acreedor">Acreedor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Capital, Ingreso
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div>
               <FormField
                 control={form.control}
                 name="parent_account_id"

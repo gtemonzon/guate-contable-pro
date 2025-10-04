@@ -23,6 +23,7 @@ interface Account {
   account_code: string;
   account_name: string;
   requires_cost_center: boolean;
+  balance_type: string;
 }
 
 interface Period {
@@ -107,7 +108,7 @@ export default function JournalEntryDialog({
       // Cargar cuentas de detalle
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
-        .select("id, account_code, account_name, requires_cost_center")
+        .select("id, account_code, account_name, requires_cost_center, balance_type")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("is_detail_account", true)
         .eq("allows_movement", true)
@@ -192,11 +193,30 @@ export default function JournalEntryDialog({
   };
 
   const updateLine = (id: string, field: keyof DetailLine, value: any) => {
-    setDetailLines(lines =>
-      lines.map(line =>
+    setDetailLines(lines => {
+      const updatedLines = lines.map(line =>
         line.id === id ? { ...line, [field]: value } : line
-      )
-    );
+      );
+      
+      // Auto-agregar nueva línea si se ingresó un monto en la última línea
+      const lineIndex = updatedLines.findIndex(l => l.id === id);
+      const isLastLine = lineIndex === updatedLines.length - 1;
+      
+      if (isLastLine && (field === "debit_amount" || field === "credit_amount") && value > 0) {
+        // Agregar nueva línea
+        updatedLines.push({
+          id: crypto.randomUUID(),
+          account_id: null,
+          description: headerDescription,
+          bank_reference: "",
+          cost_center: "",
+          debit_amount: 0,
+          credit_amount: 0
+        });
+      }
+      
+      return updatedLines;
+    });
   };
 
   const getTotalDebit = () => {
@@ -232,7 +252,19 @@ export default function JournalEntryDialog({
       return false;
     }
 
-    if (detailLines.length < 2) {
+    // Filtrar líneas vacías - solo mantener líneas con cuenta o monto
+    const validLines = detailLines.filter(line => {
+      const hasAccount = line.account_id !== null;
+      const hasAmount = line.debit_amount > 0 || line.credit_amount > 0;
+      
+      // Mantener si tiene cuenta o monto
+      return hasAccount || hasAmount;
+    });
+
+    // Actualizar las líneas eliminando las vacías
+    setDetailLines(validLines.length >= 2 ? validLines : detailLines);
+
+    if (validLines.length < 2) {
       toast({
         title: "Líneas insuficientes",
         description: "Una partida debe tener al menos 2 líneas de detalle",
@@ -241,11 +273,22 @@ export default function JournalEntryDialog({
       return false;
     }
 
-    for (const line of detailLines) {
-      if (!line.account_id) {
+    for (const line of validLines) {
+      // Error si tiene monto pero no tiene cuenta
+      if (!line.account_id && (line.debit_amount > 0 || line.credit_amount > 0)) {
         toast({
           title: "Cuenta requerida",
-          description: "Todas las líneas deben tener una cuenta asignada",
+          description: "Hay líneas con monto que no tienen cuenta asignada",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Error si tiene cuenta pero no tiene monto
+      if (line.account_id && line.debit_amount === 0 && line.credit_amount === 0) {
+        toast({
+          title: "Monto requerido",
+          description: "Hay líneas con cuenta asignada que no tienen monto",
           variant: "destructive",
         });
         return false;
@@ -256,15 +299,6 @@ export default function JournalEntryDialog({
         toast({
           title: "Centro de costo requerido",
           description: `La cuenta ${account.account_code} requiere centro de costo`,
-          variant: "destructive",
-        });
-        return false;
-      }
-
-      if (line.debit_amount === 0 && line.credit_amount === 0) {
-        toast({
-          title: "Monto requerido",
-          description: "Todas las líneas deben tener un monto en debe o haber",
           variant: "destructive",
         });
         return false;
@@ -297,6 +331,52 @@ export default function JournalEntryDialog({
 
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
+
+    // Validar sobregiros antes de guardar
+    const validLines = detailLines.filter(line => line.account_id !== null);
+    
+    for (const line of validLines) {
+      const account = accounts.find(a => a.id === line.account_id);
+      if (!account) continue;
+
+      // Obtener saldo actual de la cuenta
+      const { data: movements, error: movError } = await supabase
+        .from("tab_journal_entry_details")
+        .select("debit_amount, credit_amount")
+        .eq("account_id", line.account_id);
+
+      if (movError) {
+        console.error("Error al obtener movimientos:", movError);
+        continue;
+      }
+
+      // Calcular saldo actual
+      const currentBalance = (movements || []).reduce((acc, mov) => {
+        return acc + (mov.debit_amount || 0) - (mov.credit_amount || 0);
+      }, 0);
+
+      // Calcular nuevo saldo después de este movimiento
+      const newBalance = currentBalance + (line.debit_amount || 0) - (line.credit_amount || 0);
+
+      // Validar según tipo de saldo
+      if (account.balance_type === 'deudor' && newBalance < 0) {
+        toast({
+          title: "Sobregiro detectado",
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. No se pueden crear sobregiros en la cuenta.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (account.balance_type === 'acreedor' && newBalance > 0) {
+        toast({
+          title: "Sobregiro detectado",
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. No se pueden crear sobregiros en la cuenta.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     try {
       setLoading(true);
@@ -475,7 +555,7 @@ export default function JournalEntryDialog({
                     const account = accounts.find(a => a.id === line.account_id);
                     return (
                       <TableRow key={line.id}>
-                        <TableCell>
+                         <TableCell>
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button
@@ -493,8 +573,14 @@ export default function JournalEntryDialog({
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[400px] p-0" align="start">
-                              <Command>
-                                <CommandInput placeholder="Buscar cuenta..." />
+                              <Command shouldFilter={false}>
+                                <CommandInput 
+                                  placeholder="Buscar cuenta..." 
+                                  onKeyDown={(e) => {
+                                    // Prevenir que se cierre el popover al escribir
+                                    e.stopPropagation();
+                                  }}
+                                />
                                 <CommandList>
                                   <CommandEmpty>No se encontró la cuenta.</CommandEmpty>
                                   <CommandGroup>

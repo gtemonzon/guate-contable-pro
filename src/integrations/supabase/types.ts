@@ -74,6 +74,7 @@ export type Database = {
           account_name: string
           account_type: string
           allows_movement: boolean | null
+          balance_type: string | null
           created_at: string | null
           enterprise_id: number | null
           id: number
@@ -88,6 +89,7 @@ export type Database = {
           account_name: string
           account_type: string
           allows_movement?: boolean | null
+          balance_type?: string | null
           created_at?: string | null
           enterprise_id?: number | null
           id?: number
@@ -102,6 +104,7 @@ export type Database = {
           account_name?: string
           account_type?: string
           allows_movement?: boolean | null
+          balance_type?: string | null
           created_at?: string | null
           enterprise_id?: number | null
           id?: number
