@@ -88,13 +88,18 @@ export default function JournalEntryDialog({
 
   useEffect(() => {
     if (open) {
-      loadInitialData();
+      if (entryToEdit) {
+        loadEntryData(entryToEdit.id);
+      } else {
+        loadInitialData();
+        resetForm();
+      }
     }
-  }, [open]);
+  }, [open, entryToEdit]);
 
   useEffect(() => {
     // Auto-llenar descripción de líneas cuando cambia la descripción del encabezado
-    if (headerDescription) {
+    if (headerDescription && !entryToEdit) {
       setDetailLines(lines => 
         lines.map(line => ({
           ...line,
@@ -170,6 +175,73 @@ export default function JournalEntryDialog({
     } catch (error: any) {
       toast({
         title: "Error al cargar datos",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setEntryDate(new Date().toISOString().split('T')[0]);
+    setEntryType("diario");
+    setPeriodId(null);
+    setDocumentReference("");
+    setHeaderDescription("");
+    setDetailLines([
+      { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
+      { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
+    ]);
+  };
+
+  const loadEntryData = async (entryId: number) => {
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+
+    try {
+      // Cargar datos comunes (cuentas y períodos)
+      await loadInitialData();
+
+      // Cargar datos de la partida
+      const { data: entry, error: entryError } = await supabase
+        .from("tab_journal_entries")
+        .select("*")
+        .eq("id", entryId)
+        .single();
+
+      if (entryError) throw entryError;
+
+      // Cargar líneas de detalle
+      const { data: details, error: detailsError } = await supabase
+        .from("tab_journal_entry_details")
+        .select("*")
+        .eq("journal_entry_id", entryId)
+        .order("line_number");
+
+      if (detailsError) throw detailsError;
+
+      // Llenar formulario
+      setNextEntryNumber(entry.entry_number);
+      setEntryDate(entry.entry_date);
+      setEntryType(entry.entry_type);
+      setPeriodId(entry.accounting_period_id);
+      setDocumentReference(entry.document_reference || "");
+      setHeaderDescription(entry.description);
+
+      // Convertir detalles a formato de líneas
+      const lines: DetailLine[] = details.map(d => ({
+        id: crypto.randomUUID(),
+        account_id: d.account_id,
+        description: d.description || "",
+        bank_reference: d.bank_reference || "",
+        cost_center: d.cost_center || "",
+        debit_amount: d.debit_amount,
+        credit_amount: d.credit_amount,
+      }));
+
+      setDetailLines(lines);
+    } catch (error: any) {
+      toast({
+        title: "Error al cargar partida",
         description: error.message,
         variant: "destructive",
       });
@@ -395,50 +467,101 @@ export default function JournalEntryDialog({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Insertar encabezado
-      const { data: entry, error: entryError } = await supabase
-        .from("tab_journal_entries")
-        .insert({
-          enterprise_id: parseInt(enterpriseId),
-          entry_number: nextEntryNumber,
-          entry_date: entryDate,
-          entry_type: entryType,
-          accounting_period_id: periodId,
-          document_reference: documentReference || null,
-          description: headerDescription,
-          total_debit: getTotalDebit(),
-          total_credit: getTotalCredit(),
-          is_posted: post,
-          posted_at: post ? new Date().toISOString() : null,
-          created_by: user.id,
-        })
-        .select()
-        .single();
+      if (entryToEdit) {
+        // Actualizar partida existente
+        const { error: updateError } = await supabase
+          .from("tab_journal_entries")
+          .update({
+            entry_date: entryDate,
+            entry_type: entryType,
+            accounting_period_id: periodId,
+            document_reference: documentReference || null,
+            description: headerDescription,
+            total_debit: getTotalDebit(),
+            total_credit: getTotalCredit(),
+            is_posted: post,
+            posted_at: post ? new Date().toISOString() : null,
+          })
+          .eq("id", entryToEdit.id);
 
-      if (entryError) throw entryError;
+        if (updateError) throw updateError;
 
-      // Insertar líneas de detalle
-      const detailsToInsert = detailLines.map((line, index) => ({
-        journal_entry_id: entry.id,
-        line_number: index + 1,
-        account_id: line.account_id,
-        description: line.description || headerDescription,
-        bank_reference: line.bank_reference || null,
-        cost_center: line.cost_center || null,
-        debit_amount: line.debit_amount,
-        credit_amount: line.credit_amount,
-      }));
+        // Eliminar líneas antiguas
+        const { error: deleteError } = await supabase
+          .from("tab_journal_entry_details")
+          .delete()
+          .eq("journal_entry_id", entryToEdit.id);
 
-      const { error: detailsError } = await supabase
-        .from("tab_journal_entry_details")
-        .insert(detailsToInsert);
+        if (deleteError) throw deleteError;
 
-      if (detailsError) throw detailsError;
+        // Insertar nuevas líneas
+        const detailsToInsert = detailLines.map((line, index) => ({
+          journal_entry_id: entryToEdit.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          description: line.description || headerDescription,
+          bank_reference: line.bank_reference || null,
+          cost_center: line.cost_center || null,
+          debit_amount: line.debit_amount,
+          credit_amount: line.credit_amount,
+        }));
 
-      toast({
-        title: post ? "Partida contabilizada" : "Borrador guardado",
-        description: `Partida ${nextEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente`,
-      });
+        const { error: insertError } = await supabase
+          .from("tab_journal_entry_details")
+          .insert(detailsToInsert);
+
+        if (insertError) throw insertError;
+
+        toast({
+          title: "Partida actualizada",
+          description: `Partida ${nextEntryNumber} actualizada exitosamente`,
+        });
+      } else {
+        // Insertar nueva partida
+        const { data: entry, error: entryError } = await supabase
+          .from("tab_journal_entries")
+          .insert({
+            enterprise_id: parseInt(enterpriseId),
+            entry_number: nextEntryNumber,
+            entry_date: entryDate,
+            entry_type: entryType,
+            accounting_period_id: periodId,
+            document_reference: documentReference || null,
+            description: headerDescription,
+            total_debit: getTotalDebit(),
+            total_credit: getTotalCredit(),
+            is_posted: post,
+            posted_at: post ? new Date().toISOString() : null,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (entryError) throw entryError;
+
+        // Insertar líneas de detalle
+        const detailsToInsert = detailLines.map((line, index) => ({
+          journal_entry_id: entry.id,
+          line_number: index + 1,
+          account_id: line.account_id,
+          description: line.description || headerDescription,
+          bank_reference: line.bank_reference || null,
+          cost_center: line.cost_center || null,
+          debit_amount: line.debit_amount,
+          credit_amount: line.credit_amount,
+        }));
+
+        const { error: detailsError } = await supabase
+          .from("tab_journal_entry_details")
+          .insert(detailsToInsert);
+
+        if (detailsError) throw detailsError;
+
+        toast({
+          title: post ? "Partida contabilizada" : "Borrador guardado",
+          description: `Partida ${nextEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente`,
+        });
+      }
 
       onSuccess();
       onOpenChange(false);
@@ -457,7 +580,7 @@ export default function JournalEntryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva Partida Contable</DialogTitle>
+          <DialogTitle>{entryToEdit ? 'Editar' : 'Nueva'} Partida Contable</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">

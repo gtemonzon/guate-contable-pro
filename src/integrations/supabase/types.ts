@@ -481,6 +481,30 @@ export type Database = {
           },
         ]
       }
+      tab_fel_document_types: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: number
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: number
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: number
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
       tab_import_logs: {
         Row: {
           created_at: string | null
@@ -684,7 +708,8 @@ export type Database = {
       tab_purchase_ledger: {
         Row: {
           accounting_period_id: number | null
-          authorization_number: string | null
+          base_amount: number | null
+          batch_reference: string | null
           created_at: string | null
           currency_id: number | null
           enterprise_id: number | null
@@ -705,7 +730,8 @@ export type Database = {
         }
         Insert: {
           accounting_period_id?: number | null
-          authorization_number?: string | null
+          base_amount?: number | null
+          batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
@@ -726,7 +752,8 @@ export type Database = {
         }
         Update: {
           accounting_period_id?: number | null
-          authorization_number?: string | null
+          base_amount?: number | null
+          batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
