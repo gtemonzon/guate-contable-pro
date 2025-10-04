@@ -6,14 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { BalanceTreeView } from "@/components/balance/BalanceTreeView";
 
 interface Account {
   id: number;
@@ -24,6 +17,7 @@ interface Account {
   debit: number;
   credit: number;
   balance: number;
+  parent_account_id: number | null;
 }
 
 interface AccountPeriod {
@@ -225,6 +219,7 @@ export default function BalanceSaldos() {
           debit,
           credit,
           balance,
+          parent_account_id: account.parent_account_id,
         };
       });
 
@@ -327,65 +322,22 @@ export default function BalanceSaldos() {
         <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando...</p>
+          ) : filteredAccounts.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No hay cuentas para mostrar</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[150px]">Código</TableHead>
-                    <TableHead className="min-w-[250px]">Nombre de Cuenta</TableHead>
-                    <TableHead className="w-[100px]">Nivel</TableHead>
-                    <TableHead className="w-[120px]">Tipo</TableHead>
-                    <TableHead className="w-[150px] text-right">Debe</TableHead>
-                    <TableHead className="w-[150px] text-right">Haber</TableHead>
-                    <TableHead className="w-[150px] text-right">Saldo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAccounts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No hay cuentas para mostrar
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredAccounts.map((account) => (
-                      <TableRow key={account.id}>
-                        <TableCell className="font-mono">{account.account_code}</TableCell>
-                        <TableCell 
-                          className="font-medium"
-                          style={{ paddingLeft: `${account.level * 20}px` }}
-                        >
-                          {account.account_name}
-                        </TableCell>
-                        <TableCell>{account.level}</TableCell>
-                        <TableCell>
-                          <span className={account.balance_type === "deudor" ? "text-blue-600" : "text-green-600"}>
-                            {account.balance_type === "deudor" ? "Deudor" : "Acreedor"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {account.debit > 0 ? `Q ${account.debit.toFixed(2)}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {account.credit > 0 ? `Q ${account.credit.toFixed(2)}` : "-"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
-                          {account.balance !== 0 ? `Q ${Math.abs(account.balance).toFixed(2)}` : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                  {filteredAccounts.length > 0 && (
-                    <TableRow className="bg-muted font-semibold">
-                      <TableCell colSpan={4}>TOTALES</TableCell>
-                      <TableCell className="text-right font-mono">Q {totals.totalDebit}</TableCell>
-                      <TableCell className="text-right font-mono">Q {totals.totalCredit}</TableCell>
-                      <TableCell></TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+            <div className="space-y-4">
+              <BalanceTreeView accounts={filteredAccounts} />
+              
+              <div className="flex justify-end gap-8 pt-4 pr-3 border-t-2 bg-muted/30 rounded-lg p-4">
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Total Debe</div>
+                  <div className="text-lg font-semibold font-mono">Q {totals.totalDebit}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-muted-foreground">Total Haber</div>
+                  <div className="text-lg font-semibold font-mono">Q {totals.totalCredit}</div>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
