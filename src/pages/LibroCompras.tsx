@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2 } from "lucide-react";
+import { Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -48,8 +56,24 @@ export default function LibroCompras() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
+  const [showJournalDialog, setShowJournalDialog] = useState(false);
+  const [journalType, setJournalType] = useState<"mes" | "cheque">("mes");
 
   const { toast } = useToast();
+
+  const totals = useMemo(() => {
+    const totalWithVAT = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
+    const totalVAT = purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0);
+    const totalBase = purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0);
+    const documentCount = purchases.length;
+
+    return {
+      totalWithVAT: totalWithVAT.toFixed(2),
+      totalVAT: totalVAT.toFixed(2),
+      totalBase: totalBase.toFixed(2),
+      documentCount,
+    };
+  }, [purchases]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -325,10 +349,29 @@ export default function LibroCompras() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold">Libro de Compras</h1>
           <p className="text-muted-foreground">Registro mensual de facturas de compra</p>
+          
+          <div className="mt-4 flex gap-6 text-sm">
+            <div>
+              <span className="text-muted-foreground">Documentos: </span>
+              <Badge variant="secondary">{totals.documentCount}</Badge>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Base: </span>
+              <span className="font-semibold">Q {totals.totalBase}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">IVA: </span>
+              <span className="font-semibold">Q {totals.totalVAT}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Total c/IVA: </span>
+              <span className="font-semibold">Q {totals.totalWithVAT}</span>
+            </div>
+          </div>
         </div>
         <div className="flex gap-4 items-end">
           <div>
@@ -365,9 +408,59 @@ export default function LibroCompras() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Facturas de {monthNames[selectedMonth - 1]} {selectedYear}</CardTitle>
-            <Button onClick={addNewRow} size="sm">
-              Agregar Línea
-            </Button>
+            <div className="flex gap-2">
+              <Dialog open={showJournalDialog} onOpenChange={setShowJournalDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generar Póliza
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Generar Póliza Contable</DialogTitle>
+                    <DialogDescription>
+                      Selecciona el tipo de póliza a generar
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Tipo de Póliza</Label>
+                      <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "cheque")}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mes">Póliza del Mes</SelectItem>
+                          <SelectItem value="cheque">Póliza por Cheque</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
+                      <p><strong>Documentos:</strong> {totals.documentCount}</p>
+                      <p><strong>Base:</strong> Q {totals.totalBase}</p>
+                      <p><strong>IVA:</strong> Q {totals.totalVAT}</p>
+                      <p><strong>Total:</strong> Q {totals.totalWithVAT}</p>
+                    </div>
+                    <Button 
+                      className="w-full" 
+                      onClick={() => {
+                        toast({
+                          title: "Generando póliza",
+                          description: `Póliza ${journalType === "mes" ? "del mes" : "por cheque"} en proceso`,
+                        });
+                        setShowJournalDialog(false);
+                      }}
+                    >
+                      Generar
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button onClick={addNewRow} size="sm">
+                Agregar Línea
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
