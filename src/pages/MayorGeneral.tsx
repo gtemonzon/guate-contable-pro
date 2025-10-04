@@ -146,7 +146,61 @@ export default function MayorGeneral() {
     try {
       setLoading(true);
 
-      // Obtener detalles de partidas que afectan la cuenta
+      // Obtener la cuenta seleccionada para verificar si es de detalle
+      const { data: accountData, error: accountError } = await supabase
+        .from("tab_accounts")
+        .select("id, is_detail_account, account_code")
+        .eq("id", selectedAccount)
+        .single();
+
+      if (accountError) throw accountError;
+
+      // Función recursiva para obtener todas las cuentas hijas de detalle
+      const getDetailAccountIds = async (accountId: number): Promise<number[]> => {
+        const { data: childAccounts, error } = await supabase
+          .from("tab_accounts")
+          .select("id, is_detail_account")
+          .eq("parent_account_id", accountId)
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("is_active", true);
+
+        if (error) throw error;
+
+        let detailIds: number[] = [];
+
+        for (const child of childAccounts || []) {
+          if (child.is_detail_account) {
+            detailIds.push(child.id);
+          } else {
+            // Recursivamente obtener las cuentas hijas
+            const childDetailIds = await getDetailAccountIds(child.id);
+            detailIds = [...detailIds, ...childDetailIds];
+          }
+        }
+
+        return detailIds;
+      };
+
+      // Determinar qué cuentas consultar
+      let accountIdsToQuery: number[] = [];
+      if (accountData.is_detail_account) {
+        accountIdsToQuery = [selectedAccount];
+      } else {
+        accountIdsToQuery = await getDetailAccountIds(selectedAccount);
+      }
+
+      if (accountIdsToQuery.length === 0) {
+        setLedgerEntries([]);
+        toast({
+          title: "Sin movimientos",
+          description: "Esta cuenta no tiene cuentas de detalle con movimientos",
+          variant: "default",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Obtener detalles de partidas que afectan las cuentas
       const { data: details, error: detailsError } = await supabase
         .from("tab_journal_entry_details")
         .select(`
@@ -164,7 +218,7 @@ export default function MayorGeneral() {
             enterprise_id
           )
         `)
-        .eq("account_id", selectedAccount)
+        .in("account_id", accountIdsToQuery)
         .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
         .eq("tab_journal_entries.is_posted", true)
         .gte("tab_journal_entries.entry_date", startDate)
@@ -192,7 +246,7 @@ export default function MayorGeneral() {
             accounting_period_id
           )
         `)
-        .eq("account_id", selectedAccount)
+        .in("account_id", accountIdsToQuery)
         .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
         .eq("tab_journal_entries.is_posted", true)
         .lt("tab_journal_entries.entry_date", startDate);
@@ -377,7 +431,7 @@ export default function MayorGeneral() {
               <div className="flex gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Saldo Anterior: </span>
-                  <Badge variant="outline">
+                  <Badge variant="outline" className={(ledgerEntries[0]?.previous_balance || 0) < 0 ? 'text-red-600' : ''}>
                     Q {Math.abs(ledgerEntries[0]?.previous_balance || 0).toFixed(2)}
                   </Badge>
                 </div>
@@ -429,7 +483,7 @@ export default function MayorGeneral() {
                         <TableCell className="text-right font-mono">
                           {entry.credit_amount > 0 ? `Q ${entry.credit_amount.toFixed(2)}` : "-"}
                         </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
+                        <TableCell className={`text-right font-mono font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
                           Q {Math.abs(entry.balance).toFixed(2)}
                         </TableCell>
                         <TableCell>

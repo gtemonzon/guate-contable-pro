@@ -65,7 +65,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
           </div>
 
           <div className="col-span-1 text-right">
-            <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
+            <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.previous_balance < 0 ? 'text-red-600' : ''}`}>
               {account.previous_balance !== 0 ? `Q ${Math.abs(account.previous_balance).toFixed(2)}` : "-"}
             </span>
           </div>
@@ -83,7 +83,7 @@ function TreeNode({ account, children, level, allAccounts }: TreeNodeProps) {
           </div>
 
           <div className="col-span-2 text-right">
-            <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
+            <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.balance < 0 ? 'text-red-600' : ''}`}>
               {account.balance !== 0 ? `Q ${Math.abs(account.balance).toFixed(2)}` : "-"}
             </span>
           </div>
