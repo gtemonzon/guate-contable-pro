@@ -59,9 +59,9 @@ export default function LibroVentas() {
   const { toast } = useToast();
 
   const totals = useMemo(() => {
-    const totalWithVAT = sales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const totalVAT = sales.reduce((sum, s) => sum + (s.vat_amount || 0), 0);
-    const totalNet = sales.reduce((sum, s) => sum + (s.net_amount || 0), 0);
+    const totalWithVAT = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+    const totalVAT = sales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
+    const totalNet = sales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
     const documentCount = sales.length;
 
     return {
