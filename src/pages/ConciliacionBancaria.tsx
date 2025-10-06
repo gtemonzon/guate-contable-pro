@@ -14,11 +14,23 @@ import type { Database } from "@/integrations/supabase/types";
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
 
+type JournalMovement = {
+  id: number;
+  movement_date: string;
+  description: string;
+  debit_amount: number;
+  credit_amount: number;
+  entry_number: string;
+  is_reconciled: boolean;
+  reconciliation_id: number | null;
+  journal_entry_id: number;
+};
+
 const ConciliacionBancaria = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
-  const [movements, setMovements] = useState<BankMovement[]>([]);
+  const [movements, setMovements] = useState<JournalMovement[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<string>("");
@@ -85,36 +97,104 @@ const ConciliacionBancaria = () => {
     try {
       setLoading(true);
       
-      // Calculate end date for the selected month/year
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
-      
-      // Fetch all movements up to the end of the selected period that are not reconciled
-      // OR movements within the selected period (regardless of reconciliation status)
       const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
       
-      // Get unreconciled movements from previous periods
+      // Get unreconciled movements from journal entries (previous periods)
       const { data: previousUnreconciled, error: prevError } = await supabase
-        .from('tab_bank_movements')
-        .select('*')
-        .eq('bank_account_id', parseInt(selectedAccount))
-        .eq('is_reconciled', false)
-        .lt('movement_date', startDate);
+        .from('tab_journal_entry_details')
+        .select(`
+          id,
+          debit_amount,
+          credit_amount,
+          description,
+          tab_journal_entries!inner(
+            id,
+            entry_number,
+            entry_date,
+            is_posted,
+            enterprise_id
+          )
+        `)
+        .eq('account_id', parseInt(selectedAccount))
+        .eq('tab_journal_entries.is_posted', true)
+        .lt('tab_journal_entries.entry_date', startDate);
 
       if (prevError) throw prevError;
 
       // Get all movements from the selected period
       const { data: periodMovements, error: periodError } = await supabase
-        .from('tab_bank_movements')
-        .select('*')
-        .eq('bank_account_id', parseInt(selectedAccount))
-        .gte('movement_date', startDate)
-        .lte('movement_date', endDate);
+        .from('tab_journal_entry_details')
+        .select(`
+          id,
+          debit_amount,
+          credit_amount,
+          description,
+          tab_journal_entries!inner(
+            id,
+            entry_number,
+            entry_date,
+            is_posted,
+            enterprise_id
+          )
+        `)
+        .eq('account_id', parseInt(selectedAccount))
+        .eq('tab_journal_entries.is_posted', true)
+        .gte('tab_journal_entries.entry_date', startDate)
+        .lte('tab_journal_entries.entry_date', endDate);
 
       if (periodError) throw periodError;
 
-      // Combine both sets of movements
-      const allMovements = [...(previousUnreconciled || []), ...(periodMovements || [])];
+      // Check which movements are reconciled in tab_bank_movements
+      const allDetailIds = [
+        ...(previousUnreconciled || []).map(m => m.id),
+        ...(periodMovements || []).map(m => m.id)
+      ];
+
+      let reconciledMap = new Map<number, { is_reconciled: boolean; reconciliation_id: number | null }>();
+      
+      if (allDetailIds.length > 0) {
+        const { data: bankMovements } = await supabase
+          .from('tab_bank_movements')
+          .select('journal_entry_id, is_reconciled, reconciliation_id')
+          .in('journal_entry_id', allDetailIds);
+
+        if (bankMovements) {
+          bankMovements.forEach(bm => {
+            reconciledMap.set(bm.journal_entry_id!, {
+              is_reconciled: bm.is_reconciled || false,
+              reconciliation_id: bm.reconciliation_id
+            });
+          });
+        }
+      }
+
+      // Transform data to JournalMovement format
+      const transformMovement = (m: any): JournalMovement => {
+        const reconcilationInfo = reconciledMap.get(m.id) || { is_reconciled: false, reconciliation_id: null };
+        return {
+          id: m.id,
+          movement_date: m.tab_journal_entries.entry_date,
+          description: m.description || m.tab_journal_entries.entry_number,
+          debit_amount: m.debit_amount || 0,
+          credit_amount: m.credit_amount || 0,
+          entry_number: m.tab_journal_entries.entry_number,
+          is_reconciled: reconcilationInfo.is_reconciled,
+          reconciliation_id: reconcilationInfo.reconciliation_id,
+          journal_entry_id: m.id
+        };
+      };
+
+      // Filter previous unreconciled and combine with period movements
+      const previousUnreconciledTransformed = (previousUnreconciled || [])
+        .map(transformMovement)
+        .filter(m => !m.is_reconciled);
+
+      const periodMovementsTransformed = (periodMovements || [])
+        .map(transformMovement);
+
+      const allMovements = [...previousUnreconciledTransformed, ...periodMovementsTransformed];
       
       // Sort by date descending
       allMovements.sort((a, b) => 
@@ -129,6 +209,7 @@ const ConciliacionBancaria = () => {
       );
       setSelectedMovements(reconciledIds);
     } catch (error: any) {
+      console.error('Error fetching movements:', error);
       toast({
         variant: "destructive",
         title: "Error al cargar movimientos",
@@ -201,17 +282,64 @@ const ConciliacionBancaria = () => {
 
       if (recError) throw recError;
 
-      // Update selected movements
+      // Update selected movements - insert or update in tab_bank_movements
       const movementIds = Array.from(selectedMovements);
-      const { error: updateError } = await supabase
+      
+      // First, check which movements already have entries in tab_bank_movements
+      const { data: existingBankMovements } = await supabase
         .from('tab_bank_movements')
-        .update({
-          is_reconciled: true,
-          reconciliation_id: reconciliation.id,
-        })
-        .in('id', movementIds);
+        .select('id, journal_entry_id')
+        .in('journal_entry_id', movementIds);
 
-      if (updateError) throw updateError;
+      const existingMap = new Map(
+        (existingBankMovements || []).map(bm => [bm.journal_entry_id, bm.id])
+      );
+
+      // Separate into updates and inserts
+      const toUpdate: number[] = [];
+      const toInsert: any[] = [];
+
+      movementIds.forEach(detailId => {
+        const movement = movements.find(m => m.id === detailId);
+        if (!movement) return;
+
+        if (existingMap.has(detailId)) {
+          toUpdate.push(existingMap.get(detailId)!);
+        } else {
+          toInsert.push({
+            bank_account_id: parseInt(selectedAccount),
+            movement_date: movement.movement_date,
+            description: movement.description,
+            debit_amount: movement.debit_amount,
+            credit_amount: movement.credit_amount,
+            journal_entry_id: detailId,
+            is_reconciled: true,
+            reconciliation_id: reconciliation.id
+          });
+        }
+      });
+
+      // Update existing
+      if (toUpdate.length > 0) {
+        const { error: updateError } = await supabase
+          .from('tab_bank_movements')
+          .update({
+            is_reconciled: true,
+            reconciliation_id: reconciliation.id,
+          })
+          .in('id', toUpdate);
+
+        if (updateError) throw updateError;
+      }
+
+      // Insert new
+      if (toInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('tab_bank_movements')
+          .insert(toInsert);
+
+        if (insertError) throw insertError;
+      }
 
       // Update unselected movements
       const unselectedIds = movements
@@ -219,13 +347,21 @@ const ConciliacionBancaria = () => {
         .map(m => m.id);
       
       if (unselectedIds.length > 0) {
-        await supabase
+        // Only update those that exist in tab_bank_movements
+        const { data: unselectedExisting } = await supabase
           .from('tab_bank_movements')
-          .update({
-            is_reconciled: false,
-            reconciliation_id: null,
-          })
-          .in('id', unselectedIds);
+          .select('id')
+          .in('journal_entry_id', unselectedIds);
+
+        if (unselectedExisting && unselectedExisting.length > 0) {
+          await supabase
+            .from('tab_bank_movements')
+            .update({
+              is_reconciled: false,
+              reconciliation_id: null,
+            })
+            .in('id', unselectedExisting.map(u => u.id));
+        }
       }
 
       toast({
@@ -415,7 +551,10 @@ const ConciliacionBancaria = () => {
                               onCheckedChange={() => toggleMovement(movement.id)}
                             />
                           </TableCell>
-                          <TableCell>{new Date(movement.movement_date).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            {new Date(movement.movement_date).toLocaleDateString()}
+                            <div className="text-xs text-muted-foreground">{movement.entry_number}</div>
+                          </TableCell>
                           <TableCell>{movement.description}</TableCell>
                           <TableCell>
                             <span className={`text-sm ${movement.debit_amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
