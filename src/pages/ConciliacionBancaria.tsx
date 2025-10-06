@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BadgeCheck, Building2, Calendar, Landmark } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
@@ -87,7 +88,7 @@ const ConciliacionBancaria = () => {
       toast({
         variant: "destructive",
         title: "Error al cargar cuentas bancarias",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     }
   };
@@ -213,7 +214,7 @@ const ConciliacionBancaria = () => {
       toast({
         variant: "destructive",
         title: "Error al cargar movimientos",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     } finally {
       setLoading(false);
@@ -381,7 +382,7 @@ const ConciliacionBancaria = () => {
       toast({
         variant: "destructive",
         title: "Error al conciliar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     } finally {
       setLoading(false);

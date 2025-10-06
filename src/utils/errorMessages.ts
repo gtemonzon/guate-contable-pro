@@ -27,6 +27,36 @@ export function getSafeErrorMessage(error: any): string {
   return 'Ocurrió un error. Por favor intente nuevamente.';
 }
 
+// Sanitize authentication error messages to prevent account enumeration
+export function getSafeAuthError(error: any): string {
+  // Don't differentiate between wrong email vs wrong password (prevents account enumeration)
+  if (error.message?.includes('Invalid') || 
+      error.message?.includes('not found') ||
+      error.message?.includes('credentials') ||
+      error.message?.includes('Email not confirmed')) {
+    return 'Credenciales inválidas. Verifica tu correo y contraseña.';
+  }
+  
+  // Registration errors
+  if (error.message?.includes('already registered') || 
+      error.message?.includes('already been registered')) {
+    return 'Este correo ya está registrado.';
+  }
+  
+  // Password validation
+  if (error.message?.includes('Password')) {
+    return 'La contraseña no cumple con los requisitos mínimos.';
+  }
+  
+  // Rate limiting
+  if (error.message?.includes('rate limit') || error.message?.includes('too many')) {
+    return 'Demasiados intentos. Por favor espera unos minutos.';
+  }
+  
+  // Generic auth error
+  return 'Error de autenticación. Por favor intenta nuevamente.';
+}
+
 // Sanitize CSV field to prevent CSV injection attacks
 export function sanitizeCSVField(value: string): string {
   if (!value) return value;

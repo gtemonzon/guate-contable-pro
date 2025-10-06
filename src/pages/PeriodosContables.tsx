@@ -7,6 +7,7 @@ import { Plus, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import PeriodCard from "@/components/periodos/PeriodCard";
 import PeriodDialog from "@/components/periodos/PeriodDialog";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 const PeriodosContables = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,7 +72,7 @@ const PeriodosContables = () => {
     } catch (error: any) {
       toast({
         title: "Error al cerrar período",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -99,7 +100,7 @@ const PeriodosContables = () => {
     } catch (error: any) {
       toast({
         title: "Error al reabrir período",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Loader2 } from "lucide-react";
+import { getSafeAuthError } from "@/utils/errorMessages";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ const Login = () => {
       toast({
         variant: "destructive",
         title: "Error al iniciar sesión",
-        description: error.message,
+        description: getSafeAuthError(error),
       });
     } finally {
       setLoading(false);

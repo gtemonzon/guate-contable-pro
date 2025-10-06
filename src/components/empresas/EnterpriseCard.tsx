@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -98,7 +99,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       toast({
         variant: "destructive",
         title: "Error al eliminar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     } finally {
       setShowDeleteDialog(false);

@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 interface Account {
   id: number;
@@ -175,7 +176,7 @@ export default function JournalEntryDialog({
     } catch (error: any) {
       toast({
         title: "Error al cargar datos",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -242,7 +243,7 @@ export default function JournalEntryDialog({
     } catch (error: any) {
       toast({
         title: "Error al cargar partida",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }

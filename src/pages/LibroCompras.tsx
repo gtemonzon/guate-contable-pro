@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, FileText, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 import {
   Dialog,
   DialogContent,
@@ -178,7 +179,7 @@ export default function LibroCompras() {
     } catch (error: any) {
       toast({
         title: "Error al cargar libro",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -200,7 +201,7 @@ export default function LibroCompras() {
     } catch (error: any) {
       toast({
         title: "Error al cargar facturas",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -323,7 +324,7 @@ export default function LibroCompras() {
     } catch (error: any) {
       toast({
         title: "Error al guardar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -355,7 +356,7 @@ export default function LibroCompras() {
     } catch (error: any) {
       toast({
         title: "Error al eliminar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }

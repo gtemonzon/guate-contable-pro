@@ -9,6 +9,7 @@ import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
 import type { Database } from "@/integrations/supabase/types";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
@@ -51,7 +52,7 @@ const Cuentas = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
       setLoading(false);
     }
@@ -72,7 +73,7 @@ const Cuentas = () => {
       toast({
         variant: "destructive",
         title: "Error al cargar cuentas",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     } finally {
       setLoading(false);

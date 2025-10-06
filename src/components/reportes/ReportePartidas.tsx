@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 import {
   Table,
   TableBody,
@@ -107,7 +108,7 @@ export default function ReportePartidas() {
     } catch (error: any) {
       toast({
         title: "Error al generar reporte",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

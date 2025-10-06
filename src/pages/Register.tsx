@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Loader2 } from "lucide-react";
+import { getSafeAuthError } from "@/utils/errorMessages";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -66,7 +67,7 @@ const Register = () => {
       toast({
         variant: "destructive",
         title: "Error al registrarse",
-        description: error.message,
+        description: getSafeAuthError(error),
       });
     } finally {
       setLoading(false);

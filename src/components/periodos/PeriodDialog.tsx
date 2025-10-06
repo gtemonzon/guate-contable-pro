@@ -27,6 +27,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 const formSchema = z.object({
   start_date: z.date({
@@ -156,7 +157,7 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

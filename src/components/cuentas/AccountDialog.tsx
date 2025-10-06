@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { Database } from "@/integrations/supabase/types";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
@@ -241,7 +242,7 @@ export function AccountDialog({
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     }
   };

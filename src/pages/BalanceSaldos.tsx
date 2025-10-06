@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { BalanceTreeView } from "@/components/balance/BalanceTreeView";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 interface Account {
   id: number;
@@ -120,7 +121,7 @@ export default function BalanceSaldos() {
     } catch (error: any) {
       toast({
         title: "Error al cargar períodos",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -298,7 +299,7 @@ export default function BalanceSaldos() {
     } catch (error: any) {
       toast({
         title: "Error al cargar saldos",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, FileText, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 interface JournalEntry {
   id: number;
@@ -93,7 +94,7 @@ export default function Partidas() {
     } catch (error: any) {
       toast({
         title: "Error al cargar partidas",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 import {
   Dialog,
   DialogContent,
@@ -155,7 +156,7 @@ export default function MayorGeneral() {
     } catch (error: any) {
       toast({
         title: "Error al cargar cuentas",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -318,7 +319,7 @@ export default function MayorGeneral() {
     } catch (error: any) {
       toast({
         title: "Error al cargar movimientos",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -369,7 +370,7 @@ export default function MayorGeneral() {
     } catch (error: any) {
       toast({
         title: "Error al cargar póliza",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }

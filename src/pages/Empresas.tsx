@@ -8,6 +8,7 @@ import { Plus, Search, Building2, Users, Calendar } from "lucide-react";
 import { EnterpriseDialog } from "@/components/empresas/EnterpriseDialog";
 import { EnterpriseCard } from "@/components/empresas/EnterpriseCard";
 import type { Database } from "@/integrations/supabase/types";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -33,7 +34,7 @@ const Empresas = () => {
       toast({
         variant: "destructive",
         title: "Error al cargar empresas",
-        description: error.message,
+        description: getSafeErrorMessage(error),
       });
     } finally {
       setLoading(false);
