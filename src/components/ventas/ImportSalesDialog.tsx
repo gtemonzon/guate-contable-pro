@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload, Download } from "lucide-react";
+import { salesSchema } from "@/utils/csvValidation";
+import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 
 interface ImportSalesDialogProps {
   open: boolean;
@@ -75,27 +77,61 @@ export function ImportSalesDialog({
         throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(", ")}`);
       }
 
-      // Procesar filas
+      // Procesar y validar filas
       const sales = [];
+      const errors: string[] = [];
+      
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map(v => v.trim());
         if (values.length < requiredHeaders.length) continue;
 
+        const rowData = {
+          serie: sanitizeCSVField(values[headers.indexOf("serie")]),
+          numero: sanitizeCSVField(values[headers.indexOf("numero")]),
+          fecha: values[headers.indexOf("fecha")],
+          tipo_documento_fel: sanitizeCSVField(values[headers.indexOf("tipo_documento_fel")]),
+          numero_autorizacion: sanitizeCSVField(values[headers.indexOf("numero_autorizacion")]),
+          nit_cliente: sanitizeCSVField(values[headers.indexOf("nit_cliente")]),
+          nombre_cliente: sanitizeCSVField(values[headers.indexOf("nombre_cliente")]),
+          monto_neto: parseFloat(values[headers.indexOf("monto_neto")]),
+          iva: parseFloat(values[headers.indexOf("iva")]),
+          total: parseFloat(values[headers.indexOf("total")]),
+        };
+
+        // Validate row with zod schema
+        const validation = salesSchema.safeParse(rowData);
+        
+        if (!validation.success) {
+          errors.push(`Fila ${i + 1}: ${validation.error.errors[0].message}`);
+          continue;
+        }
+
+        // Additional business logic validation
+        const expectedTotal = rowData.monto_neto + rowData.iva;
+        if (Math.abs(expectedTotal - rowData.total) > 0.01) {
+          errors.push(`Fila ${i + 1}: El total no coincide con monto_neto + IVA`);
+          continue;
+        }
+
         const sale = {
           enterprise_id: enterpriseId,
-          invoice_series: values[headers.indexOf("serie")],
-          invoice_number: values[headers.indexOf("numero")],
-          invoice_date: values[headers.indexOf("fecha")],
-          fel_document_type: values[headers.indexOf("tipo_documento_fel")],
-          authorization_number: values[headers.indexOf("numero_autorizacion")],
-          customer_nit: values[headers.indexOf("nit_cliente")],
-          customer_name: values[headers.indexOf("nombre_cliente")],
-          net_amount: parseFloat(values[headers.indexOf("monto_neto")]) || 0,
-          vat_amount: parseFloat(values[headers.indexOf("iva")]) || 0,
-          total_amount: parseFloat(values[headers.indexOf("total")]) || 0,
+          invoice_series: rowData.serie,
+          invoice_number: rowData.numero,
+          invoice_date: rowData.fecha,
+          fel_document_type: rowData.tipo_documento_fel,
+          authorization_number: rowData.numero_autorizacion,
+          customer_nit: rowData.nit_cliente,
+          customer_name: rowData.nombre_cliente,
+          net_amount: rowData.monto_neto,
+          vat_amount: rowData.iva,
+          total_amount: rowData.total,
         };
 
         sales.push(sale);
+      }
+
+      if (errors.length > 0 && sales.length === 0) {
+        throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
       }
 
       if (sales.length === 0) {
@@ -109,9 +145,13 @@ export function ImportSalesDialog({
 
       if (error) throw error;
 
+      const message = errors.length > 0 
+        ? `Se importaron ${sales.length} registros. ${errors.length} filas con errores fueron omitidas.`
+        : `Se importaron ${sales.length} registros de ventas`;
+
       toast({
         title: "Importación exitosa",
-        description: `Se importaron ${sales.length} registros de ventas`,
+        description: message,
       });
 
       onSuccess();
@@ -119,7 +159,7 @@ export function ImportSalesDialog({
     } catch (error: any) {
       toast({
         title: "Error al importar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {

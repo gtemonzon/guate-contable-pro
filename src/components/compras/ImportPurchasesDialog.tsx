@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload, Download } from "lucide-react";
+import { purchasesSchema } from "@/utils/csvValidation";
+import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 
 interface ImportPurchasesDialogProps {
   open: boolean;
@@ -68,35 +70,69 @@ export function ImportPurchasesDialog({
       // Validar encabezados
       const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
       const requiredHeaders = ["serie", "numero", "fecha", "tipo_documento_fel", 
-                               "nit_proveedor", "nombre_proveedor", "monto_base", "iva", "total", "ref_pago"];
+                               "nit_proveedor", "nombre_proveedor", "monto_base", "iva", "total"];
       
       const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
       if (missingHeaders.length > 0) {
         throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(", ")}`);
       }
 
-      // Procesar filas
+      // Procesar y validar filas
       const purchases = [];
+      const errors: string[] = [];
+      
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map(v => v.trim());
         if (values.length < requiredHeaders.length) continue;
 
+        const rowData = {
+          serie: sanitizeCSVField(values[headers.indexOf("serie")]),
+          numero: sanitizeCSVField(values[headers.indexOf("numero")]),
+          fecha: values[headers.indexOf("fecha")],
+          tipo_documento_fel: sanitizeCSVField(values[headers.indexOf("tipo_documento_fel")]),
+          nit_proveedor: sanitizeCSVField(values[headers.indexOf("nit_proveedor")]),
+          nombre_proveedor: sanitizeCSVField(values[headers.indexOf("nombre_proveedor")]),
+          monto_base: parseFloat(values[headers.indexOf("monto_base")]),
+          iva: parseFloat(values[headers.indexOf("iva")]),
+          total: parseFloat(values[headers.indexOf("total")]),
+        };
+
+        // Validate row with zod schema
+        const validation = purchasesSchema.safeParse(rowData);
+        
+        if (!validation.success) {
+          errors.push(`Fila ${i + 1}: ${validation.error.errors[0].message}`);
+          continue;
+        }
+
+        // Additional business logic validation
+        const expectedTotal = rowData.monto_base + rowData.iva;
+        if (Math.abs(expectedTotal - rowData.total) > 0.01) {
+          errors.push(`Fila ${i + 1}: El total no coincide con monto_base + IVA`);
+          continue;
+        }
+
+        const refPagoIndex = headers.indexOf("ref_pago");
         const purchase = {
           enterprise_id: enterpriseId,
-          invoice_series: values[headers.indexOf("serie")],
-          invoice_number: values[headers.indexOf("numero")],
-          invoice_date: values[headers.indexOf("fecha")],
-          fel_document_type: values[headers.indexOf("tipo_documento_fel")],
-          supplier_nit: values[headers.indexOf("nit_proveedor")],
-          supplier_name: values[headers.indexOf("nombre_proveedor")],
-          base_amount: parseFloat(values[headers.indexOf("monto_base")]) || 0,
-          vat_amount: parseFloat(values[headers.indexOf("iva")]) || 0,
-          net_amount: parseFloat(values[headers.indexOf("monto_base")]) || 0,
-          total_amount: parseFloat(values[headers.indexOf("total")]) || 0,
-          batch_reference: values[headers.indexOf("ref_pago")] || "",
+          invoice_series: rowData.serie,
+          invoice_number: rowData.numero,
+          invoice_date: rowData.fecha,
+          fel_document_type: rowData.tipo_documento_fel,
+          supplier_nit: rowData.nit_proveedor,
+          supplier_name: rowData.nombre_proveedor,
+          base_amount: rowData.monto_base,
+          vat_amount: rowData.iva,
+          net_amount: rowData.monto_base,
+          total_amount: rowData.total,
+          batch_reference: refPagoIndex >= 0 ? sanitizeCSVField(values[refPagoIndex]) : "",
         };
 
         purchases.push(purchase);
+      }
+
+      if (errors.length > 0 && purchases.length === 0) {
+        throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
       }
 
       if (purchases.length === 0) {
@@ -110,9 +146,13 @@ export function ImportPurchasesDialog({
 
       if (error) throw error;
 
+      const message = errors.length > 0 
+        ? `Se importaron ${purchases.length} registros. ${errors.length} filas con errores fueron omitidas.`
+        : `Se importaron ${purchases.length} registros de compras`;
+
       toast({
         title: "Importación exitosa",
-        description: `Se importaron ${purchases.length} registros de compras`,
+        description: message,
       });
 
       onSuccess();
@@ -120,7 +160,7 @@ export function ImportPurchasesDialog({
     } catch (error: any) {
       toast({
         title: "Error al importar",
-        description: error.message,
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
