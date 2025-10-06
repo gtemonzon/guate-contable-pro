@@ -1,0 +1,288 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+interface JournalEntryData {
+  entry_number: string;
+  entry_date: string;
+  entry_type: string;
+  description: string;
+  total_debit: number;
+  total_credit: number;
+  is_posted: boolean;
+}
+
+export default function ReportePartidas() {
+  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [entries, setEntries] = useState<JournalEntryData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    setCurrentEnterpriseId(enterpriseId);
+    
+    if (enterpriseId) {
+      fetchEnterpriseName(enterpriseId);
+    }
+
+    // Set default dates to current month
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setDateFrom(firstDay.toISOString().split('T')[0]);
+    setDateTo(lastDay.toISOString().split('T')[0]);
+  }, []);
+
+  const fetchEnterpriseName = async (enterpriseId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_enterprises")
+        .select("business_name")
+        .eq("id", parseInt(enterpriseId))
+        .single();
+
+      if (error) throw error;
+      setEnterpriseName(data?.business_name || "");
+    } catch (error: any) {
+      console.error("Error fetching enterprise:", error);
+    }
+  };
+
+  const generateReport = async () => {
+    if (!currentEnterpriseId) {
+      toast({
+        title: "Error",
+        description: "Selecciona una empresa primero",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!dateFrom || !dateTo) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar un período de fechas",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("tab_journal_entries")
+        .select("*")
+        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .gte("entry_date", dateFrom)
+        .lte("entry_date", dateTo)
+        .order("entry_date", { ascending: true })
+        .order("entry_number", { ascending: true });
+
+      if (error) throw error;
+      setEntries(data || []);
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: "Sin datos",
+          description: "No hay partidas registradas para el período seleccionado",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error al generar reporte",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportExcel = () => {
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
+    const data = entries.map(e => [
+      e.entry_number,
+      new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+      e.entry_type,
+      e.description,
+      e.total_debit.toFixed(2),
+      e.total_credit.toFixed(2),
+      e.is_posted ? 'Contabilizado' : 'Borrador',
+    ]);
+
+    const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+    const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+
+    exportToExcel({
+      filename: `Partidas_${dateFrom}_${dateTo}`,
+      title: `Reporte de Partidas - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      enterpriseName,
+      headers,
+      data,
+      totals: [
+        { label: "Total Debe", value: `Q ${totalDebit.toFixed(2)}` },
+        { label: "Total Haber", value: `Q ${totalCredit.toFixed(2)}` },
+        { label: "Cantidad de Partidas", value: entries.length.toString() },
+      ],
+    });
+
+    toast({
+      title: "Exportado",
+      description: "El reporte se ha exportado a Excel correctamente",
+    });
+  };
+
+  const handleExportPDF = () => {
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
+    const data = entries.map(e => [
+      e.entry_number,
+      new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+      e.entry_type,
+      e.description,
+      `Q ${e.total_debit.toFixed(2)}`,
+      `Q ${e.total_credit.toFixed(2)}`,
+      e.is_posted ? 'Contabilizado' : 'Borrador',
+    ]);
+
+    const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+    const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+
+    exportToPDF({
+      filename: `Partidas_${dateFrom}_${dateTo}`,
+      title: `Reporte de Partidas - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      enterpriseName,
+      headers,
+      data,
+      totals: [
+        { label: "Total Debe", value: `Q ${totalDebit.toFixed(2)}` },
+        { label: "Total Haber", value: `Q ${totalCredit.toFixed(2)}` },
+        { label: "Cantidad de Partidas", value: entries.length.toString() },
+      ],
+    });
+
+    toast({
+      title: "Exportado",
+      description: "El reporte se ha exportado a PDF correctamente",
+    });
+  };
+
+  const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+  const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <Label htmlFor="dateFrom">Fecha Desde</Label>
+          <Input
+            id="dateFrom"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="dateTo">Fecha Hasta</Label>
+          <Input
+            id="dateTo"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-end">
+          <Button onClick={generateReport} disabled={loading} className="w-full">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Generar Reporte
+          </Button>
+        </div>
+
+        {entries.length > 0 && (
+          <div className="flex items-end gap-2">
+            <Button variant="outline" onClick={handleExportExcel} className="flex-1">
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+            <Button variant="outline" onClick={handleExportPDF} className="flex-1">
+              <FileText className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {entries.length > 0 && (
+        <div className="space-y-4">
+          <div className="rounded-lg border overflow-auto max-h-[500px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Número</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead className="text-right">Debe</TableHead>
+                  <TableHead className="text-right">Haber</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entries.map((entry, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{entry.entry_number}</TableCell>
+                    <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
+                    <TableCell className="capitalize">{entry.entry_type}</TableCell>
+                    <TableCell>{entry.description}</TableCell>
+                    <TableCell className="text-right">Q {entry.total_debit.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">Q {entry.total_credit.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {entry.is_posted ? (
+                        <span className="text-green-600">Contabilizado</span>
+                      ) : (
+                        <span className="text-muted-foreground">Borrador</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex justify-end gap-8 p-4 bg-muted rounded-lg">
+            <div>
+              <span className="text-muted-foreground">Total Debe: </span>
+              <span className="font-semibold">Q {totalDebit.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Total Haber: </span>
+              <span className="font-semibold">Q {totalCredit.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Partidas: </span>
+              <span className="font-semibold">{entries.length}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -17,6 +17,7 @@ import MayorGeneral from "./pages/MayorGeneral";
 import ConciliacionBancaria from "./pages/ConciliacionBancaria";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
+import Reportes from "./pages/Reportes";
 
 const queryClient = new QueryClient();
 
@@ -42,7 +43,7 @@ const App = () => (
             <Route path="/conciliacion" element={<ConciliacionBancaria />} />
             <Route path="/saldos" element={<BalanceSaldos />} />
             <Route path="/mayor" element={<MayorGeneral />} />
-            <Route path="/reportes" element={<div>Reportes (próximamente)</div>} />
+            <Route path="/reportes" element={<Reportes />} />
             <Route path="/importar" element={<div>Importación (próximamente)</div>} />
           </Route>
           
