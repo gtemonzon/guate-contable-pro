@@ -395,18 +395,13 @@ export function AccountDialog({
               />
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-5 gap-4 rounded-lg border p-4">
               <FormField
                 control={form.control}
                 name="is_detail_account"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Cuenta de Detalle</FormLabel>
-                      <FormDescription>
-                        Marca si es cuenta de último nivel
-                      </FormDescription>
-                    </div>
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Detalle</FormLabel>
                     <FormControl>
                       <Switch
                         checked={field.value}
@@ -421,13 +416,8 @@ export function AccountDialog({
                 control={form.control}
                 name="allows_movement"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Permite Movimiento</FormLabel>
-                      <FormDescription>
-                        Permite registrar partidas en esta cuenta
-                      </FormDescription>
-                    </div>
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Movimiento</FormLabel>
                     <FormControl>
                       <Switch
                         checked={field.value}
@@ -442,13 +432,8 @@ export function AccountDialog({
                 control={form.control}
                 name="requires_cost_center"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Requiere Centro de Costo</FormLabel>
-                      <FormDescription>
-                        Obliga a especificar centro de costo
-                      </FormDescription>
-                    </div>
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Costo</FormLabel>
                     <FormControl>
                       <Switch
                         checked={field.value}
@@ -463,13 +448,8 @@ export function AccountDialog({
                 control={form.control}
                 name="is_bank_account"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Cuenta Bancaria</FormLabel>
-                      <FormDescription>
-                        Marca si es una cuenta de banco para conciliación
-                      </FormDescription>
-                    </div>
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Banco</FormLabel>
                     <FormControl>
                       <Switch
                         checked={field.value || false}
@@ -484,13 +464,8 @@ export function AccountDialog({
                 control={form.control}
                 name="is_active"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Cuenta Activa</FormLabel>
-                      <FormDescription>
-                        Desactiva para ocultar de operaciones
-                      </FormDescription>
-                    </div>
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Activa</FormLabel>
                     <FormControl>
                       <Switch
                         checked={field.value}
