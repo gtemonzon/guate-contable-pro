@@ -85,25 +85,47 @@ const ConciliacionBancaria = () => {
     try {
       setLoading(true);
       
-      // Calculate start and end dates for the selected month/year
-      const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+      // Calculate end date for the selected month/year
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
       
-      const { data, error } = await supabase
+      // Fetch all movements up to the end of the selected period that are not reconciled
+      // OR movements within the selected period (regardless of reconciliation status)
+      const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+      
+      // Get unreconciled movements from previous periods
+      const { data: previousUnreconciled, error: prevError } = await supabase
+        .from('tab_bank_movements')
+        .select('*')
+        .eq('bank_account_id', parseInt(selectedAccount))
+        .eq('is_reconciled', false)
+        .lt('movement_date', startDate);
+
+      if (prevError) throw prevError;
+
+      // Get all movements from the selected period
+      const { data: periodMovements, error: periodError } = await supabase
         .from('tab_bank_movements')
         .select('*')
         .eq('bank_account_id', parseInt(selectedAccount))
         .gte('movement_date', startDate)
-        .lte('movement_date', endDate)
-        .order('movement_date', { ascending: false });
+        .lte('movement_date', endDate);
 
-      if (error) throw error;
-      setMovements(data || []);
+      if (periodError) throw periodError;
+
+      // Combine both sets of movements
+      const allMovements = [...(previousUnreconciled || []), ...(periodMovements || [])];
+      
+      // Sort by date descending
+      allMovements.sort((a, b) => 
+        new Date(b.movement_date).getTime() - new Date(a.movement_date).getTime()
+      );
+      
+      setMovements(allMovements);
       
       // Pre-select already reconciled movements
       const reconciledIds = new Set(
-        data?.filter(m => m.is_reconciled).map(m => m.id) || []
+        allMovements.filter(m => m.is_reconciled).map(m => m.id)
       );
       setSelectedMovements(reconciledIds);
     } catch (error: any) {
