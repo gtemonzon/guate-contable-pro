@@ -175,20 +175,20 @@ export default function MayorGeneral() {
     try {
       setLoading(true);
 
-      // Obtener la cuenta seleccionada para verificar si es de detalle
+      // Obtener la cuenta seleccionada para verificar si permite movimiento
       const { data: accountData, error: accountError } = await supabase
         .from("tab_accounts")
-        .select("id, is_detail_account, account_code")
+        .select("id, allows_movement, account_code")
         .eq("id", selectedAccount)
         .single();
 
       if (accountError) throw accountError;
 
-      // Función recursiva para obtener todas las cuentas hijas de detalle
+      // Función recursiva para obtener todas las cuentas hijas que permiten movimiento
       const getDetailAccountIds = async (accountId: number): Promise<number[]> => {
         const { data: childAccounts, error } = await supabase
           .from("tab_accounts")
-          .select("id, is_detail_account")
+          .select("id, allows_movement")
           .eq("parent_account_id", accountId)
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .eq("is_active", true);
@@ -198,7 +198,7 @@ export default function MayorGeneral() {
         let detailIds: number[] = [];
 
         for (const child of childAccounts || []) {
-          if (child.is_detail_account) {
+          if (child.allows_movement) {
             detailIds.push(child.id);
           } else {
             // Recursivamente obtener las cuentas hijas
@@ -212,7 +212,7 @@ export default function MayorGeneral() {
 
       // Determinar qué cuentas consultar
       let accountIdsToQuery: number[] = [];
-      if (accountData.is_detail_account) {
+      if (accountData.allows_movement) {
         accountIdsToQuery = [selectedAccount];
       } else {
         accountIdsToQuery = await getDetailAccountIds(selectedAccount);

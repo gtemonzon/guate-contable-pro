@@ -122,12 +122,11 @@ export default function JournalEntryDialog({
     }
 
     try {
-      // Cargar cuentas de detalle
+      // Cargar cuentas que permiten movimiento
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
         .select("id, account_code, account_name, requires_cost_center, balance_type")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("is_detail_account", true)
         .eq("allows_movement", true)
         .eq("is_active", true)
         .order("account_code");

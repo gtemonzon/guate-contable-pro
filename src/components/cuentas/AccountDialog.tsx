@@ -42,14 +42,9 @@ const formSchema = z.object({
   balance_type: z.enum(["deudor", "acreedor"]),
   parent_account_id: z.number().nullable(),
   level: z.number().min(1).max(10),
-  is_detail_account: z.boolean().default(false),
   allows_movement: z.boolean().default(true),
-  requires_cost_center: z.boolean().default(false),
   is_bank_account: z.boolean().default(false),
   is_active: z.boolean().default(true),
-  is_income_account: z.boolean().default(false),
-  is_cost_account: z.boolean().default(false),
-  is_expense_account: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -81,14 +76,9 @@ export function AccountDialog({
       balance_type: "deudor",
       parent_account_id: null,
       level: 1,
-      is_detail_account: false,
       allows_movement: true,
-      requires_cost_center: false,
       is_bank_account: false,
       is_active: true,
-      is_income_account: false,
-      is_cost_account: false,
-      is_expense_account: false,
     },
   });
 
@@ -143,14 +133,9 @@ export function AccountDialog({
         balance_type: (account.balance_type as any) || "deudor",
         parent_account_id: account.parent_account_id,
         level: account.level,
-        is_detail_account: account.is_detail_account ?? false,
         allows_movement: account.allows_movement ?? true,
-        requires_cost_center: account.requires_cost_center ?? false,
         is_bank_account: account.is_bank_account ?? false,
         is_active: account.is_active ?? true,
-        is_income_account: (account as any).is_income_account ?? false,
-        is_cost_account: (account as any).is_cost_account ?? false,
-        is_expense_account: (account as any).is_expense_account ?? false,
       });
     } else {
       const suggestedCode = getNextSuggestedCode();
@@ -163,14 +148,9 @@ export function AccountDialog({
         balance_type: "deudor",
         parent_account_id: parentAccountId,
         level: level,
-        is_detail_account: false,
         allows_movement: true,
-        requires_cost_center: false,
         is_bank_account: false,
         is_active: true,
-        is_income_account: false,
-        is_cost_account: false,
-        is_expense_account: false,
       });
     }
   }, [account, accounts]);
@@ -216,14 +196,9 @@ export function AccountDialog({
         balance_type: values.balance_type,
         parent_account_id: values.parent_account_id,
         level: values.level,
-        is_detail_account: values.is_detail_account,
         allows_movement: values.allows_movement,
-        requires_cost_center: values.requires_cost_center,
         is_bank_account: values.is_bank_account,
         is_active: values.is_active,
-        is_income_account: values.is_income_account,
-        is_cost_account: values.is_cost_account,
-        is_expense_account: values.is_expense_account,
       };
 
       if (account) {
@@ -263,7 +238,7 @@ export function AccountDialog({
   };
 
   const parentAccounts = accounts.filter(
-    (acc) => !acc.is_detail_account && acc.id !== account?.id
+    (acc) => !acc.allows_movement && acc.id !== account?.id
   );
 
   return (
@@ -411,141 +386,54 @@ export function AccountDialog({
               />
             </div>
 
-            <div className="space-y-3">
-              <div className="grid grid-cols-5 gap-4 rounded-lg border p-4">
-                <FormField
-                  control={form.control}
-                  name="is_detail_account"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col items-center gap-2">
-                      <FormLabel className="text-sm">Detalle</FormLabel>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+            <div className="grid grid-cols-3 gap-4 rounded-lg border p-4">
+              <FormField
+                control={form.control}
+                name="allows_movement"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Permite Movimiento</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="allows_movement"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col items-center gap-2">
-                      <FormLabel className="text-sm">Movimiento</FormLabel>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="is_bank_account"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Cuenta Bancaria</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value || false}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
-                <FormField
-                  control={form.control}
-                  name="requires_cost_center"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col items-center gap-2">
-                      <FormLabel className="text-sm">Costo</FormLabel>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="is_bank_account"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col items-center gap-2">
-                      <FormLabel className="text-sm">Banco</FormLabel>
-                      <FormControl>
-                        <Switch
-                          checked={field.value || false}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="is_active"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col items-center gap-2">
-                      <FormLabel className="text-sm">Activa</FormLabel>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium mb-3">Clasificación para Estado de Resultados</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="is_income_account"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col items-center gap-2">
-                        <FormLabel className="text-sm">Ingreso</FormLabel>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="is_cost_account"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col items-center gap-2">
-                        <FormLabel className="text-sm">Costo</FormLabel>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="is_expense_account"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col items-center gap-2">
-                        <FormLabel className="text-sm">Gasto</FormLabel>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="is_active"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm">Cuenta Activa</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="flex justify-end gap-3 pt-4">

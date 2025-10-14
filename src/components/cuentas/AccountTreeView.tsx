@@ -75,9 +75,9 @@ function TreeNode({ account, children, onEdit, level, allAccounts }: TreeNodePro
             {ACCOUNT_TYPE_LABELS[account.account_type]}
           </Badge>
           
-          {account.is_detail_account && (
+          {account.allows_movement && (
             <Badge variant="outline" className="text-xs">
-              Detalle
+              Movimiento
             </Badge>
           )}
 

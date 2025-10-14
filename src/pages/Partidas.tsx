@@ -288,8 +288,7 @@ export default function Partidas() {
                           setEditingEntry(entry);
                           setShowDialog(true);
                         }}
-                        disabled={entry.is_posted}
-                        title={entry.is_posted ? "No se pueden editar partidas contabilizadas" : "Editar partida"}
+                        title={entry.is_posted ? "Ver partida contabilizada" : "Editar partida"}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>

@@ -80,10 +80,6 @@ export type Database = {
           id: number
           is_active: boolean | null
           is_bank_account: boolean | null
-          is_cost_account: boolean | null
-          is_detail_account: boolean | null
-          is_expense_account: boolean | null
-          is_income_account: boolean | null
           level: number
           parent_account_id: number | null
           requires_cost_center: boolean | null
@@ -99,10 +95,6 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           is_bank_account?: boolean | null
-          is_cost_account?: boolean | null
-          is_detail_account?: boolean | null
-          is_expense_account?: boolean | null
-          is_income_account?: boolean | null
           level: number
           parent_account_id?: number | null
           requires_cost_center?: boolean | null
@@ -118,10 +110,6 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           is_bank_account?: boolean | null
-          is_cost_account?: boolean | null
-          is_detail_account?: boolean | null
-          is_expense_account?: boolean | null
-          is_income_account?: boolean | null
           level?: number
           parent_account_id?: number | null
           requires_cost_center?: boolean | null
