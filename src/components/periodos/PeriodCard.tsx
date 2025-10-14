@@ -2,7 +2,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Lock, LockOpen, Edit, CheckCircle2 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface PeriodCardProps {
@@ -14,8 +14,9 @@ interface PeriodCardProps {
 
 const PeriodCard = ({ period, onEdit, onClose, onReopen }: PeriodCardProps) => {
   const isClosed = period.status === "cerrado";
-  const startDate = new Date(period.start_date);
-  const endDate = new Date(period.end_date);
+  // Use parseISO to correctly parse date strings without timezone issues
+  const startDate = parseISO(period.start_date);
+  const endDate = parseISO(period.end_date);
 
   const getStatusColor = (status: string) => {
     switch (status) {
