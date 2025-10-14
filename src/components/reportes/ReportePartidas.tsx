@@ -7,6 +7,7 @@ import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/table";
 
 interface JournalEntryData {
+  id: number;
   entry_number: string;
   entry_date: string;
   entry_type: string;
@@ -26,12 +28,23 @@ interface JournalEntryData {
   is_posted: boolean;
 }
 
+interface JournalEntryDetail {
+  line_number: number;
+  account_code: string;
+  account_name: string;
+  debit_amount: number;
+  credit_amount: number;
+  description: string | null;
+}
+
 export default function ReportePartidas() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [entries, setEntries] = useState<JournalEntryData[]>([]);
+  const [entryDetails, setEntryDetails] = useState<Record<number, JournalEntryDetail[]>>({});
+  const [includeDetails, setIncludeDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -98,6 +111,38 @@ export default function ReportePartidas() {
 
       if (error) throw error;
       setEntries(data || []);
+
+      // Fetch details if needed
+      if (includeDetails && data && data.length > 0) {
+        const entryIds = data.map(e => e.id);
+        const { data: detailsData, error: detailsError } = await supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            *,
+            tab_accounts!inner(account_code, account_name)
+          `)
+          .in("journal_entry_id", entryIds)
+          .order("line_number");
+
+        if (detailsError) throw detailsError;
+
+        // Group details by entry id
+        const groupedDetails: Record<number, JournalEntryDetail[]> = {};
+        (detailsData || []).forEach((detail: any) => {
+          if (!groupedDetails[detail.journal_entry_id]) {
+            groupedDetails[detail.journal_entry_id] = [];
+          }
+          groupedDetails[detail.journal_entry_id].push({
+            line_number: detail.line_number,
+            account_code: detail.tab_accounts.account_code,
+            account_name: detail.tab_accounts.account_name,
+            debit_amount: detail.debit_amount,
+            credit_amount: detail.credit_amount,
+            description: detail.description,
+          });
+        });
+        setEntryDetails(groupedDetails);
+      }
       
       if (!data || data.length === 0) {
         toast({
@@ -189,7 +234,7 @@ export default function ReportePartidas() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <Label htmlFor="dateFrom">Fecha Desde</Label>
           <Input
@@ -208,6 +253,17 @@ export default function ReportePartidas() {
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
+        </div>
+
+        <div className="flex flex-col gap-2 justify-end">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="include-details"
+              checked={includeDetails}
+              onCheckedChange={setIncludeDetails}
+            />
+            <Label htmlFor="include-details" className="text-sm">Incluir detalle</Label>
+          </div>
         </div>
 
         <div className="flex items-end">
@@ -248,21 +304,44 @@ export default function ReportePartidas() {
               </TableHeader>
               <TableBody>
                 {entries.map((entry, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{entry.entry_number}</TableCell>
-                    <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
-                    <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                    <TableCell>{entry.description}</TableCell>
-                    <TableCell className="text-right">Q {entry.total_debit.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">Q {entry.total_credit.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {entry.is_posted ? (
-                        <span className="text-green-600">Contabilizado</span>
-                      ) : (
-                        <span className="text-muted-foreground">Borrador</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                  <>
+                    <TableRow key={idx} className="font-semibold">
+                      <TableCell>{entry.entry_number}</TableCell>
+                      <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
+                      <TableCell className="capitalize">{entry.entry_type}</TableCell>
+                      <TableCell>{entry.description}</TableCell>
+                      <TableCell className="text-right">Q {entry.total_debit.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">Q {entry.total_credit.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {entry.is_posted ? (
+                          <span className="text-green-600">Contabilizado</span>
+                        ) : (
+                          <span className="text-muted-foreground">Borrador</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    {includeDetails && entryDetails[entry.id] && (
+                      <>
+                        {entryDetails[entry.id].map((detail, detailIdx) => (
+                          <TableRow key={`${idx}-${detailIdx}`} className="bg-muted/30">
+                            <TableCell className="pl-8 text-sm" colSpan={2}>
+                              {detail.account_code} - {detail.account_name}
+                            </TableCell>
+                            <TableCell className="text-sm" colSpan={2}>
+                              {detail.description || '-'}
+                            </TableCell>
+                            <TableCell className="text-right text-sm">
+                              {detail.debit_amount > 0 ? `Q ${detail.debit_amount.toFixed(2)}` : '-'}
+                            </TableCell>
+                            <TableCell className="text-right text-sm">
+                              {detail.credit_amount > 0 ? `Q ${detail.credit_amount.toFixed(2)}` : '-'}
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        ))}
+                      </>
+                    )}
+                  </>
                 ))}
               </TableBody>
             </Table>

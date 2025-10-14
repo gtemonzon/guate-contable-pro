@@ -302,21 +302,20 @@ export default function Partidas() {
         </CardContent>
       </Card>
 
-      {(showDialog || editingEntry) && (
-        <JournalEntryDialog
-          open={showDialog || !!editingEntry}
-          onOpenChange={(open) => {
-            setShowDialog(open);
-            if (!open) setEditingEntry(null);
-          }}
-          onSuccess={() => {
-            if (currentEnterpriseId) {
-              fetchEntries(currentEnterpriseId);
-            }
-          }}
-          entryToEdit={editingEntry}
-        />
-      )}
+      <JournalEntryDialog
+        open={showDialog}
+        onOpenChange={(open) => {
+          setShowDialog(open);
+          if (!open) setEditingEntry(null);
+        }}
+        onSuccess={() => {
+          if (currentEnterpriseId) {
+            fetchEntries(currentEnterpriseId);
+          }
+          setEditingEntry(null);
+        }}
+        entryToEdit={editingEntry}
+      />
     </div>
   );
 }
