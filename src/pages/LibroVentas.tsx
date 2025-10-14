@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, FileText, Upload } from "lucide-react";
+import { FileText, Upload } from "lucide-react";
+import { SalesCard } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -18,14 +19,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 interface FELDocumentType {
   id: number;
@@ -536,145 +529,23 @@ export default function LibroVentas() {
         <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando...</p>
+          ) : sales.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No hay facturas. Haz clic en "Agregar Línea" para comenzar.
+            </p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[140px]">Serie</TableHead>
-                    <TableHead className="w-[140px]">Número</TableHead>
-                    <TableHead className="w-[140px]">Fecha</TableHead>
-                    <TableHead className="w-[130px]">Tipo Doc</TableHead>
-                    <TableHead className="w-[140px]">NIT</TableHead>
-                    <TableHead className="min-w-[220px]">Cliente</TableHead>
-                    <TableHead className="w-[130px]">Total c/IVA</TableHead>
-                    <TableHead className="w-[120px]">IVA</TableHead>
-                    <TableHead className="w-[130px]">Neto</TableHead>
-                    <TableHead className="w-[100px]">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sales.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                        No hay facturas. Haz clic en "Agregar Línea" para comenzar.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    sales.map((sale, index) => (
-                      <TableRow key={sale.id || `new-${index}`}>
-                        <TableCell>
-                          <Input
-                            value={sale.invoice_series}
-                            onChange={(e) => updateRow(index, "invoice_series", e.target.value)}
-                            placeholder="A"
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={sale.invoice_number}
-                            onChange={(e) => updateRow(index, "invoice_number", e.target.value)}
-                            placeholder="12345"
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="date"
-                            value={sale.invoice_date}
-                            onChange={(e) => updateRow(index, "invoice_date", e.target.value)}
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={sale.fel_document_type}
-                            onValueChange={(v) => updateRow(index, "fel_document_type", v)}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {felDocTypes.map((type) => (
-                                <SelectItem key={type.code} value={type.code}>
-                                  {type.code}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={sale.customer_nit}
-                            onChange={(e) => updateRow(index, "customer_nit", e.target.value)}
-                            placeholder="12345678"
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={sale.customer_name}
-                            onChange={(e) => updateRow(index, "customer_name", e.target.value)}
-                            placeholder="Nombre del cliente"
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={sale.total_amount}
-                            onChange={(e) => updateRow(index, "total_amount", e.target.value)}
-                            onBlur={() => saveRow(index)}
-                            className="h-8"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={sale.vat_amount}
-                            readOnly
-                            className="h-8 bg-muted"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={sale.net_amount}
-                            readOnly
-                            className="h-8 bg-muted"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => saveRow(index)}
-                              title="Guardar"
-                            >
-                              ✓
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => deleteRow(index)}
-                              title="Eliminar"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              {sales.map((sale, index) => (
+                <SalesCard
+                  key={sale.id || `new-${index}`}
+                  sale={sale}
+                  index={index}
+                  felDocTypes={felDocTypes}
+                  onUpdate={updateRow}
+                  onSave={saveRow}
+                  onDelete={deleteRow}
+                />
+              ))}
             </div>
           )}
         </CardContent>
