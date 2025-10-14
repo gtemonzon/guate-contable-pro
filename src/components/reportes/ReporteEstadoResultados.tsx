@@ -76,31 +76,59 @@ export default function ReporteEstadoResultados() {
 
     try {
       setLoading(true);
-      // Get accounts for income statement (4, 5, 6)
-      const { data, error } = await supabase
+      
+      // Get accounts classified for income statement
+      const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
         .select("*")
         .eq("enterprise_id", parseInt(currentEnterpriseId))
         .eq("is_active", true)
-        .in("account_code", ["4", "5", "6"])
+        .or("is_income_account.eq.true,is_cost_account.eq.true,is_expense_account.eq.true")
         .order("account_code");
 
-      if (error) throw error;
+      if (accountsError) throw accountsError;
+
+      // Get journal entry details for the period
+      const { data: detailsData, error: detailsError } = await supabase
+        .from("tab_journal_entry_details")
+        .select(`
+          *,
+          tab_journal_entries!inner(
+            entry_date,
+            enterprise_id,
+            is_posted
+          )
+        `)
+        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+        .eq("tab_journal_entries.is_posted", true)
+        .gte("tab_journal_entries.entry_date", dateFrom)
+        .lte("tab_journal_entries.entry_date", dateTo);
+
+      if (detailsError) throw detailsError;
+
+      // Calculate amounts per account
+      const amountMap = new Map<number, number>();
       
-      // Mock data - in production this would calculate from actual transactions
-      const resultData: ResultAccount[] = (data || []).map(acc => ({
+      (detailsData || []).forEach((detail: any) => {
+        const current = amountMap.get(detail.account_id) || 0;
+        const amount = Number(detail.credit_amount || 0) - Number(detail.debit_amount || 0);
+        amountMap.set(detail.account_id, current + amount);
+      });
+
+      // Create result data
+      const resultData: ResultAccount[] = (accountsData || []).map(acc => ({
         account_code: acc.account_code,
         account_name: acc.account_name,
-        amount: 0, // Would calculate from transactions in period
+        amount: amountMap.get(acc.id) || 0,
         level: acc.level,
-      }));
+      })).filter(acc => acc.amount !== 0);
 
       setAccounts(resultData);
       
       if (resultData.length === 0) {
         toast({
           title: "Sin datos",
-          description: "No hay cuentas para generar el estado de resultados",
+          description: "No hay cuentas de ingresos, costos o gastos con movimientos en el período. Verifica que las cuentas estén clasificadas correctamente en el catálogo.",
         });
       }
     } catch (error: any) {

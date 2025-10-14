@@ -72,32 +72,64 @@ export default function ReporteBalanceGeneral() {
 
     try {
       setLoading(true);
-      // This is a simplified version. In a real system, you'd calculate actual balances
-      // from journal entries up to the report date
-      const { data, error } = await supabase
+      
+      // Get all accounts
+      const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
         .select("*")
         .eq("enterprise_id", parseInt(currentEnterpriseId))
         .eq("is_active", true)
         .order("account_code");
 
-      if (error) throw error;
+      if (accountsError) throw accountsError;
+
+      // Get all journal entry details up to the report date
+      const { data: detailsData, error: detailsError } = await supabase
+        .from("tab_journal_entry_details")
+        .select(`
+          *,
+          tab_journal_entries!inner(
+            entry_date,
+            enterprise_id,
+            is_posted
+          )
+        `)
+        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+        .eq("tab_journal_entries.is_posted", true)
+        .lte("tab_journal_entries.entry_date", reportDate);
+
+      if (detailsError) throw detailsError;
+
+      // Calculate balances per account
+      const balanceMap = new Map<number, { debit: number, credit: number }>();
       
-      // Mock data - in production this would come from actual transactions
-      const balanceData: BalanceAccount[] = (data || []).map(acc => ({
-        account_code: acc.account_code,
-        account_name: acc.account_name,
-        debit_balance: 0, // Would calculate from transactions
-        credit_balance: 0, // Would calculate from transactions
-        level: acc.level,
-      }));
+      (detailsData || []).forEach((detail: any) => {
+        const current = balanceMap.get(detail.account_id) || { debit: 0, credit: 0 };
+        current.debit += Number(detail.debit_amount || 0);
+        current.credit += Number(detail.credit_amount || 0);
+        balanceMap.set(detail.account_id, current);
+      });
+
+      // Create balance data
+      const balanceData: BalanceAccount[] = (accountsData || []).map(acc => {
+        const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
+        const netBalance = balance.debit - balance.credit;
+        
+        return {
+          account_code: acc.account_code,
+          account_name: acc.account_name,
+          debit_balance: netBalance > 0 ? netBalance : 0,
+          credit_balance: netBalance < 0 ? Math.abs(netBalance) : 0,
+          level: acc.level,
+        };
+      }).filter(acc => acc.debit_balance !== 0 || acc.credit_balance !== 0);
 
       setAccounts(balanceData);
       
       if (balanceData.length === 0) {
         toast({
           title: "Sin datos",
-          description: "No hay cuentas para generar el balance",
+          description: "No hay movimientos contabilizados hasta la fecha seleccionada",
         });
       }
     } catch (error: any) {

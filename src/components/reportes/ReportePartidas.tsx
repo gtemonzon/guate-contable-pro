@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -162,23 +163,57 @@ export default function ReportePartidas() {
   };
 
   const handleExportExcel = () => {
-    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
-    const data = entries.map(e => [
-      e.entry_number,
-      new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-      e.entry_type,
-      e.description,
-      e.total_debit.toFixed(2),
-      e.total_credit.toFixed(2),
-      e.is_posted ? 'Contabilizado' : 'Borrador',
-    ]);
+    let data: any[] = [];
+    
+    if (includeDetails) {
+      // Export with details
+      entries.forEach(e => {
+        // Add entry header
+        data.push([
+          e.entry_number,
+          new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+          e.entry_type,
+          e.description,
+          e.total_debit.toFixed(2),
+          e.total_credit.toFixed(2),
+          e.is_posted ? 'Contabilizado' : 'Borrador',
+        ]);
+        
+        // Add details if available
+        if (entryDetails[e.id]) {
+          entryDetails[e.id].forEach(detail => {
+            data.push([
+              '',
+              `  ${detail.account_code} - ${detail.account_name}`,
+              '',
+              detail.description || '',
+              detail.debit_amount > 0 ? detail.debit_amount.toFixed(2) : '',
+              detail.credit_amount > 0 ? detail.credit_amount.toFixed(2) : '',
+              '',
+            ]);
+          });
+        }
+      });
+    } else {
+      // Export summary only
+      data = entries.map(e => [
+        e.entry_number,
+        new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+        e.entry_type,
+        e.description,
+        e.total_debit.toFixed(2),
+        e.total_credit.toFixed(2),
+        e.is_posted ? 'Contabilizado' : 'Borrador',
+      ]);
+    }
 
     const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
     const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
     exportToExcel({
       filename: `Partidas_${dateFrom}_${dateTo}`,
-      title: `Reporte de Partidas - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      title: `Reporte de Partidas${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
       enterpriseName,
       headers,
       data,
@@ -196,23 +231,57 @@ export default function ReportePartidas() {
   };
 
   const handleExportPDF = () => {
-    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
-    const data = entries.map(e => [
-      e.entry_number,
-      new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-      e.entry_type,
-      e.description,
-      `Q ${e.total_debit.toFixed(2)}`,
-      `Q ${e.total_credit.toFixed(2)}`,
-      e.is_posted ? 'Contabilizado' : 'Borrador',
-    ]);
+    let data: any[] = [];
+    
+    if (includeDetails) {
+      // Export with details
+      entries.forEach(e => {
+        // Add entry header
+        data.push([
+          e.entry_number,
+          new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+          e.entry_type,
+          e.description,
+          `Q ${e.total_debit.toFixed(2)}`,
+          `Q ${e.total_credit.toFixed(2)}`,
+          e.is_posted ? 'Contabilizado' : 'Borrador',
+        ]);
+        
+        // Add details if available
+        if (entryDetails[e.id]) {
+          entryDetails[e.id].forEach(detail => {
+            data.push([
+              '',
+              `  ${detail.account_code} - ${detail.account_name}`,
+              '',
+              detail.description || '',
+              detail.debit_amount > 0 ? `Q ${detail.debit_amount.toFixed(2)}` : '',
+              detail.credit_amount > 0 ? `Q ${detail.credit_amount.toFixed(2)}` : '',
+              '',
+            ]);
+          });
+        }
+      });
+    } else {
+      // Export summary only
+      data = entries.map(e => [
+        e.entry_number,
+        new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+        e.entry_type,
+        e.description,
+        `Q ${e.total_debit.toFixed(2)}`,
+        `Q ${e.total_credit.toFixed(2)}`,
+        e.is_posted ? 'Contabilizado' : 'Borrador',
+      ]);
+    }
 
     const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
     const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
     exportToPDF({
       filename: `Partidas_${dateFrom}_${dateTo}`,
-      title: `Reporte de Partidas - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      title: `Reporte de Partidas${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
       enterpriseName,
       headers,
       data,
@@ -304,8 +373,8 @@ export default function ReportePartidas() {
               </TableHeader>
               <TableBody>
                 {entries.map((entry, idx) => (
-                  <>
-                    <TableRow key={idx} className="font-semibold">
+                  <React.Fragment key={entry.id}>
+                    <TableRow className="font-semibold">
                       <TableCell>{entry.entry_number}</TableCell>
                       <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                       <TableCell className="capitalize">{entry.entry_type}</TableCell>
@@ -323,7 +392,7 @@ export default function ReportePartidas() {
                     {includeDetails && entryDetails[entry.id] && (
                       <>
                         {entryDetails[entry.id].map((detail, detailIdx) => (
-                          <TableRow key={`${idx}-${detailIdx}`} className="bg-muted/30">
+                          <TableRow key={`${entry.id}-${detailIdx}`} className="bg-muted/30">
                             <TableCell className="pl-8 text-sm" colSpan={2}>
                               {detail.account_code} - {detail.account_name}
                             </TableCell>
@@ -341,7 +410,7 @@ export default function ReportePartidas() {
                         ))}
                       </>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
