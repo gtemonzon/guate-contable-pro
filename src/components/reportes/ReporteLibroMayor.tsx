@@ -3,9 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, FileSpreadsheet, Loader2 } from "lucide-react";
+import { FileDown, FileSpreadsheet, Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
@@ -18,6 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 interface Account {
   id: number;
@@ -38,14 +44,15 @@ interface LedgerEntry {
 
 export default function ReporteLibroMayor() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
-  const [selectedAccountInfo, setSelectedAccountInfo] = useState<Account | null>(null);
+  const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [open, setOpen] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
 
   const { toast } = useToast();
 
@@ -120,11 +127,27 @@ export default function ReporteLibroMayor() {
     }
   };
 
+  const toggleAccount = (accountId: number) => {
+    setSelectedAccounts(prev =>
+      prev.includes(accountId)
+        ? prev.filter(id => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
+
+  const toggleAllAccounts = () => {
+    if (selectedAccounts.length === accounts.length) {
+      setSelectedAccounts([]);
+    } else {
+      setSelectedAccounts(accounts.map(a => a.id));
+    }
+  };
+
   const generateReport = async () => {
-    if (!selectedAccount || !startDate || !endDate || !currentEnterpriseId) {
+    if (selectedAccounts.length === 0 || !startDate || !endDate || !currentEnterpriseId) {
       toast({
         title: "Campos requeridos",
-        description: "Selecciona una cuenta y un rango de fechas",
+        description: "Selecciona al menos una cuenta y un rango de fechas",
         variant: "destructive",
       });
       return;
@@ -132,19 +155,7 @@ export default function ReporteLibroMayor() {
 
     try {
       setLoading(true);
-
-      // Guardar info de la cuenta seleccionada
-      const accountInfo = accounts.find(a => a.id === selectedAccount);
-      setSelectedAccountInfo(accountInfo || null);
-
-      // Obtener la cuenta seleccionada para verificar si permite movimiento
-      const { data: accountData, error: accountError } = await supabase
-        .from("tab_accounts")
-        .select("id, allows_movement, account_code")
-        .eq("id", selectedAccount)
-        .single();
-
-      if (accountError) throw accountError;
+      setReportGenerated(false);
 
       // Función recursiva para obtener todas las cuentas hijas que permiten movimiento
       const getDetailAccountIds = async (accountId: number): Promise<number[]> => {
@@ -171,19 +182,31 @@ export default function ReporteLibroMayor() {
         return detailIds;
       };
 
-      // Determinar qué cuentas consultar
+      // Obtener todas las cuentas de detalle para las cuentas seleccionadas
       let accountIdsToQuery: number[] = [];
-      if (accountData.allows_movement) {
-        accountIdsToQuery = [selectedAccount];
-      } else {
-        accountIdsToQuery = await getDetailAccountIds(selectedAccount);
+      
+      for (const accountId of selectedAccounts) {
+        const { data: accountData, error: accountError } = await supabase
+          .from("tab_accounts")
+          .select("id, allows_movement")
+          .eq("id", accountId)
+          .single();
+
+        if (accountError) throw accountError;
+
+        if (accountData.allows_movement) {
+          accountIdsToQuery.push(accountId);
+        } else {
+          const childIds = await getDetailAccountIds(accountId);
+          accountIdsToQuery = [...accountIdsToQuery, ...childIds];
+        }
       }
 
       if (accountIdsToQuery.length === 0) {
         setLedgerEntries([]);
         toast({
           title: "Sin movimientos",
-          description: "Esta cuenta no tiene cuentas de detalle con movimientos",
+          description: "Las cuentas seleccionadas no tienen movimientos",
           variant: "default",
         });
         setLoading(false);
@@ -270,10 +293,11 @@ export default function ReporteLibroMayor() {
       });
 
       setLedgerEntries(entries);
+      setReportGenerated(true);
       
       toast({
         title: "Reporte generado",
-        description: `Se encontraron ${entries.length} movimientos`,
+        description: `Se encontraron ${entries.length} movimientos para ${selectedAccounts.length} cuenta(s)`,
       });
     } catch (error: any) {
       toast({
@@ -287,7 +311,12 @@ export default function ReporteLibroMayor() {
   };
 
   const handleExportExcel = () => {
-    if (ledgerEntries.length === 0 || !selectedAccountInfo) return;
+    if (ledgerEntries.length === 0) return;
+
+    const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
+    const accountsLabel = selectedAccounts.length === accounts.length 
+      ? "Todas las cuentas"
+      : selectedAccountsInfo.map(a => `${a.account_code} ${a.account_name}`).join(", ");
 
     const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
     const data = ledgerEntries.map(entry => [
@@ -305,8 +334,8 @@ export default function ReporteLibroMayor() {
     const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
 
     exportToExcel({
-      filename: `libro-mayor-${selectedAccountInfo.account_code}-${startDate}-${endDate}`,
-      title: `Libro Mayor - ${selectedAccountInfo.account_code} ${selectedAccountInfo.account_name}`,
+      filename: `libro-mayor-${startDate}-${endDate}`,
+      title: `Libro Mayor - ${accountsLabel}`,
       enterpriseName: enterpriseName,
       headers,
       data,
@@ -320,7 +349,12 @@ export default function ReporteLibroMayor() {
   };
 
   const handleExportPDF = () => {
-    if (ledgerEntries.length === 0 || !selectedAccountInfo) return;
+    if (ledgerEntries.length === 0) return;
+
+    const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
+    const accountsLabel = selectedAccounts.length === accounts.length 
+      ? "Todas las cuentas"
+      : selectedAccountsInfo.map(a => `${a.account_code} ${a.account_name}`).join(", ");
 
     const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
     const data = ledgerEntries.map(entry => [
@@ -338,8 +372,8 @@ export default function ReporteLibroMayor() {
     const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
 
     exportToPDF({
-      filename: `libro-mayor-${selectedAccountInfo.account_code}-${startDate}-${endDate}`,
-      title: `Libro Mayor - ${selectedAccountInfo.account_code} ${selectedAccountInfo.account_name}`,
+      filename: `libro-mayor-${startDate}-${endDate}`,
+      title: `Libro Mayor - ${accountsLabel}`,
       enterpriseName: enterpriseName,
       headers,
       data,
@@ -365,26 +399,68 @@ export default function ReporteLibroMayor() {
     );
   }
 
+  const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <Label htmlFor="account-select">Cuenta Contable</Label>
-          <Select 
-            value={selectedAccount ? String(selectedAccount) : undefined} 
-            onValueChange={(v) => setSelectedAccount(parseInt(v))}
-          >
-            <SelectTrigger id="account-select">
-              <SelectValue placeholder="Seleccionar cuenta" />
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.map((account) => (
-                <SelectItem key={account.id} value={String(account.id)}>
-                  {account.account_code} - {account.account_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Cuentas Contables</Label>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="w-full justify-between"
+              >
+                {selectedAccounts.length === 0
+                  ? "Seleccionar cuentas..."
+                  : selectedAccounts.length === accounts.length
+                  ? "Todas las cuentas"
+                  : `${selectedAccounts.length} cuenta(s) seleccionada(s)`}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
+              <div className="max-h-[300px] overflow-y-auto p-2">
+                <div className="flex items-center space-x-2 px-2 py-2 border-b">
+                  <Checkbox
+                    id="select-all"
+                    checked={selectedAccounts.length === accounts.length}
+                    onCheckedChange={toggleAllAccounts}
+                  />
+                  <label
+                    htmlFor="select-all"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Seleccionar todas
+                  </label>
+                </div>
+                <div className="space-y-1 mt-2">
+                  {accounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center space-x-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
+                      onClick={() => toggleAccount(account.id)}
+                    >
+                      <Checkbox
+                        id={`account-${account.id}`}
+                        checked={selectedAccounts.includes(account.id)}
+                        onCheckedChange={() => toggleAccount(account.id)}
+                      />
+                      <label
+                        htmlFor={`account-${account.id}`}
+                        className="text-sm flex-1 cursor-pointer"
+                      >
+                        {account.account_code} - {account.account_name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         <div>
           <Label htmlFor="start-date">Desde</Label>
@@ -407,12 +483,12 @@ export default function ReporteLibroMayor() {
       </div>
 
       <div className="flex gap-4">
-        <Button onClick={generateReport} disabled={loading}>
+        <Button onClick={generateReport} disabled={loading || selectedAccounts.length === 0}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Generar Reporte
         </Button>
         
-        {ledgerEntries.length > 0 && (
+        {reportGenerated && ledgerEntries.length > 0 && (
           <>
             <Button variant="outline" onClick={handleExportExcel}>
               <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -426,12 +502,14 @@ export default function ReporteLibroMayor() {
         )}
       </div>
 
-      {ledgerEntries.length > 0 && selectedAccountInfo && (
+      {reportGenerated && ledgerEntries.length > 0 && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-semibold">
-                {selectedAccountInfo.account_code} - {selectedAccountInfo.account_name}
+                {selectedAccounts.length === accounts.length
+                  ? "Todas las cuentas"
+                  : selectedAccountsInfo.map(a => `${a.account_code} - ${a.account_name}`).join(", ")}
               </h3>
               <p className="text-sm text-muted-foreground">
                 Del {startDate} al {endDate}
@@ -498,7 +576,7 @@ export default function ReporteLibroMayor() {
         </div>
       )}
 
-      {ledgerEntries.length === 0 && !loading && selectedAccount && (
+      {reportGenerated && ledgerEntries.length === 0 && !loading && (
         <div className="text-center text-muted-foreground py-8">
           No se encontraron movimientos para los criterios seleccionados
         </div>
