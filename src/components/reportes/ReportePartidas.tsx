@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
+import { formatCurrency } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -218,8 +219,8 @@ export default function ReportePartidas() {
       headers,
       data,
       totals: [
-        { label: "Total Debe", value: `Q ${totalDebit.toFixed(2)}` },
-        { label: "Total Haber", value: `Q ${totalCredit.toFixed(2)}` },
+        { label: "Total Debe", value: formatCurrency(totalDebit) },
+        { label: "Total Haber", value: formatCurrency(totalCredit) },
         { label: "Cantidad de Partidas", value: entries.length.toString() },
       ],
     });
@@ -242,8 +243,8 @@ export default function ReportePartidas() {
           new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
           e.entry_type,
           e.description,
-          `Q ${e.total_debit.toFixed(2)}`,
-          `Q ${e.total_credit.toFixed(2)}`,
+          formatCurrency(e.total_debit),
+          formatCurrency(e.total_credit),
           e.is_posted ? 'Contabilizado' : 'Borrador',
         ]);
         
@@ -255,8 +256,8 @@ export default function ReportePartidas() {
               `  ${detail.account_code} - ${detail.account_name}`,
               '',
               detail.description || '',
-              detail.debit_amount > 0 ? `Q ${detail.debit_amount.toFixed(2)}` : '',
-              detail.credit_amount > 0 ? `Q ${detail.credit_amount.toFixed(2)}` : '',
+              detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '',
+              detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '',
               '',
             ]);
           });
@@ -269,8 +270,8 @@ export default function ReportePartidas() {
         new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
         e.entry_type,
         e.description,
-        `Q ${e.total_debit.toFixed(2)}`,
-        `Q ${e.total_credit.toFixed(2)}`,
+        formatCurrency(e.total_debit),
+        formatCurrency(e.total_credit),
         e.is_posted ? 'Contabilizado' : 'Borrador',
       ]);
     }
@@ -286,8 +287,8 @@ export default function ReportePartidas() {
       headers,
       data,
       totals: [
-        { label: "Total Debe", value: `Q ${totalDebit.toFixed(2)}` },
-        { label: "Total Haber", value: `Q ${totalCredit.toFixed(2)}` },
+        { label: "Total Debe", value: formatCurrency(totalDebit) },
+        { label: "Total Haber", value: formatCurrency(totalCredit) },
         { label: "Cantidad de Partidas", value: entries.length.toString() },
       ],
     });
@@ -379,8 +380,8 @@ export default function ReportePartidas() {
                       <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                       <TableCell className="capitalize">{entry.entry_type}</TableCell>
                       <TableCell>{entry.description}</TableCell>
-                      <TableCell className="text-right">Q {entry.total_debit.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">Q {entry.total_credit.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                       <TableCell>
                         {entry.is_posted ? (
                           <span className="text-green-600">Contabilizado</span>
@@ -400,10 +401,10 @@ export default function ReportePartidas() {
                               {detail.description || '-'}
                             </TableCell>
                             <TableCell className="text-right text-sm">
-                              {detail.debit_amount > 0 ? `Q ${detail.debit_amount.toFixed(2)}` : '-'}
+                              {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}
                             </TableCell>
                             <TableCell className="text-right text-sm">
-                              {detail.credit_amount > 0 ? `Q ${detail.credit_amount.toFixed(2)}` : '-'}
+                              {detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '-'}
                             </TableCell>
                             <TableCell></TableCell>
                           </TableRow>
@@ -419,11 +420,11 @@ export default function ReportePartidas() {
           <div className="flex justify-end gap-8 p-4 bg-muted rounded-lg">
             <div>
               <span className="text-muted-foreground">Total Debe: </span>
-              <span className="font-semibold">Q {totalDebit.toFixed(2)}</span>
+              <span className="font-semibold">{formatCurrency(totalDebit)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Total Haber: </span>
-              <span className="font-semibold">Q {totalCredit.toFixed(2)}</span>
+              <span className="font-semibold">{formatCurrency(totalCredit)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Partidas: </span>

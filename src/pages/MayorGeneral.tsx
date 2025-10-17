@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { formatCurrency } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -461,21 +462,21 @@ export default function MayorGeneral() {
                 <div>
                   <span className="text-muted-foreground">Saldo Anterior: </span>
                   <Badge variant="outline" className={(ledgerEntries[0]?.previous_balance || 0) < 0 ? 'text-red-600' : ''}>
-                    Q {Math.abs(ledgerEntries[0]?.previous_balance || 0).toFixed(2)}
+                    {formatCurrency(Math.abs(ledgerEntries[0]?.previous_balance || 0))}
                   </Badge>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Total Debe: </span>
-                  <Badge variant="secondary">Q {totalDebit.toFixed(2)}</Badge>
+                  <Badge variant="secondary">{formatCurrency(totalDebit)}</Badge>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Total Haber: </span>
-                  <Badge variant="secondary">Q {totalCredit.toFixed(2)}</Badge>
+                  <Badge variant="secondary">{formatCurrency(totalCredit)}</Badge>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Saldo Final: </span>
                   <Badge variant={finalBalance >= 0 ? "default" : "destructive"}>
-                    Q {Math.abs(finalBalance).toFixed(2)}
+                    {formatCurrency(Math.abs(finalBalance))}
                   </Badge>
                 </div>
               </div>
@@ -507,13 +508,13 @@ export default function MayorGeneral() {
                         </TableCell>
                         <TableCell>{entry.description}</TableCell>
                         <TableCell className="text-right font-mono">
-                          {entry.debit_amount > 0 ? `Q ${entry.debit_amount.toFixed(2)}` : "-"}
+                          {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {entry.credit_amount > 0 ? `Q ${entry.credit_amount.toFixed(2)}` : "-"}
+                          {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-"}
                         </TableCell>
                         <TableCell className={`text-right font-mono font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                          Q {Math.abs(entry.balance).toFixed(2)}
+                          {formatCurrency(Math.abs(entry.balance))}
                         </TableCell>
                         <TableCell>
                           <Button
@@ -579,20 +580,20 @@ export default function MayorGeneral() {
                       <TableCell>{detail.account_name}</TableCell>
                       <TableCell>{detail.description}</TableCell>
                       <TableCell className="text-right font-mono">
-                        {detail.debit_amount > 0 ? `Q ${detail.debit_amount.toFixed(2)}` : "-"}
+                        {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : "-"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {detail.credit_amount > 0 ? `Q ${detail.credit_amount.toFixed(2)}` : "-"}
+                        {detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : "-"}
                       </TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="font-semibold bg-muted">
                     <TableCell colSpan={4} className="text-right">Total</TableCell>
                     <TableCell className="text-right">
-                      Q {selectedJournalEntry.total_debit.toFixed(2)}
+                      {formatCurrency(selectedJournalEntry.total_debit)}
                     </TableCell>
                     <TableCell className="text-right">
-                      Q {selectedJournalEntry.total_credit.toFixed(2)}
+                      {formatCurrency(selectedJournalEntry.total_credit)}
                     </TableCell>
                   </TableRow>
                 </TableBody>

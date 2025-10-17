@@ -11,6 +11,7 @@ import { PurchaseCard } from "@/components/compras/PurchaseCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { formatCurrency } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -64,9 +65,9 @@ export default function LibroCompras() {
     const documentCount = purchases.length;
 
     return {
-      totalWithVAT: totalWithVAT.toFixed(2),
-      totalVAT: totalVAT.toFixed(2),
-      totalBase: totalBase.toFixed(2),
+      totalWithVAT: formatCurrency(totalWithVAT),
+      totalVAT: formatCurrency(totalVAT),
+      totalBase: formatCurrency(totalBase),
       documentCount,
     };
   }, [purchases]);
@@ -468,9 +469,9 @@ export default function LibroCompras() {
                     </div>
                     <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
                       <p><strong>Documentos:</strong> {totals.documentCount}</p>
-                      <p><strong>Base:</strong> Q {totals.totalBase}</p>
-                      <p><strong>IVA:</strong> Q {totals.totalVAT}</p>
-                      <p><strong>Total:</strong> Q {totals.totalWithVAT}</p>
+                      <p><strong>Base:</strong> {totals.totalBase}</p>
+                      <p><strong>IVA:</strong> {totals.totalVAT}</p>
+                      <p><strong>Total:</strong> {totals.totalWithVAT}</p>
                     </div>
                     <Button 
                       className="w-full" 

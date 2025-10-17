@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { BalanceTreeView } from "@/components/balance/BalanceTreeView";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { formatCurrency } from "@/lib/utils";
 
 interface Account {
   id: number;
@@ -55,8 +56,8 @@ export default function BalanceSaldos() {
     const totalCredit = detailAccounts.reduce((sum, acc) => sum + acc.credit, 0);
     
     return {
-      totalDebit: totalDebit.toFixed(2),
-      totalCredit: totalCredit.toFixed(2),
+      totalDebit: formatCurrency(totalDebit),
+      totalCredit: formatCurrency(totalCredit),
     };
   }, [accounts]);
 

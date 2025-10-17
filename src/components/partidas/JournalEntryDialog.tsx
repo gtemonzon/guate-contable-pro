@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -445,7 +446,7 @@ export default function JournalEntryDialog({
       if (account.balance_type === 'deudor' && newBalance < 0) {
         toast({
           title: "Sobregiro detectado",
-          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: Q${currentBalance.toFixed(2)}. No se pueden crear sobregiros en la cuenta.`,
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: ${formatCurrency(currentBalance)}. No se pueden crear sobregiros en la cuenta.`,
           variant: "destructive",
         });
         return;
@@ -454,7 +455,7 @@ export default function JournalEntryDialog({
       if (account.balance_type === 'acreedor' && newBalance > 0) {
         toast({
           title: "Sobregiro detectado",
-          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: Q${Math.abs(currentBalance).toFixed(2)}. No se pueden crear sobregiros en la cuenta.`,
+          description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes para este registro. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}. No se pueden crear sobregiros en la cuenta.`,
           variant: "destructive",
         });
         return;
@@ -801,10 +802,10 @@ export default function JournalEntryDialog({
                       Totales:
                     </TableCell>
                     <TableCell className="font-semibold">
-                      Q{getTotalDebit().toFixed(2)}
+                      {formatCurrency(getTotalDebit())}
                     </TableCell>
                     <TableCell className="font-semibold">
-                      Q{getTotalCredit().toFixed(2)}
+                      {formatCurrency(getTotalCredit())}
                     </TableCell>
                     <TableCell></TableCell>
                   </TableRow>
@@ -814,7 +815,7 @@ export default function JournalEntryDialog({
 
             {!isBalanced() && (
               <p className="text-sm text-destructive mt-2">
-                ⚠️ La partida no está balanceada. Diferencia: Q{Math.abs(getTotalDebit() - getTotalCredit()).toFixed(2)}
+                ⚠️ La partida no está balanceada. Diferencia: {formatCurrency(Math.abs(getTotalDebit() - getTotalCredit()))}
               </p>
             )}
             {isBalanced() && getTotalDebit() > 0 && (

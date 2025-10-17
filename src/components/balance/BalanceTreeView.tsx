@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown, Circle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
 
 interface Account {
   id: number;
@@ -69,25 +70,25 @@ function TreeNode({ account, children, level, allAccounts, onViewDetails }: Tree
 
           <div className="col-span-1 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.previous_balance < 0 ? 'text-red-600' : ''}`}>
-              {account.previous_balance !== 0 ? `Q ${Math.abs(account.previous_balance).toFixed(2)}` : "-"}
+              {account.previous_balance !== 0 ? formatCurrency(Math.abs(account.previous_balance)) : "-"}
             </span>
           </div>
 
           <div className="col-span-1 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
-              {account.debit > 0 ? `Q ${account.debit.toFixed(2)}` : "-"}
+              {account.debit > 0 ? formatCurrency(account.debit) : "-"}
             </span>
           </div>
 
           <div className="col-span-1 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
-              {account.credit > 0 ? `Q ${account.credit.toFixed(2)}` : "-"}
+              {account.credit > 0 ? formatCurrency(account.credit) : "-"}
             </span>
           </div>
 
           <div className="col-span-2 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.balance < 0 ? 'text-red-600' : ''}`}>
-              {account.balance !== 0 ? `Q ${Math.abs(account.balance).toFixed(2)}` : "-"}
+              {account.balance !== 0 ? formatCurrency(Math.abs(account.balance)) : "-"}
             </span>
           </div>
 

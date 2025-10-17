@@ -11,6 +11,7 @@ import { SalesCard } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { formatCurrency } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -61,9 +62,9 @@ export default function LibroVentas() {
     const documentCount = sales.length;
 
     return {
-      totalWithVAT: totalWithVAT.toFixed(2),
-      totalVAT: totalVAT.toFixed(2),
-      totalNet: totalNet.toFixed(2),
+      totalWithVAT: formatCurrency(totalWithVAT),
+      totalVAT: formatCurrency(totalVAT),
+      totalNet: formatCurrency(totalNet),
       documentCount,
     };
   }, [sales]);

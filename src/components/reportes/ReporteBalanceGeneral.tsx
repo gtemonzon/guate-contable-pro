@@ -7,6 +7,7 @@ import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { formatCurrency } from "@/lib/utils";
 
 interface BalanceAccount {
   account_code: string;
