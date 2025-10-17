@@ -391,6 +391,51 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_enterprise_documents: {
+        Row: {
+          created_at: string | null
+          document_name: string
+          document_type: string
+          enterprise_id: number
+          file_name: string
+          file_path: string
+          file_size: number
+          id: number
+          is_active: boolean | null
+          notes: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_name: string
+          document_type: string
+          enterprise_id: number
+          file_name: string
+          file_path: string
+          file_size: number
+          id?: never
+          is_active?: boolean | null
+          notes?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_name?: string
+          document_type?: string
+          enterprise_id?: number
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: never
+          is_active?: boolean | null
+          notes?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       tab_enterprises: {
         Row: {
           address: string | null

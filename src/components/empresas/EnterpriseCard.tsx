@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2 } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -37,6 +37,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
   const { toast } = useToast();
   const [isSelected, setIsSelected] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [documentsCount, setDocumentsCount] = useState(0);
 
   useEffect(() => {
     const checkSelection = () => {
@@ -59,6 +60,25 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       window.removeEventListener("storage", handleEnterpriseChange);
       window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
     };
+  }, [enterprise.id]);
+
+  useEffect(() => {
+    const fetchDocumentsCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('tab_enterprise_documents')
+          .select('*', { count: 'exact', head: true })
+          .eq('enterprise_id', enterprise.id)
+          .eq('is_active', true);
+
+        if (error) throw error;
+        setDocumentsCount(count || 0);
+      } catch (error) {
+        console.error('Error fetching documents count:', error);
+      }
+    };
+
+    fetchDocumentsCount();
   }, [enterprise.id]);
 
   const handleSelectEnterprise = () => {
@@ -121,6 +141,12 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
               )}
             </div>
           </div>
+          {documentsCount > 0 && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <FileText className="h-3 w-3" />
+              {documentsCount}
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
