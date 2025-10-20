@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -15,9 +15,10 @@ import {
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   {
-    title: "Empresa",
+    title: "Administración",
     items: [
-      { title: "Información", url: "/empresas", icon: Building2 },
+      { title: "Usuarios", url: "/usuarios", icon: Users },
+      { title: "Empresas", url: "/empresas", icon: Building2 },
     ],
   },
   {
