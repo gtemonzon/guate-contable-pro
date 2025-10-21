@@ -90,7 +90,9 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     });
     // Trigger events for other components to react
     window.dispatchEvent(new Event("storage"));
-    window.dispatchEvent(new CustomEvent("enterpriseChanged"));
+    window.dispatchEvent(new CustomEvent("enterpriseChanged", {
+      detail: { enterpriseId: enterprise.id }
+    }));
   };
 
   const handleDeleteEnterprise = async () => {

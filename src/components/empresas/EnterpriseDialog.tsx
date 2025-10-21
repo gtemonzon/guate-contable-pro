@@ -196,6 +196,12 @@ export function EnterpriseDialog({
 
         // Auto-select the new enterprise
         localStorage.setItem("currentEnterpriseId", newEnterprise.id.toString());
+        
+        // Trigger events for other components to react
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new CustomEvent("enterpriseChanged", {
+          detail: { enterpriseId: newEnterprise.id }
+        }));
 
         toast({
           title: "Empresa creada",

@@ -23,6 +23,8 @@ const MainLayout = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentEnterprise, setCurrentEnterprise] = useState<string>("");
+  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener
@@ -50,6 +52,53 @@ const MainLayout = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Fetch and listen for current enterprise changes
+  useEffect(() => {
+    const fetchCurrentEnterprise = async () => {
+      const enterpriseId = localStorage.getItem("currentEnterpriseId");
+      setCurrentEnterpriseId(enterpriseId);
+      
+      if (enterpriseId) {
+        try {
+          const { data, error } = await supabase
+            .from("tab_enterprises")
+            .select("business_name")
+            .eq("id", parseInt(enterpriseId))
+            .single();
+          
+          if (error) throw error;
+          setCurrentEnterprise(data.business_name);
+        } catch (error) {
+          console.error("Error fetching enterprise:", error);
+          setCurrentEnterprise("");
+        }
+      } else {
+        setCurrentEnterprise("");
+      }
+    };
+
+    // Fetch on mount
+    fetchCurrentEnterprise();
+
+    // Listen for storage events (from other tabs)
+    const handleStorageChange = () => {
+      fetchCurrentEnterprise();
+    };
+
+    // Listen for custom enterprise changed events (from same tab)
+    const handleEnterpriseChanged = () => {
+      fetchCurrentEnterprise();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("enterpriseChanged", handleEnterpriseChanged);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("enterpriseChanged", handleEnterpriseChanged);
+    };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -88,7 +137,12 @@ const MainLayout = () => {
             
             <div className="flex items-center gap-2 text-lg font-semibold">
               <Building2 className="h-5 w-5 text-primary" />
-              <span className="hidden sm:inline">Sistema Contable Guatemala</span>
+              <span className="hidden sm:inline truncate max-w-md">
+                {currentEnterprise 
+                  ? `Sistema Contable - ${currentEnterprise}`
+                  : "Sistema Contable"
+                }
+              </span>
             </div>
 
             <div className="ml-auto flex items-center gap-4">
