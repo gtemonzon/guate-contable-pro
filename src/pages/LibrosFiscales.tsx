@@ -255,6 +255,82 @@ export default function LibrosFiscales() {
     return { base: parseFloat(base.toFixed(2)), vat: parseFloat(vat.toFixed(2)) };
   };
 
+  const checkDuplicatePurchase = async (
+    entry: PurchaseEntry, 
+    currentEntryId?: number
+  ): Promise<{ isDuplicate: boolean; month?: string; year?: number }> => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_purchase_ledger")
+        .select("id, invoice_date")
+        .eq("purchase_book_id", currentBookId)
+        .eq("supplier_nit", entry.supplier_nit)
+        .eq("fel_document_type", entry.fel_document_type)
+        .eq("invoice_series", entry.invoice_series || "")
+        .eq("invoice_number", entry.invoice_number);
+
+      if (error) throw error;
+
+      const duplicates = data?.filter(d => d.id !== currentEntryId);
+      
+      if (duplicates && duplicates.length > 0) {
+        const date = new Date(duplicates[0].invoice_date);
+        return { 
+          isDuplicate: true, 
+          month: monthNames[date.getMonth()],
+          year: date.getFullYear()
+        };
+      }
+      
+      return { isDuplicate: false };
+    } catch (error) {
+      console.error("Error al verificar duplicados:", error);
+      return { isDuplicate: false };
+    }
+  };
+
+  const checkDuplicateSale = async (
+    entry: SaleEntry, 
+    currentEntryId?: number
+  ): Promise<{ isDuplicate: boolean; month?: string; year?: number }> => {
+    try {
+      const entryDate = new Date(entry.invoice_date);
+      const month = entryDate.getMonth() + 1;
+      const year = entryDate.getFullYear();
+      
+      const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      const { data, error } = await supabase
+        .from("tab_sales_ledger")
+        .select("id, invoice_date")
+        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .eq("customer_nit", entry.customer_nit)
+        .eq("fel_document_type", entry.fel_document_type)
+        .eq("invoice_series", entry.invoice_series || "")
+        .eq("invoice_number", entry.invoice_number)
+        .gte("invoice_date", startDate)
+        .lte("invoice_date", endDate);
+
+      if (error) throw error;
+
+      const duplicates = data?.filter(d => d.id !== currentEntryId);
+      
+      if (duplicates && duplicates.length > 0) {
+        return { 
+          isDuplicate: true, 
+          month: monthNames[month - 1],
+          year: year
+        };
+      }
+      
+      return { isDuplicate: false };
+    } catch (error) {
+      console.error("Error al verificar duplicados:", error);
+      return { isDuplicate: false };
+    }
+  };
+
   const addNewPurchase = () => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
@@ -332,6 +408,17 @@ export default function LibrosFiscales() {
     const entry = purchases[index];
     if (!currentBookId || !currentEnterpriseId) return;
 
+    // Validar duplicados antes de guardar
+    const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
+    if (duplicateCheck.isDuplicate) {
+      toast({
+        title: "Documento duplicado",
+        description: `Documento ya ingresado en el mes ${duplicateCheck.month} ${duplicateCheck.year}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const entryData = {
         purchase_book_id: currentBookId,
@@ -380,9 +467,13 @@ export default function LibrosFiscales() {
         });
       }
     } catch (error: any) {
+      const errorMessage = error.message?.includes("unique_purchase_document") 
+        ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
+        : getSafeErrorMessage(error);
+      
       toast({
         title: "Error al guardar",
-        description: getSafeErrorMessage(error),
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -391,6 +482,17 @@ export default function LibrosFiscales() {
   const saveSaleRow = async (index: number) => {
     const entry = sales[index];
     if (!currentEnterpriseId) return;
+
+    // Validar duplicados antes de guardar
+    const duplicateCheck = await checkDuplicateSale(entry, entry.id);
+    if (duplicateCheck.isDuplicate) {
+      toast({
+        title: "Documento duplicado",
+        description: `Documento ya ingresado en el mes ${duplicateCheck.month} ${duplicateCheck.year}`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const entryData = {
@@ -438,9 +540,13 @@ export default function LibrosFiscales() {
         });
       }
     } catch (error: any) {
+      const errorMessage = error.message?.includes("unique_sales_document") 
+        ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
+        : getSafeErrorMessage(error);
+      
       toast({
         title: "Error al guardar",
-        description: getSafeErrorMessage(error),
+        description: errorMessage,
         variant: "destructive",
       });
     }
