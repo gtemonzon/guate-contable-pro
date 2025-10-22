@@ -55,8 +55,23 @@ export default function LibroCompras() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
-  const [journalType, setJournalType] = useState<"mes" | "cheque">("mes");
+  const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  
+  const [expenseAccounts, setExpenseAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  
+  const [bankAccounts, setBankAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  
+  const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
+  const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
 
   const { toast } = useToast();
 
@@ -85,6 +100,13 @@ export default function LibroCompras() {
     
     if (enterpriseId) {
       fetchFELDocTypes();
+      fetchAccounts(enterpriseId);
+      
+      // Cargar última cuenta usada desde localStorage
+      const savedExpense = localStorage.getItem(`lastExpenseAccount_${enterpriseId}`);
+      const savedBank = localStorage.getItem(`lastBankAccount_${enterpriseId}`);
+      if (savedExpense) setLastExpenseAccountId(parseInt(savedExpense));
+      if (savedBank) setLastBankAccountId(parseInt(savedBank));
     } else {
       setLoading(false);
       toast({
@@ -99,6 +121,7 @@ export default function LibroCompras() {
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
+        fetchAccounts(newEnterpriseId);
         fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
       } else {
         setPurchases([]);
@@ -132,6 +155,48 @@ export default function LibroCompras() {
       setFelDocTypes(data || []);
     } catch (error: any) {
       console.error("Error loading FEL doc types:", error);
+    }
+  };
+
+  const fetchAccounts = async (enterpriseId: string) => {
+    try {
+      // Cuentas que permiten movimientos (para gastos)
+      const { data: movementAccounts, error: movementError } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("allows_movement", true)
+        .eq("is_active", true)
+        .order("account_code");
+
+      if (movementError) throw movementError;
+
+      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos) o 6 (Costos)
+      const expenses = movementAccounts?.filter(acc => 
+        acc.account_code.startsWith('5') || acc.account_code.startsWith('6')
+      ) || [];
+
+      setExpenseAccounts(expenses);
+
+      // Cuentas bancarias (is_bank_account = true)
+      const { data: banks, error: banksError } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("is_bank_account", true)
+        .eq("is_active", true)
+        .order("account_code");
+
+      if (banksError) throw banksError;
+      setBankAccounts(banks || []);
+
+    } catch (error: any) {
+      console.error("Error al cargar cuentas:", error);
+      toast({
+        title: "Error al cargar cuentas",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -225,6 +290,8 @@ export default function LibroCompras() {
       base_amount: 0,
       vat_amount: 0,
       batch_reference: "",
+      expense_account_id: lastExpenseAccountId,
+      bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
     };
@@ -285,7 +352,19 @@ export default function LibroCompras() {
         vat_amount: entry.vat_amount,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
+        expense_account_id: entry.expense_account_id,
+        bank_account_id: entry.bank_account_id,
       };
+      
+      // Guardar última cuenta usada
+      if (entry.expense_account_id) {
+        setLastExpenseAccountId(entry.expense_account_id);
+        localStorage.setItem(`lastExpenseAccount_${currentEnterpriseId}`, entry.expense_account_id.toString());
+      }
+      if (entry.bank_account_id) {
+        setLastBankAccountId(entry.bank_account_id);
+        localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
+      }
 
       if (entry.isNew) {
         const { data, error } = await supabase
@@ -459,13 +538,14 @@ export default function LibroCompras() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label>Tipo de Póliza</Label>
-                      <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "cheque")}>
+                      <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "banco" | "documento")}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="mes">Póliza del Mes</SelectItem>
-                          <SelectItem value="cheque">Póliza por Cheque</SelectItem>
+                          <SelectItem value="mes">Póliza Consolidada</SelectItem>
+                          <SelectItem value="banco">Póliza por Banco</SelectItem>
+                          <SelectItem value="documento">Póliza por Documento</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -483,6 +563,17 @@ export default function LibroCompras() {
                             toast({
                               title: "Error",
                               description: "No se puede generar la póliza",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+
+                          // Validar que todas las facturas tengan cuenta asignada
+                          const withoutAccount = purchases.filter(p => !p.expense_account_id);
+                          if (withoutAccount.length > 0) {
+                            toast({
+                              title: "Documentos sin cuenta",
+                              description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
                               variant: "destructive",
                             });
                             return;
@@ -510,49 +601,129 @@ export default function LibroCompras() {
                             return;
                           }
 
-                          // Crear póliza
-                          const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-                          const { data: journalEntry, error: journalError } = await supabase
-                            .from("tab_journal_entries")
-                            .insert({
-                              enterprise_id: parseInt(currentEnterpriseId),
-                              accounting_period_id: period.id,
-                              entry_number: entryNumber,
-                              entry_date: new Date().toISOString().split('T')[0],
-                              entry_type: "diario",
-                              description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                              total_debit: parseFloat(totals.totalWithVAT),
-                              total_credit: parseFloat(totals.totalWithVAT),
-                              created_by: user.id,
-                            })
-                            .select()
-                            .single();
+                          if (journalType === "mes") {
+                            // Póliza consolidada del mes
+                            const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                            const { data: journalEntry, error: journalError } = await supabase
+                              .from("tab_journal_entries")
+                              .insert({
+                                enterprise_id: parseInt(currentEnterpriseId),
+                                accounting_period_id: period.id,
+                                entry_number: entryNumber,
+                                entry_date: new Date().toISOString().split('T')[0],
+                                entry_type: "diario",
+                                description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                                total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+                                total_credit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+                                is_posted: false,
+                                created_by: user.id,
+                              })
+                              .select()
+                              .single();
 
-                          if (journalError) throw journalError;
+                            if (journalError) throw journalError;
 
-                          // Marcar facturas con el journal_entry_id
-                          const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
-                          if (purchaseIds.length > 0) {
-                            const { error: updateError } = await supabase
-                              .from("tab_purchase_ledger")
-                              .update({ journal_entry_id: journalEntry.id })
-                              .in("id", purchaseIds);
+                            // Marcar facturas
+                            const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
+                            if (purchaseIds.length > 0) {
+                              await supabase
+                                .from("tab_purchase_ledger")
+                                .update({ journal_entry_id: journalEntry.id })
+                                .in("id", purchaseIds);
+                            }
 
-                            if (updateError) throw updateError;
+                            toast({
+                              title: "Póliza generada",
+                              description: `Póliza ${entryNumber} creada en borrador`,
+                            });
+                          } else if (journalType === "banco") {
+                            // Agrupar por batch_reference
+                            const byBank = purchases.reduce((acc, p) => {
+                              const key = p.batch_reference || "SIN_REF";
+                              if (!acc[key]) acc[key] = [];
+                              acc[key].push(p);
+                              return acc;
+                            }, {} as Record<string, PurchaseEntry[]>);
+
+                            for (const [ref, items] of Object.entries(byBank)) {
+                              const total = items.reduce((sum, p) => sum + p.total_amount, 0);
+                              const entryNumber = `COMP-BANCO-${ref}-${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
+                              
+                              const { data: journalEntry, error: journalError } = await supabase
+                                .from("tab_journal_entries")
+                                .insert({
+                                  enterprise_id: parseInt(currentEnterpriseId),
+                                  accounting_period_id: period.id,
+                                  entry_number: entryNumber,
+                                  entry_date: new Date().toISOString().split('T')[0],
+                                  entry_type: "diario",
+                                  description: `Compras Ref. ${ref}`,
+                                  total_debit: total,
+                                  total_credit: total,
+                                  is_posted: false,
+                                  created_by: user.id,
+                                })
+                                .select()
+                                .single();
+
+                              if (journalError) throw journalError;
+
+                              const ids = items.filter(p => p.id).map(p => p.id);
+                              if (ids.length > 0) {
+                                await supabase
+                                  .from("tab_purchase_ledger")
+                                  .update({ journal_entry_id: journalEntry.id })
+                                  .in("id", ids);
+                              }
+                            }
+
+                            toast({
+                              title: "Pólizas generadas",
+                              description: `${Object.keys(byBank).length} pólizas creadas en borrador`,
+                            });
+                          } else {
+                            // Póliza por documento
+                            for (const p of purchases) {
+                              if (!p.id) continue;
+                              
+                              const entryNumber = `COMP-DOC-${p.invoice_series}-${p.invoice_number}`;
+                              const { data: journalEntry, error: journalError } = await supabase
+                                .from("tab_journal_entries")
+                                .insert({
+                                  enterprise_id: parseInt(currentEnterpriseId),
+                                  accounting_period_id: period.id,
+                                  entry_number: entryNumber,
+                                  entry_date: p.invoice_date,
+                                  entry_type: "diario",
+                                  description: `Compra ${p.supplier_name}`,
+                                  total_debit: p.total_amount,
+                                  total_credit: p.total_amount,
+                                  is_posted: false,
+                                  created_by: user.id,
+                                })
+                                .select()
+                                .single();
+
+                              if (journalError) throw journalError;
+
+                              await supabase
+                                .from("tab_purchase_ledger")
+                                .update({ journal_entry_id: journalEntry.id })
+                                .eq("id", p.id);
+                            }
+
+                            toast({
+                              title: "Pólizas generadas",
+                              description: `${purchases.length} pólizas creadas en borrador`,
+                            });
                           }
 
-                          toast({
-                            title: "Póliza generada",
-                            description: `Póliza ${entryNumber} creada exitosamente`,
-                          });
                           setShowJournalDialog(false);
-                          
-                          // Recargar facturas
                           await fetchPurchases(currentBookId);
                         } catch (error: any) {
                           toast({
                             title: "Error al generar póliza",
-                            description: error.message,
+                            description: getSafeErrorMessage(error),
                             variant: "destructive",
                           });
                         }
@@ -584,6 +755,8 @@ export default function LibroCompras() {
                   purchase={purchase}
                   index={index}
                   felDocTypes={felDocTypes}
+                  expenseAccounts={expenseAccounts}
+                  bankAccounts={bankAccounts}
                   onUpdate={updateRow}
                   onSave={saveRow}
                   onDelete={deleteRow}

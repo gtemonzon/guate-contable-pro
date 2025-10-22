@@ -51,8 +51,16 @@ export default function LibroVentas() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
-  const [journalType, setJournalType] = useState<"mes" | "cheque">("mes");
+  const [journalType, setJournalType] = useState<"mes" | "documento">("mes");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  
+  const [incomeAccounts, setIncomeAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  
+  const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
 
   const { toast } = useToast();
 
@@ -81,7 +89,12 @@ export default function LibroVentas() {
     
     if (enterpriseId) {
       fetchFELDocTypes();
+      fetchAccounts(enterpriseId);
       fetchSales(enterpriseId, selectedMonth, selectedYear);
+      
+      // Cargar última cuenta usada desde localStorage
+      const savedIncome = localStorage.getItem(`lastIncomeAccount_${enterpriseId}`);
+      if (savedIncome) setLastIncomeAccountId(parseInt(savedIncome));
     } else {
       setLoading(false);
       toast({
@@ -96,6 +109,7 @@ export default function LibroVentas() {
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
+        fetchAccounts(newEnterpriseId);
         fetchSales(newEnterpriseId, selectedMonth, selectedYear);
       } else {
         setSales([]);
@@ -129,6 +143,36 @@ export default function LibroVentas() {
       setFelDocTypes(data || []);
     } catch (error: any) {
       console.error("Error loading FEL doc types:", error);
+    }
+  };
+
+  const fetchAccounts = async (enterpriseId: string) => {
+    try {
+      // Cuentas que permiten movimientos (para ingresos)
+      const { data: movementAccounts, error: movementError } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("allows_movement", true)
+        .eq("is_active", true)
+        .order("account_code");
+
+      if (movementError) throw movementError;
+
+      // Ingresos: Cuentas que empiezan con 4 (Ingresos)
+      const incomes = movementAccounts?.filter(acc => 
+        acc.account_code.startsWith('4')
+      ) || [];
+
+      setIncomeAccounts(incomes);
+
+    } catch (error: any) {
+      console.error("Error al cargar cuentas:", error);
+      toast({
+        title: "Error al cargar cuentas",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -182,6 +226,7 @@ export default function LibroVentas() {
       total_amount: 0,
       vat_amount: 0,
       net_amount: 0,
+      income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
     };
@@ -240,7 +285,14 @@ export default function LibroVentas() {
         total_amount: entry.total_amount,
         vat_amount: entry.vat_amount,
         net_amount: entry.net_amount,
+        income_account_id: entry.income_account_id,
       };
+      
+      // Guardar última cuenta usada
+      if (entry.income_account_id) {
+        setLastIncomeAccountId(entry.income_account_id);
+        localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
+      }
 
       if (entry.isNew) {
         const { data, error } = await supabase
@@ -324,6 +376,17 @@ export default function LibroVentas() {
         return;
       }
 
+      // Validar que todas las facturas tengan cuenta asignada
+      const withoutAccount = sales.filter(s => !s.income_account_id);
+      if (withoutAccount.length > 0) {
+        toast({
+          title: "Documentos sin cuenta",
+          description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
@@ -346,41 +409,78 @@ export default function LibroVentas() {
         return;
       }
 
-      // Crear póliza
-      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-      const { data: journalEntry, error: journalError } = await supabase
-        .from("tab_journal_entries")
-        .insert({
-          enterprise_id: parseInt(currentEnterpriseId),
-          accounting_period_id: period.id,
-          entry_number: entryNumber,
-          entry_date: new Date().toISOString().split('T')[0],
-          entry_type: "diario",
-          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-          total_debit: parseFloat(totals.totalWithVAT),
-          total_credit: parseFloat(totals.totalWithVAT),
-          created_by: user.id,
-        })
-        .select()
-        .single();
+      if (journalType === "mes") {
+        // Póliza consolidada del mes
+        const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        const { data: journalEntry, error: journalError } = await supabase
+          .from("tab_journal_entries")
+          .insert({
+            enterprise_id: parseInt(currentEnterpriseId),
+            accounting_period_id: period.id,
+            entry_number: entryNumber,
+            entry_date: new Date().toISOString().split('T')[0],
+            entry_type: "diario",
+            description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+            total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+            total_credit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+            is_posted: false,
+            created_by: user.id,
+          })
+          .select()
+          .single();
 
-      if (journalError) throw journalError;
+        if (journalError) throw journalError;
 
-      // Marcar facturas con el journal_entry_id
-      const saleIds = sales.filter(s => s.id).map(s => s.id);
-      if (saleIds.length > 0) {
-        const { error: updateError } = await supabase
-          .from("tab_sales_ledger")
-          .update({ journal_entry_id: journalEntry.id })
-          .in("id", saleIds);
+        // Marcar facturas con el journal_entry_id
+        const saleIds = sales.filter(s => s.id).map(s => s.id);
+        if (saleIds.length > 0) {
+          await supabase
+            .from("tab_sales_ledger")
+            .update({ journal_entry_id: journalEntry.id })
+            .in("id", saleIds);
+        }
 
-        if (updateError) throw updateError;
+        toast({
+          title: "Póliza generada",
+          description: `Póliza ${entryNumber} creada en borrador`,
+        });
+      } else {
+        // Póliza por documento
+        for (const s of sales) {
+          if (!s.id) continue;
+          
+          const entryNumber = `VENT-DOC-${s.invoice_series}-${s.invoice_number}`;
+          const { data: journalEntry, error: journalError } = await supabase
+            .from("tab_journal_entries")
+            .insert({
+              enterprise_id: parseInt(currentEnterpriseId),
+              accounting_period_id: period.id,
+              entry_number: entryNumber,
+              entry_date: s.invoice_date,
+              entry_type: "diario",
+              description: `Venta ${s.customer_name}`,
+              total_debit: s.total_amount,
+              total_credit: s.total_amount,
+              is_posted: false,
+              created_by: user.id,
+            })
+            .select()
+            .single();
+
+          if (journalError) throw journalError;
+
+          await supabase
+            .from("tab_sales_ledger")
+            .update({ journal_entry_id: journalEntry.id })
+            .eq("id", s.id);
+        }
+
+        toast({
+          title: "Pólizas generadas",
+          description: `${sales.length} pólizas creadas en borrador`,
+        });
       }
 
-      toast({
-        title: "Póliza generada",
-        description: `Póliza ${entryNumber} creada exitosamente`,
-      });
       setShowJournalDialog(false);
       
       // Recargar facturas
@@ -497,13 +597,13 @@ export default function LibroVentas() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label>Tipo de Póliza</Label>
-                      <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "cheque")}>
+                      <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "documento")}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="mes">Póliza del Mes</SelectItem>
-                          <SelectItem value="cheque">Póliza por Cheque</SelectItem>
+                          <SelectItem value="mes">Póliza Consolidada</SelectItem>
+                          <SelectItem value="documento">Póliza por Documento</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -543,6 +643,7 @@ export default function LibroVentas() {
                   sale={sale}
                   index={index}
                   felDocTypes={felDocTypes}
+                  incomeAccounts={incomeAccounts}
                   onUpdate={updateRow}
                   onSave={saveRow}
                   onDelete={deleteRow}
