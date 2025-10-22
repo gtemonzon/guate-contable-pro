@@ -27,7 +27,7 @@ const menuItems = [
       { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen },
       { title: "Períodos Contables", url: "/periodos", icon: FileText },
       { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText },
-      { title: "Libros Fiscales", url: "/libros-fiscales", icon: ShoppingCart },
+      { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart },
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote },
     ],
   },

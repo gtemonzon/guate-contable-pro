@@ -66,7 +66,6 @@ export default function LibrosFiscales() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
-  const [showNewEntryDialog, setShowNewEntryDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const { toast } = useToast();
 
@@ -275,7 +274,6 @@ export default function LibrosFiscales() {
       isNew: true,
     };
     setPurchases([newEntry, ...purchases]);
-    setShowNewEntryDialog(false);
   };
 
   const addNewSale = () => {
@@ -296,7 +294,6 @@ export default function LibrosFiscales() {
       isNew: true,
     };
     setSales([newEntry, ...sales]);
-    setShowNewEntryDialog(false);
   };
 
   const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: any) => {
@@ -531,7 +528,7 @@ export default function LibrosFiscales() {
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Libros Fiscales</h1>
+          <h1 className="text-3xl font-bold">Compras y Ventas</h1>
           <p className="text-muted-foreground">Registro de compras y ventas</p>
         </div>
         <div className="flex gap-4 items-end">
@@ -596,7 +593,7 @@ export default function LibrosFiscales() {
                 <Upload className="h-4 w-4 mr-2" />
                 Importar
               </Button>
-              <Button size="sm" onClick={() => setShowNewEntryDialog(true)}>
+              <Button size="sm" onClick={addNewPurchase}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Factura
               </Button>
@@ -653,7 +650,7 @@ export default function LibrosFiscales() {
                 <Upload className="h-4 w-4 mr-2" />
                 Importar
               </Button>
-              <Button size="sm" onClick={() => setShowNewEntryDialog(true)}>
+              <Button size="sm" onClick={addNewSale}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Factura
               </Button>
@@ -686,24 +683,6 @@ export default function LibrosFiscales() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showNewEntryDialog} onOpenChange={setShowNewEntryDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nueva Factura</DialogTitle>
-            <DialogDescription>
-              Se agregará una nueva línea {activeTab === "compras" ? "de compra" : "de venta"} al libro
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2 pt-4">
-            <Button variant="outline" onClick={() => setShowNewEntryDialog(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={activeTab === "compras" ? addNewPurchase : addNewSale} className="flex-1">
-              Agregar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {activeTab === "compras" && currentEnterpriseId && currentBookId && (
         <ImportPurchasesDialog
