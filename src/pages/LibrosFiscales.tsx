@@ -36,6 +36,8 @@ interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   batch_reference: string;
+  expense_account_id: number | null;
+  bank_account_id: number | null;
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;
@@ -52,6 +54,7 @@ interface SaleEntry {
   total_amount: number;
   vat_amount: number;
   net_amount: number;
+  income_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
 }
@@ -67,6 +70,29 @@ export default function LibrosFiscales() {
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  
+  // Estados para listas de cuentas
+  const [expenseAccounts, setExpenseAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  const [bankAccounts, setBankAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  const [incomeAccounts, setIncomeAccounts] = useState<Array<{
+    id: number;
+    account_code: string;
+    account_name: string;
+  }>>([]);
+  
+  // Estados para memoria de última cuenta usada
+  const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
+  const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
+  const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
+  
   const { toast } = useToast();
 
   const monthNames = [
@@ -104,8 +130,18 @@ export default function LibrosFiscales() {
     
     if (enterpriseId) {
       fetchFELDocTypes();
+      fetchAccounts(enterpriseId);
       fetchOrCreateBook(enterpriseId, selectedMonth, selectedYear);
       fetchSales(enterpriseId, selectedMonth, selectedYear);
+      
+      // Cargar última cuenta usada desde localStorage
+      const savedExpense = localStorage.getItem(`lastExpenseAccount_${enterpriseId}`);
+      const savedBank = localStorage.getItem(`lastBankAccount_${enterpriseId}`);
+      const savedIncome = localStorage.getItem(`lastIncomeAccount_${enterpriseId}`);
+      
+      if (savedExpense) setLastExpenseAccountId(parseInt(savedExpense));
+      if (savedBank) setLastBankAccountId(parseInt(savedBank));
+      if (savedIncome) setLastIncomeAccountId(parseInt(savedIncome));
     } else {
       setLoading(false);
     }
@@ -115,6 +151,7 @@ export default function LibrosFiscales() {
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
+        fetchAccounts(newEnterpriseId);
         fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
         fetchSales(newEnterpriseId, selectedMonth, selectedYear);
       } else {
@@ -134,6 +171,7 @@ export default function LibrosFiscales() {
 
   useEffect(() => {
     if (currentEnterpriseId) {
+      fetchAccounts(currentEnterpriseId);
       fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
       fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
     }
@@ -151,6 +189,55 @@ export default function LibrosFiscales() {
       setFelDocTypes(data || []);
     } catch (error: any) {
       console.error("Error loading FEL doc types:", error);
+    }
+  };
+
+  const fetchAccounts = async (enterpriseId: string) => {
+    try {
+      // Cuentas que permiten movimientos (para gastos/ingresos)
+      const { data: movementAccounts, error: movementError } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("allows_movement", true)
+        .eq("is_active", true)
+        .order("account_code");
+
+      if (movementError) throw movementError;
+
+      // Separar por tipo de cuenta
+      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos) o 6 (Costos)
+      const expenses = movementAccounts?.filter(acc => 
+        acc.account_code.startsWith('5') || acc.account_code.startsWith('6')
+      ) || [];
+
+      // Ingresos: Cuentas que empiezan con 4 (Ingresos)
+      const incomes = movementAccounts?.filter(acc => 
+        acc.account_code.startsWith('4')
+      ) || [];
+
+      setExpenseAccounts(expenses);
+      setIncomeAccounts(incomes);
+
+      // Cuentas bancarias (is_bank_account = true)
+      const { data: banks, error: banksError } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("is_bank_account", true)
+        .eq("is_active", true)
+        .order("account_code");
+
+      if (banksError) throw banksError;
+      setBankAccounts(banks || []);
+
+    } catch (error: any) {
+      console.error("Error al cargar cuentas:", error);
+      toast({
+        title: "Error al cargar cuentas",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -345,6 +432,8 @@ export default function LibrosFiscales() {
       base_amount: 0,
       vat_amount: 0,
       batch_reference: "",
+      expense_account_id: lastExpenseAccountId,
+      bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
     };
@@ -365,6 +454,7 @@ export default function LibrosFiscales() {
       total_amount: 0,
       vat_amount: 0,
       net_amount: 0,
+      income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
     };
@@ -433,6 +523,8 @@ export default function LibrosFiscales() {
         vat_amount: entry.vat_amount,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
+        expense_account_id: entry.expense_account_id,
+        bank_account_id: entry.bank_account_id,
       };
 
       if (entry.isNew) {
@@ -448,6 +540,16 @@ export default function LibrosFiscales() {
         updated[index] = { ...data, isNew: false };
         setPurchases(updated);
 
+        // Guardar última cuenta usada
+        if (entry.expense_account_id) {
+          setLastExpenseAccountId(entry.expense_account_id);
+          localStorage.setItem(`lastExpenseAccount_${currentEnterpriseId}`, entry.expense_account_id.toString());
+        }
+        if (entry.bank_account_id) {
+          setLastBankAccountId(entry.bank_account_id);
+          localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
+        }
+
         toast({
           title: "Factura guardada",
           description: "La factura de compra se guardó correctamente",
@@ -459,6 +561,16 @@ export default function LibrosFiscales() {
           .eq("id", entry.id);
 
         if (error) throw error;
+
+        // Guardar última cuenta usada
+        if (entry.expense_account_id) {
+          setLastExpenseAccountId(entry.expense_account_id);
+          localStorage.setItem(`lastExpenseAccount_${currentEnterpriseId}`, entry.expense_account_id.toString());
+        }
+        if (entry.bank_account_id) {
+          setLastBankAccountId(entry.bank_account_id);
+          localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
+        }
 
         toast({
           title: "Factura actualizada",
@@ -506,6 +618,7 @@ export default function LibrosFiscales() {
         total_amount: entry.total_amount,
         vat_amount: entry.vat_amount,
         net_amount: entry.net_amount,
+        income_account_id: entry.income_account_id,
       };
 
       if (entry.isNew) {
@@ -521,6 +634,12 @@ export default function LibrosFiscales() {
         updated[index] = { ...data, isNew: false };
         setSales(updated);
 
+        // Guardar última cuenta usada
+        if (entry.income_account_id) {
+          setLastIncomeAccountId(entry.income_account_id);
+          localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
+        }
+
         toast({
           title: "Factura guardada",
           description: "La factura de venta se guardó correctamente",
@@ -532,6 +651,12 @@ export default function LibrosFiscales() {
           .eq("id", entry.id);
 
         if (error) throw error;
+
+        // Guardar última cuenta usada
+        if (entry.income_account_id) {
+          setLastIncomeAccountId(entry.income_account_id);
+          localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
+        }
 
         toast({
           title: "Factura actualizada",
@@ -719,6 +844,8 @@ export default function LibrosFiscales() {
                       purchase={purchase}
                       index={index}
                       felDocTypes={felDocTypes}
+                      expenseAccounts={expenseAccounts}
+                      bankAccounts={bankAccounts}
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
@@ -776,6 +903,7 @@ export default function LibrosFiscales() {
                       sale={sale}
                       index={index}
                       felDocTypes={felDocTypes}
+                      incomeAccounts={incomeAccounts}
                       onUpdate={updateSaleRow}
                       onSave={saveSaleRow}
                       onDelete={deleteSaleRow}

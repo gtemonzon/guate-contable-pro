@@ -795,12 +795,14 @@ export type Database = {
       tab_purchase_ledger: {
         Row: {
           accounting_period_id: number | null
+          bank_account_id: number | null
           base_amount: number | null
           batch_reference: string | null
           created_at: string | null
           currency_id: number | null
           enterprise_id: number | null
           exchange_rate: number | null
+          expense_account_id: number | null
           fel_document_type: string | null
           id: number
           imported_from_fel: boolean | null
@@ -818,12 +820,14 @@ export type Database = {
         }
         Insert: {
           accounting_period_id?: number | null
+          bank_account_id?: number | null
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
           exchange_rate?: number | null
+          expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
           imported_from_fel?: boolean | null
@@ -841,12 +845,14 @@ export type Database = {
         }
         Update: {
           accounting_period_id?: number | null
+          bank_account_id?: number | null
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
           exchange_rate?: number | null
+          expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
           imported_from_fel?: boolean | null
@@ -871,6 +877,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tab_purchase_ledger_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tab_purchase_ledger_currency_id_fkey"
             columns: ["currency_id"]
             isOneToOne: false
@@ -882,6 +895,13 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_purchase_ledger_expense_account_id_fkey"
+            columns: ["expense_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -914,6 +934,7 @@ export type Database = {
           fel_xml_path: string | null
           id: number
           imported_from_fel: boolean | null
+          income_account_id: number | null
           invoice_date: string
           invoice_number: string
           invoice_series: string | null
@@ -935,6 +956,7 @@ export type Database = {
           fel_xml_path?: string | null
           id?: number
           imported_from_fel?: boolean | null
+          income_account_id?: number | null
           invoice_date: string
           invoice_number: string
           invoice_series?: string | null
@@ -956,6 +978,7 @@ export type Database = {
           fel_xml_path?: string | null
           id?: number
           imported_from_fel?: boolean | null
+          income_account_id?: number | null
           invoice_date?: string
           invoice_number?: string
           invoice_series?: string | null
@@ -984,6 +1007,13 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_sales_ledger_income_account_id_fkey"
+            columns: ["income_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
             referencedColumns: ["id"]
           },
           {

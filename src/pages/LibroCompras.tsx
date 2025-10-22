@@ -39,6 +39,8 @@ interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   batch_reference: string;
+  expense_account_id: number | null;
+  bank_account_id: number | null;
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;

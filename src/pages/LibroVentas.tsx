@@ -38,6 +38,7 @@ interface SaleEntry {
   total_amount: number;
   vat_amount: number;
   net_amount: number;
+  income_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
 }

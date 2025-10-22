@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AccountCombobox } from "@/components/ui/account-combobox";
 
 interface SaleEntry {
   id?: number;
@@ -16,6 +17,7 @@ interface SaleEntry {
   total_amount: number;
   vat_amount: number;
   net_amount: number;
+  income_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
 }
@@ -24,12 +26,13 @@ interface SalesCardProps {
   sale: SaleEntry;
   index: number;
   felDocTypes: { code: string; name: string }[];
+  incomeAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
 }
 
-export function SalesCard({ sale, index, felDocTypes, onUpdate, onSave, onDelete }: SalesCardProps) {
+export function SalesCard({ sale, index, felDocTypes, incomeAccounts, onUpdate, onSave, onDelete }: SalesCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -100,9 +103,9 @@ export function SalesCard({ sale, index, felDocTypes, onUpdate, onSave, onDelete
             </div>
           </div>
 
-          {/* Segunda fila */}
+          {/* Segunda fila: Cliente, montos y cuenta */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-6">
+            <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Cliente</label>
               <Input
                 value={sale.customer_name}
@@ -123,16 +126,6 @@ export function SalesCard({ sale, index, felDocTypes, onUpdate, onSave, onDelete
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Neto</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={sale.net_amount}
-                readOnly
-                className="h-8 bg-muted"
-              />
-            </div>
-            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -140,6 +133,16 @@ export function SalesCard({ sale, index, felDocTypes, onUpdate, onSave, onDelete
                 value={sale.vat_amount}
                 readOnly
                 className="h-8 bg-muted"
+              />
+            </div>
+            <div className="col-span-4">
+              <label className="text-xs text-muted-foreground">Cuenta</label>
+              <AccountCombobox
+                accounts={incomeAccounts}
+                value={sale.income_account_id}
+                onValueChange={(val) => onUpdate(index, "income_account_id", val)}
+                placeholder="Cuenta de ingreso..."
+                className="w-full"
               />
             </div>
           </div>

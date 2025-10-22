@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { AccountCombobox } from "@/components/ui/account-combobox";
 
 interface PurchaseEntry {
   id?: number;
@@ -17,6 +18,8 @@ interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   batch_reference: string;
+  expense_account_id: number | null;
+  bank_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
 }
@@ -25,12 +28,14 @@ interface PurchaseCardProps {
   purchase: PurchaseEntry;
   index: number;
   felDocTypes: { code: string; name: string }[];
+  expenseAccounts: { id: number; account_code: string; account_name: string }[];
+  bankAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
 }
 
-export function PurchaseCard({ purchase, index, felDocTypes, onUpdate, onSave, onDelete }: PurchaseCardProps) {
+export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete }: PurchaseCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -101,9 +106,9 @@ export function PurchaseCard({ purchase, index, felDocTypes, onUpdate, onSave, o
             </div>
           </div>
 
-          {/* Segunda fila: Proveedor, montos y referencia */}
+          {/* Segunda fila: Proveedor, montos, cuenta y referencia */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-4">
+            <div className="col-span-3">
               <label className="text-xs text-muted-foreground">Proveedor</label>
               <Input
                 value={purchase.supplier_name}
@@ -124,16 +129,6 @@ export function PurchaseCard({ purchase, index, felDocTypes, onUpdate, onSave, o
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Base s/IVA</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={purchase.base_amount}
-                readOnly
-                className="h-8 bg-muted"
-              />
-            </div>
-            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -141,6 +136,16 @@ export function PurchaseCard({ purchase, index, felDocTypes, onUpdate, onSave, o
                 value={purchase.vat_amount}
                 readOnly
                 className="h-8 bg-muted"
+              />
+            </div>
+            <div className="col-span-3">
+              <label className="text-xs text-muted-foreground">Cuenta</label>
+              <AccountCombobox
+                accounts={expenseAccounts}
+                value={purchase.expense_account_id}
+                onValueChange={(val) => onUpdate(index, "expense_account_id", val)}
+                placeholder="Cuenta de gasto..."
+                className="w-full"
               />
             </div>
             <div className="col-span-2">
@@ -153,6 +158,22 @@ export function PurchaseCard({ purchase, index, felDocTypes, onUpdate, onSave, o
               />
             </div>
           </div>
+
+          {/* Tercera fila condicional: Banco (solo si hay Ref.Pago) */}
+          {purchase.batch_reference && (
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-12">
+                <label className="text-xs text-muted-foreground">Banco</label>
+                <AccountCombobox
+                  accounts={bankAccounts}
+                  value={purchase.bank_account_id}
+                  onValueChange={(val) => onUpdate(index, "bank_account_id", val)}
+                  placeholder="Seleccionar cuenta bancaria..."
+                  className="w-full"
+                />
+              </div>
+            </div>
+          )}
 
           {purchase.journal_entry_id && (
             <div className="pt-2 border-t">
