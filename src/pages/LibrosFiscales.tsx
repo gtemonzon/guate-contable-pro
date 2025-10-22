@@ -75,9 +75,9 @@ export default function LibrosFiscales() {
   ];
 
   const purchaseTotals = useMemo(() => {
-    const totalWithVAT = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    const totalVAT = purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0);
-    const totalBase = purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0);
+    const totalWithVAT = purchases.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0);
+    const totalVAT = purchases.reduce((sum, p) => sum + (Number(p.vat_amount) || 0), 0);
+    const totalBase = purchases.reduce((sum, p) => sum + (Number(p.base_amount) || 0), 0);
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
@@ -528,8 +528,8 @@ export default function LibrosFiscales() {
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Compras y Ventas</h1>
-          <p className="text-muted-foreground">Registro de compras y ventas</p>
+          <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
+          <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
         </div>
         <div className="flex gap-4 items-end">
           <div>
@@ -563,9 +563,9 @@ export default function LibrosFiscales() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "compras" | "ventas")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="compras">Libro de Compras</TabsTrigger>
-          <TabsTrigger value="ventas">Libro de Ventas</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 bg-muted/50">
+          <TabsTrigger value="compras" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Compras</TabsTrigger>
+          <TabsTrigger value="ventas" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Ventas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compras" className="space-y-4">
