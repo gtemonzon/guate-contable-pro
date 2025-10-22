@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const userFormSchema = z.object({
   email: z.string().email("Email inválido"),
   full_name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional().or(z.literal("")),
   is_active: z.boolean(),
   is_admin: z.boolean(),
 });
@@ -120,6 +120,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   };
 
   const onSubmit = async (data: UserFormData) => {
+    console.log("Formulario enviado:", data, "Empresas seleccionadas:", selectedEnterprises);
     try {
       setLoading(true);
 
@@ -219,6 +220,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
       onClose();
     } catch (error: any) {
+      console.error("Error al guardar usuario:", error);
       toast.error("Error al guardar usuario", {
         description: error.message,
       });
@@ -241,15 +243,15 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="general">Información General</TabsTrigger>
-            <TabsTrigger value="empresas">Empresas</TabsTrigger>
-          </TabsList>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <Tabs defaultValue="general" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="general">Información General</TabsTrigger>
+                <TabsTrigger value="empresas">Empresas</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="general" className="space-y-4">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <TabsContent value="general" className="space-y-4">
                 <FormField
                   control={form.control}
                   name="email"
@@ -346,63 +348,62 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                     </FormItem>
                   )}
                 />
-              </form>
-            </Form>
-          </TabsContent>
+              </TabsContent>
 
-          <TabsContent value="empresas" className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Selecciona las empresas a las que tendrá acceso este usuario
-              </p>
-              {enterprises.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No hay empresas disponibles
-                </p>
-              ) : (
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {enterprises.map((enterprise) => (
-                    <div
-                      key={enterprise.id}
-                      className="flex items-center space-x-2 rounded-lg border p-3"
-                    >
-                      <Checkbox
-                        id={`enterprise-${enterprise.id}`}
-                        checked={selectedEnterprises.includes(enterprise.id)}
-                        onCheckedChange={() => toggleEnterprise(enterprise.id)}
-                      />
-                      <label
-                        htmlFor={`enterprise-${enterprise.id}`}
-                        className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {enterprise.business_name}
-                      </label>
+              <TabsContent value="empresas" className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Selecciona las empresas a las que tendrá acceso este usuario
+                  </p>
+                  {enterprises.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay empresas disponibles
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {enterprises.map((enterprise) => (
+                        <div
+                          key={enterprise.id}
+                          className="flex items-center space-x-2 rounded-lg border p-3"
+                        >
+                          <Checkbox
+                            id={`enterprise-${enterprise.id}`}
+                            checked={selectedEnterprises.includes(enterprise.id)}
+                            onCheckedChange={() => toggleEnterprise(enterprise.id)}
+                          />
+                          <label
+                            htmlFor={`enterprise-${enterprise.id}`}
+                            className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {enterprise.business_name}
+                          </label>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+              </TabsContent>
+            </Tabs>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            onClick={form.handleSubmit(onSubmit)}
-            disabled={loading}
-          >
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEditing ? "Actualizar" : "Crear"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={loading}
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEditing ? "Actualizar" : "Crear"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
