@@ -528,6 +528,7 @@ export type Database = {
       }
       tab_fel_document_types: {
         Row: {
+          applies_vat: boolean
           code: string
           created_at: string | null
           id: number
@@ -535,6 +536,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          applies_vat?: boolean
           code: string
           created_at?: string | null
           id?: number
@@ -542,6 +544,7 @@ export type Database = {
           name: string
         }
         Update: {
+          applies_vat?: boolean
           code?: string
           created_at?: string | null
           id?: number
@@ -1104,6 +1107,10 @@ export type Database = {
       }
       is_super_admin: {
         Args: { _user_id: string }
+        Returns: boolean
+      }
+      validate_invoice_date: {
+        Args: { book_month: number; book_year: number; invoice_date: string }
         Returns: boolean
       }
     }

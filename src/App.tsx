@@ -11,8 +11,7 @@ import Empresas from "./pages/Empresas";
 import Cuentas from "./pages/Cuentas";
 import PeriodosContables from "./pages/PeriodosContables";
 import Partidas from "./pages/Partidas";
-import LibroCompras from "./pages/LibroCompras";
-import LibroVentas from "./pages/LibroVentas";
+import LibrosFiscales from "./pages/LibrosFiscales";
 import BalanceSaldos from "./pages/BalanceSaldos";
 import MayorGeneral from "./pages/MayorGeneral";
 import ConciliacionBancaria from "./pages/ConciliacionBancaria";
@@ -40,8 +39,7 @@ const App = () => (
             <Route path="/cuentas" element={<Cuentas />} />
             <Route path="/periodos" element={<PeriodosContables />} />
             <Route path="/partidas" element={<Partidas />} />
-            <Route path="/compras" element={<LibroCompras />} />
-            <Route path="/ventas" element={<LibroVentas />} />
+            <Route path="/libros-fiscales" element={<LibrosFiscales />} />
             <Route path="/conciliacion" element={<ConciliacionBancaria />} />
             <Route path="/saldos" element={<BalanceSaldos />} />
             <Route path="/mayor" element={<MayorGeneral />} />

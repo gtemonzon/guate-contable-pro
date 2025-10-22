@@ -17,6 +17,7 @@ interface ImportPurchasesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enterpriseId: number | null;
+  bookId?: number | null;
   onSuccess: () => void;
 }
 
@@ -24,6 +25,7 @@ export function ImportPurchasesDialog({
   open,
   onOpenChange,
   enterpriseId,
+  bookId,
   onSuccess,
 }: ImportPurchasesDialogProps) {
   const { toast } = useToast();

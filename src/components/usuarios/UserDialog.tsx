@@ -124,6 +124,10 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       setLoading(true);
 
       if (isEditing) {
+        // Get current user to check permissions
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (!currentUser) throw new Error("Usuario no autenticado");
+
         // Update existing user
         const { error: userError } = await supabase
           .from("tab_users")
@@ -136,12 +140,15 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
         if (userError) throw userError;
 
-        // Update enterprise assignments
-        await supabase
+        // Update enterprise assignments - delete old ones first
+        const { error: deleteError } = await supabase
           .from("tab_user_enterprises")
           .delete()
           .eq("user_id", user.id);
 
+        if (deleteError) throw deleteError;
+
+        // Insert new enterprise assignments
         if (selectedEnterprises.length > 0) {
           const enterpriseRelations = selectedEnterprises.map((enterpriseId) => ({
             user_id: user.id,
