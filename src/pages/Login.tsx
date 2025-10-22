@@ -28,6 +28,20 @@ const Login = () => {
 
       if (error) throw error;
 
+      // Verificar si el usuario está activo
+      const { data: userData, error: userError } = await supabase
+        .from("tab_users")
+        .select("is_active")
+        .eq("id", data.user.id)
+        .single();
+
+      if (userError) throw userError;
+
+      if (!userData.is_active) {
+        await supabase.auth.signOut();
+        throw new Error("Tu cuenta está inactiva. Contacta al administrador.");
+      }
+
       toast({
         title: "Bienvenido",
         description: "Sesión iniciada exitosamente",

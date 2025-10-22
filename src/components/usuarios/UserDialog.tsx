@@ -154,7 +154,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           const enterpriseRelations = selectedEnterprises.map((enterpriseId) => ({
             user_id: user.id,
             enterprise_id: enterpriseId,
-            role: data.is_admin ? "admin" : "usuario",
+            role: data.is_admin ? "admin_empresa" : "usuario_basico",
           }));
 
           const { error: entError } = await supabase
@@ -205,7 +205,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           const enterpriseRelations = selectedEnterprises.map((enterpriseId) => ({
             user_id: authData.user.id,
             enterprise_id: enterpriseId,
-            role: data.is_admin ? "admin" : "usuario",
+            role: data.is_admin ? "admin_empresa" : "usuario_basico",
           }));
 
           const { error: entError } = await supabase
