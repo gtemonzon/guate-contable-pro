@@ -305,7 +305,6 @@ export default function LibrosFiscales() {
         .from("tab_sales_ledger")
         .select("id, invoice_date")
         .eq("enterprise_id", parseInt(currentEnterpriseId))
-        .eq("customer_nit", entry.customer_nit)
         .eq("fel_document_type", entry.fel_document_type)
         .eq("invoice_series", entry.invoice_series || "")
         .eq("invoice_number", entry.invoice_number)
