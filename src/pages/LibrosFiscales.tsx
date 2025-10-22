@@ -70,6 +70,8 @@ export default function LibrosFiscales() {
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showJournalDialog, setShowJournalDialog] = useState(false);
+  const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   
   // Estados para listas de cuentas
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
@@ -823,6 +825,10 @@ export default function LibrosFiscales() {
                 <Upload className="h-4 w-4 mr-2" />
                 Importar
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
+                <FileText className="h-4 w-4 mr-2" />
+                Generar Póliza
+              </Button>
               <Button size="sm" onClick={addNewPurchase}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Factura
@@ -882,6 +888,10 @@ export default function LibrosFiscales() {
                 <Upload className="h-4 w-4 mr-2" />
                 Importar
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
+                <FileText className="h-4 w-4 mr-2" />
+                Generar Póliza
+              </Button>
               <Button size="sm" onClick={addNewSale}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nueva Factura
@@ -916,6 +926,314 @@ export default function LibrosFiscales() {
         </TabsContent>
       </Tabs>
 
+      {/* Diálogo de Generar Póliza */}
+      <Dialog open={showJournalDialog} onOpenChange={setShowJournalDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generar Póliza Contable</DialogTitle>
+            <DialogDescription>
+              Selecciona el tipo de póliza a generar para {activeTab === "compras" ? "compras" : "ventas"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Tipo de Póliza</Label>
+              <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "banco" | "documento")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mes">Póliza Consolidada</SelectItem>
+                  {activeTab === "compras" && <SelectItem value="banco">Póliza por Banco</SelectItem>}
+                  <SelectItem value="documento">Póliza por Documento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
+              {activeTab === "compras" ? (
+                <>
+                  <p><strong>Documentos:</strong> {purchaseTotals.documentCount}</p>
+                  <p><strong>Base:</strong> Q {purchaseTotals.totalBase}</p>
+                  <p><strong>IVA:</strong> Q {purchaseTotals.totalVAT}</p>
+                  <p><strong>Total:</strong> Q {purchaseTotals.totalWithVAT}</p>
+                </>
+              ) : (
+                <>
+                  <p><strong>Documentos:</strong> {salesTotals.documentCount}</p>
+                  <p><strong>Neto:</strong> Q {salesTotals.totalNet}</p>
+                  <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>
+                  <p><strong>Total:</strong> Q {salesTotals.totalWithVAT}</p>
+                </>
+              )}
+            </div>
+            <Button 
+              className="w-full" 
+              onClick={async () => {
+                try {
+                  if (!currentEnterpriseId || (activeTab === "compras" && !currentBookId)) {
+                    toast({
+                      title: "Error",
+                      description: "No se puede generar la póliza",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  // Validar que todas las facturas tengan cuenta asignada
+                  if (activeTab === "compras") {
+                    const withoutAccount = purchases.filter(p => !p.expense_account_id);
+                    if (withoutAccount.length > 0) {
+                      toast({
+                        title: "Documentos sin cuenta",
+                        description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                  } else {
+                    const withoutAccount = sales.filter(s => !s.income_account_id);
+                    if (withoutAccount.length > 0) {
+                      toast({
+                        title: "Documentos sin cuenta",
+                        description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                  }
+
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (!user) throw new Error("Usuario no autenticado");
+
+                  // Obtener período contable activo
+                  const { data: period, error: periodError } = await supabase
+                    .from("tab_accounting_periods")
+                    .select("id")
+                    .eq("enterprise_id", parseInt(currentEnterpriseId))
+                    .eq("status", "abierto")
+                    .eq("year", selectedYear)
+                    .maybeSingle();
+
+                  if (periodError) throw periodError;
+                  if (!period) {
+                    toast({
+                      title: "Error",
+                      description: "No hay período contable abierto para este año",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+
+                  if (activeTab === "compras") {
+                    // Lógica de pólizas de COMPRAS
+                    if (journalType === "mes") {
+                      // Póliza consolidada del mes
+                      const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      const { data: journalEntry, error: journalError } = await supabase
+                        .from("tab_journal_entries")
+                        .insert({
+                          enterprise_id: parseInt(currentEnterpriseId),
+                          accounting_period_id: period.id,
+                          entry_number: entryNumber,
+                          entry_date: new Date().toISOString().split('T')[0],
+                          entry_type: "diario",
+                          description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                          total_debit: parseFloat(purchaseTotals.totalWithVAT.replace(/,/g, '')),
+                          total_credit: parseFloat(purchaseTotals.totalWithVAT.replace(/,/g, '')),
+                          is_posted: false,
+                          created_by: user.id,
+                        })
+                        .select()
+                        .single();
+
+                      if (journalError) throw journalError;
+
+                      const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
+                      if (purchaseIds.length > 0) {
+                        await supabase
+                          .from("tab_purchase_ledger")
+                          .update({ journal_entry_id: journalEntry.id })
+                          .in("id", purchaseIds);
+                      }
+
+                      toast({
+                        title: "Póliza generada",
+                        description: `Póliza ${entryNumber} creada en borrador`,
+                      });
+                    } else if (journalType === "banco") {
+                      // Agrupar por batch_reference
+                      const byBank = purchases.reduce((acc, p) => {
+                        const key = p.batch_reference || "SIN_REF";
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(p);
+                        return acc;
+                      }, {} as Record<string, PurchaseEntry[]>);
+
+                      for (const [ref, items] of Object.entries(byBank)) {
+                        const total = items.reduce((sum, p) => sum + p.total_amount, 0);
+                        const entryNumber = `COMP-BANCO-${ref}-${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
+                        
+                        const { data: journalEntry, error: journalError } = await supabase
+                          .from("tab_journal_entries")
+                          .insert({
+                            enterprise_id: parseInt(currentEnterpriseId),
+                            accounting_period_id: period.id,
+                            entry_number: entryNumber,
+                            entry_date: new Date().toISOString().split('T')[0],
+                            entry_type: "diario",
+                            description: `Compras Ref. ${ref}`,
+                            total_debit: total,
+                            total_credit: total,
+                            is_posted: false,
+                            created_by: user.id,
+                          })
+                          .select()
+                          .single();
+
+                        if (journalError) throw journalError;
+
+                        const ids = items.filter(p => p.id).map(p => p.id);
+                        if (ids.length > 0) {
+                          await supabase
+                            .from("tab_purchase_ledger")
+                            .update({ journal_entry_id: journalEntry.id })
+                            .in("id", ids);
+                        }
+                      }
+
+                      toast({
+                        title: "Pólizas generadas",
+                        description: `${Object.keys(byBank).length} pólizas creadas en borrador`,
+                      });
+                    } else {
+                      // Póliza por documento
+                      for (const p of purchases) {
+                        if (!p.id) continue;
+                        
+                        const entryNumber = `COMP-DOC-${p.invoice_series}-${p.invoice_number}`;
+                        const { data: journalEntry, error: journalError } = await supabase
+                          .from("tab_journal_entries")
+                          .insert({
+                            enterprise_id: parseInt(currentEnterpriseId),
+                            accounting_period_id: period.id,
+                            entry_number: entryNumber,
+                            entry_date: p.invoice_date,
+                            entry_type: "diario",
+                            description: `Compra ${p.supplier_name}`,
+                            total_debit: p.total_amount,
+                            total_credit: p.total_amount,
+                            is_posted: false,
+                            created_by: user.id,
+                          })
+                          .select()
+                          .single();
+
+                        if (journalError) throw journalError;
+
+                        await supabase
+                          .from("tab_purchase_ledger")
+                          .update({ journal_entry_id: journalEntry.id })
+                          .eq("id", p.id);
+                      }
+
+                      toast({
+                        title: "Pólizas generadas",
+                        description: `${purchases.length} pólizas creadas en borrador`,
+                      });
+                    }
+
+                    if (currentBookId) await fetchPurchases(currentBookId);
+                  } else {
+                    // Lógica de pólizas de VENTAS
+                    if (journalType === "mes") {
+                      // Póliza consolidada del mes
+                      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      const { data: journalEntry, error: journalError } = await supabase
+                        .from("tab_journal_entries")
+                        .insert({
+                          enterprise_id: parseInt(currentEnterpriseId),
+                          accounting_period_id: period.id,
+                          entry_number: entryNumber,
+                          entry_date: new Date().toISOString().split('T')[0],
+                          entry_type: "diario",
+                          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                          total_debit: parseFloat(salesTotals.totalWithVAT.replace(/,/g, '')),
+                          total_credit: parseFloat(salesTotals.totalWithVAT.replace(/,/g, '')),
+                          is_posted: false,
+                          created_by: user.id,
+                        })
+                        .select()
+                        .single();
+
+                      if (journalError) throw journalError;
+
+                      const saleIds = sales.filter(s => s.id).map(s => s.id);
+                      if (saleIds.length > 0) {
+                        await supabase
+                          .from("tab_sales_ledger")
+                          .update({ journal_entry_id: journalEntry.id })
+                          .in("id", saleIds);
+                      }
+
+                      toast({
+                        title: "Póliza generada",
+                        description: `Póliza ${entryNumber} creada en borrador`,
+                      });
+                    } else {
+                      // Póliza por documento
+                      for (const s of sales) {
+                        if (!s.id) continue;
+                        
+                        const entryNumber = `VENT-DOC-${s.invoice_series}-${s.invoice_number}`;
+                        const { data: journalEntry, error: journalError } = await supabase
+                          .from("tab_journal_entries")
+                          .insert({
+                            enterprise_id: parseInt(currentEnterpriseId),
+                            accounting_period_id: period.id,
+                            entry_number: entryNumber,
+                            entry_date: s.invoice_date,
+                            entry_type: "diario",
+                            description: `Venta ${s.customer_name}`,
+                            total_debit: s.total_amount,
+                            total_credit: s.total_amount,
+                            is_posted: false,
+                            created_by: user.id,
+                          })
+                          .select()
+                          .single();
+
+                        if (journalError) throw journalError;
+
+                        await supabase
+                          .from("tab_sales_ledger")
+                          .update({ journal_entry_id: journalEntry.id })
+                          .eq("id", s.id);
+                      }
+
+                      toast({
+                        title: "Pólizas generadas",
+                        description: `${sales.length} pólizas creadas en borrador`,
+                      });
+                    }
+
+                    if (currentEnterpriseId) await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
+                  }
+
+                  setShowJournalDialog(false);
+                } catch (error: any) {
+                  toast({
+                    title: "Error al generar póliza",
+                    description: getSafeErrorMessage(error),
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Generar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {activeTab === "compras" && currentEnterpriseId && currentBookId && (
         <ImportPurchasesDialog
