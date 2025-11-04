@@ -151,7 +151,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, ba
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Ref. Pago</label>
               <Input
-                value={purchase.batch_reference}
+                value={purchase.batch_reference || ""}
                 onChange={(e) => onUpdate(index, "batch_reference", e.target.value)}
                 placeholder="Cheque/Ref"
                 className="h-8"
