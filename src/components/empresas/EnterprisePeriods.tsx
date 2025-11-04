@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, CheckCircle2, Calendar, Lock, LockOpen } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import PeriodDialog from "@/components/periodos/PeriodDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -229,15 +229,15 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(period.start_date), "dd 'de' MMMM yyyy", {
-                        locale: es,
-                      })}{" "}
-                      -{" "}
-                      {format(new Date(period.end_date), "dd 'de' MMMM yyyy", {
-                        locale: es,
-                      })}
-                    </p>
+                <p className="text-sm text-muted-foreground">
+                  {format(parseISO(period.start_date), "dd 'de' MMMM yyyy", {
+                    locale: es,
+                  })}{" "}
+                  -{" "}
+                  {format(parseISO(period.end_date), "dd 'de' MMMM yyyy", {
+                    locale: es,
+                  })}
+                </p>
                     {period.notes && (
                       <p className="text-xs text-muted-foreground mt-1">
                         {period.notes}
