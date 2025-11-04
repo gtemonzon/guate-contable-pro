@@ -273,25 +273,27 @@ export default function LibroVentas() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Buscar período contable que cubra el mes seleccionado
-      const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split('T')[0];
-      const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // Buscar período contable que contenga la fecha de la factura
+      console.log("Buscando período para fecha:", entry.invoice_date, "empresa:", currentEnterpriseId);
       
       const { data: periods, error: periodError } = await supabase
         .from('tab_accounting_periods')
-        .select('id, status, start_date, end_date')
+        .select('id, status, start_date, end_date, year')
         .eq('enterprise_id', parseInt(currentEnterpriseId))
-        .lte('start_date', lastDayOfMonth)
-        .gte('end_date', firstDayOfMonth)
+        .lte('start_date', entry.invoice_date)
+        .gte('end_date', entry.invoice_date)
         .eq('status', 'abierto');
+
+      console.log("Períodos encontrados:", periods, "Error:", periodError);
 
       if (periodError) throw periodError;
       
       if (!periods || periods.length === 0) {
-        throw new Error(`No existe un período contable abierto para ${monthNames[selectedMonth - 1]} ${selectedYear}. Por favor, cree el período contable en la vista de Empresas.`);
+        throw new Error(`No existe un período contable abierto que incluya la fecha ${entry.invoice_date}. Por favor, verifique los períodos contables en la vista de Empresas.`);
       }
 
       const period = periods[0];
+      console.log("Usando período:", period.id, "para factura del", entry.invoice_date);
 
       const entryData = {
         enterprise_id: parseInt(currentEnterpriseId),

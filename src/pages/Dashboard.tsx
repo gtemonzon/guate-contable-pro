@@ -29,14 +29,14 @@ const Dashboard = () => {
       }
 
       try {
-        // Fetch last two months of purchases
+        // Fetch all purchase books to find months with data
         const { data: purchaseBooks } = await supabase
           .from("tab_purchase_books")
           .select("id, month, year")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .order("year", { ascending: false })
           .order("month", { ascending: false })
-          .limit(2);
+          .limit(12);
 
         if (purchaseBooks && purchaseBooks.length > 0) {
           // Buscar el libro más reciente que tenga datos
