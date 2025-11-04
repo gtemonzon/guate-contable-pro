@@ -1,7 +1,109 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface BookSummary {
+  month: number;
+  year: number;
+  base: number;
+  vat: number;
+  total: number;
+  count: number;
+}
 
 const Dashboard = () => {
+  const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
+  const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBookSummaries = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch last month of purchases
+        const { data: purchaseBooks } = await supabase
+          .from("tab_purchase_books")
+          .select("id, month, year")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .order("year", { ascending: false })
+          .order("month", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (purchaseBooks) {
+          const { data: purchases } = await supabase
+            .from("tab_purchase_ledger")
+            .select("net_amount, vat_amount, total_amount")
+            .eq("purchase_book_id", purchaseBooks.id);
+
+          if (purchases && purchases.length > 0) {
+            const summary = purchases.reduce(
+              (acc, curr) => ({
+                month: purchaseBooks.month,
+                year: purchaseBooks.year,
+                base: acc.base + Number(curr.net_amount || 0),
+                vat: acc.vat + Number(curr.vat_amount || 0),
+                total: acc.total + Number(curr.total_amount || 0),
+                count: acc.count + 1,
+              }),
+              { month: 0, year: 0, base: 0, vat: 0, total: 0, count: 0 }
+            );
+            setPurchaseSummary(summary);
+          }
+        }
+
+        // Fetch last month of sales
+        const { data: sales } = await supabase
+          .from("tab_sales_ledger")
+          .select("invoice_date, net_amount, vat_amount, total_amount")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .order("invoice_date", { ascending: false })
+          .limit(100);
+
+        if (sales && sales.length > 0) {
+          // Group by month/year and get the most recent
+          const grouped = sales.reduce((acc: any, curr) => {
+            const date = new Date(curr.invoice_date);
+            const key = `${date.getFullYear()}-${date.getMonth()}`;
+            if (!acc[key]) {
+              acc[key] = {
+                month: date.getMonth() + 1,
+                year: date.getFullYear(),
+                base: 0,
+                vat: 0,
+                total: 0,
+                count: 0,
+              };
+            }
+            acc[key].base += Number(curr.net_amount || 0);
+            acc[key].vat += Number(curr.vat_amount || 0);
+            acc[key].total += Number(curr.total_amount || 0);
+            acc[key].count += 1;
+            return acc;
+          }, {});
+
+          const sortedKeys = Object.keys(grouped).sort().reverse();
+          if (sortedKeys.length > 0) {
+            setSalesSummary(grouped[sortedKeys[0]]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching book summaries:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookSummaries();
+  }, []);
+
   // Mock data for demonstration
   const kpis = [
     {
@@ -134,22 +236,128 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Chart placeholder */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingresos vs Gastos</CardTitle>
-          <CardDescription>
-            Comparación mensual de los últimos 12 meses
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-            <p>Gráfico de Ingresos vs Gastos (próximamente)</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Latest Books Summary */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Último Mes de Ventas</CardTitle>
+                <CardDescription>
+                  {salesSummary
+                    ? `${getMonthName(salesSummary.month)} ${salesSummary.year}`
+                    : "No hay registros"}
+                </CardDescription>
+              </div>
+              <Receipt className="h-8 w-8 text-success" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+              </div>
+            ) : salesSummary ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Base:</span>
+                  <span className="text-lg font-semibold financial-number">
+                    Q {salesSummary.base.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">IVA:</span>
+                  <span className="text-lg font-semibold financial-number">
+                    Q {salesSummary.vat.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium">Total:</span>
+                  <span className="text-xl font-bold text-success financial-number">
+                    Q {salesSummary.total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm text-muted-foreground">Cantidad de documentos:</span>
+                  <span className="text-lg font-semibold">{salesSummary.count}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="h-40 flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">No hay ventas registradas</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Último Mes de Compras</CardTitle>
+                <CardDescription>
+                  {purchaseSummary
+                    ? `${getMonthName(purchaseSummary.month)} ${purchaseSummary.year}`
+                    : "No hay registros"}
+                </CardDescription>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-destructive" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+                <Skeleton className="h-6 w-full" />
+              </div>
+            ) : purchaseSummary ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Base:</span>
+                  <span className="text-lg font-semibold financial-number">
+                    Q {purchaseSummary.base.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">IVA:</span>
+                  <span className="text-lg font-semibold financial-number">
+                    Q {purchaseSummary.vat.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-medium">Total:</span>
+                  <span className="text-xl font-bold text-destructive financial-number">
+                    Q {purchaseSummary.total.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm text-muted-foreground">Cantidad de documentos:</span>
+                  <span className="text-lg font-semibold">{purchaseSummary.count}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="h-40 flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">No hay compras registradas</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
+};
+
+const getMonthName = (month: number): string => {
+  const months = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+  ];
+  return months[month - 1] || "";
 };
 
 export default Dashboard;
