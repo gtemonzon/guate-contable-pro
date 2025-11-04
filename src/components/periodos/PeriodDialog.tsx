@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -66,8 +66,8 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
   useEffect(() => {
     if (period) {
       form.reset({
-        start_date: new Date(period.start_date),
-        end_date: new Date(period.end_date),
+        start_date: parseISO(period.start_date),
+        end_date: parseISO(period.end_date),
         notes: period.notes || "",
       });
     } else {
