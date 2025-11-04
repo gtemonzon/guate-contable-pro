@@ -338,9 +338,28 @@ export default function LibroCompras() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      // Obtener período contable activo
+      const activePeriodId = localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`);
+      if (!activePeriodId) {
+        throw new Error("No hay período contable activo para esta empresa. Por favor, active un período en la vista de Empresas.");
+      }
+
+      // Verificar que el período esté abierto
+      const { data: period, error: periodError } = await supabase
+        .from('tab_accounting_periods')
+        .select('status')
+        .eq('id', parseInt(activePeriodId))
+        .single();
+
+      if (periodError) throw periodError;
+      if (period.status !== 'abierto') {
+        throw new Error("El período contable no está abierto. No se pueden crear facturas.");
+      }
+
       const entryData = {
         purchase_book_id: currentBookId,
         enterprise_id: parseInt(currentEnterpriseId),
+        accounting_period_id: parseInt(activePeriodId),
         invoice_series: entry.invoice_series || null,
         invoice_number: entry.invoice_number,
         invoice_date: entry.invoice_date,
@@ -373,7 +392,10 @@ export default function LibroCompras() {
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error detallado al insertar:", error);
+          throw error;
+        }
 
         const updated = [...purchases];
         updated[index] = { ...data, isNew: false };
@@ -389,7 +411,10 @@ export default function LibroCompras() {
           .update(entryData)
           .eq("id", entry.id);
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error detallado al actualizar:", error);
+          throw error;
+        }
 
         toast({
           title: "Factura actualizada",
@@ -397,9 +422,21 @@ export default function LibroCompras() {
         });
       }
     } catch (error: any) {
+      console.error("Error completo:", error);
+      let errorMessage = getSafeErrorMessage(error);
+      
+      // Mensajes más específicos según el error
+      if (error.message?.includes("fecha")) {
+        errorMessage = "La fecha de la factura debe estar en el mes seleccionado o máximo 2 meses atrás";
+      } else if (error.code === "23502") {
+        errorMessage = "Faltan campos requeridos. Verifique que haya completado todos los campos obligatorios.";
+      } else if (error.code === "23503") {
+        errorMessage = "Error de referencia: Verifique que las cuentas seleccionadas sean válidas.";
+      }
+      
       toast({
         title: "Error al guardar",
-        description: getSafeErrorMessage(error),
+        description: errorMessage,
         variant: "destructive",
       });
     }
