@@ -39,17 +39,33 @@ const Dashboard = () => {
           .limit(2);
 
         if (purchaseBooks && purchaseBooks.length > 0) {
-          const lastBook = purchaseBooks[0];
-          const { data: purchases } = await supabase
-            .from("tab_purchase_ledger")
-            .select("net_amount, vat_amount, total_amount")
-            .eq("purchase_book_id", lastBook.id);
+          // Buscar el libro más reciente que tenga datos
+          let lastBookWithData = null;
+          let prevBookWithData = null;
+          let purchases = null;
+          
+          for (const book of purchaseBooks) {
+            const { data: bookPurchases } = await supabase
+              .from("tab_purchase_ledger")
+              .select("net_amount, vat_amount, total_amount")
+              .eq("purchase_book_id", book.id);
 
-          if (purchases && purchases.length > 0) {
+            if (bookPurchases && bookPurchases.length > 0) {
+              if (!lastBookWithData) {
+                lastBookWithData = book;
+                purchases = bookPurchases;
+              } else if (!prevBookWithData) {
+                prevBookWithData = book;
+                break;
+              }
+            }
+          }
+
+          if (lastBookWithData && purchases && purchases.length > 0) {
             const summary: BookSummary = purchases.reduce(
               (acc, curr) => ({
-                month: lastBook.month,
-                year: lastBook.year,
+                month: lastBookWithData.month,
+                year: lastBookWithData.year,
                 base: acc.base + Number(curr.net_amount || 0),
                 vat: acc.vat + Number(curr.vat_amount || 0),
                 total: acc.total + Number(curr.total_amount || 0),
@@ -58,13 +74,12 @@ const Dashboard = () => {
               { month: 0, year: 0, base: 0, vat: 0, total: 0, count: 0 } as BookSummary
             );
 
-            // Calculate percentage change with previous month
-            if (purchaseBooks.length > 1) {
-              const prevBook = purchaseBooks[1];
+            // Calcular cambio porcentual con el mes anterior que tenga datos
+            if (prevBookWithData) {
               const { data: prevPurchases } = await supabase
                 .from("tab_purchase_ledger")
                 .select("total_amount")
-                .eq("purchase_book_id", prevBook.id);
+                .eq("purchase_book_id", prevBookWithData.id);
 
               if (prevPurchases && prevPurchases.length > 0) {
                 const prevTotal = prevPurchases.reduce(
