@@ -273,27 +273,29 @@ export default function LibroVentas() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Obtener período contable activo
-      const activePeriodId = localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`);
-      if (!activePeriodId) {
-        throw new Error("No hay período contable activo para esta empresa. Por favor, active un período en la vista de Empresas.");
-      }
-
-      // Verificar que el período esté abierto
-      const { data: period, error: periodError } = await supabase
+      // Buscar período contable que cubra el mes seleccionado
+      const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split('T')[0];
+      const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      
+      const { data: periods, error: periodError } = await supabase
         .from('tab_accounting_periods')
-        .select('status')
-        .eq('id', parseInt(activePeriodId))
-        .single();
+        .select('id, status, start_date, end_date')
+        .eq('enterprise_id', parseInt(currentEnterpriseId))
+        .lte('start_date', lastDayOfMonth)
+        .gte('end_date', firstDayOfMonth)
+        .eq('status', 'abierto');
 
       if (periodError) throw periodError;
-      if (period.status !== 'abierto') {
-        throw new Error("El período contable no está abierto. No se pueden crear facturas.");
+      
+      if (!periods || periods.length === 0) {
+        throw new Error(`No existe un período contable abierto para ${monthNames[selectedMonth - 1]} ${selectedYear}. Por favor, cree el período contable en la vista de Empresas.`);
       }
+
+      const period = periods[0];
 
       const entryData = {
         enterprise_id: parseInt(currentEnterpriseId),
-        accounting_period_id: parseInt(activePeriodId),
+        accounting_period_id: period.id,
         invoice_series: entry.invoice_series || null,
         invoice_number: entry.invoice_number,
         invoice_date: entry.invoice_date,
