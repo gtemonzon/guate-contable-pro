@@ -11,6 +11,8 @@ interface BookSummary {
   vat: number;
   total: number;
   count: number;
+  previousTotal?: number;
+  percentageChange?: number;
 }
 
 const Dashboard = () => {
@@ -27,49 +29,71 @@ const Dashboard = () => {
       }
 
       try {
-        // Fetch last month of purchases
+        // Fetch last two months of purchases
         const { data: purchaseBooks } = await supabase
           .from("tab_purchase_books")
           .select("id, month, year")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .order("year", { ascending: false })
           .order("month", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(2);
 
-        if (purchaseBooks) {
+        if (purchaseBooks && purchaseBooks.length > 0) {
+          const lastBook = purchaseBooks[0];
           const { data: purchases } = await supabase
             .from("tab_purchase_ledger")
             .select("net_amount, vat_amount, total_amount")
-            .eq("purchase_book_id", purchaseBooks.id);
+            .eq("purchase_book_id", lastBook.id);
 
           if (purchases && purchases.length > 0) {
-            const summary = purchases.reduce(
+            const summary: BookSummary = purchases.reduce(
               (acc, curr) => ({
-                month: purchaseBooks.month,
-                year: purchaseBooks.year,
+                month: lastBook.month,
+                year: lastBook.year,
                 base: acc.base + Number(curr.net_amount || 0),
                 vat: acc.vat + Number(curr.vat_amount || 0),
                 total: acc.total + Number(curr.total_amount || 0),
                 count: acc.count + 1,
               }),
-              { month: 0, year: 0, base: 0, vat: 0, total: 0, count: 0 }
+              { month: 0, year: 0, base: 0, vat: 0, total: 0, count: 0 } as BookSummary
             );
+
+            // Calculate percentage change with previous month
+            if (purchaseBooks.length > 1) {
+              const prevBook = purchaseBooks[1];
+              const { data: prevPurchases } = await supabase
+                .from("tab_purchase_ledger")
+                .select("total_amount")
+                .eq("purchase_book_id", prevBook.id);
+
+              if (prevPurchases && prevPurchases.length > 0) {
+                const prevTotal = prevPurchases.reduce(
+                  (sum, curr) => sum + Number(curr.total_amount || 0),
+                  0
+                );
+                summary.previousTotal = prevTotal;
+                if (prevTotal > 0) {
+                  summary.percentageChange =
+                    ((summary.total - prevTotal) / prevTotal) * 100;
+                }
+              }
+            }
+
             setPurchaseSummary(summary);
           }
         }
 
-        // Fetch last month of sales
+        // Fetch sales data
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date, net_amount, vat_amount, total_amount")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .order("invoice_date", { ascending: false })
-          .limit(100);
+          .limit(500);
 
         if (sales && sales.length > 0) {
-          // Group by month/year and get the most recent
-          const grouped = sales.reduce((acc: any, curr) => {
+          // Group by month/year and get the most recent two months
+          const grouped: { [key: string]: BookSummary } = sales.reduce((acc: any, curr) => {
             const date = new Date(curr.invoice_date);
             const key = `${date.getFullYear()}-${date.getMonth()}`;
             if (!acc[key]) {
@@ -91,7 +115,19 @@ const Dashboard = () => {
 
           const sortedKeys = Object.keys(grouped).sort().reverse();
           if (sortedKeys.length > 0) {
-            setSalesSummary(grouped[sortedKeys[0]]);
+            const lastMonth = grouped[sortedKeys[0]];
+            
+            // Calculate percentage change with previous month
+            if (sortedKeys.length > 1) {
+              const prevMonth = grouped[sortedKeys[1]];
+              lastMonth.previousTotal = prevMonth.total;
+              if (prevMonth.total > 0) {
+                lastMonth.percentageChange =
+                  ((lastMonth.total - prevMonth.total) / prevMonth.total) * 100;
+              }
+            }
+            
+            setSalesSummary(lastMonth);
           }
         }
       } catch (error) {
@@ -284,6 +320,21 @@ const Dashboard = () => {
                   <span className="text-sm text-muted-foreground">Cantidad de documentos:</span>
                   <span className="text-lg font-semibold">{salesSummary.count}</span>
                 </div>
+                {salesSummary.percentageChange !== undefined && (
+                  <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                    <span className="text-xs text-muted-foreground">vs mes anterior</span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        salesSummary.percentageChange >= 0
+                          ? "text-success"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {salesSummary.percentageChange >= 0 ? "+" : ""}
+                      {salesSummary.percentageChange.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="h-40 flex items-center justify-center text-muted-foreground">
@@ -339,6 +390,21 @@ const Dashboard = () => {
                   <span className="text-sm text-muted-foreground">Cantidad de documentos:</span>
                   <span className="text-lg font-semibold">{purchaseSummary.count}</span>
                 </div>
+                {purchaseSummary.percentageChange !== undefined && (
+                  <div className="flex justify-between items-center pt-2 mt-2 border-t">
+                    <span className="text-xs text-muted-foreground">vs mes anterior</span>
+                    <span
+                      className={`text-sm font-semibold ${
+                        purchaseSummary.percentageChange <= 0
+                          ? "text-success"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {purchaseSummary.percentageChange >= 0 ? "+" : ""}
+                      {purchaseSummary.percentageChange.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="h-40 flex items-center justify-center text-muted-foreground">
