@@ -324,11 +324,12 @@ const Dashboard = () => {
                   <div className="flex justify-between items-center pt-2 mt-2 border-t">
                     <span className="text-xs text-muted-foreground">vs mes anterior</span>
                     <span
-                      className={`text-sm font-semibold ${
-                        salesSummary.percentageChange >= 0
-                          ? "text-success"
-                          : "text-destructive"
-                      }`}
+                      className="text-sm font-semibold"
+                      style={{
+                        color: salesSummary.percentageChange >= 0 
+                          ? "hsl(var(--success))" 
+                          : "hsl(var(--destructive))"
+                      }}
                     >
                       {salesSummary.percentageChange >= 0 ? "+" : ""}
                       {salesSummary.percentageChange.toFixed(1)}%
@@ -394,11 +395,12 @@ const Dashboard = () => {
                   <div className="flex justify-between items-center pt-2 mt-2 border-t">
                     <span className="text-xs text-muted-foreground">vs mes anterior</span>
                     <span
-                      className={`text-sm font-semibold ${
-                        purchaseSummary.percentageChange <= 0
-                          ? "text-success"
-                          : "text-destructive"
-                      }`}
+                      className="text-sm font-semibold"
+                      style={{
+                        color: purchaseSummary.percentageChange <= 0 
+                          ? "hsl(var(--success))" 
+                          : "hsl(var(--destructive))"
+                      }}
                     >
                       {purchaseSummary.percentageChange >= 0 ? "+" : ""}
                       {purchaseSummary.percentageChange.toFixed(1)}%
