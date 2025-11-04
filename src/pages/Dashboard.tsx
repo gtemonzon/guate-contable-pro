@@ -20,6 +20,13 @@ const Dashboard = () => {
   const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const formatNumber = (num: number): string => {
+    return num.toLocaleString('es-GT', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   useEffect(() => {
     const fetchBookSummaries = async () => {
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -316,19 +323,19 @@ const Dashboard = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Base:</span>
                   <span className="text-lg font-semibold financial-number">
-                    Q {salesSummary.base.toFixed(2)}
+                    Q {formatNumber(salesSummary.base)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">IVA:</span>
                   <span className="text-lg font-semibold financial-number">
-                    Q {salesSummary.vat.toFixed(2)}
+                    Q {formatNumber(salesSummary.vat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t">
                   <span className="text-sm font-medium">Total:</span>
                   <span className="text-xl font-bold text-success financial-number">
-                    Q {salesSummary.total.toFixed(2)}
+                    Q {formatNumber(salesSummary.total)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t">
@@ -387,19 +394,19 @@ const Dashboard = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Base:</span>
                   <span className="text-lg font-semibold financial-number">
-                    Q {purchaseSummary.base.toFixed(2)}
+                    Q {formatNumber(purchaseSummary.base)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">IVA:</span>
                   <span className="text-lg font-semibold financial-number">
-                    Q {purchaseSummary.vat.toFixed(2)}
+                    Q {formatNumber(purchaseSummary.vat)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t">
                   <span className="text-sm font-medium">Total:</span>
                   <span className="text-xl font-bold text-destructive financial-number">
-                    Q {purchaseSummary.total.toFixed(2)}
+                    Q {formatNumber(purchaseSummary.total)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t">
