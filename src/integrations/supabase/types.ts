@@ -22,6 +22,7 @@ export type Database = {
           end_date: string
           enterprise_id: number | null
           id: number
+          is_default_period: boolean | null
           notes: string | null
           start_date: string
           status: string
@@ -34,6 +35,7 @@ export type Database = {
           end_date: string
           enterprise_id?: number | null
           id?: number
+          is_default_period?: boolean | null
           notes?: string | null
           start_date: string
           status?: string
@@ -46,6 +48,7 @@ export type Database = {
           end_date?: string
           enterprise_id?: number | null
           id?: number
+          is_default_period?: boolean | null
           notes?: string | null
           start_date?: string
           status?: string

@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { EnterpriseDocuments } from "./EnterpriseDocuments";
+import { EnterprisePeriods } from "./EnterprisePeriods";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -236,9 +237,10 @@ export function EnterpriseDialog({
 
         {enterprise ? (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="general">Información General</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
+              <TabsTrigger value="periods">Períodos Contables</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="mt-4">
@@ -438,6 +440,10 @@ export function EnterpriseDialog({
 
             <TabsContent value="documents" className="mt-4">
               <EnterpriseDocuments enterpriseId={enterprise.id} />
+            </TabsContent>
+
+            <TabsContent value="periods" className="mt-4">
+              <EnterprisePeriods enterpriseId={enterprise.id} />
             </TabsContent>
           </Tabs>
         ) : (

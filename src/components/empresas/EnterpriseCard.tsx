@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -38,6 +40,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
   const [isSelected, setIsSelected] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [documentsCount, setDocumentsCount] = useState(0);
+  const [activePeriod, setActivePeriod] = useState<any>(null);
 
   useEffect(() => {
     const checkSelection = () => {
@@ -53,12 +56,22 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       checkSelection();
     };
 
+    // Listen for period changes
+    const handlePeriodChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.enterpriseId === enterprise.id) {
+        fetchActivePeriod();
+      }
+    };
+
     window.addEventListener("storage", handleEnterpriseChange);
     window.addEventListener("enterpriseChanged", handleEnterpriseChange);
+    window.addEventListener("periodChanged", handlePeriodChange);
 
     return () => {
       window.removeEventListener("storage", handleEnterpriseChange);
       window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
+      window.removeEventListener("periodChanged", handlePeriodChange);
     };
   }, [enterprise.id]);
 
@@ -81,13 +94,79 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     fetchDocumentsCount();
   }, [enterprise.id]);
 
-  const handleSelectEnterprise = () => {
+  const fetchActivePeriod = async () => {
+    try {
+      const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterprise.id}`);
+      
+      let query = supabase
+        .from('tab_accounting_periods')
+        .select('*')
+        .eq('enterprise_id', enterprise.id)
+        .eq('status', 'abierto')
+        .order('start_date', { ascending: false })
+        .limit(1);
+      
+      if (savedPeriodId) {
+        query = query.eq('id', parseInt(savedPeriodId));
+      }
+      
+      const { data } = await query.maybeSingle();
+      
+      if (data) {
+        setActivePeriod(data);
+        if (!savedPeriodId) {
+          localStorage.setItem(`currentPeriodId_${enterprise.id}`, data.id.toString());
+        }
+      } else {
+        setActivePeriod(null);
+      }
+    } catch (error) {
+      console.error('Error fetching active period:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchActivePeriod();
+  }, [enterprise.id]);
+
+  const handleSelectEnterprise = async () => {
     localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
     setIsSelected(true);
-    toast({
-      title: "Empresa seleccionada",
-      description: `${enterprise.business_name} está ahora activa`,
-    });
+    
+    // Cargar período activo de la empresa (si existe)
+    const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterprise.id}`);
+    
+    if (!savedPeriodId) {
+      // Buscar período abierto más reciente
+      const { data } = await supabase
+        .from('tab_accounting_periods')
+        .select('*')
+        .eq('enterprise_id', enterprise.id)
+        .eq('status', 'abierto')
+        .order('start_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (data) {
+        localStorage.setItem(`currentPeriodId_${enterprise.id}`, data.id.toString());
+        setActivePeriod(data);
+        toast({
+          title: "Empresa y período seleccionados",
+          description: `${enterprise.business_name} con período ${data.year}`,
+        });
+      } else {
+        toast({
+          title: "Empresa seleccionada",
+          description: `${enterprise.business_name} - No hay períodos abiertos`,
+        });
+      }
+    } else {
+      toast({
+        title: "Empresa seleccionada",
+        description: `${enterprise.business_name} está ahora activa`,
+      });
+    }
+    
     // Trigger events for other components to react
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("enterpriseChanged", {
@@ -143,12 +222,20 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
               )}
             </div>
           </div>
-          {documentsCount > 0 && (
-            <Badge variant="secondary" className="flex items-center gap-1">
-              <FileText className="h-3 w-3" />
-              {documentsCount}
-            </Badge>
-          )}
+          <div className="flex flex-col gap-1">
+            {documentsCount > 0 && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <FileText className="h-3 w-3" />
+                {documentsCount}
+              </Badge>
+            )}
+            {activePeriod && (
+              <Badge variant="outline" className="text-xs">
+                <Calendar className="h-3 w-3 mr-1" />
+                {activePeriod.year}
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

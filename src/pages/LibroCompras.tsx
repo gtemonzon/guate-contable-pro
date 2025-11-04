@@ -582,16 +582,35 @@ export default function LibroCompras() {
                           const { data: { user } } = await supabase.auth.getUser();
                           if (!user) throw new Error("Usuario no autenticado");
 
-                          // Obtener período contable activo
-                          const { data: period, error: periodError } = await supabase
-                            .from("tab_accounting_periods")
-                            .select("id")
-                            .eq("enterprise_id", parseInt(currentEnterpriseId))
-                            .eq("status", "abierto")
-                            .eq("year", selectedYear)
-                            .maybeSingle();
+                          // Obtener período contable activo (primero intentar desde localStorage)
+                          let period;
+                          const activePeriodId = localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`);
+                          
+                          if (activePeriodId) {
+                            const { data, error: periodError } = await supabase
+                              .from("tab_accounting_periods")
+                              .select("id")
+                              .eq("id", parseInt(activePeriodId))
+                              .eq("status", "abierto")
+                              .maybeSingle();
+                            
+                            if (!periodError) period = data;
+                          }
+                          
+                          // Fallback: buscar período abierto por año
+                          if (!period) {
+                            const { data, error: periodError } = await supabase
+                              .from("tab_accounting_periods")
+                              .select("id")
+                              .eq("enterprise_id", parseInt(currentEnterpriseId))
+                              .eq("status", "abierto")
+                              .eq("year", selectedYear)
+                              .maybeSingle();
+                            
+                            if (periodError) throw periodError;
+                            period = data;
+                          }
 
-                          if (periodError) throw periodError;
                           if (!period) {
                             toast({
                               title: "Error",
