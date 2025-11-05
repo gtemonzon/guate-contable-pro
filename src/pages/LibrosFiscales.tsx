@@ -134,6 +134,88 @@ export default function LibrosFiscales() {
     };
   }, [sales]);
 
+  // Resumen de compras por Tipo de Operación
+  const purchasesByOperationType = useMemo(() => {
+    const grouped = purchases.reduce((acc, purchase) => {
+      const opType = operationTypes.find(ot => ot.id === purchase.operation_type_id);
+      if (!opType) return acc;
+      
+      const key = opType.name;
+      if (!acc[key]) {
+        acc[key] = { name: opType.name, total: 0 };
+      }
+      acc[key].total += Number(purchase.base_amount) || 0;
+      return acc;
+    }, {} as Record<string, { name: string; total: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [purchases, operationTypes]);
+
+  // Resumen de compras por Tipo de Documento
+  const purchasesByDocType = useMemo(() => {
+    const grouped = purchases.reduce((acc, purchase) => {
+      const docType = purchase.fel_document_type || 'SIN TIPO';
+      if (!acc[docType]) {
+        acc[docType] = { type: docType, total: 0 };
+      }
+      acc[docType].total += Number(purchase.base_amount) || 0;
+      return acc;
+    }, {} as Record<string, { type: string; total: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+  }, [purchases]);
+
+  // Resumen de ventas por Tipo de Operación
+  const salesByOperationType = useMemo(() => {
+    const grouped = sales.reduce((acc, sale) => {
+      const opType = operationTypes.find(ot => ot.id === sale.operation_type_id);
+      if (!opType) return acc;
+      
+      const key = opType.name;
+      if (!acc[key]) {
+        acc[key] = { name: opType.name, total: 0 };
+      }
+      acc[key].total += Number(sale.net_amount) || 0;
+      return acc;
+    }, {} as Record<string, { name: string; total: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [sales, operationTypes]);
+
+  // Resumen de ventas por Tipo de Documento
+  const salesByDocType = useMemo(() => {
+    const grouped = sales.reduce((acc, sale) => {
+      const docType = sale.fel_document_type || 'SIN TIPO';
+      if (!acc[docType]) {
+        acc[docType] = { type: docType, total: 0 };
+      }
+      acc[docType].total += Number(sale.net_amount) || 0;
+      return acc;
+    }, {} as Record<string, { type: string; total: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+  }, [sales]);
+
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
@@ -779,88 +861,191 @@ export default function LibrosFiscales() {
   }
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
-          <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
-        </div>
-        <div className="flex gap-4 items-end">
+    <div className="p-8">
+      {/* Header Sticky - contiene título, selectores, tabs, resúmenes y botones */}
+      <div className="sticky top-0 z-10 bg-background pb-4 space-y-4">
+        <div className="flex justify-between items-start">
           <div>
-            <Label htmlFor="month-select">Mes</Label>
-            <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-              <SelectTrigger id="month-select" className="w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {monthNames.map((name, index) => (
-                  <SelectItem key={index + 1} value={String(index + 1)}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
+            <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
           </div>
-          <div>
-            <Label htmlFor="year-select">Año</Label>
-            <Input
-              id="year-select"
-              type="number"
-              className="w-[100px]"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              min="2020"
-              max="2099"
-            />
+          <div className="flex gap-4 items-end">
+            <div>
+              <Label htmlFor="month-select">Mes</Label>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+                <SelectTrigger id="month-select" className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthNames.map((name, index) => (
+                    <SelectItem key={index + 1} value={String(index + 1)}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="year-select">Año</Label>
+              <Input
+                id="year-select"
+                type="number"
+                className="w-[100px]"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                min="2020"
+                max="2099"
+              />
+            </div>
           </div>
         </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "compras" | "ventas")}>
+          <TabsList className="grid w-full grid-cols-2 bg-muted/50">
+            <TabsTrigger value="compras" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Compras</TabsTrigger>
+            <TabsTrigger value="ventas" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Ventas</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="compras" className="space-y-2 mt-4">
+            <div className="space-y-2">
+              {/* Resumen principal */}
+              <div className="flex justify-between items-center">
+                <div className="flex gap-6 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Documentos: </span>
+                    <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Base: </span>
+                    <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IVA: </span>
+                    <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total c/IVA: </span>
+                    <span className="font-semibold">Q {purchaseTotals.totalWithVAT}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importar
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generar Póliza
+                  </Button>
+                  <Button size="sm" onClick={addNewPurchase}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nueva Factura
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Resumen por Tipo de Operación */}
+              {purchasesByOperationType.length > 0 && (
+                <div className="flex gap-6 text-sm text-muted-foreground">
+                  <span className="font-medium">Por Operación:</span>
+                  {purchasesByOperationType.map(op => (
+                    <div key={op.name}>
+                      <span>{op.name}: </span>
+                      <span className="font-semibold text-foreground">Q {op.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Resumen por Tipo de Documento */}
+              {purchasesByDocType.length > 0 && (
+                <div className="flex gap-6 text-sm text-muted-foreground">
+                  <span className="font-medium">Por Documento:</span>
+                  {purchasesByDocType.map(doc => (
+                    <div key={doc.type}>
+                      <span>{doc.type}: </span>
+                      <span className="font-semibold text-foreground">Q {doc.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="ventas" className="space-y-2 mt-4">
+            <div className="space-y-2">
+              {/* Resumen principal */}
+              <div className="flex justify-between items-center">
+                <div className="flex gap-6 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Documentos: </span>
+                    <Badge variant="secondary">{salesTotals.documentCount}</Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Neto: </span>
+                    <span className="font-semibold">Q {salesTotals.totalNet}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IVA: </span>
+                    <span className="font-semibold">Q {salesTotals.totalVAT}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total c/IVA: </span>
+                    <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importar
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Generar Póliza
+                  </Button>
+                  <Button size="sm" onClick={addNewSale}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nueva Factura
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Resumen por Tipo de Operación */}
+              {salesByOperationType.length > 0 && (
+                <div className="flex gap-6 text-sm text-muted-foreground">
+                  <span className="font-medium">Por Operación:</span>
+                  {salesByOperationType.map(op => (
+                    <div key={op.name}>
+                      <span>{op.name}: </span>
+                      <span className="font-semibold text-foreground">Q {op.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Resumen por Tipo de Documento */}
+              {salesByDocType.length > 0 && (
+                <div className="flex gap-6 text-sm text-muted-foreground">
+                  <span className="font-medium">Por Documento:</span>
+                  {salesByDocType.map(doc => (
+                    <div key={doc.type}>
+                      <span>{doc.type}: </span>
+                      <span className="font-semibold text-foreground">Q {doc.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "compras" | "ventas")}>
-        <TabsList className="grid w-full grid-cols-2 bg-muted/50">
-          <TabsTrigger value="compras" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Compras</TabsTrigger>
-          <TabsTrigger value="ventas" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Ventas</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="compras" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-6 text-sm">
-              <div>
-                <span className="text-muted-foreground">Documentos: </span>
-                <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Base: </span>
-                <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">IVA: </span>
-                <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total c/IVA: </span>
-                <span className="font-semibold">Q {purchaseTotals.totalWithVAT}</span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
-                <FileText className="h-4 w-4 mr-2" />
-                Generar Póliza
-              </Button>
-              <Button size="sm" onClick={addNewPurchase}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nueva Factura
-              </Button>
-            </div>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6">
-              {loading ? (
+      {/* Área scrollable con las facturas */}
+      <div className="mt-4">
+        <Card>
+          <CardContent className="pt-6">
+            {activeTab === "compras" ? (
+              loading ? (
                 <p className="text-center text-muted-foreground">Cargando...</p>
               ) : purchases.length === 0 ? (
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
@@ -881,50 +1066,9 @@ export default function LibrosFiscales() {
                     />
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ventas" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="flex gap-6 text-sm">
-              <div>
-                <span className="text-muted-foreground">Documentos: </span>
-                <Badge variant="secondary">{salesTotals.documentCount}</Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Neto: </span>
-                <span className="font-semibold">Q {salesTotals.totalNet}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">IVA: </span>
-                <span className="font-semibold">Q {salesTotals.totalVAT}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total c/IVA: </span>
-                <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
-                <FileText className="h-4 w-4 mr-2" />
-                Generar Póliza
-              </Button>
-              <Button size="sm" onClick={addNewSale}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nueva Factura
-              </Button>
-            </div>
-          </div>
-
-          <Card>
-            <CardContent className="pt-6">
-              {loading ? (
+              )
+            ) : (
+              loading ? (
                 <p className="text-center text-muted-foreground">Cargando...</p>
               ) : sales.length === 0 ? (
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
@@ -944,11 +1088,11 @@ export default function LibrosFiscales() {
                     />
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              )
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Diálogo de Generar Póliza */}
       <Dialog open={showJournalDialog} onOpenChange={setShowJournalDialog}>
