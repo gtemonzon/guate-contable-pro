@@ -19,6 +19,7 @@ const menuItems = [
     items: [
       { title: "Usuarios", url: "/usuarios", icon: Users },
       { title: "Empresas", url: "/empresas", icon: Building2 },
+      { title: "Configuración", url: "/configuracion", icon: Settings },
     ],
   },
   {
@@ -41,11 +42,6 @@ const menuItems = [
     title: "Reportes",
     url: "/reportes",
     icon: FileBarChart,
-  },
-  {
-    title: "Configuración",
-    url: "/configuracion",
-    icon: Settings,
   },
   {
     title: "Importación",

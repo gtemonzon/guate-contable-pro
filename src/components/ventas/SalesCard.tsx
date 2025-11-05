@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
+import { cn } from "@/lib/utils";
 
 interface SaleEntry {
   id?: number;
@@ -35,10 +37,23 @@ interface SalesCardProps {
 }
 
 export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete }: SalesCardProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={cn(
+      "hover:shadow-md transition-all",
+      isFocused && "ring-2 ring-green-500 border-green-500"
+    )}>
       <CardContent className="p-4">
-        <div className="space-y-3">
+        <div 
+          className="space-y-3"
+          onFocus={() => setIsFocused(true)}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              setIsFocused(false);
+            }
+          }}
+        >
           {/* Primera fila */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
