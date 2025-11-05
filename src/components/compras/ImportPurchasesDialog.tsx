@@ -57,7 +57,14 @@ export function ImportPurchasesDialog({
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !enterpriseId) return;
+    if (!file || !enterpriseId || !bookId) {
+      toast({
+        title: "Error",
+        description: "No se ha seleccionado un libro de compras",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setImporting(true);
 
@@ -117,6 +124,7 @@ export function ImportPurchasesDialog({
         const refPagoIndex = headers.indexOf("ref_pago");
         const purchase = {
           enterprise_id: enterpriseId,
+          purchase_book_id: bookId,
           invoice_series: rowData.serie,
           invoice_number: rowData.numero,
           invoice_date: rowData.fecha,
