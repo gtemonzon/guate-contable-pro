@@ -18,6 +18,7 @@ import ConciliacionBancaria from "./pages/ConciliacionBancaria";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import Reportes from "./pages/Reportes";
+import Configuracion from "./pages/Configuracion";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/saldos" element={<BalanceSaldos />} />
             <Route path="/mayor" element={<MayorGeneral />} />
             <Route path="/reportes" element={<Reportes />} />
+            <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/importar" element={<div>Importación (próximamente)</div>} />
           </Route>
           

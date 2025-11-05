@@ -17,6 +17,7 @@ interface SaleEntry {
   total_amount: number;
   vat_amount: number;
   net_amount: number;
+  operation_type_id: number | null;
   income_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
@@ -26,13 +27,14 @@ interface SalesCardProps {
   sale: SaleEntry;
   index: number;
   felDocTypes: { code: string; name: string }[];
+  operationTypes: { id: number; code: string; name: string }[];
   incomeAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
 }
 
-export function SalesCard({ sale, index, felDocTypes, incomeAccounts, onUpdate, onSave, onDelete }: SalesCardProps) {
+export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete }: SalesCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -103,9 +105,9 @@ export function SalesCard({ sale, index, felDocTypes, incomeAccounts, onUpdate, 
             </div>
           </div>
 
-          {/* Segunda fila: Cliente, montos y cuenta */}
+          {/* Segunda fila: Cliente, montos, tipo operación y cuenta */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-4">
+            <div className="col-span-3">
               <label className="text-xs text-muted-foreground">Cliente</label>
               <Input
                 value={sale.customer_name}
@@ -135,7 +137,25 @@ export function SalesCard({ sale, index, felDocTypes, incomeAccounts, onUpdate, 
                 className="h-8 bg-muted"
               />
             </div>
-            <div className="col-span-4">
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground">Tipo Op</label>
+              <Select
+                value={sale.operation_type_id?.toString() || ""}
+                onValueChange={(v) => onUpdate(index, "operation_type_id", v ? parseInt(v) : null)}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {operationTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id.toString()}>
+                      {type.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-3">
               <label className="text-xs text-muted-foreground">Cuenta</label>
               <AccountCombobox
                 accounts={incomeAccounts}

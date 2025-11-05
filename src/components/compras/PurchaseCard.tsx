@@ -18,6 +18,7 @@ interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   batch_reference: string;
+  operation_type_id: number | null;
   expense_account_id: number | null;
   bank_account_id: number | null;
   journal_entry_id: number | null;
@@ -28,6 +29,7 @@ interface PurchaseCardProps {
   purchase: PurchaseEntry;
   index: number;
   felDocTypes: { code: string; name: string }[];
+  operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
   bankAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
@@ -35,7 +37,7 @@ interface PurchaseCardProps {
   onDelete: (index: number) => void;
 }
 
-export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete }: PurchaseCardProps) {
+export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete }: PurchaseCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -106,7 +108,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, ba
             </div>
           </div>
 
-          {/* Segunda fila: Proveedor, montos, cuenta y referencia */}
+          {/* Segunda fila: Proveedor, montos, tipo operación, cuenta y referencia */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-3">
               <label className="text-xs text-muted-foreground">Proveedor</label>
@@ -128,7 +130,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, ba
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -138,7 +140,25 @@ export function PurchaseCard({ purchase, index, felDocTypes, expenseAccounts, ba
                 className="h-8 bg-muted"
               />
             </div>
-            <div className="col-span-3">
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground">Tipo Op</label>
+              <Select
+                value={purchase.operation_type_id?.toString() || ""}
+                onValueChange={(v) => onUpdate(index, "operation_type_id", v ? parseInt(v) : null)}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {operationTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id.toString()}>
+                      {type.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Cuenta</label>
               <AccountCombobox
                 accounts={expenseAccounts}

@@ -38,6 +38,7 @@ interface SaleEntry {
   total_amount: number;
   vat_amount: number;
   net_amount: number;
+  operation_type_id: number | null;
   income_account_id: number | null;
   journal_entry_id: number | null;
   isNew?: boolean;
@@ -58,6 +59,12 @@ export default function LibroVentas() {
     id: number;
     account_code: string;
     account_name: string;
+  }>>([]);
+  
+  const [operationTypes, setOperationTypes] = useState<Array<{
+    id: number;
+    code: string;
+    name: string;
   }>>([]);
   
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
@@ -166,6 +173,17 @@ export default function LibroVentas() {
 
       setIncomeAccounts(incomes);
 
+      // Tipos de operación
+      const { data: types, error: typesError } = await supabase
+        .from("tab_operation_types")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .in("applies_to", ["sales", "both"])
+        .order("code");
+
+      if (typesError) throw typesError;
+      setOperationTypes(types || []);
+
     } catch (error: any) {
       console.error("Error al cargar cuentas:", error);
       toast({
@@ -226,6 +244,7 @@ export default function LibroVentas() {
       total_amount: 0,
       vat_amount: 0,
       net_amount: 0,
+      operation_type_id: null,
       income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
@@ -705,6 +724,7 @@ export default function LibroVentas() {
                   sale={sale}
                   index={index}
                   felDocTypes={felDocTypes}
+                  operationTypes={operationTypes}
                   incomeAccounts={incomeAccounts}
                   onUpdate={updateRow}
                   onSave={saveRow}

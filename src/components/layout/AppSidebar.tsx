@@ -43,6 +43,11 @@ const menuItems = [
     icon: FileBarChart,
   },
   {
+    title: "Configuración",
+    url: "/configuracion",
+    icon: Settings,
+  },
+  {
     title: "Importación",
     url: "/importar",
     icon: Upload,

@@ -756,6 +756,50 @@ export type Database = {
           },
         ]
       }
+      tab_operation_types: {
+        Row: {
+          applies_to: string
+          code: string
+          created_at: string | null
+          description: string | null
+          enterprise_id: number | null
+          id: number
+          is_active: boolean | null
+          is_system: boolean | null
+          name: string
+        }
+        Insert: {
+          applies_to: string
+          code: string
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          id?: number
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name: string
+        }
+        Update: {
+          applies_to?: string
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          id?: number
+          is_active?: boolean | null
+          is_system?: boolean | null
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_operation_types_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_purchase_books: {
         Row: {
           closed_at: string | null
@@ -814,6 +858,7 @@ export type Database = {
           invoice_series: string | null
           journal_entry_id: number | null
           net_amount: number
+          operation_type_id: number | null
           purchase_book_id: number | null
           purchase_type: string | null
           supplier_name: string
@@ -839,6 +884,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount: number
+          operation_type_id?: number | null
           purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name: string
@@ -864,6 +910,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount?: number
+          operation_type_id?: number | null
           purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name?: string
@@ -915,6 +962,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tab_purchase_ledger_operation_type_id_fkey"
+            columns: ["operation_type_id"]
+            isOneToOne: false
+            referencedRelation: "tab_operation_types"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tab_purchase_ledger_purchase_book_id_fkey"
             columns: ["purchase_book_id"]
             isOneToOne: false
@@ -943,6 +997,7 @@ export type Database = {
           invoice_series: string | null
           journal_entry_id: number | null
           net_amount: number
+          operation_type_id: number | null
           total_amount: number
           vat_amount: number
         }
@@ -965,6 +1020,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount: number
+          operation_type_id?: number | null
           total_amount: number
           vat_amount: number
         }
@@ -987,6 +1043,7 @@ export type Database = {
           invoice_series?: string | null
           journal_entry_id?: number | null
           net_amount?: number
+          operation_type_id?: number | null
           total_amount?: number
           vat_amount?: number
         }
@@ -1024,6 +1081,13 @@ export type Database = {
             columns: ["journal_entry_id"]
             isOneToOne: false
             referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_sales_ledger_operation_type_id_fkey"
+            columns: ["operation_type_id"]
+            isOneToOne: false
+            referencedRelation: "tab_operation_types"
             referencedColumns: ["id"]
           },
         ]
