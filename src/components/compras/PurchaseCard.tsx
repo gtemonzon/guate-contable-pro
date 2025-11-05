@@ -59,7 +59,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
         >
           {/* Primera fila: Info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-1">
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
                 value={purchase.invoice_series}
@@ -68,7 +68,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
-            <div className="col-span-1">
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
                 value={purchase.invoice_number}
@@ -104,16 +104,16 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={purchase.supplier_nit}
                 onChange={(e) => onUpdate(index, "supplier_nit", e.target.value)}
-                placeholder="12345678"
+                placeholder="123456789"
                 className="h-8"
               />
             </div>
-            <div className="col-span-5">
+            <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Proveedor</label>
               <Input
                 value={purchase.supplier_name}
@@ -148,7 +148,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Tipo Op</label>
+              <label className="text-xs text-muted-foreground">Tipo Operación</label>
               <Select
                 value={purchase.operation_type_id?.toString() || ""}
                 onValueChange={(v) => onUpdate(index, "operation_type_id", v ? parseInt(v) : null)}
