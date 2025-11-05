@@ -54,9 +54,9 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
             }
           }}
         >
-          {/* Primera fila */}
+          {/* Primera fila: Info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
                 value={sale.invoice_series}
@@ -65,7 +65,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
                 value={sale.invoice_number}
@@ -83,7 +83,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Tipo Doc</label>
               <Select
                 value={sale.fel_document_type}
@@ -110,19 +110,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
-            <div className="col-span-2 flex items-end gap-1">
-              <Button size="sm" variant="outline" onClick={() => onSave(index)} className="h-8">
-                <Save className="h-3 w-3" />
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8">
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Segunda fila: Cliente, montos, tipo operación y cuenta */}
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-3">
+            <div className="col-span-5">
               <label className="text-xs text-muted-foreground">Cliente</label>
               <Input
                 value={sale.customer_name}
@@ -131,6 +119,10 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
+          </div>
+
+          {/* Segunda fila: Montos, tipo operación y cuenta con botones */}
+          <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Total c/IVA</label>
               <Input
@@ -170,7 +162,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-3">
+            <div className="col-span-5">
               <label className="text-xs text-muted-foreground">Cuenta</label>
               <AccountCombobox
                 accounts={incomeAccounts}
@@ -179,6 +171,14 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 placeholder="Cuenta de ingreso..."
                 className="w-full"
               />
+            </div>
+            <div className="col-span-1 flex items-end gap-1">
+              <Button size="sm" variant="outline" onClick={() => onSave(index)} className="h-8 w-8 p-0">
+                <Save className="h-3 w-3" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8 w-8 p-0">
+                <Trash2 className="h-3 w-3" />
+              </Button>
             </div>
           </div>
 

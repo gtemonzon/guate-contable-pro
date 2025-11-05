@@ -57,9 +57,9 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
             }
           }}
         >
-          {/* Primera fila: Info documento y proveedor */}
+          {/* Primera fila: Info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
                 value={purchase.invoice_series}
@@ -68,7 +68,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
                 value={purchase.invoice_number}
@@ -86,7 +86,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Tipo Doc</label>
               <Select
                 value={purchase.fel_document_type}
@@ -113,19 +113,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
-            <div className="col-span-2 flex items-end gap-1">
-              <Button size="sm" variant="outline" onClick={() => onSave(index)} className="h-8">
-                <Save className="h-3 w-3" />
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8">
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Segunda fila: Proveedor, montos, tipo operación, cuenta y referencia */}
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-3">
+            <div className="col-span-5">
               <label className="text-xs text-muted-foreground">Proveedor</label>
               <Input
                 value={purchase.supplier_name}
@@ -134,6 +122,10 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
+          </div>
+
+          {/* Segunda fila: Montos, tipo operación, cuenta y referencia con botones */}
+          <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Total c/IVA</label>
               <Input
@@ -145,7 +137,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 className="h-8"
               />
             </div>
-            <div className="col-span-1">
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -173,7 +165,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-3">
               <label className="text-xs text-muted-foreground">Cuenta</label>
               <AccountCombobox
                 accounts={expenseAccounts}
@@ -191,6 +183,14 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 placeholder="Cheque/Ref"
                 className="h-8"
               />
+            </div>
+            <div className="col-span-1 flex items-end gap-1">
+              <Button size="sm" variant="outline" onClick={() => onSave(index)} className="h-8 w-8 p-0">
+                <Save className="h-3 w-3" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8 w-8 p-0">
+                <Trash2 className="h-3 w-3" />
+              </Button>
             </div>
           </div>
 
