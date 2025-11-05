@@ -328,6 +328,7 @@ export default function LibroVentas() {
         vat_amount: entry.vat_amount,
         net_amount: entry.net_amount,
         income_account_id: entry.income_account_id,
+        operation_type_id: entry.operation_type_id,
       };
       
       // Guardar última cuenta usada

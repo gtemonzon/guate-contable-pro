@@ -392,6 +392,7 @@ export default function LibroCompras() {
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
         bank_account_id: entry.bank_account_id,
+        operation_type_id: entry.operation_type_id,
       };
       
       // Guardar última cuenta usada

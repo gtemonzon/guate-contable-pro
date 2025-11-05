@@ -547,6 +547,7 @@ export default function LibrosFiscales() {
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
         bank_account_id: entry.bank_account_id,
+        operation_type_id: entry.operation_type_id,
       };
 
       if (entry.isNew) {
@@ -641,6 +642,7 @@ export default function LibrosFiscales() {
         vat_amount: entry.vat_amount,
         net_amount: entry.net_amount,
         income_account_id: entry.income_account_id,
+        operation_type_id: entry.operation_type_id,
       };
 
       if (entry.isNew) {
