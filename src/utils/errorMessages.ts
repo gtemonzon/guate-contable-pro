@@ -53,6 +53,15 @@ export function getSafeAuthError(error: any): string {
     return 'Demasiados intentos. Por favor espera unos minutos.';
   }
   
+  // Password reset errors
+  if (error.message?.includes('email not found') || error.message?.includes('User not found')) {
+    return 'Si ese correo existe en nuestro sistema, recibirás un enlace de recuperación.';
+  }
+  
+  if (error.message?.includes('invalid_token') || error.message?.includes('expired')) {
+    return 'El enlace de recuperación ha expirado. Solicita uno nuevo.';
+  }
+  
   // Generic auth error
   return 'Error de autenticación. Por favor intenta nuevamente.';
 }
