@@ -166,34 +166,26 @@ export function EnterpriseDialog({
           description: "Los datos se guardaron correctamente",
         });
       } else {
-        // Insert the enterprise and get the id
-        const { data: newEnterprise, error: enterpriseError } = await supabase
-          .from("tab_enterprises")
-          .insert([dataToSave])
-          .select()
-          .single();
+        // Use database function to create enterprise and link user atomically
+        const { data: enterpriseData, error: enterpriseError } = await supabase
+          .rpc('create_enterprise_with_user_link', {
+            _nit: values.nit,
+            _business_name: values.business_name,
+            _tax_regime: values.tax_regime,
+            _base_currency_code: values.base_currency_code,
+            _is_active: values.is_active,
+            _trade_name: values.trade_name || null,
+            _address: values.address || null,
+            _phone: values.phone || null,
+            _email: values.email || null,
+          });
 
         if (enterpriseError) {
-          console.error("Enterprise insert error:", enterpriseError);
-          console.error("Error details:", {
-            code: enterpriseError.code,
-            message: enterpriseError.message,
-            details: enterpriseError.details,
-            hint: enterpriseError.hint,
-          });
+          console.error("Enterprise creation error:", enterpriseError);
           throw enterpriseError;
         }
 
-        // Link user to enterprise as admin
-        const { error: linkError } = await supabase
-          .from("tab_user_enterprises")
-          .insert([{
-            user_id: user.id,
-            enterprise_id: newEnterprise.id,
-            role: "admin_empresa"
-          }]);
-
-        if (linkError) throw linkError;
+        const newEnterprise = enterpriseData as unknown as Enterprise;
 
         // Auto-select the new enterprise
         localStorage.setItem("currentEnterpriseId", newEnterprise.id.toString());

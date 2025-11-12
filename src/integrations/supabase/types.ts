@@ -1195,6 +1195,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_enterprise_with_user_link: {
+        Args: {
+          _address?: string
+          _base_currency_code: string
+          _business_name: string
+          _email?: string
+          _is_active: boolean
+          _nit: string
+          _phone?: string
+          _tax_regime: string
+          _trade_name?: string
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
