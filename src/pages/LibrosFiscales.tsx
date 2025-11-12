@@ -142,11 +142,12 @@ export default function LibrosFiscales() {
       
       const key = opType.name;
       if (!acc[key]) {
-        acc[key] = { name: opType.name, total: 0 };
+        acc[key] = { name: opType.name, total: 0, count: 0 };
       }
       acc[key].total += Number(purchase.base_amount) || 0;
+      acc[key].count += 1;
       return acc;
-    }, {} as Record<string, { name: string; total: number }>);
+    }, {} as Record<string, { name: string; total: number; count: number }>);
     
     return Object.values(grouped)
       .map(item => ({
@@ -161,11 +162,12 @@ export default function LibrosFiscales() {
     const grouped = purchases.reduce((acc, purchase) => {
       const docType = purchase.fel_document_type || 'SIN TIPO';
       if (!acc[docType]) {
-        acc[docType] = { type: docType, total: 0 };
+        acc[docType] = { type: docType, total: 0, count: 0 };
       }
       acc[docType].total += Number(purchase.base_amount) || 0;
+      acc[docType].count += 1;
       return acc;
-    }, {} as Record<string, { type: string; total: number }>);
+    }, {} as Record<string, { type: string; total: number; count: number }>);
     
     return Object.values(grouped)
       .map(item => ({
@@ -183,11 +185,12 @@ export default function LibrosFiscales() {
       
       const key = opType.name;
       if (!acc[key]) {
-        acc[key] = { name: opType.name, total: 0 };
+        acc[key] = { name: opType.name, total: 0, count: 0 };
       }
       acc[key].total += Number(sale.net_amount) || 0;
+      acc[key].count += 1;
       return acc;
-    }, {} as Record<string, { name: string; total: number }>);
+    }, {} as Record<string, { name: string; total: number; count: number }>);
     
     return Object.values(grouped)
       .map(item => ({
@@ -202,11 +205,12 @@ export default function LibrosFiscales() {
     const grouped = sales.reduce((acc, sale) => {
       const docType = sale.fel_document_type || 'SIN TIPO';
       if (!acc[docType]) {
-        acc[docType] = { type: docType, total: 0 };
+        acc[docType] = { type: docType, total: 0, count: 0 };
       }
       acc[docType].total += Number(sale.net_amount) || 0;
+      acc[docType].count += 1;
       return acc;
-    }, {} as Record<string, { type: string; total: number }>);
+    }, {} as Record<string, { type: string; total: number; count: number }>);
     
     return Object.values(grouped)
       .map(item => ({
@@ -951,7 +955,7 @@ export default function LibrosFiscales() {
                   {purchasesByOperationType.map(op => (
                     <div key={op.name}>
                       <span>{op.name}: </span>
-                      <span className="font-semibold text-foreground">Q {op.total}</span>
+                      <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
                     </div>
                   ))}
                 </div>
@@ -964,7 +968,7 @@ export default function LibrosFiscales() {
                   {purchasesByDocType.map(doc => (
                     <div key={doc.type}>
                       <span>{doc.type}: </span>
-                      <span className="font-semibold text-foreground">Q {doc.total}</span>
+                      <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
                     </div>
                   ))}
                 </div>
@@ -1017,7 +1021,7 @@ export default function LibrosFiscales() {
                   {salesByOperationType.map(op => (
                     <div key={op.name}>
                       <span>{op.name}: </span>
-                      <span className="font-semibold text-foreground">Q {op.total}</span>
+                      <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
                     </div>
                   ))}
                 </div>
@@ -1030,7 +1034,7 @@ export default function LibrosFiscales() {
                   {salesByDocType.map(doc => (
                     <div key={doc.type}>
                       <span>{doc.type}: </span>
-                      <span className="font-semibold text-foreground">Q {doc.total}</span>
+                      <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
                     </div>
                   ))}
                 </div>
