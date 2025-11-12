@@ -113,6 +113,9 @@ export default function LibroCompras() {
       return acc;
     }, {} as Record<string, { total: number; count: number }>);
 
+    console.log('Totals by DocType:', byDocType);
+    console.log('Totals by Operation:', byOperation);
+
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
@@ -566,10 +569,12 @@ export default function LibroCompras() {
               <div>
                 <span className="text-muted-foreground">Por Operación: </span>
                 {Object.entries(totals.byOperation).map(([key, data], idx) => (
-                  <span key={key} className="font-medium">
-                    {idx > 0 && '    '}
-                    {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
-                  </span>
+                  <>
+                    {idx > 0 && <span>    </span>}
+                    <span key={key} className="font-medium">
+                      {key}: Q {formatCurrency(data.total)} ({data.count})
+                    </span>
+                  </>
                 ))}
               </div>
             )}
@@ -578,10 +583,12 @@ export default function LibroCompras() {
               <div>
                 <span className="text-muted-foreground">Por Documento: </span>
                 {Object.entries(totals.byDocType).map(([key, data], idx) => (
-                  <span key={key} className="font-medium">
-                    {idx > 0 && '    '}
-                    {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
-                  </span>
+                  <>
+                    {idx > 0 && <span>    </span>}
+                    <span key={key} className="font-medium">
+                      {key}: Q {formatCurrency(data.total)} ({data.count})
+                    </span>
+                  </>
                 ))}
               </div>
             )}
