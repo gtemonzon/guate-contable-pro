@@ -565,28 +565,24 @@ export default function LibroCompras() {
             {Object.keys(totals.byOperation).length > 0 && (
               <div>
                 <span className="text-muted-foreground">Por Operación: </span>
-                <span className="font-medium">
-                  {Object.entries(totals.byOperation).map(([key, data], idx, arr) => (
-                    <span key={key}>
-                      {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
-                      {idx < arr.length - 1 ? ' ' : ''}
-                    </span>
-                  ))}
-                </span>
+                {Object.entries(totals.byOperation).map(([key, data], idx) => (
+                  <span key={key} className="font-medium">
+                    {idx > 0 && '    '}
+                    {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
+                  </span>
+                ))}
               </div>
             )}
             
             {Object.keys(totals.byDocType).length > 0 && (
               <div>
                 <span className="text-muted-foreground">Por Documento: </span>
-                <span className="font-medium">
-                  {Object.entries(totals.byDocType).map(([key, data], idx, arr) => (
-                    <span key={key}>
-                      {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
-                      {idx < arr.length - 1 ? ' ' : ''}
-                    </span>
-                  ))}
-                </span>
+                {Object.entries(totals.byDocType).map(([key, data], idx) => (
+                  <span key={key} className="font-medium">
+                    {idx > 0 && '    '}
+                    {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
+                  </span>
+                ))}
               </div>
             )}
           </div>
