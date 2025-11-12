@@ -7,6 +7,7 @@ import { Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface PurchaseEntry {
   id?: number;
@@ -41,6 +42,26 @@ interface PurchaseCardProps {
 
 export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete }: PurchaseCardProps) {
   const [isFocused, setIsFocused] = useState(false);
+
+  const searchSupplierByNit = async (nit: string) => {
+    if (!nit || nit.length < 3) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("tab_purchase_ledger")
+        .select("supplier_name, supplier_nit")
+        .eq("supplier_nit", nit)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        onUpdate(index, "supplier_name", data.supplier_name);
+      }
+    } catch (error) {
+      console.error("Error searching supplier:", error);
+    }
+  };
 
   return (
     <Card className={cn(
@@ -109,6 +130,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
               <Input
                 value={purchase.supplier_nit}
                 onChange={(e) => onUpdate(index, "supplier_nit", e.target.value)}
+                onBlur={(e) => searchSupplierByNit(e.target.value)}
                 placeholder="123456789"
                 className="h-8"
               />

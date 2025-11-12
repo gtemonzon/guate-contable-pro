@@ -77,13 +77,40 @@ export default function LibroVentas() {
     const totalNet = sales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
     const documentCount = sales.length;
 
+    // Calcular totales por tipo de documento
+    const byDocType = sales.reduce((acc, s) => {
+      const docType = s.fel_document_type || 'SIN_TIPO';
+      if (!acc[docType]) {
+        acc[docType] = { total: 0, count: 0 };
+      }
+      acc[docType].total += Number(s.total_amount) || 0;
+      acc[docType].count += 1;
+      return acc;
+    }, {} as Record<string, { total: number; count: number }>);
+
+    // Calcular totales por operación
+    const byOperation = sales.reduce((acc, s) => {
+      if (!s.operation_type_id) return acc;
+      const opType = operationTypes.find(o => o.id === s.operation_type_id);
+      if (!opType) return acc;
+      const key = opType.code;
+      if (!acc[key]) {
+        acc[key] = { total: 0, count: 0 };
+      }
+      acc[key].total += Number(s.total_amount) || 0;
+      acc[key].count += 1;
+      return acc;
+    }, {} as Record<string, { total: number; count: number }>);
+
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalNet: formatCurrency(totalNet),
       documentCount,
+      byDocType,
+      byOperation,
     };
-  }, [sales]);
+  }, [sales, operationTypes]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -599,23 +626,53 @@ export default function LibroVentas() {
           <h1 className="text-3xl font-bold">Libro de Ventas</h1>
           <p className="text-muted-foreground">Registro mensual de facturas de venta</p>
           
-          <div className="mt-4 flex gap-6 text-sm">
-            <div>
-              <span className="text-muted-foreground">Documentos: </span>
-              <Badge variant="secondary">{totals.documentCount}</Badge>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex gap-6">
+              <div>
+                <span className="text-muted-foreground">Documentos: </span>
+                <Badge variant="secondary">{totals.documentCount}</Badge>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Neto: </span>
+                <span className="font-semibold">Q {totals.totalNet}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">IVA: </span>
+                <span className="font-semibold">Q {totals.totalVAT}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Total c/IVA: </span>
+                <span className="font-semibold">Q {totals.totalWithVAT}</span>
+              </div>
             </div>
-            <div>
-              <span className="text-muted-foreground">Neto: </span>
-              <span className="font-semibold">Q {totals.totalNet}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">IVA: </span>
-              <span className="font-semibold">Q {totals.totalVAT}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Total c/IVA: </span>
-              <span className="font-semibold">Q {totals.totalWithVAT}</span>
-            </div>
+            
+            {Object.keys(totals.byOperation).length > 0 && (
+              <div>
+                <span className="text-muted-foreground">Por Operación: </span>
+                <span className="font-medium">
+                  {Object.entries(totals.byOperation).map(([key, data], idx, arr) => (
+                    <span key={key}>
+                      {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
+                      {idx < arr.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
+            
+            {Object.keys(totals.byDocType).length > 0 && (
+              <div>
+                <span className="text-muted-foreground">Por Documento: </span>
+                <span className="font-medium">
+                  {Object.entries(totals.byDocType).map(([key, data], idx, arr) => (
+                    <span key={key}>
+                      {key}: Q {formatCurrency(data.total)} <span className="text-muted-foreground">({data.count})</span>
+                      {idx < arr.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-4 items-end">

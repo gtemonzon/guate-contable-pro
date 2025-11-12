@@ -7,6 +7,7 @@ import { Trash2, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SaleEntry {
   id?: number;
@@ -38,6 +39,26 @@ interface SalesCardProps {
 
 export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete }: SalesCardProps) {
   const [isFocused, setIsFocused] = useState(false);
+
+  const searchCustomerByNit = async (nit: string) => {
+    if (!nit || nit.length < 3) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from("tab_sales_ledger")
+        .select("customer_name, customer_nit")
+        .eq("customer_nit", nit)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        onUpdate(index, "customer_name", data.customer_name);
+      }
+    } catch (error) {
+      console.error("Error searching customer:", error);
+    }
+  };
 
   return (
     <Card className={cn(
@@ -106,6 +127,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
               <Input
                 value={sale.customer_nit}
                 onChange={(e) => onUpdate(index, "customer_nit", e.target.value)}
+                onBlur={(e) => searchCustomerByNit(e.target.value)}
                 placeholder="123456789"
                 className="h-8"
               />
