@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -84,22 +85,22 @@ export default function ReporteBalanceGeneral() {
 
       if (accountsError) throw accountsError;
 
-      // Get all journal entry details up to the report date
-      const { data: detailsData, error: detailsError } = await supabase
-        .from("tab_journal_entry_details")
-        .select(`
-          *,
-          tab_journal_entries!inner(
-            entry_date,
-            enterprise_id,
-            is_posted
-          )
-        `)
-        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-        .eq("tab_journal_entries.is_posted", true)
-        .lte("tab_journal_entries.entry_date", reportDate);
-
-      if (detailsError) throw detailsError;
+      // Get all journal entry details up to the report date (con paginación automática)
+      const detailsData = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            *,
+            tab_journal_entries!inner(
+              entry_date,
+              enterprise_id,
+              is_posted
+            )
+          `)
+          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+          .eq("tab_journal_entries.is_posted", true)
+          .lte("tab_journal_entries.entry_date", reportDate)
+      );
 
       // Calculate balances per account
       const balanceMap = new Map<number, { debit: number, credit: number }>();

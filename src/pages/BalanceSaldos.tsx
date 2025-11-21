@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -156,45 +157,45 @@ export default function BalanceSaldos() {
 
       if (periodError) throw periodError;
 
-      // Obtener todos los movimientos del período y rango de fechas
-      const { data: entries, error: entriesError } = await supabase
-        .from("tab_journal_entries")
-        .select(`
-          id,
-          entry_date,
-          is_posted,
-          tab_journal_entry_details (
-            account_id,
-            debit_amount,
-            credit_amount
-          )
-        `)
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("accounting_period_id", periodId)
-        .eq("is_posted", true)
-        .gte("entry_date", dateFrom)
-        .lte("entry_date", dateTo);
+      // Obtener todos los movimientos del período y rango de fechas (con paginación automática)
+      const entries = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entries")
+          .select(`
+            id,
+            entry_date,
+            is_posted,
+            tab_journal_entry_details (
+              account_id,
+              debit_amount,
+              credit_amount
+            )
+          `)
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("accounting_period_id", periodId)
+          .eq("is_posted", true)
+          .gte("entry_date", dateFrom)
+          .lte("entry_date", dateTo)
+      );
 
-      if (entriesError) throw entriesError;
-
-      // Calcular saldos anteriores (antes del dateFrom)
-      const { data: prevEntries, error: prevEntriesError } = await supabase
-        .from("tab_journal_entries")
-        .select(`
-          id,
-          entry_date,
-          tab_journal_entry_details (
-            account_id,
-            debit_amount,
-            credit_amount
-          )
-        `)
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("accounting_period_id", periodId)
-        .eq("is_posted", true)
-        .lt("entry_date", dateFrom);
-
-      if (prevEntriesError) throw prevEntriesError;
+      // Calcular saldos anteriores (antes del dateFrom) con paginación automática
+      const prevEntries = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entries")
+          .select(`
+            id,
+            entry_date,
+            tab_journal_entry_details (
+              account_id,
+              debit_amount,
+              credit_amount
+            )
+          `)
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("accounting_period_id", periodId)
+          .eq("is_posted", true)
+          .lt("entry_date", dateFrom)
+      );
 
       // Calcular saldos anteriores por cuenta de detalle
       const previousBalances: Record<number, { debit: number; credit: number }> = {};
