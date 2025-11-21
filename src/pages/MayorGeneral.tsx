@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -230,31 +231,31 @@ export default function MayorGeneral() {
         return;
       }
 
-      // Obtener detalles de partidas que afectan las cuentas
-      const { data: details, error: detailsError } = await supabase
-        .from("tab_journal_entry_details")
-        .select(`
-          id,
-          debit_amount,
-          credit_amount,
-          description,
-          journal_entry_id,
-          tab_journal_entries!inner (
+      // Obtener detalles de partidas que afectan las cuentas (con paginación automática)
+      const details = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entry_details")
+          .select(`
             id,
-            entry_number,
-            entry_date,
+            debit_amount,
+            credit_amount,
             description,
-            is_posted,
-            enterprise_id
-          )
-        `)
-        .in("account_id", accountIdsToQuery)
-        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-        .eq("tab_journal_entries.is_posted", true)
-        .gte("tab_journal_entries.entry_date", startDate)
-        .lte("tab_journal_entries.entry_date", endDate);
-
-      if (detailsError) throw detailsError;
+            journal_entry_id,
+            tab_journal_entries!inner (
+              id,
+              entry_number,
+              entry_date,
+              description,
+              is_posted,
+              enterprise_id
+            )
+          `)
+          .in("account_id", accountIdsToQuery)
+          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+          .eq("tab_journal_entries.is_posted", true)
+          .gte("tab_journal_entries.entry_date", startDate)
+          .lte("tab_journal_entries.entry_date", endDate)
+      );
 
       // Ordenar por fecha (en JavaScript ya que no podemos ordenar por tabla relacionada)
       const sortedDetails = (details || []).sort((a: any, b: any) => {
@@ -263,25 +264,25 @@ export default function MayorGeneral() {
         return dateA - dateB;
       });
 
-      // Calcular saldo anterior (antes del startDate)
-      const { data: previousDetails, error: prevError } = await supabase
-        .from("tab_journal_entry_details")
-        .select(`
-          debit_amount,
-          credit_amount,
-          tab_journal_entries!inner (
-            entry_date,
-            is_posted,
-            enterprise_id,
-            accounting_period_id
-          )
-        `)
-        .in("account_id", accountIdsToQuery)
-        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-        .eq("tab_journal_entries.is_posted", true)
-        .lt("tab_journal_entries.entry_date", startDate);
-
-      if (prevError) throw prevError;
+      // Calcular saldo anterior (antes del startDate) con paginación automática
+      const previousDetails = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            debit_amount,
+            credit_amount,
+            tab_journal_entries!inner (
+              entry_date,
+              is_posted,
+              enterprise_id,
+              accounting_period_id
+            )
+          `)
+          .in("account_id", accountIdsToQuery)
+          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+          .eq("tab_journal_entries.is_posted", true)
+          .lt("tab_journal_entries.entry_date", startDate)
+      );
 
       // Calcular saldo inicial
       let previousBalance = 0;

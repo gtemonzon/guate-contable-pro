@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -89,23 +90,23 @@ export default function ReporteEstadoResultados() {
 
       if (accountsError) throw accountsError;
 
-      // Get journal entry details for the period
-      const { data: detailsData, error: detailsError } = await supabase
-        .from("tab_journal_entry_details")
-        .select(`
-          *,
-          tab_journal_entries!inner(
-            entry_date,
-            enterprise_id,
-            is_posted
-          )
-        `)
-        .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-        .eq("tab_journal_entries.is_posted", true)
-        .gte("tab_journal_entries.entry_date", dateFrom)
-        .lte("tab_journal_entries.entry_date", dateTo);
-
-      if (detailsError) throw detailsError;
+      // Get journal entry details for the period (con paginación automática)
+      const detailsData = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            *,
+            tab_journal_entries!inner(
+              entry_date,
+              enterprise_id,
+              is_posted
+            )
+          `)
+          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+          .eq("tab_journal_entries.is_posted", true)
+          .gte("tab_journal_entries.entry_date", dateFrom)
+          .lte("tab_journal_entries.entry_date", dateTo)
+      );
 
       // Calculate amounts per account
       const amountMap = new Map<number, number>();

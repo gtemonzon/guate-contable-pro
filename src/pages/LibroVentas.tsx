@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -231,16 +232,16 @@ export default function LibroVentas() {
       const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-      const { data, error } = await supabase
-        .from("tab_sales_ledger")
-        .select("*")
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .gte("invoice_date", startDate)
-        .lte("invoice_date", endDate)
-        .order("invoice_date", { ascending: true })
-        .order("invoice_number", { ascending: true });
-
-      if (error) throw error;
+      const data = await fetchAllRecords<any>(
+        supabase
+          .from("tab_sales_ledger")
+          .select("*")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .gte("invoice_date", startDate)
+          .lte("invoice_date", endDate)
+          .order("invoice_date", { ascending: true })
+          .order("invoice_number", { ascending: true })
+      );
       setSales(data || []);
     } catch (error: any) {
       toast({

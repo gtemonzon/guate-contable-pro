@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -102,31 +103,31 @@ export default function ReportePartidas() {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("tab_journal_entries")
-        .select("*")
-        .eq("enterprise_id", parseInt(currentEnterpriseId))
-        .gte("entry_date", dateFrom)
-        .lte("entry_date", dateTo)
-        .order("entry_date", { ascending: true })
-        .order("entry_number", { ascending: true });
-
-      if (error) throw error;
+      const data = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entries")
+          .select("*")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .gte("entry_date", dateFrom)
+          .lte("entry_date", dateTo)
+          .order("entry_date", { ascending: true })
+          .order("entry_number", { ascending: true })
+      );
       setEntries(data || []);
 
-      // Fetch details if needed
+      // Fetch details if needed (con paginación automática)
       if (includeDetails && data && data.length > 0) {
         const entryIds = data.map(e => e.id);
-        const { data: detailsData, error: detailsError } = await supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            *,
-            tab_accounts!inner(account_code, account_name)
-          `)
-          .in("journal_entry_id", entryIds)
-          .order("line_number");
-
-        if (detailsError) throw detailsError;
+        const detailsData = await fetchAllRecords<any>(
+          supabase
+            .from("tab_journal_entry_details")
+            .select(`
+              *,
+              tab_accounts!inner(account_code, account_name)
+            `)
+            .in("journal_entry_id", entryIds)
+            .order("line_number")
+        );
 
         // Group details by entry id
         const groupedDetails: Record<number, JournalEntryDetail[]> = {};

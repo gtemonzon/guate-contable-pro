@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -83,16 +84,16 @@ export default function ReporteVentas() {
       const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split('T')[0];
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
 
-      const { data, error } = await supabase
-        .from("tab_sales_ledger")
-        .select("*")
-        .eq("enterprise_id", parseInt(currentEnterpriseId))
-        .gte("invoice_date", startDate)
-        .lte("invoice_date", endDate)
-        .order("invoice_date", { ascending: true })
-        .order("invoice_number", { ascending: true });
-
-      if (error) throw error;
+      const data = await fetchAllRecords<any>(
+        supabase
+          .from("tab_sales_ledger")
+          .select("*")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .gte("invoice_date", startDate)
+          .lte("invoice_date", endDate)
+          .order("invoice_date", { ascending: true })
+          .order("invoice_number", { ascending: true })
+      );
       setSales(data || []);
       
       if (!data || data.length === 0) {
