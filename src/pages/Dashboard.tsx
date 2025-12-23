@@ -4,6 +4,7 @@ import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, Sh
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface BookSummary {
   month: number;
@@ -32,6 +33,12 @@ interface AccountBalance {
   balance: number;
 }
 
+interface MonthlyChartData {
+  month: string;
+  monthNum: number;
+  total: number;
+}
+
 const Dashboard = () => {
   const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
   const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
@@ -39,6 +46,9 @@ const Dashboard = () => {
   const [kpiLoading, setKpiLoading] = useState(true);
   const [kpiData, setKpiData] = useState<KPIData | null>(null);
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
+  const [yearlyChartsLoading, setYearlyChartsLoading] = useState(true);
+  const [yearlySalesData, setYearlySalesData] = useState<MonthlyChartData[]>([]);
+  const [yearlyPurchasesData, setYearlyPurchasesData] = useState<MonthlyChartData[]>([]);
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -440,6 +450,72 @@ const Dashboard = () => {
     fetchBookSummaries();
   }, []);
 
+  // Cargar datos anuales para gráficas
+  useEffect(() => {
+    const fetchYearlyData = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) {
+        setYearlyChartsLoading(false);
+        return;
+      }
+
+      try {
+        const currentYear = new Date().getFullYear();
+        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+        // Inicializar datos mensuales con ceros
+        const initializeMonthlyData = (): MonthlyChartData[] => 
+          monthNames.map((month, index) => ({ month, monthNum: index + 1, total: 0 }));
+
+        // Fetch ventas del año
+        const { data: sales } = await supabase
+          .from("tab_sales_ledger")
+          .select("invoice_date, total_amount")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .gte("invoice_date", `${currentYear}-01-01`)
+          .lte("invoice_date", `${currentYear}-12-31`);
+
+        const salesByMonth = initializeMonthlyData();
+        if (sales) {
+          sales.forEach((sale) => {
+            const month = new Date(sale.invoice_date).getMonth();
+            salesByMonth[month].total += Number(sale.total_amount || 0);
+          });
+        }
+        setYearlySalesData(salesByMonth);
+
+        // Fetch compras del año
+        const { data: purchaseBooks } = await supabase
+          .from("tab_purchase_books")
+          .select("id, month, year")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("year", currentYear);
+
+        const purchasesByMonth = initializeMonthlyData();
+        if (purchaseBooks && purchaseBooks.length > 0) {
+          for (const book of purchaseBooks) {
+            const { data: purchases } = await supabase
+              .from("tab_purchase_ledger")
+              .select("total_amount")
+              .eq("purchase_book_id", book.id);
+
+            if (purchases) {
+              const totalForMonth = purchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+              purchasesByMonth[book.month - 1].total += totalForMonth;
+            }
+          }
+        }
+        setYearlyPurchasesData(purchasesByMonth);
+      } catch (error) {
+        console.error("Error fetching yearly data:", error);
+      } finally {
+        setYearlyChartsLoading(false);
+      }
+    };
+
+    fetchYearlyData();
+  }, []);
+
   // KPIs dinámicos
   const formatChange = (change: number | null | undefined, isPercentage = true): string => {
     if (change === null || change === undefined) return "N/A";
@@ -728,6 +804,125 @@ const Dashboard = () => {
             ) : (
               <div className="h-40 flex items-center justify-center text-muted-foreground">
                 <p className="text-sm">No hay compras registradas</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Yearly Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Ventas del Año</CardTitle>
+                <CardDescription>
+                  Total mensual de ventas {new Date().getFullYear()}
+                </CardDescription>
+              </div>
+              <Receipt className="h-6 w-6 text-success" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {yearlyChartsLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : yearlySalesData.some(d => d.total > 0) ? (
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={yearlySalesData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fontSize: 11 }} 
+                      className="text-muted-foreground"
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 11 }} 
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`Q ${formatNumber(value)}`, 'Total']}
+                      labelFormatter={(label) => `Mes: ${label}`}
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="total" 
+                      stroke="hsl(var(--success))" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(var(--success))', strokeWidth: 2, r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">No hay ventas registradas este año</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Compras del Año</CardTitle>
+                <CardDescription>
+                  Total mensual de compras {new Date().getFullYear()}
+                </CardDescription>
+              </div>
+              <ShoppingCart className="h-6 w-6 text-destructive" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {yearlyChartsLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : yearlyPurchasesData.some(d => d.total > 0) ? (
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={yearlyPurchasesData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="month" 
+                      tick={{ fontSize: 11 }} 
+                      className="text-muted-foreground"
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 11 }} 
+                      tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => [`Q ${formatNumber(value)}`, 'Total']}
+                      labelFormatter={(label) => `Mes: ${label}`}
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="total" 
+                      stroke="hsl(var(--destructive))" 
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(var(--destructive))', strokeWidth: 2, r: 3 }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">No hay compras registradas este año</p>
               </div>
             )}
           </CardContent>
