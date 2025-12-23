@@ -441,41 +441,39 @@ const Dashboard = () => {
   }, []);
 
   // KPIs dinámicos
+  const formatChange = (change: number | null | undefined, isPercentage = true): string => {
+    if (change === null || change === undefined) return "N/A";
+    const sign = change >= 0 ? '+' : '';
+    return isPercentage ? `${sign}${change.toFixed(1)}%` : `${sign}${change.toFixed(2)}`;
+  };
+
   const kpis = [
     {
       title: "Total Activos",
       value: kpiData ? `Q ${formatNumber(kpiData.totalActivos.value)}` : "Q 0.00",
-      change: kpiData?.totalActivos.change !== null 
-        ? `${kpiData.totalActivos.change >= 0 ? '+' : ''}${kpiData.totalActivos.change.toFixed(1)}%`
-        : "N/A",
-      trend: kpiData?.totalActivos.trend || 'neutral',
+      change: kpiData ? formatChange(kpiData.totalActivos.change) : "N/A",
+      trend: kpiData?.totalActivos?.trend || 'neutral',
       icon: DollarSign,
     },
     {
       title: "Total Pasivos",
       value: kpiData ? `Q ${formatNumber(kpiData.totalPasivos.value)}` : "Q 0.00",
-      change: kpiData?.totalPasivos.change !== null 
-        ? `${kpiData.totalPasivos.change >= 0 ? '+' : ''}${kpiData.totalPasivos.change.toFixed(1)}%`
-        : "N/A",
-      trend: kpiData?.totalPasivos.trend || 'neutral',
+      change: kpiData ? formatChange(kpiData.totalPasivos.change) : "N/A",
+      trend: kpiData?.totalPasivos?.trend || 'neutral',
       icon: Scale,
     },
     {
       title: "Utilidad del Mes",
       value: kpiData ? `Q ${formatNumber(kpiData.utilidadMes.value)}` : "Q 0.00",
-      change: kpiData?.utilidadMes.change !== null 
-        ? `${kpiData.utilidadMes.change >= 0 ? '+' : ''}${kpiData.utilidadMes.change.toFixed(1)}%`
-        : "N/A",
-      trend: kpiData?.utilidadMes.trend || 'neutral',
+      change: kpiData ? formatChange(kpiData.utilidadMes.change) : "N/A",
+      trend: kpiData?.utilidadMes?.trend || 'neutral',
       icon: TrendingUp,
     },
     {
       title: "Liquidez",
       value: kpiData ? kpiData.liquidez.value.toFixed(2) : "0.00",
-      change: kpiData?.liquidez.change !== null 
-        ? `${kpiData.liquidez.change >= 0 ? '+' : ''}${kpiData.liquidez.change.toFixed(2)}`
-        : "N/A",
-      trend: kpiData?.liquidez.trend || 'neutral',
+      change: kpiData ? formatChange(kpiData.liquidez.change, false) : "N/A",
+      trend: kpiData?.liquidez?.trend || 'neutral',
       icon: Wallet,
     },
   ];
