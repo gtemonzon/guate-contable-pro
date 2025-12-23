@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 
 interface BookSummary {
   month: number;
@@ -15,10 +16,29 @@ interface BookSummary {
   percentageChange?: number;
 }
 
+interface KPIData {
+  totalActivos: { value: number; change: number | null; trend: 'up' | 'down' | 'neutral' };
+  totalPasivos: { value: number; change: number | null; trend: 'up' | 'down' | 'neutral' };
+  utilidadMes: { value: number; change: number | null; trend: 'up' | 'down' | 'neutral' };
+  liquidez: { value: number; change: number | null; trend: 'up' | 'down' | 'neutral' };
+}
+
+interface AccountBalance {
+  id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  balance_type: string | null;
+  balance: number;
+}
+
 const Dashboard = () => {
   const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
   const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [kpiData, setKpiData] = useState<KPIData | null>(null);
+  const [recentEntries, setRecentEntries] = useState<any[]>([]);
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -26,6 +46,268 @@ const Dashboard = () => {
       maximumFractionDigits: 2
     });
   };
+
+  // Función para calcular saldos de cuentas
+  const calculateAccountBalances = async (
+    enterpriseId: number,
+    endDate: string
+  ): Promise<AccountBalance[]> => {
+    // Obtener cuentas activas
+    const { data: accounts, error: accountsError } = await supabase
+      .from("tab_accounts")
+      .select("id, account_code, account_name, account_type, balance_type")
+      .eq("enterprise_id", enterpriseId)
+      .eq("is_active", true);
+
+    if (accountsError || !accounts) return [];
+
+    // Obtener todos los movimientos hasta la fecha indicada
+    const baseQuery = supabase
+      .from("tab_journal_entry_details")
+      .select(`
+        account_id,
+        debit_amount,
+        credit_amount,
+        tab_journal_entries!inner(entry_date, enterprise_id)
+      `)
+      .eq("tab_journal_entries.enterprise_id", enterpriseId)
+      .lte("tab_journal_entries.entry_date", endDate);
+
+    const movements = await fetchAllRecords<any>(baseQuery);
+
+    // Agrupar movimientos por cuenta
+    const balanceMap = new Map<number, { debits: number; credits: number }>();
+    
+    movements.forEach((mov) => {
+      const accountId = mov.account_id;
+      if (!balanceMap.has(accountId)) {
+        balanceMap.set(accountId, { debits: 0, credits: 0 });
+      }
+      const current = balanceMap.get(accountId)!;
+      current.debits += Number(mov.debit_amount || 0);
+      current.credits += Number(mov.credit_amount || 0);
+    });
+
+    // Calcular saldo según tipo de cuenta
+    return accounts.map((acc) => {
+      const movements = balanceMap.get(acc.id) || { debits: 0, credits: 0 };
+      let balance = 0;
+      
+      // Saldo deudor: débitos - créditos (activos, gastos)
+      // Saldo acreedor: créditos - débitos (pasivos, patrimonio, ingresos)
+      if (acc.balance_type === 'deudor' || acc.account_type === 'activo' || acc.account_type === 'gasto') {
+        balance = movements.debits - movements.credits;
+      } else {
+        balance = movements.credits - movements.debits;
+      }
+
+      return {
+        id: acc.id,
+        account_code: acc.account_code,
+        account_name: acc.account_name,
+        account_type: acc.account_type,
+        balance_type: acc.balance_type,
+        balance
+      };
+    });
+  };
+
+  // Función para calcular utilidad de un período específico
+  const calculatePeriodProfit = async (
+    enterpriseId: number,
+    startDate: string,
+    endDate: string
+  ): Promise<number> => {
+    const { data: accounts } = await supabase
+      .from("tab_accounts")
+      .select("id, account_type")
+      .eq("enterprise_id", enterpriseId)
+      .eq("is_active", true)
+      .in("account_type", ["ingreso", "gasto"]);
+
+    if (!accounts || accounts.length === 0) return 0;
+
+    const accountIds = accounts.map(a => a.id);
+
+    const baseQuery = supabase
+      .from("tab_journal_entry_details")
+      .select(`
+        account_id,
+        debit_amount,
+        credit_amount,
+        tab_journal_entries!inner(entry_date, enterprise_id)
+      `)
+      .eq("tab_journal_entries.enterprise_id", enterpriseId)
+      .gte("tab_journal_entries.entry_date", startDate)
+      .lte("tab_journal_entries.entry_date", endDate)
+      .in("account_id", accountIds);
+
+    const movements = await fetchAllRecords<any>(baseQuery);
+
+    const accountTypeMap = new Map(accounts.map(a => [a.id, a.account_type]));
+    
+    let ingresos = 0;
+    let gastos = 0;
+
+    movements.forEach((mov) => {
+      const accountType = accountTypeMap.get(mov.account_id);
+      const debit = Number(mov.debit_amount || 0);
+      const credit = Number(mov.credit_amount || 0);
+
+      if (accountType === 'ingreso') {
+        ingresos += credit - debit; // Ingresos son acreedores
+      } else if (accountType === 'gasto') {
+        gastos += debit - credit; // Gastos son deudores
+      }
+    });
+
+    return ingresos - gastos;
+  };
+
+  // Cargar KPIs
+  useEffect(() => {
+    const fetchKPIs = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) {
+        setKpiLoading(false);
+        return;
+      }
+
+      try {
+        const enterpriseId = parseInt(currentEnterpriseId);
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // Fechas del mes actual
+        const currentMonthStart = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
+        const currentMonthEnd = today.toISOString().split('T')[0];
+        
+        // Fechas del mes anterior
+        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        const prevMonthStart = new Date(prevYear, prevMonth, 1).toISOString().split('T')[0];
+        const prevMonthEnd = new Date(prevYear, prevMonth + 1, 0).toISOString().split('T')[0];
+
+        // Calcular saldos actuales
+        const currentBalances = await calculateAccountBalances(enterpriseId, currentMonthEnd);
+        const prevBalances = await calculateAccountBalances(enterpriseId, prevMonthEnd);
+
+        // Total Activos
+        const totalActivos = currentBalances
+          .filter(acc => acc.account_type === 'activo')
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const prevTotalActivos = prevBalances
+          .filter(acc => acc.account_type === 'activo')
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+
+        // Total Pasivos
+        const totalPasivos = currentBalances
+          .filter(acc => acc.account_type === 'pasivo')
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const prevTotalPasivos = prevBalances
+          .filter(acc => acc.account_type === 'pasivo')
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+
+        // Utilidad del mes actual
+        const utilidadMes = await calculatePeriodProfit(enterpriseId, currentMonthStart, currentMonthEnd);
+        const prevUtilidadMes = await calculatePeriodProfit(enterpriseId, prevMonthStart, prevMonthEnd);
+
+        // Liquidez (Activo Corriente / Pasivo Corriente)
+        const activoCorriente = currentBalances
+          .filter(acc => acc.account_code.startsWith('1.1') || acc.account_code.startsWith('1-1') || acc.account_code.startsWith('11'))
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const pasivoCorriente = currentBalances
+          .filter(acc => acc.account_code.startsWith('2.1') || acc.account_code.startsWith('2-1') || acc.account_code.startsWith('21'))
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const liquidez = pasivoCorriente > 0 ? activoCorriente / pasivoCorriente : 0;
+
+        const prevActivoCorriente = prevBalances
+          .filter(acc => acc.account_code.startsWith('1.1') || acc.account_code.startsWith('1-1') || acc.account_code.startsWith('11'))
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const prevPasivoCorriente = prevBalances
+          .filter(acc => acc.account_code.startsWith('2.1') || acc.account_code.startsWith('2-1') || acc.account_code.startsWith('21'))
+          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+        
+        const prevLiquidez = prevPasivoCorriente > 0 ? prevActivoCorriente / prevPasivoCorriente : 0;
+
+        // Calcular cambios porcentuales
+        const calculateChange = (current: number, previous: number): number | null => {
+          if (previous === 0) return current !== 0 ? 100 : null;
+          return ((current - previous) / Math.abs(previous)) * 100;
+        };
+
+        const getTrend = (change: number | null, invertedLogic = false): 'up' | 'down' | 'neutral' => {
+          if (change === null) return 'neutral';
+          if (invertedLogic) {
+            return change > 0 ? 'down' : change < 0 ? 'up' : 'neutral';
+          }
+          return change > 0 ? 'up' : change < 0 ? 'down' : 'neutral';
+        };
+
+        setKpiData({
+          totalActivos: {
+            value: totalActivos,
+            change: calculateChange(totalActivos, prevTotalActivos),
+            trend: getTrend(calculateChange(totalActivos, prevTotalActivos))
+          },
+          totalPasivos: {
+            value: totalPasivos,
+            change: calculateChange(totalPasivos, prevTotalPasivos),
+            trend: getTrend(calculateChange(totalPasivos, prevTotalPasivos), true) // Menos pasivos es mejor
+          },
+          utilidadMes: {
+            value: utilidadMes,
+            change: calculateChange(utilidadMes, prevUtilidadMes),
+            trend: getTrend(calculateChange(utilidadMes, prevUtilidadMes))
+          },
+          liquidez: {
+            value: liquidez,
+            change: liquidez - prevLiquidez,
+            trend: getTrend(liquidez - prevLiquidez)
+          }
+        });
+      } catch (error) {
+        console.error("Error fetching KPIs:", error);
+      } finally {
+        setKpiLoading(false);
+      }
+    };
+
+    fetchKPIs();
+  }, []);
+
+  // Cargar últimas partidas
+  useEffect(() => {
+    const fetchRecentEntries = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) return;
+
+      const { data: entries } = await supabase
+        .from("tab_journal_entries")
+        .select("id, entry_number, entry_date, description, total_debit")
+        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .order("entry_date", { ascending: false })
+        .limit(3);
+
+      if (entries) {
+        setRecentEntries(entries.map(e => ({
+          id: e.id,
+          number: e.entry_number,
+          date: e.entry_date,
+          description: e.description,
+          amount: `Q ${formatNumber(Number(e.total_debit || 0))}`
+        })));
+      }
+    };
+
+    fetchRecentEntries();
+  }, []);
 
   useEffect(() => {
     const fetchBookSummaries = async () => {
@@ -46,7 +328,6 @@ const Dashboard = () => {
           .limit(12);
 
         if (purchaseBooks && purchaseBooks.length > 0) {
-          // Buscar el libro más reciente que tenga datos
           let lastBookWithData = null;
           let prevBookWithData = null;
           let purchases = null;
@@ -81,7 +362,6 @@ const Dashboard = () => {
               { month: 0, year: 0, base: 0, vat: 0, total: 0, count: 0 } as BookSummary
             );
 
-            // Calcular cambio porcentual con el mes anterior que tenga datos
             if (prevBookWithData) {
               const { data: prevPurchases } = await supabase
                 .from("tab_purchase_ledger")
@@ -114,7 +394,6 @@ const Dashboard = () => {
           .limit(500);
 
         if (sales && sales.length > 0) {
-          // Group by month/year and get the most recent two months
           const grouped: { [key: string]: BookSummary } = sales.reduce((acc: any, curr) => {
             const date = new Date(curr.invoice_date);
             const key = `${date.getFullYear()}-${date.getMonth()}`;
@@ -139,7 +418,6 @@ const Dashboard = () => {
           if (sortedKeys.length > 0) {
             const lastMonth = grouped[sortedKeys[0]];
             
-            // Calculate percentage change with previous month
             if (sortedKeys.length > 1) {
               const prevMonth = grouped[sortedKeys[1]];
               lastMonth.previousTotal = prevMonth.total;
@@ -162,42 +440,48 @@ const Dashboard = () => {
     fetchBookSummaries();
   }, []);
 
-  // Mock data for demonstration
+  // KPIs dinámicos
   const kpis = [
     {
       title: "Total Activos",
-      value: "Q 1,250,450.00",
-      change: "+12.5%",
-      trend: "up",
+      value: kpiData ? `Q ${formatNumber(kpiData.totalActivos.value)}` : "Q 0.00",
+      change: kpiData?.totalActivos.change !== null 
+        ? `${kpiData.totalActivos.change >= 0 ? '+' : ''}${kpiData.totalActivos.change.toFixed(1)}%`
+        : "N/A",
+      trend: kpiData?.totalActivos.trend || 'neutral',
       icon: DollarSign,
     },
     {
       title: "Total Pasivos",
-      value: "Q 450,230.00",
-      change: "-3.2%",
-      trend: "down",
-      icon: TrendingDown,
+      value: kpiData ? `Q ${formatNumber(kpiData.totalPasivos.value)}` : "Q 0.00",
+      change: kpiData?.totalPasivos.change !== null 
+        ? `${kpiData.totalPasivos.change >= 0 ? '+' : ''}${kpiData.totalPasivos.change.toFixed(1)}%`
+        : "N/A",
+      trend: kpiData?.totalPasivos.trend || 'neutral',
+      icon: Scale,
     },
     {
       title: "Utilidad del Mes",
-      value: "Q 85,340.00",
-      change: "+8.3%",
-      trend: "up",
+      value: kpiData ? `Q ${formatNumber(kpiData.utilidadMes.value)}` : "Q 0.00",
+      change: kpiData?.utilidadMes.change !== null 
+        ? `${kpiData.utilidadMes.change >= 0 ? '+' : ''}${kpiData.utilidadMes.change.toFixed(1)}%`
+        : "N/A",
+      trend: kpiData?.utilidadMes.trend || 'neutral',
       icon: TrendingUp,
     },
     {
       title: "Liquidez",
-      value: "2.78",
-      change: "+0.15",
-      trend: "up",
-      icon: DollarSign,
+      value: kpiData ? kpiData.liquidez.value.toFixed(2) : "0.00",
+      change: kpiData?.liquidez.change !== null 
+        ? `${kpiData.liquidez.change >= 0 ? '+' : ''}${kpiData.liquidez.change.toFixed(2)}`
+        : "N/A",
+      trend: kpiData?.liquidez.trend || 'neutral',
+      icon: Wallet,
     },
   ];
 
-  const recentEntries = [
-    { id: 1, number: "2025-001", date: "2025-01-15", description: "Compra de equipo de oficina", amount: "Q 5,600.00" },
-    { id: 2, number: "2025-002", date: "2025-01-16", description: "Venta de servicios", amount: "Q 12,500.00" },
-    { id: 3, number: "2025-003", date: "2025-01-17", description: "Pago de salarios", amount: "Q 35,000.00" },
+  const displayedEntries = recentEntries.length > 0 ? recentEntries : [
+    { id: 1, number: "-", date: "-", description: "No hay partidas registradas", amount: "Q 0.00" }
   ];
 
   return (
@@ -220,10 +504,23 @@ const Dashboard = () => {
               <kpi.icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold financial-number">{kpi.value}</div>
-              <p className={`text-xs ${kpi.trend === "up" ? "text-success" : "text-muted-foreground"}`}>
-                {kpi.change} vs mes anterior
-              </p>
+              {kpiLoading ? (
+                <>
+                  <Skeleton className="h-8 w-3/4 mb-2" />
+                  <Skeleton className="h-4 w-1/2" />
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold financial-number">{kpi.value}</div>
+                  <p className={`text-xs ${
+                    kpi.trend === "up" ? "text-success" : 
+                    kpi.trend === "down" ? "text-destructive" : 
+                    "text-muted-foreground"
+                  }`}>
+                    {kpi.change} vs mes anterior
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -240,7 +537,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentEntries.map((entry) => (
+              {displayedEntries.map((entry) => (
                 <div key={entry.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent">
