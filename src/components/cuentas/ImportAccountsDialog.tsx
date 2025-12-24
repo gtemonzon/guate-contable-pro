@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ImportAccountsDialogProps {
   open: boolean;
@@ -26,9 +28,20 @@ export function ImportAccountsDialog({
   const { toast } = useToast();
   const [importing, setImporting] = useState(false);
 
+  const { isDragging, dragProps } = useFileDrop({
+    accept: [".csv", "text/csv"],
+    onFile: (file) => handleImport(file),
+    onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
+    disabled: importing,
+  });
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !enterpriseId) return;
+    if (file) handleImport(file);
+  };
+
+  const handleImport = async (file: File) => {
+    if (!enterpriseId) return;
 
     setImporting(true);
     
@@ -52,10 +65,17 @@ export function ImportAccountsDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="border-2 border-dashed rounded-lg p-8 text-center">
-            <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <div
+            {...dragProps}
+            className={cn(
+              "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+              isDragging && "border-primary bg-primary/5",
+              !isDragging && "border-border"
+            )}
+          >
+            <Upload className={cn("h-12 w-12 mx-auto mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
             <p className="text-sm text-muted-foreground mb-4">
-              Arrastra un archivo CSV o haz clic para seleccionar
+              {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o haz clic para seleccionar"}
             </p>
             <input
               type="file"

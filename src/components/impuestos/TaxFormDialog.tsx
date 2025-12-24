@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Upload, X, FileText } from "lucide-react";
@@ -40,6 +41,8 @@ interface TaxFormDialogProps {
   editingForm: TaxForm | null;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 export default function TaxFormDialog({
   open,
   onOpenChange,
@@ -57,6 +60,17 @@ export default function TaxFormDialog({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const { isDragging, dragProps } = useFileDrop({
+    accept: [".pdf", "application/pdf"],
+    maxSize: MAX_FILE_SIZE,
+    onFile: (f) => {
+      setFile(f);
+      setExistingFileName(null);
+    },
+    onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
+    disabled: loading,
+  });
 
   useEffect(() => {
     if (open) {
@@ -95,7 +109,7 @@ export default function TaxFormDialog({
         });
         return;
       }
-      if (selectedFile.size > 10 * 1024 * 1024) {
+      if (selectedFile.size > MAX_FILE_SIZE) {
         toast({
           title: "Error",
           description: "El archivo no puede superar los 10 MB",
@@ -306,7 +320,14 @@ export default function TaxFormDialog({
 
           <div className="space-y-2">
             <Label>Archivo PDF (Opcional)</Label>
-            <div className="border-2 border-dashed border-border rounded-lg p-4">
+            <div
+              {...dragProps}
+              className={cn(
+                "border-2 border-dashed rounded-lg p-4 transition-colors",
+                isDragging && "border-primary bg-primary/5",
+                !isDragging && "border-border"
+              )}
+            >
               {file ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -342,9 +363,9 @@ export default function TaxFormDialog({
                   className="flex flex-col items-center justify-center cursor-pointer"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <Upload className={cn("h-8 w-8 mb-2", isDragging ? "text-primary" : "text-muted-foreground")} />
                   <p className="text-sm text-muted-foreground">
-                    Clic para seleccionar archivo PDF
+                    {isDragging ? "Suelta el archivo aquí" : "Arrastra un PDF o haz clic para seleccionar"}
                   </p>
                   <p className="text-xs text-muted-foreground">Máximo 10 MB</p>
                 </div>
