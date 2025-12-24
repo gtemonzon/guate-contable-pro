@@ -4,10 +4,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Upload, Download, BookOpen } from "lucide-react";
+import { Plus, Search, Upload, Download, BookOpen, Copy } from "lucide-react";
 import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
+import { CopyAccountsCatalogDialog } from "@/components/cuentas/CopyAccountsCatalogDialog";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
@@ -20,6 +21,7 @@ const Cuentas = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedEnterprise, setSelectedEnterprise] = useState<number | null>(null);
 
@@ -100,6 +102,13 @@ const Cuentas = () => {
 
   const handleImportClose = () => {
     setImportDialogOpen(false);
+    if (selectedEnterprise) {
+      fetchAccounts(selectedEnterprise);
+    }
+  };
+
+  const handleCopyClose = () => {
+    setCopyDialogOpen(false);
     if (selectedEnterprise) {
       fetchAccounts(selectedEnterprise);
     }
@@ -190,6 +199,10 @@ const Cuentas = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCopyDialogOpen(true)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar Catálogo
+          </Button>
           <Button variant="outline" onClick={handleExportTemplate}>
             <Download className="mr-2 h-4 w-4" />
             Plantilla
@@ -276,6 +289,13 @@ const Cuentas = () => {
         onOpenChange={setImportDialogOpen}
         enterpriseId={selectedEnterprise}
         onSuccess={handleImportClose}
+      />
+
+      <CopyAccountsCatalogDialog
+        open={copyDialogOpen}
+        onOpenChange={setCopyDialogOpen}
+        currentEnterpriseId={selectedEnterprise}
+        onSuccess={handleCopyClose}
       />
     </div>
   );
