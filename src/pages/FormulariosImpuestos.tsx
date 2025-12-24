@@ -1,0 +1,399 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, Search, FileText, Download, Trash2, Edit, ArrowUpDown } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import TaxFormDialog from "@/components/impuestos/TaxFormDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface Enterprise {
+  id: number;
+  business_name: string;
+  nit: string;
+}
+
+interface TaxForm {
+  id: number;
+  enterprise_id: number;
+  form_number: string;
+  access_code: string;
+  payment_date: string;
+  amount_paid: number;
+  file_path: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  notes: string | null;
+  created_at: string;
+  is_active: boolean;
+}
+
+export default function FormulariosImpuestos() {
+  const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
+  const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string>("");
+  const [taxForms, setTaxForms] = useState<TaxForm[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingForm, setEditingForm] = useState<TaxForm | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [formToDelete, setFormToDelete] = useState<TaxForm | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchEnterprises();
+  }, []);
+
+  useEffect(() => {
+    if (selectedEnterpriseId) {
+      fetchTaxForms();
+      localStorage.setItem("tax_forms_selected_enterprise", selectedEnterpriseId);
+    }
+  }, [selectedEnterpriseId, sortOrder]);
+
+  const fetchEnterprises = async () => {
+    try {
+      const { data: userEnterprises, error: ueError } = await supabase
+        .from("tab_user_enterprises")
+        .select("enterprise_id");
+
+      if (ueError) throw ueError;
+
+      if (userEnterprises && userEnterprises.length > 0) {
+        const enterpriseIds = userEnterprises.map((ue) => ue.enterprise_id);
+        const { data: enterprisesData, error: eError } = await supabase
+          .from("tab_enterprises")
+          .select("id, business_name, nit")
+          .in("id", enterpriseIds)
+          .eq("is_active", true)
+          .order("business_name");
+
+        if (eError) throw eError;
+
+        setEnterprises(enterprisesData || []);
+
+        const savedId = localStorage.getItem("tax_forms_selected_enterprise");
+        if (savedId && enterprisesData?.some((e) => e.id.toString() === savedId)) {
+          setSelectedEnterpriseId(savedId);
+        } else if (enterprisesData && enterprisesData.length > 0) {
+          setSelectedEnterpriseId(enterprisesData[0].id.toString());
+        }
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las empresas",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTaxForms = async () => {
+    if (!selectedEnterpriseId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("tab_tax_forms")
+        .select("*")
+        .eq("enterprise_id", parseInt(selectedEnterpriseId))
+        .eq("is_active", true)
+        .order("payment_date", { ascending: sortOrder === "asc" });
+
+      if (error) throw error;
+
+      setTaxForms(data || []);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los formularios",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEdit = (form: TaxForm) => {
+    setEditingForm(form);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!formToDelete) return;
+
+    try {
+      // Soft delete
+      const { error } = await supabase
+        .from("tab_tax_forms")
+        .update({ is_active: false })
+        .eq("id", formToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Formulario eliminado",
+        description: "El formulario fue eliminado correctamente",
+      });
+
+      fetchTaxForms();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el formulario",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setFormToDelete(null);
+    }
+  };
+
+  const handleDownloadPdf = async (form: TaxForm) => {
+    if (!form.file_path) return;
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("tax-forms")
+        .download(form.file_path);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = form.file_name || "formulario.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudo descargar el archivo",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("es-GT", {
+      style: "currency",
+      currency: "GTQ",
+    }).format(amount);
+  };
+
+  const filteredForms = taxForms.filter((form) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      form.form_number.toLowerCase().includes(query) ||
+      form.payment_date.includes(query) ||
+      format(new Date(form.payment_date), "dd/MM/yyyy").includes(query)
+    );
+  });
+
+  const handleDialogClose = (success?: boolean) => {
+    setDialogOpen(false);
+    setEditingForm(null);
+    if (success) {
+      fetchTaxForms();
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Formularios de Impuestos</h1>
+        <p className="text-muted-foreground">
+          Gestiona los formularios de impuestos de tu empresa
+        </p>
+      </div>
+
+      {/* Selector de empresa */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Empresa Activa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedEnterpriseId} onValueChange={setSelectedEnterpriseId}>
+            <SelectTrigger className="w-full md:w-[400px]">
+              <SelectValue placeholder="Selecciona una empresa" />
+            </SelectTrigger>
+            <SelectContent>
+              {enterprises.map((enterprise) => (
+                <SelectItem key={enterprise.id} value={enterprise.id.toString()}>
+                  {enterprise.business_name} ({enterprise.nit})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {selectedEnterpriseId && (
+        <>
+          {/* Barra de búsqueda y acciones */}
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por número o fecha..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+                <SelectTrigger className="w-full md:w-48">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">Más reciente primero</SelectItem>
+                  <SelectItem value="asc">Más antiguo primero</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nuevo Formulario
+            </Button>
+          </div>
+
+          {/* Lista de formularios */}
+          {filteredForms.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground text-center">
+                  {searchQuery
+                    ? "No se encontraron formularios con ese criterio de búsqueda"
+                    : "No hay formularios registrados. Haz clic en 'Nuevo Formulario' para agregar uno."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {filteredForms.map((form) => (
+                <Card key={form.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-primary" />
+                          <span className="font-semibold text-lg">
+                            Formulario: {form.form_number}
+                          </span>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <p>Código de acceso: {form.access_code}</p>
+                          <p>
+                            Fecha de pago:{" "}
+                            {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
+                              locale: es,
+                            })}
+                          </p>
+                          {form.notes && (
+                            <p className="text-xs italic">Notas: {form.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-primary">
+                            {formatCurrency(form.amount_paid)}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {form.file_path && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadPdf(form)}
+                              title="Descargar PDF"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(form)}
+                            title="Editar"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setFormToDelete(form);
+                              setDeleteDialogOpen(true);
+                            }}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Dialog para agregar/editar */}
+      <TaxFormDialog
+        open={dialogOpen}
+        onOpenChange={handleDialogClose}
+        enterpriseId={parseInt(selectedEnterpriseId)}
+        editingForm={editingForm}
+      />
+
+      {/* Dialog de confirmación de eliminación */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar formulario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará el formulario {formToDelete?.form_number}. Esta acción no se
+              puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

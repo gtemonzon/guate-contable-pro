@@ -29,6 +29,7 @@ const menuItems = [
       { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText },
       { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart },
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote },
+      { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt },
     ],
   },
   {

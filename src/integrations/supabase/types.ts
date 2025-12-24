@@ -1092,6 +1092,62 @@ export type Database = {
           },
         ]
       }
+      tab_tax_forms: {
+        Row: {
+          access_code: string
+          amount_paid: number
+          created_at: string | null
+          created_by: string | null
+          enterprise_id: number
+          file_name: string | null
+          file_path: string | null
+          file_size: number | null
+          form_number: string
+          id: number
+          is_active: boolean | null
+          notes: string | null
+          payment_date: string
+        }
+        Insert: {
+          access_code: string
+          amount_paid?: number
+          created_at?: string | null
+          created_by?: string | null
+          enterprise_id: number
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          form_number: string
+          id?: never
+          is_active?: boolean | null
+          notes?: string | null
+          payment_date: string
+        }
+        Update: {
+          access_code?: string
+          amount_paid?: number
+          created_at?: string | null
+          created_by?: string | null
+          enterprise_id?: number
+          file_name?: string | null
+          file_path?: string | null
+          file_size?: number | null
+          form_number?: string
+          id?: never
+          is_active?: boolean | null
+          notes?: string | null
+          payment_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_tax_forms_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_user_enterprises: {
         Row: {
           created_at: string | null
