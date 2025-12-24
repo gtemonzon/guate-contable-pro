@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useFileDrop } from "@/hooks/use-file-drop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -41,6 +42,7 @@ import {
   Upload,
   AlertCircle,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { DOCUMENT_TYPES, MAX_FILE_SIZE, MAX_DOCUMENTS_PER_ENTERPRISE, DocumentType } from "@/constants/documentTypes";
 import {
   validateFileType,
@@ -112,7 +114,10 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    processFile(file);
+  };
 
+  const processFile = (file: File) => {
     if (!validateFileType(file)) {
       toast({
         variant: "destructive",
@@ -133,6 +138,14 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
 
     setSelectedFile(file);
   };
+
+  const { isDragging, dragProps } = useFileDrop({
+    accept: [".pdf", "application/pdf"],
+    maxSize: MAX_FILE_SIZE,
+    onFile: processFile,
+    onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
+    disabled: isUploading,
+  });
 
   const handleUpload = async () => {
     if (!selectedFile || !documentName.trim()) {
@@ -408,7 +421,14 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
 
             <div className="space-y-2">
               <Label>Archivo PDF *</Label>
-              <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <div
+                {...dragProps}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+                  isDragging && "border-primary bg-primary/5",
+                  !isDragging && "border-border"
+                )}
+              >
                 {selectedFile ? (
                   <div className="space-y-2">
                     <FileText className="h-10 w-10 mx-auto text-primary" />
@@ -427,13 +447,13 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                    <Upload className={cn("h-10 w-10 mx-auto", isDragging ? "text-primary" : "text-muted-foreground")} />
                     <div>
                       <Label
                         htmlFor="file-upload"
                         className="cursor-pointer text-primary hover:underline"
                       >
-                        Seleccionar archivo PDF
+                        {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo o haz clic para seleccionar"}
                       </Label>
                       <Input
                         id="file-upload"
