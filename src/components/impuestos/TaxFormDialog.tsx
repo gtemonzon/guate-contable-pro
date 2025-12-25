@@ -26,6 +26,7 @@ interface TaxForm {
   enterprise_id: number;
   form_number: string;
   access_code: string;
+  tax_type: string | null;
   payment_date: string;
   amount_paid: number;
   file_path: string | null;
@@ -51,6 +52,9 @@ export default function TaxFormDialog({
 }: TaxFormDialogProps) {
   const [formNumber, setFormNumber] = useState("");
   const [accessCode, setAccessCode] = useState("");
+  const [taxType, setTaxType] = useState("");
+  const [taxTypeSuggestions, setTaxTypeSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [paymentDate, setPaymentDate] = useState<Date | undefined>();
   const [amountPaid, setAmountPaid] = useState("");
   const [notes, setNotes] = useState("");
@@ -59,6 +63,7 @@ export default function TaxFormDialog({
   const [loading, setLoading] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const { isDragging, dragProps } = useFileDrop({
@@ -74,9 +79,11 @@ export default function TaxFormDialog({
 
   useEffect(() => {
     if (open) {
+      fetchTaxTypeSuggestions();
       if (editingForm) {
         setFormNumber(editingForm.form_number);
         setAccessCode(editingForm.access_code);
+        setTaxType(editingForm.tax_type || "");
         setPaymentDate(new Date(editingForm.payment_date));
         setAmountPaid(editingForm.amount_paid.toString());
         setNotes(editingForm.notes || "");
@@ -88,14 +95,45 @@ export default function TaxFormDialog({
     }
   }, [open, editingForm]);
 
+  const fetchTaxTypeSuggestions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_tax_forms")
+        .select("tax_type")
+        .eq("enterprise_id", enterpriseId)
+        .eq("is_active", true)
+        .not("tax_type", "is", null)
+        .order("tax_type");
+
+      if (error) throw error;
+
+      // Get unique tax types
+      const uniqueTypes = [...new Set(data?.map((d) => d.tax_type).filter(Boolean))] as string[];
+      setTaxTypeSuggestions(uniqueTypes);
+    } catch (error) {
+      console.error("Error fetching tax type suggestions:", error);
+    }
+  };
+
   const resetForm = () => {
     setFormNumber("");
     setAccessCode("");
+    setTaxType("");
     setPaymentDate(undefined);
     setAmountPaid("");
     setNotes("");
     setFile(null);
     setExistingFileName(null);
+    setShowSuggestions(false);
+  };
+
+  const filteredSuggestions = taxTypeSuggestions.filter((suggestion) =>
+    suggestion.toLowerCase().includes(taxType.toLowerCase())
+  );
+
+  const handleTaxTypeSelect = (suggestion: string) => {
+    setTaxType(suggestion);
+    setShowSuggestions(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,6 +233,7 @@ export default function TaxFormDialog({
         enterprise_id: enterpriseId,
         form_number: formNumber.trim(),
         access_code: accessCode.trim(),
+        tax_type: taxType.trim() || null,
         payment_date: format(paymentDate, "yyyy-MM-dd"),
         amount_paid: amount,
         file_path: filePath,
@@ -271,6 +310,39 @@ export default function TaxFormDialog({
               onChange={(e) => setAccessCode(e.target.value)}
               placeholder="Ej: ABC123XYZ"
             />
+          </div>
+
+          <div className="space-y-2 relative">
+            <Label htmlFor="taxType">Tipo de Impuesto</Label>
+            <Input
+              id="taxType"
+              ref={taxTypeInputRef}
+              value={taxType}
+              onChange={(e) => {
+                setTaxType(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => {
+                // Delay to allow click on suggestion
+                setTimeout(() => setShowSuggestions(false), 150);
+              }}
+              placeholder="Ej: IVA, ISR, ISO..."
+              autoComplete="off"
+            />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                {filteredSuggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    className="px-3 py-2 cursor-pointer hover:bg-accent text-sm"
+                    onClick={() => handleTaxTypeSelect(suggestion)}
+                  >
+                    {suggestion}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

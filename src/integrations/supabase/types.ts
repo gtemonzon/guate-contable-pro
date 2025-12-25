@@ -1107,6 +1107,7 @@ export type Database = {
           is_active: boolean | null
           notes: string | null
           payment_date: string
+          tax_type: string | null
         }
         Insert: {
           access_code: string
@@ -1122,6 +1123,7 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           payment_date: string
+          tax_type?: string | null
         }
         Update: {
           access_code?: string
@@ -1137,6 +1139,7 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           payment_date?: string
+          tax_type?: string | null
         }
         Relationships: [
           {

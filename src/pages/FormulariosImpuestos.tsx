@@ -31,6 +31,7 @@ interface TaxForm {
   enterprise_id: number;
   form_number: string;
   access_code: string;
+  tax_type: string | null;
   payment_date: string;
   amount_paid: number;
   file_path: string | null;
@@ -202,7 +203,8 @@ export default function FormulariosImpuestos() {
     return (
       form.form_number.toLowerCase().includes(query) ||
       form.payment_date.includes(query) ||
-      format(new Date(form.payment_date), "dd/MM/yyyy").includes(query)
+      format(new Date(form.payment_date), "dd/MM/yyyy").includes(query) ||
+      (form.tax_type && form.tax_type.toLowerCase().includes(query))
     );
   });
 
@@ -307,6 +309,11 @@ export default function FormulariosImpuestos() {
                           <span className="font-semibold text-lg">
                             Formulario: {form.form_number}
                           </span>
+                          {form.tax_type && (
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                              {form.tax_type}
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-muted-foreground space-y-1">
                           <p>Código de acceso: {form.access_code}</p>
