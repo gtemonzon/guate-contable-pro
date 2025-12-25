@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, FileText, Download, Trash2, Edit, ArrowUpDown } from "lucide-react";
+import { Plus, Search, FileText, Download, Trash2, Edit, ArrowUpDown, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import TaxFormDialog from "@/components/impuestos/TaxFormDialog";
@@ -20,18 +20,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface Enterprise {
-  id: number;
-  business_name: string;
-  nit: string;
-}
-
 interface TaxForm {
   id: number;
   enterprise_id: number;
   form_number: string;
   access_code: string;
   tax_type: string | null;
+  period_type: string | null;
+  period_month: number | null;
+  period_year: number | null;
   payment_date: string;
   amount_paid: number;
   file_path: string | null;
@@ -42,9 +39,29 @@ interface TaxForm {
   is_active: boolean;
 }
 
+const MONTHS = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+const formatPeriod = (form: TaxForm): string => {
+  if (!form.period_type || !form.period_year) return "";
+  
+  if (form.period_type === "mensual" && form.period_month) {
+    return `${MONTHS[form.period_month - 1]} ${form.period_year}`;
+  } else if (form.period_type === "trimestral" && form.period_month) {
+    const startMonth = form.period_month;
+    const endMonth = Math.min(startMonth + 2, 12);
+    return `${MONTHS[startMonth - 1]} - ${MONTHS[endMonth - 1]} ${form.period_year}`;
+  } else if (form.period_type === "anual") {
+    return `Enero - Diciembre ${form.period_year}`;
+  }
+  return "";
+};
+
 export default function FormulariosImpuestos() {
-  const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
-  const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<string>("");
+  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
+  const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [taxForms, setTaxForms] = useState<TaxForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,63 +73,64 @@ export default function FormulariosImpuestos() {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchEnterprises();
+    loadActiveEnterprise();
+    
+    // Listen for enterprise changes
+    const handleEnterpriseChange = () => loadActiveEnterprise();
+    window.addEventListener("storage", handleEnterpriseChange);
+    window.addEventListener("enterpriseChanged", handleEnterpriseChange);
+    
+    return () => {
+      window.removeEventListener("storage", handleEnterpriseChange);
+      window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
+    };
   }, []);
 
   useEffect(() => {
-    if (selectedEnterpriseId) {
+    if (enterpriseId) {
       fetchTaxForms();
-      localStorage.setItem("tax_forms_selected_enterprise", selectedEnterpriseId);
     }
-  }, [selectedEnterpriseId, sortOrder]);
+  }, [enterpriseId, sortOrder]);
 
-  const fetchEnterprises = async () => {
+  const loadActiveEnterprise = async () => {
+    const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+    
+    if (!currentEnterpriseId) {
+      setEnterpriseId(null);
+      setEnterpriseName("");
+      setTaxForms([]);
+      setLoading(false);
+      return;
+    }
+
+    const id = parseInt(currentEnterpriseId);
+    setEnterpriseId(id);
+
     try {
-      const { data: userEnterprises, error: ueError } = await supabase
-        .from("tab_user_enterprises")
-        .select("enterprise_id");
+      const { data, error } = await supabase
+        .from("tab_enterprises")
+        .select("business_name")
+        .eq("id", id)
+        .single();
 
-      if (ueError) throw ueError;
-
-      if (userEnterprises && userEnterprises.length > 0) {
-        const enterpriseIds = userEnterprises.map((ue) => ue.enterprise_id);
-        const { data: enterprisesData, error: eError } = await supabase
-          .from("tab_enterprises")
-          .select("id, business_name, nit")
-          .in("id", enterpriseIds)
-          .eq("is_active", true)
-          .order("business_name");
-
-        if (eError) throw eError;
-
-        setEnterprises(enterprisesData || []);
-
-        const savedId = localStorage.getItem("tax_forms_selected_enterprise");
-        if (savedId && enterprisesData?.some((e) => e.id.toString() === savedId)) {
-          setSelectedEnterpriseId(savedId);
-        } else if (enterprisesData && enterprisesData.length > 0) {
-          setSelectedEnterpriseId(enterprisesData[0].id.toString());
-        }
-      }
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar las empresas",
-        variant: "destructive",
-      });
+      if (error) throw error;
+      setEnterpriseName(data.business_name);
+    } catch (error) {
+      console.error("Error fetching enterprise:", error);
+      setEnterpriseName("");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchTaxForms = async () => {
-    if (!selectedEnterpriseId) return;
+    if (!enterpriseId) return;
 
     try {
       const { data, error } = await supabase
         .from("tab_tax_forms")
         .select("*")
-        .eq("enterprise_id", parseInt(selectedEnterpriseId))
+        .eq("enterprise_id", enterpriseId)
         .eq("is_active", true)
         .order("payment_date", { ascending: sortOrder === "asc" });
 
@@ -137,7 +155,6 @@ export default function FormulariosImpuestos() {
     if (!formToDelete) return;
 
     try {
-      // Soft delete
       const { error } = await supabase
         .from("tab_tax_forms")
         .update({ is_active: false })
@@ -200,11 +217,13 @@ export default function FormulariosImpuestos() {
   const filteredForms = taxForms.filter((form) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
+    const periodText = formatPeriod(form).toLowerCase();
     return (
       form.form_number.toLowerCase().includes(query) ||
       form.payment_date.includes(query) ||
       format(new Date(form.payment_date), "dd/MM/yyyy").includes(query) ||
-      (form.tax_type && form.tax_type.toLowerCase().includes(query))
+      (form.tax_type && form.tax_type.toLowerCase().includes(query)) ||
+      periodText.includes(query)
     );
   });
 
@@ -224,162 +243,163 @@ export default function FormulariosImpuestos() {
     );
   }
 
+  if (!enterpriseId) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Formularios de Impuestos</h1>
+          <p className="text-muted-foreground">
+            Gestiona los formularios de impuestos de tu empresa
+          </p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground text-center">
+              No hay empresa activa. Selecciona una empresa en el módulo de Empresas.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Formularios de Impuestos</h1>
         <p className="text-muted-foreground">
-          Gestiona los formularios de impuestos de tu empresa
+          Empresa: <span className="font-medium text-foreground">{enterpriseName}</span>
         </p>
       </div>
 
-      {/* Selector de empresa */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Empresa Activa</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedEnterpriseId} onValueChange={setSelectedEnterpriseId}>
-            <SelectTrigger className="w-full md:w-[400px]">
-              <SelectValue placeholder="Selecciona una empresa" />
+      {/* Barra de búsqueda y acciones */}
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por número, fecha, tipo o período..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
+            <SelectTrigger className="w-full md:w-48">
+              <ArrowUpDown className="h-4 w-4 mr-2" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {enterprises.map((enterprise) => (
-                <SelectItem key={enterprise.id} value={enterprise.id.toString()}>
-                  {enterprise.business_name} ({enterprise.nit})
-                </SelectItem>
-              ))}
+              <SelectItem value="desc">Más reciente primero</SelectItem>
+              <SelectItem value="asc">Más antiguo primero</SelectItem>
             </SelectContent>
           </Select>
-        </CardContent>
-      </Card>
+        </div>
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Nuevo Formulario
+        </Button>
+      </div>
 
-      {selectedEnterpriseId && (
-        <>
-          {/* Barra de búsqueda y acciones */}
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por número o fecha..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "desc" | "asc")}>
-                <SelectTrigger className="w-full md:w-48">
-                  <ArrowUpDown className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="desc">Más reciente primero</SelectItem>
-                  <SelectItem value="asc">Más antiguo primero</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Formulario
-            </Button>
-          </div>
-
-          {/* Lista de formularios */}
-          {filteredForms.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground text-center">
-                  {searchQuery
-                    ? "No se encontraron formularios con ese criterio de búsqueda"
-                    : "No hay formularios registrados. Haz clic en 'Nuevo Formulario' para agregar uno."}
-                </p>
+      {/* Lista de formularios */}
+      {filteredForms.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground text-center">
+              {searchQuery
+                ? "No se encontraron formularios con ese criterio de búsqueda"
+                : "No hay formularios registrados. Haz clic en 'Nuevo Formulario' para agregar uno."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {filteredForms.map((form) => (
+            <Card key={form.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <span className="font-semibold text-lg">
+                        Formulario: {form.form_number}
+                      </span>
+                      {form.tax_type && (
+                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                          {form.tax_type}
+                        </span>
+                      )}
+                      {form.period_type && (
+                        <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                          {formatPeriod(form)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p>Código de acceso: {form.access_code}</p>
+                      <p>
+                        Fecha de pago:{" "}
+                        {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
+                          locale: es,
+                        })}
+                      </p>
+                      {form.notes && (
+                        <p className="text-xs italic">Notas: {form.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">
+                        {formatCurrency(form.amount_paid)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {form.file_path && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadPdf(form)}
+                          title="Descargar PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(form)}
+                        title="Editar"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setFormToDelete(form);
+                          setDeleteDialogOpen(true);
+                        }}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredForms.map((form) => (
-                <Card key={form.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-primary" />
-                          <span className="font-semibold text-lg">
-                            Formulario: {form.form_number}
-                          </span>
-                          {form.tax_type && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              {form.tax_type}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <p>Código de acceso: {form.access_code}</p>
-                          <p>
-                            Fecha de pago:{" "}
-                            {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
-                              locale: es,
-                            })}
-                          </p>
-                          {form.notes && (
-                            <p className="text-xs italic">Notas: {form.notes}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-primary">
-                            {formatCurrency(form.amount_paid)}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          {form.file_path && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownloadPdf(form)}
-                              title="Descargar PDF"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(form)}
-                            title="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setFormToDelete(form);
-                              setDeleteDialogOpen(true);
-                            }}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
 
       {/* Dialog para agregar/editar */}
       <TaxFormDialog
         open={dialogOpen}
         onOpenChange={handleDialogClose}
-        enterpriseId={parseInt(selectedEnterpriseId)}
+        enterpriseId={enterpriseId}
         editingForm={editingForm}
       />
 

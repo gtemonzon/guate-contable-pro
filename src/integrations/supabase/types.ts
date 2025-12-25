@@ -1107,6 +1107,9 @@ export type Database = {
           is_active: boolean | null
           notes: string | null
           payment_date: string
+          period_month: number | null
+          period_type: string | null
+          period_year: number | null
           tax_type: string | null
         }
         Insert: {
@@ -1123,6 +1126,9 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           payment_date: string
+          period_month?: number | null
+          period_type?: string | null
+          period_year?: number | null
           tax_type?: string | null
         }
         Update: {
@@ -1139,6 +1145,9 @@ export type Database = {
           is_active?: boolean | null
           notes?: string | null
           payment_date?: string
+          period_month?: number | null
+          period_type?: string | null
+          period_year?: number | null
           tax_type?: string | null
         }
         Relationships: [

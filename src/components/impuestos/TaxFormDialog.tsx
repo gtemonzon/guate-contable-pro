@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { Calendar } from "@/components/ui/calendar";
@@ -27,6 +28,9 @@ interface TaxForm {
   form_number: string;
   access_code: string;
   tax_type: string | null;
+  period_type: string | null;
+  period_month: number | null;
+  period_year: number | null;
   payment_date: string;
   amount_paid: number;
   file_path: string | null;
@@ -44,6 +48,31 @@ interface TaxFormDialogProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
+const MONTHS = [
+  { value: 1, label: "Enero" },
+  { value: 2, label: "Febrero" },
+  { value: 3, label: "Marzo" },
+  { value: 4, label: "Abril" },
+  { value: 5, label: "Mayo" },
+  { value: 6, label: "Junio" },
+  { value: 7, label: "Julio" },
+  { value: 8, label: "Agosto" },
+  { value: 9, label: "Septiembre" },
+  { value: 10, label: "Octubre" },
+  { value: 11, label: "Noviembre" },
+  { value: 12, label: "Diciembre" },
+];
+
+const QUARTERS = [
+  { value: 1, label: "Enero - Marzo (Q1)" },
+  { value: 4, label: "Abril - Junio (Q2)" },
+  { value: 7, label: "Julio - Septiembre (Q3)" },
+  { value: 10, label: "Octubre - Diciembre (Q4)" },
+];
+
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
+
 export default function TaxFormDialog({
   open,
   onOpenChange,
@@ -55,6 +84,9 @@ export default function TaxFormDialog({
   const [taxType, setTaxType] = useState("");
   const [taxTypeSuggestions, setTaxTypeSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [periodType, setPeriodType] = useState<string>("");
+  const [periodMonth, setPeriodMonth] = useState<string>("");
+  const [periodYear, setPeriodYear] = useState<string>(currentYear.toString());
   const [paymentDate, setPaymentDate] = useState<Date | undefined>();
   const [amountPaid, setAmountPaid] = useState("");
   const [notes, setNotes] = useState("");
@@ -84,6 +116,9 @@ export default function TaxFormDialog({
         setFormNumber(editingForm.form_number);
         setAccessCode(editingForm.access_code);
         setTaxType(editingForm.tax_type || "");
+        setPeriodType(editingForm.period_type || "");
+        setPeriodMonth(editingForm.period_month?.toString() || "");
+        setPeriodYear(editingForm.period_year?.toString() || currentYear.toString());
         setPaymentDate(new Date(editingForm.payment_date));
         setAmountPaid(editingForm.amount_paid.toString());
         setNotes(editingForm.notes || "");
@@ -107,7 +142,6 @@ export default function TaxFormDialog({
 
       if (error) throw error;
 
-      // Get unique tax types
       const uniqueTypes = [...new Set(data?.map((d) => d.tax_type).filter(Boolean))] as string[];
       setTaxTypeSuggestions(uniqueTypes);
     } catch (error) {
@@ -119,6 +153,9 @@ export default function TaxFormDialog({
     setFormNumber("");
     setAccessCode("");
     setTaxType("");
+    setPeriodType("");
+    setPeriodMonth("");
+    setPeriodYear(currentYear.toString());
     setPaymentDate(undefined);
     setAmountPaid("");
     setNotes("");
@@ -183,7 +220,7 @@ export default function TaxFormDialog({
     setLoading(true);
 
     try {
-      // Check for duplicate form number (excluding current form if editing)
+      // Check for duplicate form number
       const { data: existing, error: checkError } = await supabase
         .from("tab_tax_forms")
         .select("id")
@@ -234,6 +271,9 @@ export default function TaxFormDialog({
         form_number: formNumber.trim(),
         access_code: accessCode.trim(),
         tax_type: taxType.trim() || null,
+        period_type: periodType || null,
+        period_month: periodMonth ? parseInt(periodMonth) : null,
+        period_year: periodYear ? parseInt(periodYear) : null,
         payment_date: format(paymentDate, "yyyy-MM-dd"),
         amount_paid: amount,
         file_path: filePath,
@@ -279,7 +319,7 @@ export default function TaxFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => onOpenChange()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingForm ? "Editar Formulario" : "Nuevo Formulario de Impuestos"}
@@ -292,24 +332,26 @@ export default function TaxFormDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="formNumber">Número de Formulario *</Label>
-            <Input
-              id="formNumber"
-              value={formNumber}
-              onChange={(e) => setFormNumber(e.target.value)}
-              placeholder="Ej: 1234567890"
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="formNumber">Número de Formulario *</Label>
+              <Input
+                id="formNumber"
+                value={formNumber}
+                onChange={(e) => setFormNumber(e.target.value)}
+                placeholder="Ej: 1234567890"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="accessCode">Código de Acceso *</Label>
-            <Input
-              id="accessCode"
-              value={accessCode}
-              onChange={(e) => setAccessCode(e.target.value)}
-              placeholder="Ej: ABC123XYZ"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="accessCode">Código de Acceso *</Label>
+              <Input
+                id="accessCode"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                placeholder="Ej: ABC123XYZ"
+              />
+            </div>
           </div>
 
           <div className="space-y-2 relative">
@@ -324,7 +366,6 @@ export default function TaxFormDialog({
               }}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => {
-                // Delay to allow click on suggestion
                 setTimeout(() => setShowSuggestions(false), 150);
               }}
               placeholder="Ej: IVA, ISR, ISO..."
@@ -343,6 +384,71 @@ export default function TaxFormDialog({
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Período del impuesto */}
+          <div className="space-y-2">
+            <Label>Período del Impuesto</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={periodType} onValueChange={(v) => {
+                setPeriodType(v);
+                setPeriodMonth("");
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mensual">Mensual</SelectItem>
+                  <SelectItem value="trimestral">Trimestral</SelectItem>
+                  <SelectItem value="anual">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {periodType === "mensual" && (
+                <Select value={periodMonth} onValueChange={setPeriodMonth}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((month) => (
+                      <SelectItem key={month.value} value={month.value.toString()}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {periodType === "trimestral" && (
+                <Select value={periodMonth} onValueChange={setPeriodMonth}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Trimestre" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUARTERS.map((quarter) => (
+                      <SelectItem key={quarter.value} value={quarter.value.toString()}>
+                        {quarter.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {periodType && (
+                <Select value={periodYear} onValueChange={setPeriodYear}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Año" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {YEARS.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -371,6 +477,7 @@ export default function TaxFormDialog({
                     }}
                     locale={es}
                     initialFocus
+                    className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
