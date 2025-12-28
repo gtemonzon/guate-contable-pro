@@ -62,7 +62,7 @@ export function AppSidebar() {
           if ("items" in section) {
             return (
               <SidebarGroup key={idx}>
-                <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
+                <SidebarGroupLabel className="text-sidebar-foreground/60">{section.title}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {section.items.map((item) => (
@@ -71,11 +71,14 @@ export function AppSidebar() {
                           <NavLink
                             to={item.url}
                             className={({ isActive }) =>
-                              isActive ? "bg-accent text-accent-foreground" : ""
+                              [
+                                "text-sidebar-foreground/70 hover:text-sidebar-foreground",
+                                isActive ? "bg-accent text-accent-foreground" : "",
+                              ].join(" ")
                             }
                           >
                             <item.icon className="h-4 w-4" />
-                            {!isCollapsed && <span>{item.title}</span>}
+                            {!isCollapsed && <span className="truncate">{item.title}</span>}
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -95,11 +98,16 @@ export function AppSidebar() {
                       <NavLink
                         to={section.url}
                         className={({ isActive }) =>
-                          isActive ? "bg-accent text-accent-foreground" : ""
+                          [
+                            "text-sidebar-foreground/70 hover:text-sidebar-foreground",
+                            isActive ? "bg-accent text-accent-foreground" : "",
+                          ].join(" ")
                         }
                       >
                         <section.icon className="h-4 w-4" />
-                        {!isCollapsed && <span>{section.title}</span>}
+                        {!isCollapsed && (
+                          <span className="truncate">{section.title}</span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
