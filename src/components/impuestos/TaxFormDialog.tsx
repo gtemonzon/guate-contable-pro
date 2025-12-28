@@ -220,17 +220,38 @@ export default function TaxFormDialog({
     const arrayBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = "";
-    
+
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(" ");
+      const pageText = textContent.items.map((item: any) => item.str).join(" ");
       fullText += pageText + "\n";
     }
-    
+
     return fullText;
+  };
+
+  const renderFirstPageToDataUrl = async (pdfFile: File): Promise<string | null> => {
+    try {
+      const arrayBuffer = await pdfFile.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.6 });
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      // JPEG is smaller than PNG and good enough for reading "MES/AÑO"
+      return canvas.toDataURL("image/jpeg", 0.82);
+    } catch (e) {
+      console.error("Error rendering PDF first page:", e);
+      return null;
+    }
   };
 
   const handleAnalyzePdf = async () => {
@@ -240,17 +261,37 @@ export default function TaxFormDialog({
     try {
       // Extract text from PDF in client-side
       const pdfText = await extractTextFromPdf(file);
-      
+
       console.log("Extracted PDF text length:", pdfText.length);
       console.log("PDF text preview:", pdfText.substring(0, 500));
 
-      const { data, error } = await supabase.functions.invoke("parse-tax-form-pdf", {
+      // First attempt: text-only
+      let { data, error } = await supabase.functions.invoke("parse-tax-form-pdf", {
         body: { pdfText },
       });
 
       if (error) throw error;
 
-      const extractedData = data as ExtractedPdfData;
+      let extractedData = data as ExtractedPdfData;
+
+      // If month/year is missing (common when those fields are rendered as graphics),
+      // retry with a rendered image of page 1 so the backend can infer the period.
+      if (!extractedData.periodMonth || !extractedData.periodYear) {
+        const pageImageDataUrl = await renderFirstPageToDataUrl(file);
+        if (pageImageDataUrl) {
+          toast({
+            title: "Reintentando período",
+            description: "No se detectó Mes/Año en texto; intentando lectura visual…",
+          });
+
+          const retry = await supabase.functions.invoke("parse-tax-form-pdf", {
+            body: { pdfText, pageImageDataUrl },
+          });
+
+          if (retry.error) throw retry.error;
+          extractedData = retry.data as ExtractedPdfData;
+        }
+      }
 
       if (extractedData.fieldsFound === 0) {
         toast({
