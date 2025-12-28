@@ -49,6 +49,7 @@ export default function LibroVentas() {
   const [sales, setSales] = useState<SaleEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
@@ -125,10 +126,20 @@ export default function LibroVentas() {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
     
+    const fetchEnterpriseNit = async (id: string) => {
+      const { data } = await supabase
+        .from("tab_enterprises")
+        .select("nit")
+        .eq("id", parseInt(id))
+        .single();
+      if (data) setEnterpriseNit(data.nit);
+    };
+    
     if (enterpriseId) {
       fetchFELDocTypes();
       fetchAccounts(enterpriseId);
       fetchSales(enterpriseId, selectedMonth, selectedYear);
+      fetchEnterpriseNit(enterpriseId);
       
       // Cargar última cuenta usada desde localStorage
       const savedIncome = localStorage.getItem(`lastIncomeAccount_${enterpriseId}`);
@@ -142,15 +153,22 @@ export default function LibroVentas() {
       });
     }
 
-    const handleStorageChange = () => {
+    const handleStorageChange = async () => {
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
         fetchAccounts(newEnterpriseId);
         fetchSales(newEnterpriseId, selectedMonth, selectedYear);
+        const { data } = await supabase
+          .from("tab_enterprises")
+          .select("nit")
+          .eq("id", parseInt(newEnterpriseId))
+          .single();
+        if (data) setEnterpriseNit(data.nit);
       } else {
         setSales([]);
+        setEnterpriseNit("");
       }
     };
 
@@ -923,6 +941,7 @@ export default function LibroVentas() {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
+        enterpriseNit={enterpriseNit}
         onSuccess={() => {
           if (currentEnterpriseId) {
             fetchSales(currentEnterpriseId, selectedMonth, selectedYear);

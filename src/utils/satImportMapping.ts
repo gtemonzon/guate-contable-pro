@@ -26,6 +26,7 @@ export const SAT_PURCHASES_MAPPING: Record<string, string[]> = {
   iva: ["iva monto de este impuesto", "iva"],
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
+  nit_receptor: ["id del receptor"], // Para validar que sea la empresa correcta
 };
 
 // SAT column mappings for sales (receptor data for SALES we're the emisor, so we need receptor)
@@ -41,6 +42,7 @@ export const SAT_SALES_MAPPING: Record<string, string[]> = {
   iva: ["iva monto de este impuesto", "iva"],
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
+  nit_emisor: ["nit del emisor"], // Para validar que sea la empresa correcta
 };
 
 // Find a SAT column index from headers
