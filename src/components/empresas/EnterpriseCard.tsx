@@ -16,6 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -223,18 +229,34 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
             </div>
           </div>
           <div className="flex flex-col gap-1">
-            {documentsCount > 0 && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <FileText className="h-3 w-3" />
-                {documentsCount}
-              </Badge>
-            )}
-            {activePeriod && (
-              <Badge variant="outline" className="text-xs">
-                <Calendar className="h-3 w-3 mr-1" />
-                {activePeriod.year}
-              </Badge>
-            )}
+            <TooltipProvider>
+              {documentsCount > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
+                      <FileText className="h-3 w-3" />
+                      {documentsCount}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{documentsCount} documento(s) adjunto(s)</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {activePeriod && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="text-xs cursor-help">
+                      <Calendar className="h-3 w-3 mr-1" />
+                      {activePeriod.year}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Período contable activo: {activePeriod.year}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
           </div>
         </div>
       </CardHeader>
