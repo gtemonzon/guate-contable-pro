@@ -228,36 +228,34 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
               )}
             </div>
           </div>
-          <div className="flex flex-col gap-1">
+          {(documentsCount > 0 || activePeriod) && (
             <TooltipProvider>
-              {documentsCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
-                      <FileText className="h-3 w-3" />
-                      {documentsCount}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{documentsCount} documento(s) adjunto(s)</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {activePeriod && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="text-xs cursor-help">
-                      <Calendar className="h-3 w-3 mr-1" />
-                      {activePeriod.year}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Período contable activo: {activePeriod.year}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-col gap-1 cursor-default">
+                    {documentsCount > 0 && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <FileText className="h-3 w-3" />
+                        {documentsCount}
+                      </Badge>
+                    )}
+                    {activePeriod && (
+                      <Badge variant="outline" className="text-xs">
+                        <Calendar className="h-3 w-3 mr-1" />
+                        {activePeriod.year}
+                      </Badge>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <div className="text-sm">
+                    {documentsCount > 0 && <p>Documentos Cargados: {documentsCount}</p>}
+                    {activePeriod && <p>Año Activo: {activePeriod.year}</p>}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
             </TooltipProvider>
-          </div>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
