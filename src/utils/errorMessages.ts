@@ -1,6 +1,26 @@
 // Utility for sanitizing error messages to prevent information leakage
 
 export function getSafeErrorMessage(error: any): string {
+  // If it's a custom Error with a message that doesn't expose internals, show it
+  if (error instanceof Error && error.message) {
+    // Check if it's a user-friendly custom message (from our code)
+    const msg = error.message;
+    
+    // Allow through specific custom messages that are safe to show
+    if (msg.includes("No se encontraron") || 
+        msg.includes("columnas requeridas") ||
+        msg.includes("archivo está vacío") ||
+        msg.includes("Fecha inválida") ||
+        msg.includes("facturas anuladas") ||
+        msg.includes("período contable") ||
+        msg.includes("Total debe ser") ||
+        msg.includes("es requerido") ||
+        msg.includes("Errores:") ||
+        msg.includes("registros válidos")) {
+      return msg;
+    }
+  }
+  
   // Handle PostgreSQL error codes
   if (error.code === '23505') return 'Este registro ya existe';
   if (error.code === '23503') return 'Referencia inválida o dato relacionado no encontrado';

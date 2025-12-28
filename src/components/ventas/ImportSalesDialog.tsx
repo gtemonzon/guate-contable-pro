@@ -400,8 +400,22 @@ export function ImportSalesDialog({
               disabled={importing}
             />
             <label htmlFor="file-upload-sales">
-              <Button variant="outline" disabled={importing} asChild>
-                <span>{importing ? "Importando..." : "Seleccionar Archivo"}</span>
+              <Button 
+                variant={importing ? "default" : "outline"} 
+                disabled={importing} 
+                className={cn(importing && "opacity-100")}
+                asChild
+              >
+                <span>
+                  {importing ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Importando...
+                    </>
+                  ) : (
+                    "Seleccionar Archivo"
+                  )}
+                </span>
               </Button>
             </label>
           </div>
