@@ -756,6 +756,36 @@ export type Database = {
           },
         ]
       }
+      tab_journal_entry_prefixes: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          id: number
+          is_active: boolean | null
+          name: string
+          prefix: string
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          id?: never
+          is_active?: boolean | null
+          name: string
+          prefix: string
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          id?: never
+          is_active?: boolean | null
+          name?: string
+          prefix?: string
+        }
+        Relationships: []
+      }
       tab_operation_types: {
         Row: {
           applies_to: string
