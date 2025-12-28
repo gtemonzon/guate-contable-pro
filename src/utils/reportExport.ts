@@ -9,9 +9,10 @@ interface ExportOptions {
   headers: string[];
   data: any[][];
   totals?: { label: string; value: string }[];
+  statistics?: { label: string; items: { name: string; value: string; count: number }[] }[];
 }
 
-export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals }: ExportOptions) => {
+export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
   const wb = XLSX.utils.book_new();
   
   // Crear hoja de datos
@@ -26,8 +27,22 @@ export const exportToExcel = ({ filename, title, enterpriseName, headers, data, 
   // Agregar totales si existen
   if (totals && totals.length > 0) {
     wsData.push([]);
+    wsData.push(['RESUMEN DE TOTALES']);
     totals.forEach(total => {
       wsData.push([total.label, total.value]);
+    });
+  }
+
+  // Agregar estadísticas si existen
+  if (statistics && statistics.length > 0) {
+    wsData.push([]);
+    wsData.push(['ESTADÍSTICAS']);
+    statistics.forEach(stat => {
+      wsData.push([]);
+      wsData.push([stat.label]);
+      stat.items.forEach(item => {
+        wsData.push([`  ${item.name}`, item.value, `(${item.count} documentos)`]);
+      });
     });
   }
 
@@ -47,7 +62,7 @@ export const exportToExcel = ({ filename, title, enterpriseName, headers, data, 
   XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals }: ExportOptions) => {
+export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
   const doc = new jsPDF({
     orientation: headers.length > 5 ? 'landscape' : 'portrait',
   });
@@ -77,12 +92,43 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     },
   });
 
+  let currentY = (doc as any).lastAutoTable.finalY + 10;
+
   // Totales
   if (totals && totals.length > 0) {
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFontSize(10);
-    totals.forEach((total, idx) => {
-      doc.text(`${total.label}: ${total.value}`, 14, finalY + (idx * 7));
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN DE TOTALES', 14, currentY);
+    currentY += 6;
+    doc.setFont('helvetica', 'normal');
+    totals.forEach((total) => {
+      doc.text(`${total.label}: ${total.value}`, 14, currentY);
+      currentY += 5;
+    });
+    currentY += 5;
+  }
+
+  // Estadísticas
+  if (statistics && statistics.length > 0) {
+    statistics.forEach((stat) => {
+      // Verificar si necesitamos nueva página
+      if (currentY > doc.internal.pageSize.height - 40) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(stat.label, 14, currentY);
+      currentY += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      
+      stat.items.forEach((item) => {
+        doc.text(`${item.name}: ${item.value} (${item.count} docs)`, 20, currentY);
+        currentY += 5;
+      });
+      currentY += 3;
     });
   }
 
