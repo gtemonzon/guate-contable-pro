@@ -1332,18 +1332,24 @@ export default function LibrosFiscales() {
                     // Lógica de pólizas de VENTAS
                     if (journalType === "mes") {
                       // Póliza consolidada del mes
-                      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+
+                      const totalAmount = sales.reduce(
+                        (sum, s) => sum + (Number(s.total_amount) || 0),
+                        0
+                      );
+
                       const { data: journalEntry, error: journalError } = await supabase
                         .from("tab_journal_entries")
                         .insert({
                           enterprise_id: parseInt(currentEnterpriseId),
                           accounting_period_id: period.id,
                           entry_number: entryNumber,
-                          entry_date: new Date().toISOString().split('T')[0],
+                          entry_date: new Date().toISOString().split("T")[0],
                           entry_type: "diario",
                           description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          total_debit: parseFloat(salesTotals.totalWithVAT.replace(/,/g, '')),
-                          total_credit: parseFloat(salesTotals.totalWithVAT.replace(/,/g, '')),
+                          total_debit: totalAmount,
+                          total_credit: totalAmount,
                           is_posted: false,
                           created_by: user.id,
                         })
@@ -1352,7 +1358,74 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      const saleIds = sales.filter(s => s.id).map(s => s.id);
+                      // Crear líneas de detalle (débitos/céditos)
+                      const accountTotals = new Map<number, number>();
+                      for (const s of sales) {
+                        if (!s.income_account_id) continue;
+                        const key = Number(s.income_account_id);
+                        accountTotals.set(key, (accountTotals.get(key) || 0) + (Number(s.total_amount) || 0));
+                      }
+
+                      // Cuenta de Caja/Bancos (activo, código 1xx)
+                      const { data: cashAccounts, error: cashError } = await supabase
+                        .from("tab_accounts")
+                        .select("id")
+                        .eq("enterprise_id", parseInt(currentEnterpriseId))
+                        .eq("allows_movement", true)
+                        .eq("is_active", true)
+                        .like("account_code", "1%")
+                        .order("account_code")
+                        .limit(1);
+
+                      if (cashError) throw cashError;
+
+                      const cashAccountId = cashAccounts?.[0]?.id ?? null;
+
+                      const detailLines: Array<{
+                        journal_entry_id: number;
+                        line_number: number;
+                        account_id: number;
+                        description: string;
+                        debit_amount: number;
+                        credit_amount: number;
+                      }> = [];
+
+                      let lineNumber = 1;
+                      const description = `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`;
+
+                      // Débito total
+                      if (cashAccountId) {
+                        detailLines.push({
+                          journal_entry_id: journalEntry.id,
+                          line_number: lineNumber++,
+                          account_id: cashAccountId,
+                          description,
+                          debit_amount: totalAmount,
+                          credit_amount: 0,
+                        });
+                      }
+
+                      // Créditos por cuenta de ingreso
+                      for (const [accountId, credit] of accountTotals) {
+                        detailLines.push({
+                          journal_entry_id: journalEntry.id,
+                          line_number: lineNumber++,
+                          account_id: accountId,
+                          description,
+                          debit_amount: 0,
+                          credit_amount: credit,
+                        });
+                      }
+
+                      if (detailLines.length > 0) {
+                        const { error: detailError } = await supabase
+                          .from("tab_journal_entry_details")
+                          .insert(detailLines);
+
+                        if (detailError) throw detailError;
+                      }
+
+                      const saleIds = sales.filter((s) => s.id).map((s) => s.id);
                       if (saleIds.length > 0) {
                         await supabase
                           .from("tab_sales_ledger")
@@ -1362,13 +1435,27 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Póliza generada",
-                        description: `Póliza ${entryNumber} creada en borrador`,
+                        description: `Póliza ${entryNumber} creada con ${detailLines.length} líneas de detalle`,
                       });
                     } else {
                       // Póliza por documento
+                      const { data: cashAccounts, error: cashError } = await supabase
+                        .from("tab_accounts")
+                        .select("id")
+                        .eq("enterprise_id", parseInt(currentEnterpriseId))
+                        .eq("allows_movement", true)
+                        .eq("is_active", true)
+                        .like("account_code", "1%")
+                        .order("account_code")
+                        .limit(1);
+
+                      if (cashError) throw cashError;
+
+                      const cashAccountId = cashAccounts?.[0]?.id ?? null;
+
                       for (const s of sales) {
                         if (!s.id) continue;
-                        
+
                         const entryNumber = `VENT-DOC-${s.invoice_series}-${s.invoice_number}`;
                         const { data: journalEntry, error: journalError } = await supabase
                           .from("tab_journal_entries")
@@ -1389,6 +1476,47 @@ export default function LibrosFiscales() {
 
                         if (journalError) throw journalError;
 
+                        const detailLines: Array<{
+                          journal_entry_id: number;
+                          line_number: number;
+                          account_id: number;
+                          description: string;
+                          debit_amount: number;
+                          credit_amount: number;
+                        }> = [];
+
+                        const description = `Venta ${s.customer_name}`;
+
+                        if (cashAccountId) {
+                          detailLines.push({
+                            journal_entry_id: journalEntry.id,
+                            line_number: 1,
+                            account_id: cashAccountId,
+                            description,
+                            debit_amount: Number(s.total_amount) || 0,
+                            credit_amount: 0,
+                          });
+                        }
+
+                        if (s.income_account_id) {
+                          detailLines.push({
+                            journal_entry_id: journalEntry.id,
+                            line_number: 2,
+                            account_id: Number(s.income_account_id),
+                            description,
+                            debit_amount: 0,
+                            credit_amount: Number(s.total_amount) || 0,
+                          });
+                        }
+
+                        if (detailLines.length > 0) {
+                          const { error: detailError } = await supabase
+                            .from("tab_journal_entry_details")
+                            .insert(detailLines);
+
+                          if (detailError) throw detailError;
+                        }
+
                         await supabase
                           .from("tab_sales_ledger")
                           .update({ journal_entry_id: journalEntry.id })
@@ -1397,7 +1525,7 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Pólizas generadas",
-                        description: `${sales.length} pólizas creadas en borrador`,
+                        description: `${sales.length} pólizas creadas con líneas de detalle`,
                       });
                     }
 
