@@ -844,6 +844,39 @@ export default function LibrosFiscales() {
     }
   };
 
+  const toggleSaleAnnulled = async (index: number) => {
+    const entry = sales[index];
+    if (!entry.id) return;
+
+    const newStatus = !entry.is_annulled;
+
+    try {
+      const { error } = await supabase
+        .from("tab_sales_ledger")
+        .update({ is_annulled: newStatus })
+        .eq("id", entry.id);
+
+      if (error) throw error;
+
+      const updated = [...sales];
+      updated[index] = { ...updated[index], is_annulled: newStatus };
+      setSales(updated);
+
+      toast({
+        title: newStatus ? "Factura anulada" : "Factura reactivada",
+        description: newStatus 
+          ? "La factura fue marcada como anulada" 
+          : "La factura fue reactivada correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
+    }
+  };
+
   const deleteSaleRow = async (index: number) => {
     const entry = sales[index];
     
@@ -1127,6 +1160,7 @@ export default function LibrosFiscales() {
                       onUpdate={updateSaleRow}
                       onSave={saveSaleRow}
                       onDelete={deleteSaleRow}
+                      onToggleAnnulled={toggleSaleAnnulled}
                       isHighlighted={highlightedInvoiceId === sale.id}
                     />
                   ))}
