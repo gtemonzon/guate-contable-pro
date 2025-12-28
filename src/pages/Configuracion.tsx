@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationTypesManager } from "@/components/configuracion/OperationTypesManager";
 import { FelDocumentTypesManager } from "@/components/configuracion/FelDocumentTypesManager";
+import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalEntryPrefixesManager";
 
 export default function Configuracion() {
   return (
@@ -17,6 +18,7 @@ export default function Configuracion() {
         <TabsList>
           <TabsTrigger value="operation-types">Tipos de Operaciones</TabsTrigger>
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
+          <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="operation-types" className="mt-6">
@@ -43,6 +45,20 @@ export default function Configuracion() {
             </CardHeader>
             <CardContent>
               <FelDocumentTypesManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="journal-prefixes" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Prefijos de Partidas</CardTitle>
+              <CardDescription>
+                Personaliza los prefijos para identificar los diferentes tipos de partidas contables
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <JournalEntryPrefixesManager />
             </CardContent>
           </Card>
         </TabsContent>
