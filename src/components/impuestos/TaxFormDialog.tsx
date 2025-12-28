@@ -541,12 +541,12 @@ export default function TaxFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="accessCode">Código de Acceso *</Label>
+                <Label htmlFor="accessCode">Número de Acceso *</Label>
                 <Input
                   id="accessCode"
                   value={accessCode}
                   onChange={(e) => setAccessCode(e.target.value)}
-                  placeholder="Ej: ABC123XYZ"
+                  placeholder="Ej: 406410915"
                   disabled={isAnalyzing}
                 />
               </div>
