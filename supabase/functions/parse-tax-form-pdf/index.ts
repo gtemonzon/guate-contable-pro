@@ -34,13 +34,6 @@ interface ExtractedData {
   fieldsFound: number;
 }
 
-type PeriodInference = {
-  periodType?: "mensual" | "trimestral" | "anual";
-  monthName?: string;
-  year?: number;
-  quarter?: number;
-};
-
 function cleanNumber(str: string): string {
   return str.replace(/\s+/g, "").trim();
 }
@@ -87,54 +80,6 @@ function parseAmount(amountStr: string): number | null {
   const cleaned = amountStr.replace(/\s+/g, "").replace(/,/g, "");
   const num = parseFloat(cleaned);
   return isNaN(num) ? null : num;
-}
-
-async function inferPeriodFromImage(pageImageDataUrl: string): Promise<PeriodInference> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) {
-    console.log("LOVABLE_API_KEY not set; skipping image inference");
-    return {};
-  }
-
-  const system =
-    "Eres un extractor de datos de formularios SAT de Guatemala. Devuelve SOLO JSON válido (sin markdown).";
-
-  const userText =
-    "Extrae el PERÍODO DE IMPOSICIÓN de la imagen. Devuelve un JSON con: periodType (mensual|trimestral|anual), monthName (por ejemplo JUNIO, solo si aplica), quarter (1-4 si aplica), year (YYYY). Si no se ve un dato, omítelo.";
-
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userText },
-            { type: "image_url", image_url: { url: pageImageDataUrl } },
-          ],
-        },
-      ],
-    }),
-  });
-
-  const json = await resp.json();
-  const content = json?.choices?.[0]?.message?.content;
-  if (!content || typeof content !== "string") return {};
-
-  try {
-    const parsed = JSON.parse(content);
-    return parsed ?? {};
-  } catch (e) {
-    console.log("AI inference JSON parse failed:", e);
-    console.log("AI raw content:", content);
-    return {};
-  }
 }
 
 function extractDataFromText(text: string): ExtractedData {
@@ -426,7 +371,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfText, pageImageDataUrl } = await req.json();
+    const { pdfText } = await req.json();
 
     if (!pdfText) {
       return new Response(
@@ -439,42 +384,6 @@ serve(async (req) => {
 
     // Extract data using regex patterns
     const extractedData = extractDataFromText(pdfText);
-
-    // If month/year couldn't be extracted from text (common when those fields are rendered as graphics),
-    // use AI vision on the first page as a fallback.
-    if ((!extractedData.periodMonth || !extractedData.periodYear) && pageImageDataUrl) {
-      console.log("Period missing from text; running image inference fallback...");
-      const inferred = await inferPeriodFromImage(pageImageDataUrl);
-
-      if (!extractedData.periodYear && typeof inferred.year === "number") {
-        extractedData.periodYear = inferred.year;
-        extractedData.fieldsFound++;
-        console.log("Inferred periodYear:", extractedData.periodYear);
-      }
-
-      if (!extractedData.periodType && inferred.periodType) {
-        extractedData.periodType = inferred.periodType;
-        extractedData.fieldsFound++;
-        console.log("Inferred periodType:", extractedData.periodType);
-      }
-
-      if (!extractedData.periodMonth) {
-        if (typeof inferred.quarter === "number" && inferred.quarter >= 1 && inferred.quarter <= 4) {
-          extractedData.periodType = extractedData.periodType || "trimestral";
-          extractedData.periodMonth = (inferred.quarter - 1) * 3 + 1;
-          extractedData.fieldsFound++;
-          console.log("Inferred quarter:", inferred.quarter, "periodMonth:", extractedData.periodMonth);
-        } else if (typeof inferred.monthName === "string") {
-          const m = inferred.monthName.trim().toUpperCase();
-          if (MONTH_MAP[m]) {
-            extractedData.periodMonth = MONTH_MAP[m];
-            extractedData.periodType = extractedData.periodType || "mensual";
-            extractedData.fieldsFound++;
-            console.log("Inferred periodMonth:", extractedData.periodMonth);
-          }
-        }
-      }
-    }
 
     return new Response(
       JSON.stringify(extractedData),
