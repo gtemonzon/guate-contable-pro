@@ -905,9 +905,9 @@ export default function LibrosFiscales() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "compras" | "ventas")}>
-          <TabsList className="grid w-full grid-cols-2 bg-muted/50">
-            <TabsTrigger value="compras" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Compras</TabsTrigger>
-            <TabsTrigger value="ventas" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:font-semibold">Libro de Ventas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="compras">Libro de Compras</TabsTrigger>
+            <TabsTrigger value="ventas">Libro de Ventas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="compras" className="space-y-2 mt-4">
