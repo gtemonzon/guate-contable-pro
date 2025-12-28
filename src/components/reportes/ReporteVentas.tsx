@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,21 @@ interface SaleData {
   net_amount: number;
   vat_amount: number;
   total_amount: number;
+  is_annulled?: boolean;
+  operation_type_id?: number | null;
+}
+
+interface FELDocumentType {
+  id: number;
+  code: string;
+  name: string;
+  affects_total: number;
+}
+
+interface OperationType {
+  id: number;
+  code: string;
+  name: string;
 }
 
 export default function ReporteVentas() {
@@ -37,6 +52,8 @@ export default function ReporteVentas() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [sales, setSales] = useState<SaleData[]>([]);
+  const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
+  const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -51,6 +68,8 @@ export default function ReporteVentas() {
     
     if (enterpriseId) {
       fetchEnterpriseName(enterpriseId);
+      fetchFelDocTypes();
+      fetchOperationTypes();
     }
   }, []);
 
@@ -68,6 +87,100 @@ export default function ReporteVentas() {
       console.error("Error fetching enterprise:", error);
     }
   };
+
+  const fetchFelDocTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_fel_document_types")
+        .select("id, code, name, affects_total")
+        .eq("is_active", true);
+
+      if (error) throw error;
+      setFelDocTypes(data || []);
+    } catch (error: any) {
+      console.error("Error fetching FEL doc types:", error);
+    }
+  };
+
+  const fetchOperationTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_operation_types")
+        .select("id, code, name")
+        .eq("is_active", true)
+        .in("applies_to", ["sales", "both"]);
+
+      if (error) throw error;
+      setOperationTypes(data || []);
+    } catch (error: any) {
+      console.error("Error fetching operation types:", error);
+    }
+  };
+
+  // Calcular totales aplicando affects_total
+  const calculatedTotals = useMemo(() => {
+    const activeSales = sales.filter(s => !s.is_annulled);
+    
+    const totalNet = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.net_amount) || 0) * multiplier);
+    }, 0);
+
+    const totalVAT = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.vat_amount) || 0) * multiplier);
+    }, 0);
+
+    const totalAmount = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.total_amount) || 0) * multiplier);
+    }, 0);
+
+    // Por tipo de documento
+    const byDocType = activeSales.reduce((acc, s) => {
+      const docTypeCode = s.fel_document_type || 'SIN_TIPO';
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      
+      if (!acc[docTypeCode]) {
+        acc[docTypeCode] = { total: 0, count: 0 };
+      }
+      acc[docTypeCode].total += (Number(s.net_amount) || 0) * multiplier;
+      acc[docTypeCode].count += 1;
+      return acc;
+    }, {} as Record<string, { total: number; count: number }>);
+
+    // Por tipo de operación
+    const byOperation = activeSales.reduce((acc, s) => {
+      if (!s.operation_type_id) return acc;
+      const opType = operationTypes.find(o => o.id === s.operation_type_id);
+      if (!opType) return acc;
+      
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      const key = opType.name;
+      
+      if (!acc[key]) {
+        acc[key] = { total: 0, count: 0 };
+      }
+      acc[key].total += (Number(s.net_amount) || 0) * multiplier;
+      acc[key].count += 1;
+      return acc;
+    }, {} as Record<string, { total: number; count: number }>);
+
+    return {
+      totalNet,
+      totalVAT,
+      totalAmount,
+      activeCount: activeSales.length,
+      annulledCount: sales.filter(s => s.is_annulled).length,
+      byDocType,
+      byOperation,
+    };
+  }, [sales, felDocTypes, operationTypes]);
 
   const generateReport = async () => {
     if (!currentEnterpriseId) {
@@ -113,23 +226,50 @@ export default function ReporteVentas() {
     }
   };
 
-  const handleExportExcel = () => {
-    const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Cliente", "Neto", "IVA", "Total"];
-    const data = sales.map(s => [
-      new Date(s.invoice_date + 'T00:00:00').toLocaleDateString('es-GT'),
-      s.invoice_series || '',
-      s.invoice_number,
-      s.fel_document_type,
-      s.customer_nit,
-      s.customer_name,
-      s.net_amount.toFixed(2),
-      s.vat_amount.toFixed(2),
-      s.total_amount.toFixed(2),
-    ]);
+  const getStatistics = () => {
+    const statistics: { label: string; items: { name: string; value: string; count: number }[] }[] = [];
 
-    const totalNet = sales.reduce((sum, s) => sum + s.net_amount, 0);
-    const totalVAT = sales.reduce((sum, s) => sum + s.vat_amount, 0);
-    const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
+    // Por tipo de documento
+    const docTypeItems = Object.entries(calculatedTotals.byDocType).map(([key, data]) => ({
+      name: key,
+      value: `Q ${formatCurrency(data.total)}`,
+      count: data.count,
+    }));
+    if (docTypeItems.length > 0) {
+      statistics.push({ label: 'Por Tipo de Documento', items: docTypeItems });
+    }
+
+    // Por tipo de operación
+    const opTypeItems = Object.entries(calculatedTotals.byOperation).map(([key, data]) => ({
+      name: key,
+      value: `Q ${formatCurrency(data.total)}`,
+      count: data.count,
+    }));
+    if (opTypeItems.length > 0) {
+      statistics.push({ label: 'Por Tipo de Operación', items: opTypeItems });
+    }
+
+    return statistics;
+  };
+
+  const handleExportExcel = () => {
+    const activeSales = sales.filter(s => !s.is_annulled);
+    const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Cliente", "Neto", "IVA", "Total"];
+    const data = activeSales.map(s => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return [
+        new Date(s.invoice_date + 'T00:00:00').toLocaleDateString('es-GT'),
+        s.invoice_series || '',
+        s.invoice_number,
+        s.fel_document_type,
+        s.customer_nit,
+        s.customer_name,
+        (s.net_amount * multiplier).toFixed(2),
+        (s.vat_amount * multiplier).toFixed(2),
+        (s.total_amount * multiplier).toFixed(2),
+      ];
+    });
 
     exportToExcel({
       filename: `Ventas_${monthNames[selectedMonth - 1]}_${selectedYear}`,
@@ -138,10 +278,13 @@ export default function ReporteVentas() {
       headers,
       data,
       totals: [
-        { label: "Total Neto", value: `Q ${totalNet.toFixed(2)}` },
-        { label: "Total IVA", value: `Q ${totalVAT.toFixed(2)}` },
-        { label: "Total con IVA", value: `Q ${totalAmount.toFixed(2)}` },
+        { label: "Total Neto", value: `Q ${formatCurrency(calculatedTotals.totalNet)}` },
+        { label: "Total IVA", value: `Q ${formatCurrency(calculatedTotals.totalVAT)}` },
+        { label: "Total con IVA", value: `Q ${formatCurrency(calculatedTotals.totalAmount)}` },
+        { label: "Documentos activos", value: `${calculatedTotals.activeCount}` },
+        { label: "Documentos anulados", value: `${calculatedTotals.annulledCount}` },
       ],
+      statistics: getStatistics(),
     });
 
     toast({
@@ -151,22 +294,23 @@ export default function ReporteVentas() {
   };
 
   const handleExportPDF = () => {
+    const activeSales = sales.filter(s => !s.is_annulled);
     const headers = ["Fecha", "Serie", "Número", "Tipo", "NIT", "Cliente", "Neto", "IVA", "Total"];
-    const data = sales.map(s => [
-      new Date(s.invoice_date + 'T00:00:00').toLocaleDateString('es-GT'),
-      s.invoice_series || '',
-      s.invoice_number,
-      s.fel_document_type,
-      s.customer_nit,
-      s.customer_name,
-      `Q ${s.net_amount.toFixed(2)}`,
-      `Q ${s.vat_amount.toFixed(2)}`,
-      `Q ${s.total_amount.toFixed(2)}`,
-    ]);
-
-    const totalNet = sales.reduce((sum, s) => sum + s.net_amount, 0);
-    const totalVAT = sales.reduce((sum, s) => sum + s.vat_amount, 0);
-    const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
+    const data = activeSales.map(s => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return [
+        new Date(s.invoice_date + 'T00:00:00').toLocaleDateString('es-GT'),
+        s.invoice_series || '',
+        s.invoice_number,
+        s.fel_document_type,
+        s.customer_nit,
+        s.customer_name,
+        `Q ${(s.net_amount * multiplier).toFixed(2)}`,
+        `Q ${(s.vat_amount * multiplier).toFixed(2)}`,
+        `Q ${(s.total_amount * multiplier).toFixed(2)}`,
+      ];
+    });
 
     exportToPDF({
       filename: `Ventas_${monthNames[selectedMonth - 1]}_${selectedYear}`,
@@ -175,10 +319,13 @@ export default function ReporteVentas() {
       headers,
       data,
       totals: [
-        { label: "Total Neto", value: `Q ${totalNet.toFixed(2)}` },
-        { label: "Total IVA", value: `Q ${totalVAT.toFixed(2)}` },
-        { label: "Total con IVA", value: `Q ${totalAmount.toFixed(2)}` },
+        { label: "Total Neto", value: `Q ${formatCurrency(calculatedTotals.totalNet)}` },
+        { label: "Total IVA", value: `Q ${formatCurrency(calculatedTotals.totalVAT)}` },
+        { label: "Total con IVA", value: `Q ${formatCurrency(calculatedTotals.totalAmount)}` },
+        { label: "Documentos activos", value: `${calculatedTotals.activeCount}` },
+        { label: "Documentos anulados", value: `${calculatedTotals.annulledCount}` },
       ],
+      statistics: getStatistics(),
     });
 
     toast({
@@ -186,10 +333,6 @@ export default function ReporteVentas() {
       description: "El reporte se ha exportado a PDF correctamente",
     });
   };
-
-  const totalNet = sales.reduce((sum, s) => sum + s.net_amount, 0);
-  const totalVAT = sales.reduce((sum, s) => sum + s.vat_amount, 0);
-  const totalAmount = sales.reduce((sum, s) => sum + s.total_amount, 0);
 
   return (
     <div className="space-y-6">
@@ -261,7 +404,7 @@ export default function ReporteVentas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sales.map((sale, idx) => (
+                {sales.filter(s => !s.is_annulled).map((sale, idx) => (
                   <TableRow key={idx}>
                     <TableCell>{new Date(sale.invoice_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                     <TableCell>{sale.invoice_series || '-'}</TableCell>
@@ -269,27 +412,65 @@ export default function ReporteVentas() {
                     <TableCell>{sale.fel_document_type}</TableCell>
                     <TableCell>{sale.customer_nit}</TableCell>
                     <TableCell>{sale.customer_name}</TableCell>
-                    <TableCell className="text-right">Q {sale.net_amount.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">Q {sale.vat_amount.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">Q {sale.total_amount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">Q {formatCurrency(sale.net_amount)}</TableCell>
+                    <TableCell className="text-right">Q {formatCurrency(sale.vat_amount)}</TableCell>
+                    <TableCell className="text-right">Q {formatCurrency(sale.total_amount)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
 
+          {/* Estadísticas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.keys(calculatedTotals.byDocType).length > 0 && (
+              <div className="p-4 bg-muted rounded-lg">
+                <span className="text-sm font-medium text-muted-foreground">Por Documento:</span>
+                <div className="mt-2 space-y-1">
+                  {Object.entries(calculatedTotals.byDocType).map(([key, data]) => (
+                    <div key={key} className="flex justify-between text-sm">
+                      <span>{key}</span>
+                      <span className="font-medium">Q {formatCurrency(data.total)} ({data.count})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {Object.keys(calculatedTotals.byOperation).length > 0 && (
+              <div className="p-4 bg-muted rounded-lg">
+                <span className="text-sm font-medium text-muted-foreground">Por Operación:</span>
+                <div className="mt-2 space-y-1">
+                  {Object.entries(calculatedTotals.byOperation).map(([key, data]) => (
+                    <div key={key} className="flex justify-between text-sm">
+                      <span>{key}</span>
+                      <span className="font-medium">Q {formatCurrency(data.total)} ({data.count})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-8 p-4 bg-muted rounded-lg">
             <div>
+              <span className="text-muted-foreground">Docs: </span>
+              <span className="font-semibold">{calculatedTotals.activeCount} activos</span>
+              {calculatedTotals.annulledCount > 0 && (
+                <span className="text-muted-foreground"> / {calculatedTotals.annulledCount} anulados</span>
+              )}
+            </div>
+            <div>
               <span className="text-muted-foreground">Total Neto: </span>
-              <span className="font-semibold">Q {totalNet.toFixed(2)}</span>
+              <span className="font-semibold">Q {formatCurrency(calculatedTotals.totalNet)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Total IVA: </span>
-              <span className="font-semibold">Q {totalVAT.toFixed(2)}</span>
+              <span className="font-semibold">Q {formatCurrency(calculatedTotals.totalVAT)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Total con IVA: </span>
-              <span className="font-semibold">Q {totalAmount.toFixed(2)}</span>
+              <span className="font-semibold">Q {formatCurrency(calculatedTotals.totalAmount)}</span>
             </div>
           </div>
         </div>
