@@ -12,8 +12,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Upload, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { purchasesSchema } from "@/utils/csvValidation";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
+import {
+  normalizeHeader,
+  SAT_PURCHASES_MAPPING,
+  findSATColumnIndex,
+  parseDateFlexible,
+  parseNumber,
+  isSATFormat,
+} from "@/utils/satImportMapping";
 
 interface ImportPurchasesDialogProps {
   open: boolean;
@@ -28,7 +35,6 @@ async function findOrCreatePurchaseBook(
   month: number,
   year: number
 ): Promise<{ id: number }> {
-  // Search for existing book
   const { data: existing, error: fetchError } = await supabase
     .from("tab_purchase_books")
     .select("id")
@@ -40,7 +46,6 @@ async function findOrCreatePurchaseBook(
   if (fetchError) throw fetchError;
   if (existing) return existing;
 
-  // Create new book
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Usuario no autenticado");
 
@@ -76,27 +81,28 @@ export function ImportPurchasesDialog({
   });
 
   const downloadTemplate = () => {
+    // SAT Guatemala format template
     const headers = [
-      "serie",
-      "numero",
-      "fecha",
-      "tipo_documento_fel",
-      "nit_proveedor",
-      "nombre_proveedor",
-      "monto_base",
-      "iva",
-      "total",
-      "ref_pago"
+      "Fecha de emisión",
+      "Número de Autorización",
+      "Tipo de DTE",
+      "Serie",
+      "Número del DTE",
+      "NIT del emisor",
+      "Nombre completo del emisor",
+      "Gran Total",
+      "IVA",
+      "Marca de anulado"
     ];
 
     const csvContent = headers.join(",") + "\n" +
-      "A,12345,2025-01-15,FACT,12345678,Proveedor Ejemplo,100.00,12.00,112.00,ch. 123\n" +
-      "B,67890,2025-02-20,FACT,87654321,Otro Proveedor,200.00,24.00,224.00,transf. 456";
+      "15/01/2025,ABC123456789,FACT,A,12345,12345678,Proveedor Ejemplo S.A.,112.00,12.00,N\n" +
+      "20/02/2025,DEF987654321,FACT,B,67890,87654321,Otro Proveedor S.A.,224.00,24.00,N";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "plantilla_compras.csv";
+    link.download = "plantilla_compras_sat.csv";
     link.click();
   };
 
@@ -125,64 +131,113 @@ export function ImportPurchasesDialog({
         throw new Error("El archivo está vacío o no tiene datos");
       }
 
-      // Validate headers
-      const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-      const requiredHeaders = ["serie", "numero", "fecha", "tipo_documento_fel", 
-                               "nit_proveedor", "nombre_proveedor", "monto_base", "iva", "total"];
+      // Parse headers
+      const rawHeaders = lines[0].split(",").map(h => h.trim());
+      const normalizedHeaders = rawHeaders.map(normalizeHeader);
       
-      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
-      if (missingHeaders.length > 0) {
-        throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(", ")}`);
+      // Detect if SAT format
+      const useSATFormat = isSATFormat(rawHeaders);
+      
+      // Get column indices based on format
+      let colIndices: Record<string, number>;
+      
+      if (useSATFormat) {
+        colIndices = {
+          fecha: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.fecha),
+          serie: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.serie),
+          numero: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.numero),
+          tipo_documento: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.tipo_documento),
+          nit: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nit),
+          nombre: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nombre),
+          total: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.total),
+          iva: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.iva),
+          anulado: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.anulado),
+        };
+      } else {
+        // Legacy format
+        colIndices = {
+          fecha: normalizedHeaders.indexOf("fecha"),
+          serie: normalizedHeaders.indexOf("serie"),
+          numero: normalizedHeaders.indexOf("numero"),
+          tipo_documento: normalizedHeaders.indexOf("tipo_documento_fel"),
+          nit: normalizedHeaders.indexOf("nit_proveedor"),
+          nombre: normalizedHeaders.indexOf("nombre_proveedor"),
+          total: normalizedHeaders.indexOf("total"),
+          iva: normalizedHeaders.indexOf("iva"),
+          anulado: -1,
+        };
       }
 
-      // Process and validate rows - group by month/year
+      // Validate required columns
+      const requiredCols = ["fecha", "numero", "nit", "nombre", "total", "iva"];
+      const missingCols = requiredCols.filter(c => colIndices[c] === -1);
+      
+      if (missingCols.length > 0) {
+        throw new Error(`No se encontraron las columnas requeridas: ${missingCols.join(", ")}. Asegúrese de usar el formato de exportación de SAT Guatemala.`);
+      }
+
+      // Process rows
       const purchasesByPeriod = new Map<string, Array<{
         invoice_date: string;
         rowData: any;
-        refPago: string;
       }>>();
       const errors: string[] = [];
+      let skippedAnuladas = 0;
       
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map(v => v.trim());
-        if (values.length < requiredHeaders.length) continue;
+        // Handle CSV with quoted fields
+        const values = parseCSVLine(lines[i]);
+        if (values.length < 5) continue;
 
-        const rowData = {
-          serie: sanitizeCSVField(values[headers.indexOf("serie")]),
-          numero: sanitizeCSVField(values[headers.indexOf("numero")]),
-          fecha: values[headers.indexOf("fecha")],
-          tipo_documento_fel: sanitizeCSVField(values[headers.indexOf("tipo_documento_fel")]),
-          nit_proveedor: sanitizeCSVField(values[headers.indexOf("nit_proveedor")]),
-          nombre_proveedor: sanitizeCSVField(values[headers.indexOf("nombre_proveedor")]),
-          monto_base: parseFloat(values[headers.indexOf("monto_base")]),
-          iva: parseFloat(values[headers.indexOf("iva")]),
-          total: parseFloat(values[headers.indexOf("total")]),
-        };
+        // Check if anulado
+        if (colIndices.anulado !== -1) {
+          const anulado = values[colIndices.anulado]?.trim().toUpperCase();
+          if (anulado === "S" || anulado === "SI" || anulado === "SÍ" || anulado === "TRUE" || anulado === "1") {
+            skippedAnuladas++;
+            continue;
+          }
+        }
 
-        // Validate row with zod schema
-        const validation = purchasesSchema.safeParse(rowData);
+        // Parse date
+        const rawDate = values[colIndices.fecha];
+        const fecha = parseDateFlexible(rawDate);
         
-        if (!validation.success) {
-          errors.push(`Fila ${i + 1}: ${validation.error.errors[0].message}`);
+        if (!fecha) {
+          errors.push(`Fila ${i + 1}: Fecha inválida "${rawDate}"`);
           continue;
         }
 
-        // Additional business logic validation
-        const expectedTotal = rowData.monto_base + rowData.iva;
-        if (Math.abs(expectedTotal - rowData.total) > 0.01) {
-          errors.push(`Fila ${i + 1}: El total no coincide con monto_base + IVA`);
+        // Parse amounts
+        const total = parseNumber(values[colIndices.total]);
+        const iva = parseNumber(values[colIndices.iva]);
+        const montoBase = total - iva;
+
+        if (total <= 0) {
+          errors.push(`Fila ${i + 1}: Total debe ser mayor a cero`);
           continue;
         }
 
-        // Validate date format and extract month/year
-        const dateParts = rowData.fecha.split("-");
-        if (dateParts.length !== 3) {
-          errors.push(`Fila ${i + 1}: Formato de fecha inválido. Use YYYY-MM-DD`);
+        // Get other fields
+        const serie = sanitizeCSVField(values[colIndices.serie] || "");
+        const numero = sanitizeCSVField(values[colIndices.numero]);
+        const tipoDoc = sanitizeCSVField(values[colIndices.tipo_documento] || "FACT");
+        const nit = sanitizeCSVField(values[colIndices.nit]);
+        const nombre = sanitizeCSVField(values[colIndices.nombre]);
+
+        if (!numero) {
+          errors.push(`Fila ${i + 1}: Número de factura es requerido`);
           continue;
         }
 
-        const year = parseInt(dateParts[0]);
-        const month = parseInt(dateParts[1]);
+        if (!nombre) {
+          errors.push(`Fila ${i + 1}: Nombre del proveedor es requerido`);
+          continue;
+        }
+
+        // Extract year/month for grouping
+        const [yearStr, monthStr] = fecha.split("-");
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
         
         if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
           errors.push(`Fila ${i + 1}: Fecha inválida`);
@@ -195,19 +250,30 @@ export function ImportPurchasesDialog({
           purchasesByPeriod.set(periodKey, []);
         }
 
-        const refPagoIndex = headers.indexOf("ref_pago");
         purchasesByPeriod.get(periodKey)!.push({
-          invoice_date: rowData.fecha,
-          rowData,
-          refPago: refPagoIndex >= 0 ? sanitizeCSVField(values[refPagoIndex]) : "",
+          invoice_date: fecha,
+          rowData: {
+            serie,
+            numero,
+            tipo_documento: tipoDoc,
+            nit,
+            nombre,
+            monto_base: montoBase,
+            iva,
+            total,
+          },
         });
       }
 
       if (purchasesByPeriod.size === 0) {
-        if (errors.length > 0) {
-          throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
+        let errorMessage = "No se encontraron registros válidos para importar";
+        if (skippedAnuladas > 0) {
+          errorMessage += `. Se omitieron ${skippedAnuladas} facturas anuladas.`;
         }
-        throw new Error("No se encontraron registros válidos para importar");
+        if (errors.length > 0) {
+          errorMessage += `\n\nErrores:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`;
+        }
+        throw new Error(errorMessage);
       }
 
       // Process each period group
@@ -219,27 +285,23 @@ export function ImportPurchasesDialog({
         const year = parseInt(yearStr);
         const month = parseInt(monthStr);
 
-        // Find or create purchase book for this period
         const book = await findOrCreatePurchaseBook(enterpriseId, month, year);
 
-        // Prepare purchases with book_id
         const purchasesToInsert = periodPurchases.map(p => ({
           enterprise_id: enterpriseId,
           purchase_book_id: book.id,
           invoice_series: p.rowData.serie,
           invoice_number: p.rowData.numero,
           invoice_date: p.invoice_date,
-          fel_document_type: p.rowData.tipo_documento_fel,
-          supplier_nit: p.rowData.nit_proveedor,
-          supplier_name: p.rowData.nombre_proveedor,
+          fel_document_type: p.rowData.tipo_documento,
+          supplier_nit: p.rowData.nit,
+          supplier_name: p.rowData.nombre,
           base_amount: p.rowData.monto_base,
           vat_amount: p.rowData.iva,
           net_amount: p.rowData.monto_base,
           total_amount: p.rowData.total,
-          batch_reference: p.refPago,
         }));
 
-        // Insert purchases for this period
         const { error: insertError } = await supabase
           .from("tab_purchase_ledger")
           .insert(purchasesToInsert);
@@ -256,9 +318,14 @@ export function ImportPurchasesDialog({
 
       // Build success message
       const summaryText = importSummary.map(s => `${s.count} en ${s.period}`).join(", ");
-      const message = errors.length > 0 
-        ? `Se importaron ${totalImported} registros (${summaryText}). ${errors.length} filas con errores fueron omitidas.`
-        : `Se importaron ${totalImported} registros: ${summaryText}`;
+      let message = `Se importaron ${totalImported} registros: ${summaryText}`;
+      
+      if (skippedAnuladas > 0) {
+        message += `. Se omitieron ${skippedAnuladas} facturas anuladas.`;
+      }
+      if (errors.length > 0) {
+        message += ` ${errors.length} filas con errores fueron omitidas.`;
+      }
 
       toast({
         title: "Importación exitosa",
@@ -284,7 +351,7 @@ export function ImportPurchasesDialog({
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV con facturas de compras. Las facturas se asignarán automáticamente al mes correspondiente según su fecha.
+            Carga un archivo CSV exportado de SAT Guatemala. Las facturas se asignarán automáticamente al mes correspondiente.
           </DialogDescription>
         </DialogHeader>
 
@@ -324,25 +391,47 @@ export function ImportPurchasesDialog({
           </div>
 
           <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg">
-            <p className="font-medium mb-2">Campos requeridos en el CSV:</p>
+            <p className="font-medium mb-2">Formato SAT Guatemala - Columnas utilizadas:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
-              <li><strong>serie:</strong> Serie de la factura (ej. A)</li>
-              <li><strong>numero:</strong> Número de factura</li>
-              <li><strong>fecha:</strong> Fecha en formato YYYY-MM-DD (las facturas se organizan por mes automáticamente)</li>
-              <li><strong>tipo_documento_fel:</strong> Tipo de documento FEL</li>
-              <li><strong>nit_proveedor:</strong> NIT del proveedor</li>
-              <li><strong>nombre_proveedor:</strong> Nombre del proveedor</li>
-              <li><strong>monto_base:</strong> Monto sin IVA</li>
-              <li><strong>iva:</strong> Monto del IVA</li>
-              <li><strong>total:</strong> Monto total con IVA</li>
-              <li><strong>ref_pago:</strong> Referencia de pago (ej. ch. 123)</li>
+              <li><strong>Fecha de emisión:</strong> DD/MM/YYYY o YYYY-MM-DD</li>
+              <li><strong>Serie:</strong> Serie de la factura</li>
+              <li><strong>Número del DTE:</strong> Número de factura</li>
+              <li><strong>Tipo de DTE:</strong> Tipo de documento</li>
+              <li><strong>NIT del emisor:</strong> NIT del proveedor</li>
+              <li><strong>Nombre completo del emisor:</strong> Nombre del proveedor</li>
+              <li><strong>Gran Total:</strong> Monto total (se calcula monto base automáticamente)</li>
+              <li><strong>IVA:</strong> Monto del IVA</li>
+              <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/N)</li>
             </ul>
             <p className="mt-3 text-xs text-primary font-medium">
-              💡 Puedes importar facturas de distintos meses en un solo archivo. Se organizarán automáticamente.
+              💡 Use el archivo exportado directamente de SAT sin modificaciones.
             </p>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+// Helper to parse CSV line handling quoted fields
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
 }
