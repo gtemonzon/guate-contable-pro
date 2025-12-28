@@ -55,11 +55,18 @@ export function findSATColumnIndex(
   return -1;
 }
 
-// Parse date flexibly (DD/MM/YYYY or YYYY-MM-DD)
+// Parse date flexibly (ISO 8601 with time, DD/MM/YYYY or YYYY-MM-DD)
 export function parseDateFlexible(dateStr: string): string | null {
   if (!dateStr || typeof dateStr !== "string") return null;
   
   const trimmed = dateStr.trim();
+  
+  // Try ISO 8601 format with time: 2025-03-31T06:41:19
+  const iso8601 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (iso8601) {
+    const [, year, month, day] = iso8601;
+    return `${year}-${month}-${day}`;
+  }
   
   // Try DD/MM/YYYY format
   const ddmmyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
