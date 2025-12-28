@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -35,6 +35,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface ImportSalesDialogProps {
   open: boolean;
@@ -73,10 +74,11 @@ interface ValidationResult {
   validRecords: ValidSale[];
   errors: ValidationError[];
   skippedAnuladas: number;
+  duplicatesCount: number;
   periodSummary: { period: string; count: number }[];
 }
 
-type DialogState = "initial" | "validating" | "options" | "summary";
+type DialogState = "initial" | "validating" | "summary";
 
 // Helper to find accounting period for a given date
 async function findAccountingPeriod(
@@ -94,6 +96,41 @@ async function findAccountingPeriod(
 
   if (error) throw error;
   return period;
+}
+
+// Check if invoice already exists in database
+async function checkDuplicates(
+  enterpriseId: number,
+  records: Array<{ authorization_number: string; invoice_series: string; invoice_number: string }>
+): Promise<Set<string>> {
+  const duplicateKeys = new Set<string>();
+  
+  // Get all authorization numbers to check
+  const authNumbers = records.map(r => r.authorization_number).filter(Boolean);
+  
+  if (authNumbers.length === 0) return duplicateKeys;
+  
+  // Query existing records by authorization_number
+  const { data: existing, error } = await supabase
+    .from("tab_sales_ledger")
+    .select("authorization_number, invoice_series, invoice_number")
+    .eq("enterprise_id", enterpriseId)
+    .in("authorization_number", authNumbers);
+  
+  if (error) {
+    console.error("Error checking duplicates:", error);
+    return duplicateKeys;
+  }
+  
+  // Build set of existing keys
+  for (const row of existing || []) {
+    // Use authorization_number as primary key for duplicates
+    duplicateKeys.add(row.authorization_number);
+    // Also add serie+numero combination
+    duplicateKeys.add(`${row.invoice_series || ""}-${row.invoice_number}`);
+  }
+  
+  return duplicateKeys;
 }
 
 // Parse file (CSV or Excel) and return rows as 2D array
@@ -140,9 +177,9 @@ export function ImportSalesDialog({
   open,
   onOpenChange,
   enterpriseId,
-  onSuccess,
   incomeAccounts = [],
   operationTypes = [],
+  onSuccess,
 }: ImportSalesDialogProps) {
   const { toast } = useToast();
   const [dialogState, setDialogState] = useState<DialogState>("initial");
@@ -150,7 +187,7 @@ export function ImportSalesDialog({
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState<string>("");
   
-  // Options for bulk assignment
+  // Options for bulk assignment - shown in summary view
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
   const [selectedIncomeAccount, setSelectedIncomeAccount] = useState<number | null>(null);
   const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
@@ -269,11 +306,42 @@ export function ImportSalesDialog({
         throw new Error(`No se encontraron las columnas requeridas: ${missingCols.join(", ")}. Asegúrese de usar el formato de exportación de SAT Guatemala.`);
       }
 
+      // First pass: collect all records for duplicate checking
+      const recordsToCheck: Array<{ authorization_number: string; invoice_series: string; invoice_number: string; rowNum: number }> = [];
+      
+      for (let i = 1; i < rows.length; i++) {
+        const values = rows[i];
+        if (!values || values.length < 5) continue;
+        
+        // Skip anulados
+        if (colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado])) {
+          continue;
+        }
+        
+        const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
+        const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
+        const numAutorizacion = sanitizeCSVField(String(values[colIndices.numero_autorizacion] || ""));
+        
+        if (numero && numAutorizacion) {
+          recordsToCheck.push({
+            authorization_number: numAutorizacion,
+            invoice_series: serie,
+            invoice_number: numero,
+            rowNum: i + 1,
+          });
+        }
+      }
+
+      // Check for duplicates in database
+      const existingKeys = await checkDuplicates(enterpriseId, recordsToCheck);
+
       // Process rows for validation
       const validRecords: ValidSale[] = [];
       const errors: ValidationError[] = [];
       let skippedAnuladas = 0;
+      let duplicatesCount = 0;
       const periodCounts = new Map<string, number>();
+      const seenInFile = new Set<string>(); // Track duplicates within file
       
       for (let i = 1; i < rows.length; i++) {
         const values = rows[i];
@@ -354,6 +422,33 @@ export function ImportSalesDialog({
           continue;
         }
 
+        // Check for duplicates in database
+        const serieNumeroKey = `${serie}-${numero}`;
+        if (existingKeys.has(numAutorizacion) || existingKeys.has(serieNumeroKey)) {
+          errors.push({
+            row: rowNum,
+            field: "Duplicado",
+            value: `${serie}-${numero}`,
+            message: "Esta factura ya existe en la base de datos"
+          });
+          duplicatesCount++;
+          continue;
+        }
+
+        // Check for duplicates within the file
+        if (seenInFile.has(numAutorizacion) || seenInFile.has(serieNumeroKey)) {
+          errors.push({
+            row: rowNum,
+            field: "Duplicado",
+            value: `${serie}-${numero}`,
+            message: "Esta factura está duplicada en el archivo"
+          });
+          duplicatesCount++;
+          continue;
+        }
+        seenInFile.add(numAutorizacion);
+        seenInFile.add(serieNumeroKey);
+
         // Extract year/month for grouping
         const [yearStr, monthStr] = fecha.split("-");
         const year = parseInt(yearStr);
@@ -411,15 +506,11 @@ export function ImportSalesDialog({
         validRecords,
         errors,
         skippedAnuladas,
+        duplicatesCount,
         periodSummary
       });
       
-      // If we have income accounts or operation types available, show options dialog
-      if (incomeAccounts.length > 0 || operationTypes.length > 0) {
-        setDialogState("options");
-      } else {
-        setDialogState("summary");
-      }
+      setDialogState("summary");
 
     } catch (error: any) {
       toast({
@@ -431,31 +522,25 @@ export function ImportSalesDialog({
     }
   };
 
-  const handleProceedToSummary = () => {
-    if (validationResult && applyBulkOptions) {
-      // Apply selected account and operation type to all records
-      const updatedRecords = validationResult.validRecords.map(record => ({
-        ...record,
-        income_account_id: selectedIncomeAccount,
-        operation_type_id: selectedOperationType,
-      }));
-      setValidationResult({
-        ...validationResult,
-        validRecords: updatedRecords,
-      });
-    }
-    setDialogState("summary");
-  };
-
   const handleImport = async () => {
     if (!validationResult || validationResult.validRecords.length === 0) return;
 
     setImporting(true);
 
     try {
+      // Apply bulk options if enabled
+      let recordsToInsert = validationResult.validRecords;
+      if (applyBulkOptions) {
+        recordsToInsert = validationResult.validRecords.map(record => ({
+          ...record,
+          income_account_id: selectedIncomeAccount,
+          operation_type_id: selectedOperationType,
+        }));
+      }
+
       const { error: insertError } = await supabase
         .from("tab_sales_ledger")
-        .insert(validationResult.validRecords);
+        .insert(recordsToInsert);
 
       if (insertError) throw insertError;
 
@@ -479,6 +564,8 @@ export function ImportSalesDialog({
     }
   };
 
+  const hasOptions = incomeAccounts.length > 0 || operationTypes.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
@@ -487,7 +574,6 @@ export function ImportSalesDialog({
           <DialogDescription>
             {dialogState === "initial" && "Carga un archivo CSV o Excel exportado de SAT Guatemala."}
             {dialogState === "validating" && `Validando ${fileName}...`}
-            {dialogState === "options" && "Opciones de importación"}
             {dialogState === "summary" && `Resultado de validación: ${fileName}`}
           </DialogDescription>
         </DialogHeader>
@@ -552,213 +638,215 @@ export function ImportSalesDialog({
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
               <p className="text-lg font-medium">Validando archivo...</p>
-              <p className="text-sm text-muted-foreground">Verificando formato y datos</p>
+              <p className="text-sm text-muted-foreground">Verificando formato, datos y duplicados</p>
             </div>
           )}
 
-          {/* Options State - Account and Operation Type Selection */}
-          {dialogState === "options" && validationResult && (
-            <div className="space-y-6">
-              <div className="bg-muted/50 rounded-lg p-4">
-                <p className="text-sm">
-                  Se encontraron <strong>{validationResult.validRecords.length}</strong> registros válidos para importar.
-                </p>
-              </div>
-
+          {/* Summary State - Validation Results with Options */}
+          {dialogState === "summary" && validationResult && (
+            <ScrollArea className="h-[60vh] pr-4">
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-1">
-                    <Label htmlFor="apply-bulk" className="text-base font-medium">
-                      ¿Aplicar cuenta y tipo de operación a todos los documentos?
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Si activas esta opción, todos los documentos importados tendrán la misma cuenta contable y tipo de operación.
+                {/* Summary Cards */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-medium text-green-800 dark:text-green-200">Válidos</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
+                      {validationResult.validRecords.length}
                     </p>
                   </div>
-                  <Switch
-                    id="apply-bulk"
-                    checked={applyBulkOptions}
-                    onCheckedChange={setApplyBulkOptions}
-                  />
+                  
+                  <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Anulados</span>
+                    </div>
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
+                      {validationResult.skippedAnuladas}
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Copy className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Duplicados</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
+                      {validationResult.duplicatesCount}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      <span className="text-sm font-medium text-red-800 dark:text-red-200">Errores</span>
+                    </div>
+                    <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-1">
+                      {validationResult.errors.length}
+                    </p>
+                  </div>
                 </div>
 
-                {applyBulkOptions && (
-                  <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                    {incomeAccounts.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Cuenta de Ingreso</Label>
-                        <Select
-                          value={selectedIncomeAccount?.toString() || ""}
-                          onValueChange={(val) => setSelectedIncomeAccount(val ? parseInt(val) : null)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar cuenta..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {incomeAccounts.map((acc) => (
-                              <SelectItem key={acc.id} value={acc.id.toString()}>
-                                {acc.account_code} - {acc.account_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                {/* Period Summary */}
+                {validationResult.periodSummary.length > 0 && (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-sm font-medium mb-2">Distribución por período:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {validationResult.periodSummary.map((ps) => (
+                        <span key={ps.period} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
+                          {ps.count} en {ps.period}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    {operationTypes.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Tipo de Operación</Label>
-                        <Select
-                          value={selectedOperationType?.toString() || ""}
-                          onValueChange={(val) => setSelectedOperationType(val ? parseInt(val) : null)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar tipo..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {operationTypes.map((op) => (
-                              <SelectItem key={op.id} value={op.id.toString()}>
-                                {op.code} - {op.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                {/* Bulk Options - Integrated in summary view */}
+                {hasOptions && validationResult.validRecords.length > 0 && (
+                  <div className="border rounded-lg">
+                    <div className="flex items-center justify-between p-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="apply-bulk" className="text-sm font-medium">
+                          Aplicar cuenta y tipo de operación a todos
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Asignar la misma cuenta contable y tipo de operación a los {validationResult.validRecords.length} documentos
+                        </p>
+                      </div>
+                      <Switch
+                        id="apply-bulk"
+                        checked={applyBulkOptions}
+                        onCheckedChange={setApplyBulkOptions}
+                      />
+                    </div>
+
+                    {applyBulkOptions && (
+                      <div className="border-t px-4 py-3 space-y-3 bg-muted/30">
+                        {incomeAccounts.length > 0 && (
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                            <Label className="text-sm">Cuenta Ingreso:</Label>
+                            <Select
+                              value={selectedIncomeAccount?.toString() || ""}
+                              onValueChange={(val) => setSelectedIncomeAccount(val ? parseInt(val) : null)}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Seleccionar cuenta..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {incomeAccounts.map((acc) => (
+                                  <SelectItem key={acc.id} value={acc.id.toString()}>
+                                    {acc.account_code} - {acc.account_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {operationTypes.length > 0 && (
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                            <Label className="text-sm">Tipo Operación:</Label>
+                            <Select
+                              value={selectedOperationType?.toString() || ""}
+                              onValueChange={(val) => setSelectedOperationType(val ? parseInt(val) : null)}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Seleccionar tipo..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {operationTypes.map((op) => (
+                                  <SelectItem key={op.id} value={op.id.toString()}>
+                                    {op.code} - {op.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* Error Details Table */}
+                {validationResult.errors.length > 0 && (
+                  <Collapsible defaultOpen={validationResult.errors.length <= 10}>
+                    <div className="border rounded-lg">
+                      <CollapsibleTrigger className="w-full bg-muted/50 px-4 py-2 border-b flex items-center justify-between hover:bg-muted/70 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <FileWarning className="h-4 w-4 text-destructive" />
+                          <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">Click para expandir/colapsar</span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <ScrollArea className="h-[200px]">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-16">Fila</TableHead>
+                                <TableHead className="w-24">Campo</TableHead>
+                                <TableHead className="w-32">Valor</TableHead>
+                                <TableHead>Error</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {validationResult.errors.map((err, idx) => (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-mono text-xs">{err.row}</TableCell>
+                                  <TableCell className="text-xs">{err.field}</TableCell>
+                                  <TableCell className="font-mono text-xs max-w-[120px] truncate" title={err.value}>
+                                    {err.value}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-destructive">{err.message}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </ScrollArea>
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                )}
+
+                {/* No valid records warning */}
+                {validationResult.validRecords.length === 0 && (
+                  <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
+                    <XCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                    <p className="font-medium text-destructive">No hay registros válidos para importar</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Revisa los errores arriba y corrige el archivo antes de volver a intentar.
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-2 sticky bottom-0 bg-background pb-2">
+                  <Button variant="outline" onClick={resetDialog} className="flex-1">
+                    Seleccionar Otro Archivo
+                  </Button>
+                  <Button 
+                    onClick={handleImport} 
+                    disabled={validationResult.validRecords.length === 0 || importing}
+                    className="flex-1"
+                  >
+                    {importing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Importando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Importar {validationResult.validRecords.length} Registros
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-
-              <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={resetDialog} className="flex-1">
-                  Cancelar
-                </Button>
-                <Button onClick={handleProceedToSummary} className="flex-1">
-                  Continuar
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Summary State - Validation Results */}
-          {dialogState === "summary" && validationResult && (
-            <div className="space-y-4">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-green-800 dark:text-green-200">Válidos</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
-                    {validationResult.validRecords.length}
-                  </p>
-                </div>
-                
-                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Anulados</span>
-                  </div>
-                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
-                    {validationResult.skippedAnuladas}
-                  </p>
-                </div>
-                
-                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    <span className="text-sm font-medium text-red-800 dark:text-red-200">Errores</span>
-                  </div>
-                  <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-1">
-                    {validationResult.errors.length}
-                  </p>
-                </div>
-              </div>
-
-              {/* Period Summary */}
-              {validationResult.periodSummary.length > 0 && (
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-sm font-medium mb-2">Distribución por período:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {validationResult.periodSummary.map((ps) => (
-                      <span key={ps.period} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
-                        {ps.count} en {ps.period}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Error Details Table */}
-              {validationResult.errors.length > 0 && (
-                <div className="border rounded-lg">
-                  <div className="bg-muted/50 px-4 py-2 border-b flex items-center gap-2">
-                    <FileWarning className="h-4 w-4 text-destructive" />
-                    <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
-                  </div>
-                  <ScrollArea className="h-[200px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">Fila</TableHead>
-                          <TableHead className="w-24">Campo</TableHead>
-                          <TableHead className="w-32">Valor</TableHead>
-                          <TableHead>Error</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {validationResult.errors.map((err, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-mono text-xs">{err.row}</TableCell>
-                            <TableCell className="text-xs">{err.field}</TableCell>
-                            <TableCell className="font-mono text-xs max-w-[120px] truncate" title={err.value}>
-                              {err.value}
-                            </TableCell>
-                            <TableCell className="text-xs text-destructive">{err.message}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                </div>
-              )}
-
-              {/* No valid records warning */}
-              {validationResult.validRecords.length === 0 && (
-                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
-                  <XCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
-                  <p className="font-medium text-destructive">No hay registros válidos para importar</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Revisa los errores arriba y corrige el archivo antes de volver a intentar.
-                  </p>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
-                <Button variant="outline" onClick={resetDialog} className="flex-1">
-                  Seleccionar Otro Archivo
-                </Button>
-                <Button 
-                  onClick={handleImport} 
-                  disabled={validationResult.validRecords.length === 0 || importing}
-                  className="flex-1"
-                >
-                  {importing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Importando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Importar {validationResult.validRecords.length} Registros
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
+            </ScrollArea>
           )}
         </div>
       </DialogContent>
