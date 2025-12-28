@@ -60,6 +60,15 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
     }
   };
 
+  const handleCardBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    // Solo guardar si el foco sale completamente de la tarjeta
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsFocused(false);
+      // Auto-guardar al salir de la tarjeta
+      onSave(index);
+    }
+  };
+
   return (
     <Card className={cn(
       "hover:shadow-md transition-all",
@@ -69,11 +78,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
         <div 
           className="space-y-3"
           onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-              setIsFocused(false);
-            }
-          }}
+          onBlur={handleCardBlur}
         >
           {/* Primera fila: Info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">

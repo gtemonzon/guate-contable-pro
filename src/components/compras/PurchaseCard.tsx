@@ -63,6 +63,15 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
     }
   };
 
+  const handleCardBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    // Solo guardar si el foco sale completamente de la tarjeta
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsFocused(false);
+      // Auto-guardar al salir de la tarjeta
+      onSave(index);
+    }
+  };
+
   return (
     <Card className={cn(
       "hover:shadow-md transition-all",
@@ -72,11 +81,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
         <div 
           className="space-y-3"
           onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-              setIsFocused(false);
-            }
-          }}
+          onBlur={handleCardBlur}
         >
           {/* Primera fila: Info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
