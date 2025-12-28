@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -23,6 +23,15 @@ import {
   isSATFormat,
   isAnulado,
 } from "@/utils/satImportMapping";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface ImportPurchasesDialogProps {
   open: boolean;
@@ -30,6 +39,37 @@ interface ImportPurchasesDialogProps {
   enterpriseId: number | null;
   onSuccess: () => void;
 }
+
+interface ValidationError {
+  row: number;
+  field: string;
+  value: string;
+  message: string;
+}
+
+interface ValidPurchase {
+  enterprise_id: number;
+  purchase_book_id: number;
+  invoice_series: string;
+  invoice_number: string;
+  invoice_date: string;
+  fel_document_type: string;
+  supplier_nit: string;
+  supplier_name: string;
+  base_amount: number;
+  vat_amount: number;
+  net_amount: number;
+  total_amount: number;
+}
+
+interface ValidationResult {
+  validRecords: ValidPurchase[];
+  errors: ValidationError[];
+  skippedAnuladas: number;
+  periodSummary: { period: string; count: number }[];
+}
+
+type DialogState = "initial" | "validating" | "summary";
 
 // Helper function to find or create purchase book for a given month/year
 async function findOrCreatePurchaseBook(
@@ -113,14 +153,30 @@ export function ImportPurchasesDialog({
   onSuccess,
 }: ImportPurchasesDialogProps) {
   const { toast } = useToast();
+  const [dialogState, setDialogState] = useState<DialogState>("initial");
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
+  const [fileName, setFileName] = useState<string>("");
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
-    onFile: (file) => handleImport(file),
+    onFile: (file) => handleValidate(file),
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
-    disabled: importing,
+    disabled: dialogState !== "initial",
   });
+
+  const resetDialog = () => {
+    setDialogState("initial");
+    setValidationResult(null);
+    setFileName("");
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      resetDialog();
+    }
+    onOpenChange(newOpen);
+  };
 
   const downloadTemplate = () => {
     const headers = [
@@ -149,10 +205,12 @@ export function ImportPurchasesDialog({
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleImport(file);
+    if (file) handleValidate(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
   };
 
-  const handleImport = async (file: File) => {
+  const handleValidate = async (file: File) => {
     if (!enterpriseId) {
       toast({
         title: "Error",
@@ -162,7 +220,8 @@ export function ImportPurchasesDialog({
       return;
     }
 
-    setImporting(true);
+    setFileName(file.name);
+    setDialogState("validating");
 
     try {
       const rows = await parseFile(file);
@@ -215,17 +274,16 @@ export function ImportPurchasesDialog({
         throw new Error(`No se encontraron las columnas requeridas: ${missingCols.join(", ")}. Asegúrese de usar el formato de exportación de SAT Guatemala.`);
       }
 
-      // Process rows
-      const purchasesByPeriod = new Map<string, Array<{
-        invoice_date: string;
-        rowData: any;
-      }>>();
-      const errors: string[] = [];
+      // Process rows for validation - group by period
+      const recordsByPeriod = new Map<string, { month: number; year: number; records: any[] }>();
+      const errors: ValidationError[] = [];
       let skippedAnuladas = 0;
       
       for (let i = 1; i < rows.length; i++) {
         const values = rows[i];
         if (!values || values.length < 5) continue;
+
+        const rowNum = i + 1;
 
         // Check if anulado
         if (colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado])) {
@@ -238,7 +296,12 @@ export function ImportPurchasesDialog({
         const fecha = parseDateFlexible(rawDate);
         
         if (!fecha) {
-          errors.push(`Fila ${i + 1}: Fecha inválida "${rawDate}"`);
+          errors.push({
+            row: rowNum,
+            field: "Fecha",
+            value: String(rawDate || "(vacío)"),
+            message: "Fecha inválida o formato no reconocido"
+          });
           continue;
         }
 
@@ -248,7 +311,12 @@ export function ImportPurchasesDialog({
         const montoBase = total - iva;
 
         if (total <= 0) {
-          errors.push(`Fila ${i + 1}: Total debe ser mayor a cero`);
+          errors.push({
+            row: rowNum,
+            field: "Total",
+            value: String(values[colIndices.total] || "0"),
+            message: "El total debe ser mayor a cero"
+          });
           continue;
         }
 
@@ -260,12 +328,22 @@ export function ImportPurchasesDialog({
         const nombre = sanitizeCSVField(String(values[colIndices.nombre] || ""));
 
         if (!numero) {
-          errors.push(`Fila ${i + 1}: Número de factura es requerido`);
+          errors.push({
+            row: rowNum,
+            field: "Número",
+            value: "(vacío)",
+            message: "Número de factura es requerido"
+          });
           continue;
         }
 
         if (!nombre) {
-          errors.push(`Fila ${i + 1}: Nombre del proveedor es requerido`);
+          errors.push({
+            row: rowNum,
+            field: "Nombre",
+            value: "(vacío)",
+            message: "Nombre del proveedor es requerido"
+          });
           continue;
         }
 
@@ -275,100 +353,99 @@ export function ImportPurchasesDialog({
         const month = parseInt(monthStr);
         
         if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-          errors.push(`Fila ${i + 1}: Fecha inválida`);
+          errors.push({
+            row: rowNum,
+            field: "Fecha",
+            value: fecha,
+            message: "Mes o año inválido"
+          });
           continue;
         }
 
         const periodKey = `${year}-${String(month).padStart(2, '0')}`;
         
-        if (!purchasesByPeriod.has(periodKey)) {
-          purchasesByPeriod.set(periodKey, []);
+        if (!recordsByPeriod.has(periodKey)) {
+          recordsByPeriod.set(periodKey, { month, year, records: [] });
         }
 
-        purchasesByPeriod.get(periodKey)!.push({
+        recordsByPeriod.get(periodKey)!.records.push({
+          invoice_series: serie,
+          invoice_number: numero,
           invoice_date: fecha,
-          rowData: {
-            serie,
-            numero,
-            tipo_documento: tipoDoc,
-            nit,
-            nombre,
-            monto_base: montoBase,
-            iva,
-            total,
-          },
+          fel_document_type: tipoDoc,
+          supplier_nit: nit,
+          supplier_name: nombre,
+          base_amount: montoBase,
+          vat_amount: iva,
+          net_amount: montoBase,
+          total_amount: total,
         });
       }
 
-      if (purchasesByPeriod.size === 0) {
-        let errorMessage = "No se encontraron registros válidos para importar";
-        if (skippedAnuladas > 0) {
-          errorMessage += `. Se omitieron ${skippedAnuladas} facturas anuladas.`;
-        }
-        if (errors.length > 0) {
-          errorMessage += `\n\nErrores:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`;
-        }
-        throw new Error(errorMessage);
-      }
+      // Now create purchase books and build valid records
+      const validRecords: ValidPurchase[] = [];
+      const periodSummary: { period: string; count: number }[] = [];
+      const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-      // Process each period group
-      const importSummary: { period: string; count: number }[] = [];
-      let totalImported = 0;
-
-      for (const [periodKey, periodPurchases] of purchasesByPeriod) {
-        const [yearStr, monthStr] = periodKey.split("-");
-        const year = parseInt(yearStr);
-        const month = parseInt(monthStr);
-
+      for (const [, periodData] of recordsByPeriod) {
+        const { month, year, records } = periodData;
+        
+        // Find or create purchase book
         const book = await findOrCreatePurchaseBook(enterpriseId, month, year);
 
-        const purchasesToInsert = periodPurchases.map(p => ({
-          enterprise_id: enterpriseId,
-          purchase_book_id: book.id,
-          invoice_series: p.rowData.serie,
-          invoice_number: p.rowData.numero,
-          invoice_date: p.invoice_date,
-          fel_document_type: p.rowData.tipo_documento,
-          supplier_nit: p.rowData.nit,
-          supplier_name: p.rowData.nombre,
-          base_amount: p.rowData.monto_base,
-          vat_amount: p.rowData.iva,
-          net_amount: p.rowData.monto_base,
-          total_amount: p.rowData.total,
-        }));
+        for (const record of records) {
+          validRecords.push({
+            enterprise_id: enterpriseId,
+            purchase_book_id: book.id,
+            ...record
+          });
+        }
 
-        const { error: insertError } = await supabase
-          .from("tab_purchase_ledger")
-          .insert(purchasesToInsert);
-
-        if (insertError) throw insertError;
-
-        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-        importSummary.push({
+        periodSummary.push({
           period: `${monthNames[month - 1]} ${year}`,
-          count: periodPurchases.length,
+          count: records.length
         });
-        totalImported += periodPurchases.length;
       }
 
-      // Build success message
-      const summaryText = importSummary.map(s => `${s.count} en ${s.period}`).join(", ");
-      let message = `Se importaron ${totalImported} registros: ${summaryText}`;
+      setValidationResult({
+        validRecords,
+        errors,
+        skippedAnuladas,
+        periodSummary
+      });
+      setDialogState("summary");
+
+    } catch (error: any) {
+      toast({
+        title: "Error al validar archivo",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
+      resetDialog();
+    }
+  };
+
+  const handleImport = async () => {
+    if (!validationResult || validationResult.validRecords.length === 0) return;
+
+    setImporting(true);
+
+    try {
+      const { error: insertError } = await supabase
+        .from("tab_purchase_ledger")
+        .insert(validationResult.validRecords);
+
+      if (insertError) throw insertError;
+
+      const summaryText = validationResult.periodSummary.map(s => `${s.count} en ${s.period}`).join(", ");
       
-      if (skippedAnuladas > 0) {
-        message += `. Se omitieron ${skippedAnuladas} facturas anuladas.`;
-      }
-      if (errors.length > 0) {
-        message += ` ${errors.length} filas con errores fueron omitidas.`;
-      }
-
       toast({
         title: "Importación exitosa",
-        description: message,
+        description: `Se importaron ${validationResult.validRecords.length} registros: ${summaryText}`,
       });
 
       onSuccess();
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch (error: any) {
       toast({
         title: "Error al importar",
@@ -381,81 +458,200 @@ export function ImportPurchasesDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV o Excel exportado de SAT Guatemala. Las facturas se asignarán automáticamente al mes correspondiente.
+            {dialogState === "initial" && "Carga un archivo CSV o Excel exportado de SAT Guatemala."}
+            {dialogState === "validating" && `Validando ${fileName}...`}
+            {dialogState === "summary" && `Resultado de validación: ${fileName}`}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={downloadTemplate} className="flex-1">
-              <Download className="h-4 w-4 mr-2" />
-              Descargar Plantilla
-            </Button>
-          </div>
+        <div className="flex-1 overflow-hidden">
+          {/* Initial State - File Upload */}
+          {dialogState === "initial" && (
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={downloadTemplate} className="flex-1">
+                  <Download className="h-4 w-4 mr-2" />
+                  Descargar Plantilla
+                </Button>
+              </div>
 
-          <div
-            {...dragProps}
-            className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-              isDragging && "border-primary bg-primary/5",
-              !isDragging && "border-border"
-            )}
-          >
-            <Upload className={cn("h-12 w-12 mx-auto mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
-            <p className="text-sm text-muted-foreground mb-4">
-              {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o Excel, o haz clic para seleccionar"}
-            </p>
-            <input
-              type="file"
-              accept=".csv,.xls,.xlsx"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="file-upload-purchases"
-              disabled={importing}
-            />
-            <label htmlFor="file-upload-purchases">
-              <Button 
-                variant={importing ? "default" : "outline"} 
-                disabled={importing} 
-                className={cn(importing && "opacity-100")}
-                asChild
+              <div
+                {...dragProps}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+                  isDragging && "border-primary bg-primary/5",
+                  !isDragging && "border-border"
+                )}
               >
-                <span>
+                <Upload className={cn("h-12 w-12 mx-auto mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
+                <p className="text-sm text-muted-foreground mb-4">
+                  {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o Excel, o haz clic para seleccionar"}
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,.xls,.xlsx"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload-purchases"
+                />
+                <label htmlFor="file-upload-purchases">
+                  <Button variant="outline" asChild>
+                    <span>Seleccionar Archivo</span>
+                  </Button>
+                </label>
+              </div>
+
+              <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg">
+                <p className="font-medium mb-2">Formato SAT Guatemala - Columnas utilizadas:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li><strong>Fecha de emisión:</strong> DD/MM/YYYY, YYYY-MM-DD o ISO 8601</li>
+                  <li><strong>Serie:</strong> Serie de la factura</li>
+                  <li><strong>Número del DTE:</strong> Número de factura</li>
+                  <li><strong>Tipo de DTE:</strong> Tipo de documento</li>
+                  <li><strong>NIT del emisor:</strong> NIT del proveedor</li>
+                  <li><strong>Nombre completo del emisor:</strong> Nombre del proveedor</li>
+                  <li><strong>Gran Total (Moneda Original):</strong> Monto total</li>
+                  <li><strong>IVA (monto de este impuesto):</strong> Monto del IVA</li>
+                  <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/Si/No)</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Validating State - Loading Spinner */}
+          {dialogState === "validating" && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+              <p className="text-lg font-medium">Validando archivo...</p>
+              <p className="text-sm text-muted-foreground">Verificando formato y datos</p>
+            </div>
+          )}
+
+          {/* Summary State - Validation Results */}
+          {dialogState === "summary" && validationResult && (
+            <div className="space-y-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-800 dark:text-green-200">Válidos</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
+                    {validationResult.validRecords.length}
+                  </p>
+                </div>
+                
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Anulados</span>
+                  </div>
+                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
+                    {validationResult.skippedAnuladas}
+                  </p>
+                </div>
+                
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    <span className="text-sm font-medium text-red-800 dark:text-red-200">Errores</span>
+                  </div>
+                  <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-1">
+                    {validationResult.errors.length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Period Summary */}
+              {validationResult.periodSummary.length > 0 && (
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-sm font-medium mb-2">Distribución por período:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {validationResult.periodSummary.map((ps) => (
+                      <span key={ps.period} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
+                        {ps.count} en {ps.period}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error Details Table */}
+              {validationResult.errors.length > 0 && (
+                <div className="border rounded-lg">
+                  <div className="bg-muted/50 px-4 py-2 border-b flex items-center gap-2">
+                    <FileWarning className="h-4 w-4 text-destructive" />
+                    <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
+                  </div>
+                  <ScrollArea className="h-[200px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16">Fila</TableHead>
+                          <TableHead className="w-24">Campo</TableHead>
+                          <TableHead className="w-32">Valor</TableHead>
+                          <TableHead>Error</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {validationResult.errors.map((err, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-mono text-xs">{err.row}</TableCell>
+                            <TableCell className="text-xs">{err.field}</TableCell>
+                            <TableCell className="font-mono text-xs max-w-[120px] truncate" title={err.value}>
+                              {err.value}
+                            </TableCell>
+                            <TableCell className="text-xs text-destructive">{err.message}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* No valid records warning */}
+              {validationResult.validRecords.length === 0 && (
+                <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
+                  <XCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                  <p className="font-medium text-destructive">No hay registros válidos para importar</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Revisa los errores arriba y corrige el archivo antes de volver a intentar.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={resetDialog} className="flex-1">
+                  Seleccionar Otro Archivo
+                </Button>
+                <Button 
+                  onClick={handleImport} 
+                  disabled={validationResult.validRecords.length === 0 || importing}
+                  className="flex-1"
+                >
                   {importing ? (
                     <>
-                      <span className="animate-spin mr-2">⏳</span>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Importando...
                     </>
                   ) : (
-                    "Seleccionar Archivo"
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Importar {validationResult.validRecords.length} Registros
+                    </>
                   )}
-                </span>
-              </Button>
-            </label>
-          </div>
-
-          <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg">
-            <p className="font-medium mb-2">Formato SAT Guatemala - Columnas utilizadas:</p>
-            <ul className="list-disc list-inside space-y-1 text-xs">
-              <li><strong>Fecha de emisión:</strong> DD/MM/YYYY, YYYY-MM-DD o ISO 8601</li>
-              <li><strong>Serie:</strong> Serie de la factura</li>
-              <li><strong>Número del DTE:</strong> Número de factura</li>
-              <li><strong>Tipo de DTE:</strong> Tipo de documento</li>
-              <li><strong>NIT del emisor:</strong> NIT del proveedor</li>
-              <li><strong>Nombre completo del emisor:</strong> Nombre del proveedor</li>
-              <li><strong>Gran Total (Moneda Original):</strong> Monto total</li>
-              <li><strong>IVA (monto de este impuesto):</strong> Monto del IVA</li>
-              <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/Si/No)</li>
-            </ul>
-            <p className="mt-3 text-xs text-primary font-medium">
-              Soporta archivos CSV, XLS y XLSX exportados directamente de SAT.
-            </p>
-          </div>
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
