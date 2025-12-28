@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload } from "lucide-react";
+import { FileText, Upload, Loader2, AlertCircle } from "lucide-react";
 import { SalesCard } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
@@ -58,6 +58,8 @@ export default function LibroVentas() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [journalType, setJournalType] = useState<"mes" | "documento">("mes");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
+  const [existingJournalEntry, setExistingJournalEntry] = useState<boolean>(false);
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
     id: number;
@@ -267,6 +269,24 @@ export default function LibroVentas() {
     }
   };
 
+  const checkExistingJournalEntry = async (enterpriseId: string, month: number, year: number) => {
+    try {
+      const entryNumber = `VENT-${year}-${String(month).padStart(2, '0')}`;
+      const { data, error } = await supabase
+        .from("tab_journal_entries")
+        .select("id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("entry_number", entryNumber)
+        .maybeSingle();
+
+      if (error) throw error;
+      setExistingJournalEntry(!!data);
+    } catch (error) {
+      console.error("Error checking existing journal entry:", error);
+      setExistingJournalEntry(false);
+    }
+  };
+
   const fetchSales = async (enterpriseId: string, month: number, year: number) => {
     try {
       setLoading(true);
@@ -285,6 +305,9 @@ export default function LibroVentas() {
           .order("invoice_number", { ascending: true })
       );
       setSales(data || []);
+
+      // Verificar si ya existe póliza consolidada para este mes
+      await checkExistingJournalEntry(enterpriseId, month, year);
     } catch (error: any) {
       toast({
         title: "Error al cargar facturas",
@@ -535,6 +558,7 @@ export default function LibroVentas() {
   };
 
   const generateJournalEntry = async () => {
+    setIsGeneratingJournal(true);
     try {
       if (!currentEnterpriseId) {
         toast({
@@ -802,6 +826,8 @@ export default function LibroVentas() {
         description: getSafeErrorMessage(error),
         variant: "destructive",
       });
+    } finally {
+      setIsGeneratingJournal(false);
     }
   };
 
@@ -934,6 +960,12 @@ export default function LibroVentas() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {existingJournalEntry && journalType === "mes" && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-600 dark:text-amber-400 text-sm">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <span>Ya existe una póliza consolidada para {monthNames[selectedMonth - 1]} {selectedYear}</span>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Tipo de Póliza</Label>
                       <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "documento")}>
@@ -955,8 +987,16 @@ export default function LibroVentas() {
                     <Button 
                       className="w-full" 
                       onClick={generateJournalEntry}
+                      disabled={isGeneratingJournal || (existingJournalEntry && journalType === "mes")}
                     >
-                      Generar
+                      {isGeneratingJournal ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Generando...
+                        </>
+                      ) : (
+                        "Generar"
+                      )}
                     </Button>
                   </div>
                 </DialogContent>

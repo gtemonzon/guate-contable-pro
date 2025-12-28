@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus, Search } from "lucide-react";
+import { FileText, Upload, Plus, Search, Loader2, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard } from "@/components/compras/PurchaseCard";
 import { SalesCard } from "@/components/ventas/SalesCard";
@@ -80,6 +80,9 @@ export default function LibrosFiscales() {
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
+  const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
+  const [existingSalesJournalEntry, setExistingSalesJournalEntry] = useState<boolean>(false);
+  const [existingPurchasesJournalEntry, setExistingPurchasesJournalEntry] = useState<boolean>(false);
   
   // Estados para listas de cuentas
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
@@ -503,12 +506,41 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
       setSales(data || []);
+
+      // Verificar pólizas existentes para ventas y compras
+      await checkExistingJournalEntries(enterpriseId, month, year);
     } catch (error: any) {
       toast({
         title: "Error al cargar facturas de venta",
         description: getSafeErrorMessage(error),
         variant: "destructive",
       });
+    }
+  };
+
+  const checkExistingJournalEntries = async (enterpriseId: string, month: number, year: number) => {
+    try {
+      const salesEntryNumber = `VENT-${year}-${String(month).padStart(2, '0')}`;
+      const purchasesEntryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+
+      const { data: salesEntry } = await supabase
+        .from("tab_journal_entries")
+        .select("id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("entry_number", salesEntryNumber)
+        .maybeSingle();
+
+      const { data: purchasesEntry } = await supabase
+        .from("tab_journal_entries")
+        .select("id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("entry_number", purchasesEntryNumber)
+        .maybeSingle();
+
+      setExistingSalesJournalEntry(!!salesEntry);
+      setExistingPurchasesJournalEntry(!!purchasesEntry);
+    } catch (error) {
+      console.error("Error checking existing journal entries:", error);
     }
   };
 
@@ -1229,6 +1261,14 @@ export default function LibrosFiscales() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {((activeTab === "ventas" && existingSalesJournalEntry) || 
+              (activeTab === "compras" && existingPurchasesJournalEntry)) && 
+              journalType === "mes" && (
+              <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-600 dark:text-amber-400 text-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>Ya existe una póliza consolidada para {monthNames[selectedMonth - 1]} {selectedYear}</span>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Tipo de Póliza</Label>
               <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "banco" | "documento")}>
@@ -1264,7 +1304,12 @@ export default function LibrosFiscales() {
             </div>
             <Button 
               className="w-full" 
+              disabled={isGeneratingJournal || (journalType === "mes" && (
+                (activeTab === "ventas" && existingSalesJournalEntry) || 
+                (activeTab === "compras" && existingPurchasesJournalEntry)
+              ))}
               onClick={async () => {
+                setIsGeneratingJournal(true);
                 try {
                   if (!currentEnterpriseId || (activeTab === "compras" && !currentBookId)) {
                     toast({
@@ -1650,10 +1695,19 @@ export default function LibrosFiscales() {
                     description: getSafeErrorMessage(error),
                     variant: "destructive",
                   });
+                } finally {
+                  setIsGeneratingJournal(false);
                 }
               }}
             >
-              Generar
+              {isGeneratingJournal ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generando...
+                </>
+              ) : (
+                "Generar"
+              )}
             </Button>
           </div>
         </DialogContent>
