@@ -209,6 +209,11 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       setUploadDialogOpen(false);
       resetForm();
       fetchDocuments();
+      
+      // Emit event to notify other components about the document change
+      window.dispatchEvent(new CustomEvent("documentsChanged", {
+        detail: { enterpriseId }
+      }));
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -260,6 +265,11 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       setDeleteDialogOpen(false);
       setSelectedDocument(null);
       fetchDocuments();
+      
+      // Emit event to notify other components about the document change
+      window.dispatchEvent(new CustomEvent("documentsChanged", {
+        detail: { enterpriseId }
+      }));
     } catch (error: any) {
       toast({
         variant: "destructive",

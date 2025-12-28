@@ -70,33 +70,43 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
+    // Listen for document changes
+    const handleDocumentsChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.enterpriseId === enterprise.id) {
+        fetchDocumentsCount();
+      }
+    };
+
     window.addEventListener("storage", handleEnterpriseChange);
     window.addEventListener("enterpriseChanged", handleEnterpriseChange);
     window.addEventListener("periodChanged", handlePeriodChange);
+    window.addEventListener("documentsChanged", handleDocumentsChange);
 
     return () => {
       window.removeEventListener("storage", handleEnterpriseChange);
       window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
       window.removeEventListener("periodChanged", handlePeriodChange);
+      window.removeEventListener("documentsChanged", handleDocumentsChange);
     };
   }, [enterprise.id]);
 
+  const fetchDocumentsCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('tab_enterprise_documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('enterprise_id', enterprise.id)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      setDocumentsCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching documents count:', error);
+    }
+  };
+
   useEffect(() => {
-    const fetchDocumentsCount = async () => {
-      try {
-        const { count, error } = await supabase
-          .from('tab_enterprise_documents')
-          .select('*', { count: 'exact', head: true })
-          .eq('enterprise_id', enterprise.id)
-          .eq('is_active', true);
-
-        if (error) throw error;
-        setDocumentsCount(count || 0);
-      } catch (error) {
-        console.error('Error fetching documents count:', error);
-      }
-    };
-
     fetchDocumentsCount();
   }, [enterprise.id]);
 
