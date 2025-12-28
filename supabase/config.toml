@@ -1,1 +1,4 @@
 project_id = "fgtmirepzlosocmkoxng"
+
+[functions.parse-tax-form-pdf]
+verify_jwt = false

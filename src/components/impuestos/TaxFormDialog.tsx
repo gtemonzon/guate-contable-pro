@@ -9,8 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, X, FileText } from "lucide-react";
-import { format } from "date-fns";
+import { CalendarIcon, Upload, X, FileText, Search, Loader2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set the worker source for pdf.js
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface TaxForm {
   id: number;
@@ -44,6 +49,18 @@ interface TaxFormDialogProps {
   onOpenChange: (success?: boolean) => void;
   enterpriseId: number;
   editingForm: TaxForm | null;
+}
+
+interface ExtractedPdfData {
+  formNumber?: string;
+  accessCode?: string;
+  taxType?: string;
+  periodType?: string;
+  periodMonth?: number;
+  periodYear?: number;
+  paymentDate?: string;
+  amountPaid?: number;
+  fieldsFound: number;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -93,6 +110,7 @@ export default function TaxFormDialog({
   const [file, setFile] = useState<File | null>(null);
   const [existingFileName, setExistingFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +124,7 @@ export default function TaxFormDialog({
       setExistingFileName(null);
     },
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
-    disabled: loading,
+    disabled: loading || isAnalyzing,
   });
 
   useEffect(() => {
@@ -194,6 +212,82 @@ export default function TaxFormDialog({
       }
       setFile(selectedFile);
       setExistingFileName(null);
+    }
+  };
+
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(" ");
+      fullText += pageText + "\n";
+    }
+    
+    return fullText;
+  };
+
+  const handleAnalyzePdf = async () => {
+    if (!file) return;
+
+    setIsAnalyzing(true);
+    try {
+      // Extract text from PDF in client-side
+      const pdfText = await extractTextFromPdf(file);
+
+      const { data, error } = await supabase.functions.invoke("parse-tax-form-pdf", {
+        body: { pdfText },
+      });
+
+      if (error) throw error;
+
+      const extractedData = data as ExtractedPdfData;
+
+      if (extractedData.fieldsFound === 0) {
+        toast({
+          title: "Sin datos detectados",
+          description: "No se pudo extraer información del PDF. Completa los campos manualmente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Pre-fill fields with extracted data
+      if (extractedData.formNumber) setFormNumber(extractedData.formNumber);
+      if (extractedData.accessCode) setAccessCode(extractedData.accessCode);
+      if (extractedData.taxType) setTaxType(extractedData.taxType);
+      if (extractedData.periodType) setPeriodType(extractedData.periodType);
+      if (extractedData.periodMonth) setPeriodMonth(extractedData.periodMonth.toString());
+      if (extractedData.periodYear) setPeriodYear(extractedData.periodYear.toString());
+      if (extractedData.paymentDate) {
+        try {
+          setPaymentDate(parseISO(extractedData.paymentDate));
+        } catch (e) {
+          console.error("Error parsing payment date:", e);
+        }
+      }
+      if (extractedData.amountPaid !== undefined) {
+        setAmountPaid(extractedData.amountPaid.toString());
+      }
+
+      toast({
+        title: "Análisis completado",
+        description: `Se detectaron ${extractedData.fieldsFound} campo(s). Revisa los datos antes de guardar.`,
+      });
+    } catch (error: any) {
+      console.error("Error analyzing PDF:", error);
+      toast({
+        title: "Error al analizar",
+        description: error.message || "No se pudo procesar el PDF. Completa los campos manualmente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -327,178 +421,17 @@ export default function TaxFormDialog({
           <DialogDescription>
             {editingForm
               ? "Modifica los datos del formulario"
-              : "Ingresa los datos del formulario de impuestos"}
+              : "Sube un PDF para extraer los datos automáticamente o ingresalos manualmente"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="formNumber">Número de Formulario *</Label>
-              <Input
-                id="formNumber"
-                value={formNumber}
-                onChange={(e) => setFormNumber(e.target.value)}
-                placeholder="Ej: 1234567890"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="accessCode">Código de Acceso *</Label>
-              <Input
-                id="accessCode"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                placeholder="Ej: ABC123XYZ"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2 relative">
-            <Label htmlFor="taxType">Tipo de Impuesto</Label>
-            <Input
-              id="taxType"
-              ref={taxTypeInputRef}
-              value={taxType}
-              onChange={(e) => {
-                setTaxType(e.target.value);
-                setShowSuggestions(true);
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => {
-                setTimeout(() => setShowSuggestions(false), 150);
-              }}
-              placeholder="Ej: IVA, ISR, ISO..."
-              autoComplete="off"
-            />
-            {showSuggestions && filteredSuggestions.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-                {filteredSuggestions.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className="px-3 py-2 cursor-pointer hover:bg-accent text-sm"
-                    onClick={() => handleTaxTypeSelect(suggestion)}
-                  >
-                    {suggestion}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Período del impuesto */}
+          {/* Step 1: PDF Upload - First */}
           <div className="space-y-2">
-            <Label>Período del Impuesto</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <Select value={periodType} onValueChange={(v) => {
-                setPeriodType(v);
-                setPeriodMonth("");
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="mensual">Mensual</SelectItem>
-                  <SelectItem value="trimestral">Trimestral</SelectItem>
-                  <SelectItem value="anual">Anual</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {periodType === "mensual" && (
-                <Select value={periodMonth} onValueChange={setPeriodMonth}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((month) => (
-                      <SelectItem key={month.value} value={month.value.toString()}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {periodType === "trimestral" && (
-                <Select value={periodMonth} onValueChange={setPeriodMonth}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Trimestre" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUARTERS.map((quarter) => (
-                      <SelectItem key={quarter.value} value={quarter.value.toString()}>
-                        {quarter.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {periodType && (
-                <Select value={periodYear} onValueChange={setPeriodYear}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Año" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {YEARS.map((year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Fecha de Pago *</Label>
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !paymentDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {paymentDate ? format(paymentDate, "dd/MM/yyyy") : "Seleccionar"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={paymentDate}
-                    onSelect={(date) => {
-                      setPaymentDate(date);
-                      setCalendarOpen(false);
-                    }}
-                    locale={es}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amountPaid">Monto Pagado (Q) *</Label>
-              <Input
-                id="amountPaid"
-                type="number"
-                step="0.01"
-                min="0"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Archivo PDF (Opcional)</Label>
+            <Label className="text-base font-medium flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs">1</span>
+              Cargar archivo PDF
+            </Label>
             <div
               {...dragProps}
               className={cn(
@@ -508,19 +441,42 @@ export default function TaxFormDialog({
               )}
             >
               {file ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-primary" />
-                    <span className="text-sm truncate max-w-[250px]">{file.name}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <FileText className="h-5 w-5 text-primary flex-shrink-0" />
+                    <span className="text-sm truncate">{file.name}</span>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setFile(null)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAnalyzePdf}
+                      disabled={isAnalyzing || loading}
+                      className="gap-1"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Analizando...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4" />
+                          Analizar PDF
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFile(null)}
+                      disabled={isAnalyzing}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ) : existingFileName ? (
                 <div className="flex items-center justify-between">
@@ -559,23 +515,204 @@ export default function TaxFormDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas (Opcional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notas adicionales..."
-              rows={3}
-            />
+          <Separator />
+
+          {/* Step 2: Form Data */}
+          <div className="space-y-4">
+            <Label className="text-base font-medium flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs">2</span>
+              Datos del formulario
+            </Label>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="formNumber">Número de Formulario *</Label>
+                <Input
+                  id="formNumber"
+                  value={formNumber}
+                  onChange={(e) => setFormNumber(e.target.value)}
+                  placeholder="Ej: 1234567890"
+                  disabled={isAnalyzing}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="accessCode">Código de Acceso *</Label>
+                <Input
+                  id="accessCode"
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  placeholder="Ej: ABC123XYZ"
+                  disabled={isAnalyzing}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 relative">
+              <Label htmlFor="taxType">Tipo de Impuesto</Label>
+              <Input
+                id="taxType"
+                ref={taxTypeInputRef}
+                value={taxType}
+                onChange={(e) => {
+                  setTaxType(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowSuggestions(false), 150);
+                }}
+                placeholder="Ej: IVA, ISR, ISO..."
+                autoComplete="off"
+                disabled={isAnalyzing}
+              />
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                  {filteredSuggestions.map((suggestion, index) => (
+                    <div
+                      key={index}
+                      className="px-3 py-2 cursor-pointer hover:bg-accent text-sm"
+                      onClick={() => handleTaxTypeSelect(suggestion)}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Período del impuesto */}
+            <div className="space-y-2">
+              <Label>Período del Impuesto</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Select value={periodType} onValueChange={(v) => {
+                  setPeriodType(v);
+                  setPeriodMonth("");
+                }} disabled={isAnalyzing}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mensual">Mensual</SelectItem>
+                    <SelectItem value="trimestral">Trimestral</SelectItem>
+                    <SelectItem value="anual">Anual</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {periodType === "mensual" && (
+                  <Select value={periodMonth} onValueChange={setPeriodMonth} disabled={isAnalyzing}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Mes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((month) => (
+                        <SelectItem key={month.value} value={month.value.toString()}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {periodType === "trimestral" && (
+                  <Select value={periodMonth} onValueChange={setPeriodMonth} disabled={isAnalyzing}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Trimestre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUARTERS.map((quarter) => (
+                        <SelectItem key={quarter.value} value={quarter.value.toString()}>
+                          {quarter.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {periodType && (
+                  <Select value={periodYear} onValueChange={setPeriodYear} disabled={isAnalyzing}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Año" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {YEARS.map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fecha de Pago *</Label>
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !paymentDate && "text-muted-foreground"
+                      )}
+                      disabled={isAnalyzing}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {paymentDate ? format(paymentDate, "dd/MM/yyyy") : "Seleccionar"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={paymentDate}
+                      onSelect={(date) => {
+                        setPaymentDate(date);
+                        setCalendarOpen(false);
+                      }}
+                      locale={es}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amountPaid">Monto Pagado (Q) *</Label>
+                <Input
+                  id="amountPaid"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={amountPaid}
+                  onChange={(e) => setAmountPaid(e.target.value)}
+                  placeholder="0.00"
+                  disabled={isAnalyzing}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notas (Opcional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Notas adicionales..."
+                rows={3}
+                disabled={isAnalyzing}
+              />
+            </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange()} disabled={loading}>
+          <Button variant="outline" onClick={() => onOpenChange()} disabled={loading || isAnalyzing}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
+          <Button onClick={handleSubmit} disabled={loading || isAnalyzing}>
             {loading ? "Guardando..." : editingForm ? "Actualizar" : "Guardar Formulario"}
           </Button>
         </DialogFooter>
