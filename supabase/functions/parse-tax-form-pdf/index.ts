@@ -196,50 +196,78 @@ function extractDataFromText(text: string): ExtractedData {
     }
   }
 
-  // Determine period type from tax type
-  if (result.taxType) {
-    if (/MENSUAL/i.test(result.taxType)) {
-      result.periodType = "mensual";
-    } else if (/TRIMESTRAL/i.test(result.taxType)) {
-      result.periodType = "trimestral";
-    } else if (/ANUAL/i.test(result.taxType)) {
-      result.periodType = "anual";
-    }
+  // Extract period info (type + month/quarter + year)
+  const periodBlock = extractBetween(
+    text,
+    /PER[IÍ]ODO\s+DE\s+IMPOSICI[ÓO]N/i,
+    /RENTA|DETERMINACI[ÓO]N|DECLARACI[ÓO]N|VALID(?:E|ACI[ÓO]N)|FECHA\s+DE|TOTAL\s+A\s+PAGAR|N[ÚU]MERO\s+DE\s+FORMULARIO|N[ÚU]MERO\s+DE\s+ACCESO|C[ÓO]DIGO\s+DE\s+ACCESO/i
+  );
+  const periodText = (periodBlock || "").toUpperCase();
+
+  // 1) Quarter (Trimestral)
+  const quarterMatch = periodText.match(/TRIMESTRE\s*[:\-\|\s]*([1-4])\b/i);
+  if (quarterMatch) {
+    const q = parseInt(quarterMatch[1]);
+    result.periodType = "trimestral";
+    result.periodMonth = (q - 1) * 3 + 1; // store starting month of quarter
+    result.fieldsFound++;
+    console.log("Found periodType:", result.periodType);
+    console.log("Found periodQuarter:", q, "(periodMonth:", result.periodMonth, ")");
   }
 
-  // Extract Month (supports table format "Mes | OCTUBRE")
-  const monthPatterns = [
-    /Mes[:\s]*([A-ZÁÉÍÓÚÑ]+)/i,
-    /Mes\s*\|\s*([A-ZÁÉÍÓÚÑ]+)/i,
-    /Per[íi]odo[:\s]*([A-ZÁÉÍÓÚÑ]+)/i,
-    /MES\s+DE[:\s]*([A-ZÁÉÍÓÚÑ]+)/i,
-  ];
+  // 2) Month (Mensual) - prefer period block if available
+  if (!result.periodMonth) {
+    const monthCandidates = [
+      // "Mes | OCTUBRE" or "Mes: OCTUBRE"
+      /\bMES\b\s*(?:\||:)?\s*([A-ZÁÉÍÓÚÑ]+)/i,
+      // "Mes 10"
+      /\bMES\b\s*(?:\||:)?\s*(\d{1,2})\b/i,
+      // Some PDFs show "PERIODO ... OCTUBRE"
+      /\bPER[IÍ]ODO\b[^A-Z0-9]{0,10}([A-ZÁÉÍÓÚÑ]+)/i,
+    ];
 
-  for (const pattern of monthPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const monthName = match[1].toUpperCase().trim();
-      if (MONTH_MAP[monthName]) {
-        result.periodMonth = MONTH_MAP[monthName];
+    const source = periodBlock ? periodBlock : text;
+    for (const pattern of monthCandidates) {
+      const m = source.match(pattern);
+      if (!m) continue;
+
+      const raw = (m[1] ?? "").toString().trim().toUpperCase();
+      const numeric = parseInt(raw);
+      if (!isNaN(numeric) && numeric >= 1 && numeric <= 12) {
+        result.periodMonth = numeric;
+        result.fieldsFound++;
+        console.log("Found periodMonth:", result.periodMonth);
+        break;
+      }
+
+      if (MONTH_MAP[raw]) {
+        result.periodMonth = MONTH_MAP[raw];
         result.fieldsFound++;
         console.log("Found periodMonth:", result.periodMonth);
         break;
       }
     }
+
+    if (result.periodMonth && !result.periodType) {
+      result.periodType = "mensual";
+      result.fieldsFound++;
+      console.log("Found periodType:", result.periodType);
+    }
   }
 
-  // Extract Year (supports table format "Año | 2025")
-  const yearPatterns = [
-    /A[ÑN]O[:\s]*(\d{4})/i,
-    /A[ÑN]o\s*\|\s*(\d{4})/i,
-    /Per[íi]odo[:\s]*\d{4}[\s\-]+(\d{4})/i,
-    /(\d{4})\s*(?:Per[íi]odo|A[ÑN]O)/i,
+  // 3) Year - prefer period block if available
+  const yearCandidates = [
+    /\bA[ÑN]O\b\s*(?:\||:)?\s*(\d{4})/i,
+    /\bAÑO\b\s*(\d{4})/i,
+    /(20\d{2})/,
   ];
 
-  for (const pattern of yearPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const year = parseInt(match[1]);
+  {
+    const source = periodBlock ? periodBlock : text;
+    for (const pattern of yearCandidates) {
+      const y = source.match(pattern);
+      if (!y) continue;
+      const year = parseInt(y[1]);
       if (year >= 2000 && year <= 2100) {
         result.periodYear = year;
         result.fieldsFound++;
@@ -249,13 +277,21 @@ function extractDataFromText(text: string): ExtractedData {
     }
   }
 
-  // Also try to find year from other patterns if not found
-  if (!result.periodYear) {
-    const yearMatch = text.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      result.periodYear = parseInt(yearMatch[1]);
+  // If we only have a year, consider it annual unless tax type says otherwise.
+  if (result.periodYear && !result.periodMonth && !result.periodType) {
+    result.periodType = "anual";
+    result.fieldsFound++;
+    console.log("Found periodType:", result.periodType);
+  }
+
+  // Last fallback: infer periodType from tax type keywords
+  if (!result.periodType && result.taxType) {
+    if (/TRIMESTRAL/i.test(result.taxType)) result.periodType = "trimestral";
+    else if (/ANUAL/i.test(result.taxType)) result.periodType = "anual";
+    else if (/MENSUAL/i.test(result.taxType)) result.periodType = "mensual";
+    if (result.periodType) {
       result.fieldsFound++;
-      console.log("Found periodYear (fallback):", result.periodYear);
+      console.log("Found periodType (from taxType):", result.periodType);
     }
   }
 
