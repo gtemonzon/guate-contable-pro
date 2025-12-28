@@ -32,12 +32,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ImportSalesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enterpriseId: number | null;
   onSuccess: () => void;
+  incomeAccounts?: Array<{ id: number; account_code: string; account_name: string }>;
+  operationTypes?: Array<{ id: number; code: string; name: string }>;
 }
 
 interface ValidationError {
@@ -60,6 +65,8 @@ interface ValidSale {
   net_amount: number;
   vat_amount: number;
   total_amount: number;
+  income_account_id?: number | null;
+  operation_type_id?: number | null;
 }
 
 interface ValidationResult {
@@ -69,7 +76,7 @@ interface ValidationResult {
   periodSummary: { period: string; count: number }[];
 }
 
-type DialogState = "initial" | "validating" | "summary";
+type DialogState = "initial" | "validating" | "options" | "summary";
 
 // Helper to find accounting period for a given date
 async function findAccountingPeriod(
@@ -134,12 +141,19 @@ export function ImportSalesDialog({
   onOpenChange,
   enterpriseId,
   onSuccess,
+  incomeAccounts = [],
+  operationTypes = [],
 }: ImportSalesDialogProps) {
   const { toast } = useToast();
   const [dialogState, setDialogState] = useState<DialogState>("initial");
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState<string>("");
+  
+  // Options for bulk assignment
+  const [applyBulkOptions, setApplyBulkOptions] = useState(false);
+  const [selectedIncomeAccount, setSelectedIncomeAccount] = useState<number | null>(null);
+  const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
@@ -152,6 +166,9 @@ export function ImportSalesDialog({
     setDialogState("initial");
     setValidationResult(null);
     setFileName("");
+    setApplyBulkOptions(false);
+    setSelectedIncomeAccount(null);
+    setSelectedOperationType(null);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -396,7 +413,13 @@ export function ImportSalesDialog({
         skippedAnuladas,
         periodSummary
       });
-      setDialogState("summary");
+      
+      // If we have income accounts or operation types available, show options dialog
+      if (incomeAccounts.length > 0 || operationTypes.length > 0) {
+        setDialogState("options");
+      } else {
+        setDialogState("summary");
+      }
 
     } catch (error: any) {
       toast({
@@ -406,6 +429,22 @@ export function ImportSalesDialog({
       });
       resetDialog();
     }
+  };
+
+  const handleProceedToSummary = () => {
+    if (validationResult && applyBulkOptions) {
+      // Apply selected account and operation type to all records
+      const updatedRecords = validationResult.validRecords.map(record => ({
+        ...record,
+        income_account_id: selectedIncomeAccount,
+        operation_type_id: selectedOperationType,
+      }));
+      setValidationResult({
+        ...validationResult,
+        validRecords: updatedRecords,
+      });
+    }
+    setDialogState("summary");
   };
 
   const handleImport = async () => {
@@ -448,6 +487,7 @@ export function ImportSalesDialog({
           <DialogDescription>
             {dialogState === "initial" && "Carga un archivo CSV o Excel exportado de SAT Guatemala."}
             {dialogState === "validating" && `Validando ${fileName}...`}
+            {dialogState === "options" && "Opciones de importación"}
             {dialogState === "summary" && `Resultado de validación: ${fileName}`}
           </DialogDescription>
         </DialogHeader>
@@ -513,6 +553,90 @@ export function ImportSalesDialog({
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
               <p className="text-lg font-medium">Validando archivo...</p>
               <p className="text-sm text-muted-foreground">Verificando formato y datos</p>
+            </div>
+          )}
+
+          {/* Options State - Account and Operation Type Selection */}
+          {dialogState === "options" && validationResult && (
+            <div className="space-y-6">
+              <div className="bg-muted/50 rounded-lg p-4">
+                <p className="text-sm">
+                  Se encontraron <strong>{validationResult.validRecords.length}</strong> registros válidos para importar.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <Label htmlFor="apply-bulk" className="text-base font-medium">
+                      ¿Aplicar cuenta y tipo de operación a todos los documentos?
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Si activas esta opción, todos los documentos importados tendrán la misma cuenta contable y tipo de operación.
+                    </p>
+                  </div>
+                  <Switch
+                    id="apply-bulk"
+                    checked={applyBulkOptions}
+                    onCheckedChange={setApplyBulkOptions}
+                  />
+                </div>
+
+                {applyBulkOptions && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    {incomeAccounts.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Cuenta de Ingreso</Label>
+                        <Select
+                          value={selectedIncomeAccount?.toString() || ""}
+                          onValueChange={(val) => setSelectedIncomeAccount(val ? parseInt(val) : null)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar cuenta..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {incomeAccounts.map((acc) => (
+                              <SelectItem key={acc.id} value={acc.id.toString()}>
+                                {acc.account_code} - {acc.account_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {operationTypes.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Tipo de Operación</Label>
+                        <Select
+                          value={selectedOperationType?.toString() || ""}
+                          onValueChange={(val) => setSelectedOperationType(val ? parseInt(val) : null)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {operationTypes.map((op) => (
+                              <SelectItem key={op.id} value={op.id.toString()}>
+                                {op.code} - {op.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={resetDialog} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleProceedToSummary} className="flex-1">
+                  Continuar
+                </Button>
+              </div>
             </div>
           )}
 
