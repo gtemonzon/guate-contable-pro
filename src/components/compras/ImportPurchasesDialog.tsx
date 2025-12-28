@@ -19,15 +19,50 @@ interface ImportPurchasesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enterpriseId: number | null;
-  bookId?: number | null;
   onSuccess: () => void;
+}
+
+// Helper function to find or create purchase book for a given month/year
+async function findOrCreatePurchaseBook(
+  enterpriseId: number,
+  month: number,
+  year: number
+): Promise<{ id: number }> {
+  // Search for existing book
+  const { data: existing, error: fetchError } = await supabase
+    .from("tab_purchase_books")
+    .select("id")
+    .eq("enterprise_id", enterpriseId)
+    .eq("month", month)
+    .eq("year", year)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (existing) return existing;
+
+  // Create new book
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Usuario no autenticado");
+
+  const { data: newBook, error: createError } = await supabase
+    .from("tab_purchase_books")
+    .insert({
+      enterprise_id: enterpriseId,
+      month,
+      year,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+
+  if (createError) throw createError;
+  return newBook;
 }
 
 export function ImportPurchasesDialog({
   open,
   onOpenChange,
   enterpriseId,
-  bookId,
   onSuccess,
 }: ImportPurchasesDialogProps) {
   const { toast } = useToast();
@@ -55,7 +90,8 @@ export function ImportPurchasesDialog({
     ];
 
     const csvContent = headers.join(",") + "\n" +
-      "A,12345,2025-01-15,FACT,12345678,Proveedor Ejemplo,100.00,12.00,112.00,ch. 123";
+      "A,12345,2025-01-15,FACT,12345678,Proveedor Ejemplo,100.00,12.00,112.00,ch. 123\n" +
+      "B,67890,2025-02-20,FACT,87654321,Otro Proveedor,200.00,24.00,224.00,transf. 456";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -70,10 +106,10 @@ export function ImportPurchasesDialog({
   };
 
   const handleImport = async (file: File) => {
-    if (!enterpriseId || !bookId) {
+    if (!enterpriseId) {
       toast({
         title: "Error",
-        description: "No se ha seleccionado un libro de compras",
+        description: "No se ha seleccionado una empresa",
         variant: "destructive",
       });
       return;
@@ -89,7 +125,7 @@ export function ImportPurchasesDialog({
         throw new Error("El archivo está vacío o no tiene datos");
       }
 
-      // Validar encabezados
+      // Validate headers
       const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
       const requiredHeaders = ["serie", "numero", "fecha", "tipo_documento_fel", 
                                "nit_proveedor", "nombre_proveedor", "monto_base", "iva", "total"];
@@ -99,8 +135,12 @@ export function ImportPurchasesDialog({
         throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(", ")}`);
       }
 
-      // Procesar y validar filas
-      const purchases = [];
+      // Process and validate rows - group by month/year
+      const purchasesByPeriod = new Map<string, Array<{
+        invoice_date: string;
+        rowData: any;
+        refPago: string;
+      }>>();
       const errors: string[] = [];
       
       for (let i = 1; i < lines.length; i++) {
@@ -134,44 +174,91 @@ export function ImportPurchasesDialog({
           continue;
         }
 
+        // Validate date format and extract month/year
+        const dateParts = rowData.fecha.split("-");
+        if (dateParts.length !== 3) {
+          errors.push(`Fila ${i + 1}: Formato de fecha inválido. Use YYYY-MM-DD`);
+          continue;
+        }
+
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        
+        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+          errors.push(`Fila ${i + 1}: Fecha inválida`);
+          continue;
+        }
+
+        const periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        
+        if (!purchasesByPeriod.has(periodKey)) {
+          purchasesByPeriod.set(periodKey, []);
+        }
+
         const refPagoIndex = headers.indexOf("ref_pago");
-        const purchase = {
-          enterprise_id: enterpriseId,
-          purchase_book_id: bookId,
-          invoice_series: rowData.serie,
-          invoice_number: rowData.numero,
+        purchasesByPeriod.get(periodKey)!.push({
           invoice_date: rowData.fecha,
-          fel_document_type: rowData.tipo_documento_fel,
-          supplier_nit: rowData.nit_proveedor,
-          supplier_name: rowData.nombre_proveedor,
-          base_amount: rowData.monto_base,
-          vat_amount: rowData.iva,
-          net_amount: rowData.monto_base,
-          total_amount: rowData.total,
-          batch_reference: refPagoIndex >= 0 ? sanitizeCSVField(values[refPagoIndex]) : "",
-        };
-
-        purchases.push(purchase);
+          rowData,
+          refPago: refPagoIndex >= 0 ? sanitizeCSVField(values[refPagoIndex]) : "",
+        });
       }
 
-      if (errors.length > 0 && purchases.length === 0) {
-        throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
-      }
-
-      if (purchases.length === 0) {
+      if (purchasesByPeriod.size === 0) {
+        if (errors.length > 0) {
+          throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
+        }
         throw new Error("No se encontraron registros válidos para importar");
       }
 
-      // Insertar en la base de datos
-      const { error } = await supabase
-        .from("tab_purchase_ledger")
-        .insert(purchases);
+      // Process each period group
+      const importSummary: { period: string; count: number }[] = [];
+      let totalImported = 0;
 
-      if (error) throw error;
+      for (const [periodKey, periodPurchases] of purchasesByPeriod) {
+        const [yearStr, monthStr] = periodKey.split("-");
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
 
+        // Find or create purchase book for this period
+        const book = await findOrCreatePurchaseBook(enterpriseId, month, year);
+
+        // Prepare purchases with book_id
+        const purchasesToInsert = periodPurchases.map(p => ({
+          enterprise_id: enterpriseId,
+          purchase_book_id: book.id,
+          invoice_series: p.rowData.serie,
+          invoice_number: p.rowData.numero,
+          invoice_date: p.invoice_date,
+          fel_document_type: p.rowData.tipo_documento_fel,
+          supplier_nit: p.rowData.nit_proveedor,
+          supplier_name: p.rowData.nombre_proveedor,
+          base_amount: p.rowData.monto_base,
+          vat_amount: p.rowData.iva,
+          net_amount: p.rowData.monto_base,
+          total_amount: p.rowData.total,
+          batch_reference: p.refPago,
+        }));
+
+        // Insert purchases for this period
+        const { error: insertError } = await supabase
+          .from("tab_purchase_ledger")
+          .insert(purchasesToInsert);
+
+        if (insertError) throw insertError;
+
+        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        importSummary.push({
+          period: `${monthNames[month - 1]} ${year}`,
+          count: periodPurchases.length,
+        });
+        totalImported += periodPurchases.length;
+      }
+
+      // Build success message
+      const summaryText = importSummary.map(s => `${s.count} en ${s.period}`).join(", ");
       const message = errors.length > 0 
-        ? `Se importaron ${purchases.length} registros. ${errors.length} filas con errores fueron omitidas.`
-        : `Se importaron ${purchases.length} registros de compras`;
+        ? `Se importaron ${totalImported} registros (${summaryText}). ${errors.length} filas con errores fueron omitidas.`
+        : `Se importaron ${totalImported} registros: ${summaryText}`;
 
       toast({
         title: "Importación exitosa",
@@ -197,7 +284,7 @@ export function ImportPurchasesDialog({
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV con las facturas de compras
+            Carga un archivo CSV con facturas de compras. Las facturas se asignarán automáticamente al mes correspondiente según su fecha.
           </DialogDescription>
         </DialogHeader>
 
@@ -241,7 +328,7 @@ export function ImportPurchasesDialog({
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li><strong>serie:</strong> Serie de la factura (ej. A)</li>
               <li><strong>numero:</strong> Número de factura</li>
-              <li><strong>fecha:</strong> Fecha en formato YYYY-MM-DD</li>
+              <li><strong>fecha:</strong> Fecha en formato YYYY-MM-DD (las facturas se organizan por mes automáticamente)</li>
               <li><strong>tipo_documento_fel:</strong> Tipo de documento FEL</li>
               <li><strong>nit_proveedor:</strong> NIT del proveedor</li>
               <li><strong>nombre_proveedor:</strong> Nombre del proveedor</li>
@@ -250,6 +337,9 @@ export function ImportPurchasesDialog({
               <li><strong>total:</strong> Monto total con IVA</li>
               <li><strong>ref_pago:</strong> Referencia de pago (ej. ch. 123)</li>
             </ul>
+            <p className="mt-3 text-xs text-primary font-medium">
+              💡 Puedes importar facturas de distintos meses en un solo archivo. Se organizarán automáticamente.
+            </p>
           </div>
         </div>
       </DialogContent>
