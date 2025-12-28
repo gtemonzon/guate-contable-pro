@@ -406,11 +406,14 @@ const Dashboard = () => {
         if (sales && sales.length > 0) {
           const grouped: { [key: string]: BookSummary } = sales.reduce((acc: any, curr) => {
             const date = new Date(curr.invoice_date);
-            const key = `${date.getFullYear()}-${date.getMonth()}`;
+            const month = date.getMonth() + 1;
+            const year = date.getFullYear();
+            // Use padded month for proper sorting (e.g., "2025-01" instead of "2025-1")
+            const key = `${year}-${String(month).padStart(2, '0')}`;
             if (!acc[key]) {
               acc[key] = {
-                month: date.getMonth() + 1,
-                year: date.getFullYear(),
+                month: month,
+                year: year,
                 base: 0,
                 vat: 0,
                 total: 0,
