@@ -133,11 +133,23 @@ function extractDataFromText(text: string): ExtractedData {
     /Contingencia|NIT\s+DEL\s+CONTRIBUYENTE|PER[IÍ]ODO\s+DE\s+IMPOSICI[ÓO]N|R[ÉE]GIMEN/i
   );
   if (accessBlock) {
-    const digits = onlyDigits(accessBlock);
-    if (digits.length >= 9) {
-      result.accessCode = digits;
+    // Prefer the first 9-digit grouped number after the label (e.g. "406 410 915")
+    const grouped = accessBlock.match(/(\d{3}\s*\d{3}\s*\d{3})/);
+    if (grouped) {
+      result.accessCode = onlyDigits(grouped[1]);
+    } else {
+      const digits = onlyDigits(accessBlock);
+      if (digits.length >= 9) {
+        // If extra digits are present (e.g. SAT-2046 Release 1), take the last 9
+        result.accessCode = digits.slice(-9);
+      }
+    }
+
+    if (result.accessCode && result.accessCode.length === 9) {
       result.fieldsFound++;
       console.log("Found accessCode (block):", result.accessCode);
+    } else {
+      result.accessCode = undefined;
     }
   }
 
@@ -153,9 +165,9 @@ function extractDataFromText(text: string): ExtractedData {
     for (const pattern of accessCodePatterns) {
       const match = text.match(pattern);
       if (match) {
-        const digits = onlyDigits(match[1] ?? match[0]);
-        if (digits.length >= 9) {
-          result.accessCode = digits;
+        const digitsRaw = onlyDigits(match[1] ?? match[0]);
+        if (digitsRaw.length >= 9) {
+          result.accessCode = digitsRaw.slice(-9);
           result.fieldsFound++;
           console.log("Found accessCode (regex):", result.accessCode);
           break;
