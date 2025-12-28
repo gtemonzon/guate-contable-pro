@@ -914,6 +914,8 @@ export default function LibroCompras() {
             fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }
         }}
+        expenseAccounts={expenseAccounts}
+        operationTypes={operationTypes}
       />
     </div>
   );

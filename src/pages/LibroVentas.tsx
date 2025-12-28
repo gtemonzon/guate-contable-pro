@@ -928,6 +928,8 @@ export default function LibroVentas() {
             fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
           }
         }}
+        incomeAccounts={incomeAccounts}
+        operationTypes={operationTypes}
       />
     </div>
   );
