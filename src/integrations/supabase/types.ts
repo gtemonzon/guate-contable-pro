@@ -531,6 +531,7 @@ export type Database = {
       }
       tab_fel_document_types: {
         Row: {
+          affects_total: number
           applies_vat: boolean
           code: string
           created_at: string | null
@@ -539,6 +540,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          affects_total?: number
           applies_vat?: boolean
           code: string
           created_at?: string | null
@@ -547,6 +549,7 @@ export type Database = {
           name: string
         }
         Update: {
+          affects_total?: number
           applies_vat?: boolean
           code?: string
           created_at?: string | null

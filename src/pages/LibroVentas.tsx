@@ -26,6 +26,7 @@ interface FELDocumentType {
   id: number;
   code: string;
   name: string;
+  affects_total: number;
 }
 
 interface SaleEntry {
@@ -75,48 +76,70 @@ export default function LibroVentas() {
   const { toast } = useToast();
 
   const totals = useMemo(() => {
-    const totalWithVAT = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-    const totalVAT = sales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
-    const totalNet = sales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
+    const activeSales = sales.filter(s => !s.is_annulled);
+    const annulledSales = sales.filter(s => s.is_annulled);
+    
+    // Calculate totals considering affects_total from document type
+    const totalWithVAT = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.total_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalVAT = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.vat_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalNet = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.net_amount) || 0) * multiplier);
+    }, 0);
+    
     const documentCount = sales.length;
 
     // Calcular totales por tipo de documento
-    const byDocType = sales.reduce((acc, s) => {
-      const docType = s.fel_document_type || 'SIN_TIPO';
-      if (!acc[docType]) {
-        acc[docType] = { total: 0, count: 0 };
+    const byDocType = activeSales.reduce((acc, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      const docTypeCode = s.fel_document_type || 'SIN_TIPO';
+      if (!acc[docTypeCode]) {
+        acc[docTypeCode] = { total: 0, count: 0 };
       }
-      acc[docType].total += Number(s.total_amount) || 0;
-      acc[docType].count += 1;
+      acc[docTypeCode].total += (Number(s.total_amount) || 0) * multiplier;
+      acc[docTypeCode].count += 1;
       return acc;
     }, {} as Record<string, { total: number; count: number }>);
 
     // Calcular totales por operación
-    const byOperation = sales.reduce((acc, s) => {
+    const byOperation = activeSales.reduce((acc, s) => {
       if (!s.operation_type_id) return acc;
       const opType = operationTypes.find(o => o.id === s.operation_type_id);
       if (!opType) return acc;
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
       const key = opType.code;
       if (!acc[key]) {
         acc[key] = { total: 0, count: 0 };
       }
-      acc[key].total += Number(s.total_amount) || 0;
+      acc[key].total += (Number(s.total_amount) || 0) * multiplier;
       acc[key].count += 1;
       return acc;
     }, {} as Record<string, { total: number; count: number }>);
-
-    console.log('Sales Totals by DocType:', byDocType);
-    console.log('Sales Totals by Operation:', byOperation);
 
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalNet: formatCurrency(totalNet),
       documentCount,
+      activeCount: activeSales.length,
+      annulledCount: annulledSales.length,
       byDocType,
       byOperation,
     };
-  }, [sales, operationTypes]);
+  }, [sales, operationTypes, felDocTypes]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
