@@ -394,6 +394,51 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_enterprise_config: {
+        Row: {
+          created_at: string | null
+          customers_account_id: number | null
+          enterprise_id: number
+          final_inventory_account_id: number | null
+          id: number
+          initial_inventory_account_id: number | null
+          period_result_account_id: number | null
+          purchases_account_id: number | null
+          sales_account_id: number | null
+          suppliers_account_id: number | null
+          vat_credit_account_id: number | null
+          vat_debit_account_id: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          customers_account_id?: number | null
+          enterprise_id: number
+          final_inventory_account_id?: number | null
+          id?: never
+          initial_inventory_account_id?: number | null
+          period_result_account_id?: number | null
+          purchases_account_id?: number | null
+          sales_account_id?: number | null
+          suppliers_account_id?: number | null
+          vat_credit_account_id?: number | null
+          vat_debit_account_id?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          customers_account_id?: number | null
+          enterprise_id?: number
+          final_inventory_account_id?: number | null
+          id?: never
+          initial_inventory_account_id?: number | null
+          period_result_account_id?: number | null
+          purchases_account_id?: number | null
+          sales_account_id?: number | null
+          suppliers_account_id?: number | null
+          vat_credit_account_id?: number | null
+          vat_debit_account_id?: number | null
+        }
+        Relationships: []
+      }
       tab_enterprise_documents: {
         Row: {
           created_at: string | null
@@ -558,6 +603,109 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      tab_financial_statement_formats: {
+        Row: {
+          created_at: string | null
+          enterprise_id: number
+          format_type: string
+          id: number
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          enterprise_id: number
+          format_type: string
+          id?: never
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          enterprise_id?: number
+          format_type?: string
+          id?: never
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
+      tab_financial_statement_section_accounts: {
+        Row: {
+          account_id: number
+          created_at: string | null
+          display_order: number
+          id: number
+          include_children: boolean | null
+          section_id: number
+          sign_multiplier: number | null
+        }
+        Insert: {
+          account_id: number
+          created_at?: string | null
+          display_order: number
+          id?: never
+          include_children?: boolean | null
+          section_id: number
+          sign_multiplier?: number | null
+        }
+        Update: {
+          account_id?: number
+          created_at?: string | null
+          display_order?: number
+          id?: never
+          include_children?: boolean | null
+          section_id?: number
+          sign_multiplier?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_financial_statement_section_accounts_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tab_financial_statement_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_financial_statement_sections: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          format_id: number
+          id: number
+          section_name: string
+          section_type: string
+          show_in_report: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order: number
+          format_id: number
+          id?: never
+          section_name: string
+          section_type: string
+          show_in_report?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          format_id?: number
+          id?: never
+          section_name?: string
+          section_type?: string
+          show_in_report?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_financial_statement_sections_format_id_fkey"
+            columns: ["format_id"]
+            isOneToOne: false
+            referencedRelation: "tab_financial_statement_formats"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_import_logs: {
         Row: {

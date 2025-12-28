@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-interface Account {
+export interface Account {
   id: number;
   account_code: string;
   account_name: string;

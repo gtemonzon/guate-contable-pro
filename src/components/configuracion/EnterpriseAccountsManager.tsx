@@ -1,0 +1,164 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { AccountCombobox, Account } from '@/components/ui/account-combobox';
+import { supabase } from '@/integrations/supabase/client';
+import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
+import { Loader2, Save } from 'lucide-react';
+
+export function EnterpriseAccountsManager() {
+  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  
+  const { config, loading, saveConfig } = useEnterpriseConfig(currentEnterpriseId);
+
+  const [formData, setFormData] = useState({
+    vat_credit_account_id: null as number | null,
+    vat_debit_account_id: null as number | null,
+    period_result_account_id: null as number | null,
+    initial_inventory_account_id: null as number | null,
+    final_inventory_account_id: null as number | null,
+    purchases_account_id: null as number | null,
+    sales_account_id: null as number | null,
+    customers_account_id: null as number | null,
+    suppliers_account_id: null as number | null,
+  });
+
+  useEffect(() => {
+    const enterpriseId = localStorage.getItem('currentEnterpriseId');
+    if (enterpriseId) {
+      setCurrentEnterpriseId(Number(enterpriseId));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (config) {
+      setFormData({
+        vat_credit_account_id: config.vat_credit_account_id,
+        vat_debit_account_id: config.vat_debit_account_id,
+        period_result_account_id: config.period_result_account_id,
+        initial_inventory_account_id: config.initial_inventory_account_id,
+        final_inventory_account_id: config.final_inventory_account_id,
+        purchases_account_id: config.purchases_account_id,
+        sales_account_id: config.sales_account_id,
+        customers_account_id: config.customers_account_id,
+        suppliers_account_id: config.suppliers_account_id,
+      });
+    }
+  }, [config]);
+
+  useEffect(() => {
+    const loadAccounts = async () => {
+      if (!currentEnterpriseId) return;
+      
+      setLoadingAccounts(true);
+      try {
+        const { data, error } = await supabase
+          .from('tab_accounts')
+          .select('id, account_code, account_name, account_type')
+          .eq('enterprise_id', currentEnterpriseId)
+          .eq('is_active', true)
+          .order('account_code');
+
+        if (error) throw error;
+        setAccounts((data || []).map(a => ({
+          id: Number(a.id),
+          account_code: a.account_code,
+          account_name: a.account_name,
+        })));
+      } catch (error) {
+        console.error('Error loading accounts:', error);
+      } finally {
+        setLoadingAccounts(false);
+      }
+    };
+
+    loadAccounts();
+  }, [currentEnterpriseId]);
+
+  const handleSave = async () => {
+    await saveConfig({
+      vat_credit_account_id: formData.vat_credit_account_id,
+      vat_debit_account_id: formData.vat_debit_account_id,
+      period_result_account_id: formData.period_result_account_id,
+      initial_inventory_account_id: formData.initial_inventory_account_id,
+      final_inventory_account_id: formData.final_inventory_account_id,
+      purchases_account_id: formData.purchases_account_id,
+      sales_account_id: formData.sales_account_id,
+      customers_account_id: formData.customers_account_id,
+      suppliers_account_id: formData.suppliers_account_id,
+    });
+  };
+
+  if (!currentEnterpriseId) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground text-center">
+            Seleccione una empresa para configurar las cuentas contables.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const accountFields = [
+    { key: 'vat_credit_account_id', label: 'IVA Crédito Fiscal', description: 'Cuenta para registrar el IVA de compras' },
+    { key: 'vat_debit_account_id', label: 'IVA Débito Fiscal', description: 'Cuenta para registrar el IVA de ventas' },
+    { key: 'period_result_account_id', label: 'Resultado del Período', description: 'Cuenta para acumular utilidad/pérdida del ejercicio' },
+    { key: 'initial_inventory_account_id', label: 'Inventario Inicial', description: 'Cuenta de inventario al inicio del período' },
+    { key: 'final_inventory_account_id', label: 'Inventario Final', description: 'Cuenta de inventario al cierre del período' },
+    { key: 'purchases_account_id', label: 'Compras', description: 'Cuenta para registrar las compras' },
+    { key: 'sales_account_id', label: 'Ventas', description: 'Cuenta para registrar las ventas' },
+    { key: 'customers_account_id', label: 'Clientes', description: 'Cuenta de cuentas por cobrar' },
+    { key: 'suppliers_account_id', label: 'Proveedores', description: 'Cuenta de cuentas por pagar' },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cuentas Contables Especiales</CardTitle>
+        <CardDescription>
+          Configure las cuentas que se utilizarán automáticamente en pólizas y reportes.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loadingAccounts || loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {accountFields.map(({ key, label, description }) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={key}>{label}</Label>
+                  <AccountCombobox
+                    accounts={accounts}
+                    value={formData[key as keyof typeof formData]}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, [key]: value }))}
+                    placeholder={`Seleccionar ${label.toLowerCase()}`}
+                  />
+                  <p className="text-xs text-muted-foreground">{description}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end">
+              <Button onClick={handleSave} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Guardar Configuración
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { OperationTypesManager } from "@/components/configuracion/OperationTypesManager";
 import { FelDocumentTypesManager } from "@/components/configuracion/FelDocumentTypesManager";
 import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalEntryPrefixesManager";
+import { EnterpriseAccountsManager } from "@/components/configuracion/EnterpriseAccountsManager";
+import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
 
 export default function Configuracion() {
   return (
@@ -14,12 +16,22 @@ export default function Configuracion() {
         </p>
       </div>
 
-      <Tabs defaultValue="operation-types" className="w-full">
-        <TabsList>
+      <Tabs defaultValue="enterprise-accounts" className="w-full">
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="enterprise-accounts">Cuentas Contables</TabsTrigger>
+          <TabsTrigger value="financial-statements">Estados Financieros</TabsTrigger>
           <TabsTrigger value="operation-types">Tipos de Operaciones</TabsTrigger>
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="enterprise-accounts" className="mt-6">
+          <EnterpriseAccountsManager />
+        </TabsContent>
+
+        <TabsContent value="financial-statements" className="mt-6">
+          <FinancialStatementDesigner />
+        </TabsContent>
 
         <TabsContent value="operation-types" className="mt-6">
           <Card>
