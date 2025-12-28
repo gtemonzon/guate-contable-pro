@@ -40,6 +40,7 @@ interface ImportPurchasesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enterpriseId: number | null;
+  enterpriseNit?: string;
   onSuccess: () => void;
   expenseAccounts?: Array<{ id: number; account_code: string; account_name: string }>;
   operationTypes?: Array<{ id: number; code: string; name: string }>;
@@ -157,6 +158,7 @@ export function ImportPurchasesDialog({
   open,
   onOpenChange,
   enterpriseId,
+  enterpriseNit = "",
   onSuccess,
   expenseAccounts = [],
   operationTypes = [],
@@ -268,7 +270,19 @@ export function ImportPurchasesDialog({
           total: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.total),
           iva: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.iva),
           anulado: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.anulado),
+          nit_receptor: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nit_receptor),
         };
+
+        // Validate enterprise NIT from file matches active enterprise
+        if (enterpriseNit && colIndices.nit_receptor !== -1 && rows.length > 1) {
+          const firstDataRow = rows[1];
+          const fileNitReceptor = sanitizeCSVField(String(firstDataRow[colIndices.nit_receptor] || "")).replace(/[-\s]/g, "");
+          const cleanEnterpriseNit = enterpriseNit.replace(/[-\s]/g, "");
+          
+          if (fileNitReceptor && fileNitReceptor !== cleanEnterpriseNit) {
+            throw new Error(`El NIT del receptor en el archivo (${fileNitReceptor}) no coincide con el NIT de la empresa activa (${cleanEnterpriseNit}). Asegúrese de seleccionar la empresa correcta.`);
+          }
+        }
       } else {
         colIndices = {
           fecha: normalizedHeaders.indexOf("fecha"),

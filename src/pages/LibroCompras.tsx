@@ -52,6 +52,7 @@ export default function LibroCompras() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
@@ -136,9 +137,19 @@ export default function LibroCompras() {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
     
+    const fetchEnterpriseNit = async (id: string) => {
+      const { data } = await supabase
+        .from("tab_enterprises")
+        .select("nit")
+        .eq("id", parseInt(id))
+        .single();
+      if (data) setEnterpriseNit(data.nit);
+    };
+    
     if (enterpriseId) {
       fetchFELDocTypes();
       fetchAccounts(enterpriseId);
+      fetchEnterpriseNit(enterpriseId);
       
       // Cargar última cuenta usada desde localStorage
       const savedExpense = localStorage.getItem(`lastExpenseAccount_${enterpriseId}`);
@@ -154,15 +165,22 @@ export default function LibroCompras() {
       });
     }
 
-    const handleStorageChange = () => {
+    const handleStorageChange = async () => {
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchFELDocTypes();
         fetchAccounts(newEnterpriseId);
         fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
+        const { data } = await supabase
+          .from("tab_enterprises")
+          .select("nit")
+          .eq("id", parseInt(newEnterpriseId))
+          .single();
+        if (data) setEnterpriseNit(data.nit);
       } else {
         setPurchases([]);
+        setEnterpriseNit("");
       }
     };
 
@@ -909,6 +927,7 @@ export default function LibroCompras() {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
+        enterpriseNit={enterpriseNit}
         onSuccess={() => {
           if (currentEnterpriseId) {
             fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);

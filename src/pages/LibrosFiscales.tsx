@@ -67,6 +67,7 @@ export default function LibrosFiscales() {
   const [sales, setSales] = useState<SaleEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
@@ -227,11 +228,21 @@ export default function LibrosFiscales() {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
     
+    const fetchEnterpriseNit = async (id: string) => {
+      const { data } = await supabase
+        .from("tab_enterprises")
+        .select("nit")
+        .eq("id", parseInt(id))
+        .single();
+      if (data) setEnterpriseNit(data.nit);
+    };
+    
     if (enterpriseId) {
       fetchFELDocTypes();
       fetchAccounts(enterpriseId);
       fetchOrCreateBook(enterpriseId, selectedMonth, selectedYear);
       fetchSales(enterpriseId, selectedMonth, selectedYear);
+      fetchEnterpriseNit(enterpriseId);
       
       // Cargar última cuenta usada desde localStorage
       const savedExpense = localStorage.getItem(`lastExpenseAccount_${enterpriseId}`);
@@ -245,7 +256,7 @@ export default function LibrosFiscales() {
       setLoading(false);
     }
 
-    const handleStorageChange = () => {
+    const handleStorageChange = async () => {
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
@@ -253,9 +264,16 @@ export default function LibrosFiscales() {
         fetchAccounts(newEnterpriseId);
         fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
         fetchSales(newEnterpriseId, selectedMonth, selectedYear);
+        const { data } = await supabase
+          .from("tab_enterprises")
+          .select("nit")
+          .eq("id", parseInt(newEnterpriseId))
+          .single();
+        if (data) setEnterpriseNit(data.nit);
       } else {
         setPurchases([]);
         setSales([]);
+        setEnterpriseNit("");
       }
     };
 
@@ -1553,6 +1571,7 @@ export default function LibrosFiscales() {
           open={showImportDialog}
           onOpenChange={setShowImportDialog}
           enterpriseId={parseInt(currentEnterpriseId)}
+          enterpriseNit={enterpriseNit}
           onSuccess={() => {
             if (currentEnterpriseId) fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }}
@@ -1566,6 +1585,7 @@ export default function LibrosFiscales() {
           open={showImportDialog}
           onOpenChange={setShowImportDialog}
           enterpriseId={parseInt(currentEnterpriseId)}
+          enterpriseNit={enterpriseNit}
           onSuccess={() => {
             if (currentEnterpriseId) fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
           }}
