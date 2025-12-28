@@ -177,60 +177,20 @@ export default function LibrosFiscales() {
     };
   }, [sales, felDocTypes]);
 
-  // Resumen de compras por Tipo de Operación
+  // Resumen de compras por Tipo de Operación (aplicando affects_total)
   const purchasesByOperationType = useMemo(() => {
     const grouped = purchases.reduce((acc, purchase) => {
       const opType = operationTypes.find(ot => ot.id === purchase.operation_type_id);
       if (!opType) return acc;
       
-      const key = opType.name;
-      if (!acc[key]) {
-        acc[key] = { name: opType.name, total: 0, count: 0 };
-      }
-      acc[key].total += Number(purchase.base_amount) || 0;
-      acc[key].count += 1;
-      return acc;
-    }, {} as Record<string, { name: string; total: number; count: number }>);
-    
-    return Object.values(grouped)
-      .map(item => ({
-        ...item,
-        total: formatCurrency(item.total)
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [purchases, operationTypes]);
-
-  // Resumen de compras por Tipo de Documento
-  const purchasesByDocType = useMemo(() => {
-    const grouped = purchases.reduce((acc, purchase) => {
-      const docType = purchase.fel_document_type || 'SIN TIPO';
-      if (!acc[docType]) {
-        acc[docType] = { type: docType, total: 0, count: 0 };
-      }
-      acc[docType].total += Number(purchase.base_amount) || 0;
-      acc[docType].count += 1;
-      return acc;
-    }, {} as Record<string, { type: string; total: number; count: number }>);
-    
-    return Object.values(grouped)
-      .map(item => ({
-        ...item,
-        total: formatCurrency(item.total)
-      }))
-      .sort((a, b) => a.type.localeCompare(b.type));
-  }, [purchases]);
-
-  // Resumen de ventas por Tipo de Operación
-  const salesByOperationType = useMemo(() => {
-    const grouped = sales.reduce((acc, sale) => {
-      const opType = operationTypes.find(ot => ot.id === sale.operation_type_id);
-      if (!opType) return acc;
+      const docType = felDocTypes.find(dt => dt.code === purchase.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
       
       const key = opType.name;
       if (!acc[key]) {
         acc[key] = { name: opType.name, total: 0, count: 0 };
       }
-      acc[key].total += Number(sale.net_amount) || 0;
+      acc[key].total += (Number(purchase.base_amount) || 0) * multiplier;
       acc[key].count += 1;
       return acc;
     }, {} as Record<string, { name: string; total: number; count: number }>);
@@ -241,16 +201,19 @@ export default function LibrosFiscales() {
         total: formatCurrency(item.total)
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [sales, operationTypes]);
+  }, [purchases, operationTypes, felDocTypes]);
 
-  // Resumen de ventas por Tipo de Documento
-  const salesByDocType = useMemo(() => {
-    const grouped = sales.reduce((acc, sale) => {
-      const docType = sale.fel_document_type || 'SIN TIPO';
+  // Resumen de compras por Tipo de Documento (aplicando affects_total)
+  const purchasesByDocType = useMemo(() => {
+    const grouped = purchases.reduce((acc, purchase) => {
+      const docType = purchase.fel_document_type || 'SIN TIPO';
+      const felDoc = felDocTypes.find(dt => dt.code === purchase.fel_document_type);
+      const multiplier = felDoc?.affects_total ?? 1;
+      
       if (!acc[docType]) {
         acc[docType] = { type: docType, total: 0, count: 0 };
       }
-      acc[docType].total += Number(sale.net_amount) || 0;
+      acc[docType].total += (Number(purchase.base_amount) || 0) * multiplier;
       acc[docType].count += 1;
       return acc;
     }, {} as Record<string, { type: string; total: number; count: number }>);
@@ -261,7 +224,58 @@ export default function LibrosFiscales() {
         total: formatCurrency(item.total)
       }))
       .sort((a, b) => a.type.localeCompare(b.type));
-  }, [sales]);
+  }, [purchases, felDocTypes]);
+
+  // Resumen de ventas por Tipo de Operación (aplicando affects_total)
+  const salesByOperationType = useMemo(() => {
+    const activeSales = sales.filter(s => !s.is_annulled);
+    const grouped = activeSales.reduce((acc, sale) => {
+      const opType = operationTypes.find(ot => ot.id === sale.operation_type_id);
+      if (!opType) return acc;
+      
+      const docType = felDocTypes.find(dt => dt.code === sale.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      
+      const key = opType.name;
+      if (!acc[key]) {
+        acc[key] = { name: opType.name, total: 0, count: 0 };
+      }
+      acc[key].total += (Number(sale.net_amount) || 0) * multiplier;
+      acc[key].count += 1;
+      return acc;
+    }, {} as Record<string, { name: string; total: number; count: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [sales, operationTypes, felDocTypes]);
+
+  // Resumen de ventas por Tipo de Documento (aplicando affects_total)
+  const salesByDocType = useMemo(() => {
+    const activeSales = sales.filter(s => !s.is_annulled);
+    const grouped = activeSales.reduce((acc, sale) => {
+      const docType = sale.fel_document_type || 'SIN TIPO';
+      const felDoc = felDocTypes.find(dt => dt.code === sale.fel_document_type);
+      const multiplier = felDoc?.affects_total ?? 1;
+      
+      if (!acc[docType]) {
+        acc[docType] = { type: docType, total: 0, count: 0 };
+      }
+      acc[docType].total += (Number(sale.net_amount) || 0) * multiplier;
+      acc[docType].count += 1;
+      return acc;
+    }, {} as Record<string, { type: string; total: number; count: number }>);
+    
+    return Object.values(grouped)
+      .map(item => ({
+        ...item,
+        total: formatCurrency(item.total)
+      }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+  }, [sales, felDocTypes]);
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
