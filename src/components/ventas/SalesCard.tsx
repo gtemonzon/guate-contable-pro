@@ -3,11 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save } from "lucide-react";
+import { Trash2, Save, Ban } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SaleEntry {
   id?: number;
@@ -23,6 +24,7 @@ interface SaleEntry {
   operation_type_id: number | null;
   income_account_id: number | null;
   journal_entry_id: number | null;
+  is_annulled?: boolean;
   isNew?: boolean;
 }
 
@@ -115,7 +117,8 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
         "hover:shadow-md transition-all",
         isFocused && "ring-2 ring-green-500 border-green-500",
         hasChanges && "ring-1 ring-amber-400",
-        isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse"
+        isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse",
+        sale.is_annulled && "opacity-60 bg-red-50 dark:bg-red-950/20"
       )}
     >
       <CardContent className="p-4">
@@ -135,14 +138,28 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
         >
           {/* Primera fila: Info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Serie</label>
-              <Input
-                value={sale.invoice_series}
-                onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
-                placeholder="A"
-                className="h-8"
-              />
+            <div className="col-span-2 flex items-end gap-1">
+              {sale.is_annulled && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Ban className="h-4 w-4 text-red-500 mb-2" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Factura anulada</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <div className="flex-1">
+                <label className="text-xs text-muted-foreground">Serie</label>
+                <Input
+                  value={sale.invoice_series}
+                  onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
+                  placeholder="A"
+                  className="h-8"
+                />
+              </div>
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>

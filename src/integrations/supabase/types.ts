@@ -1025,6 +1025,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string
           invoice_series: string | null
+          is_annulled: boolean
           journal_entry_id: number | null
           net_amount: number
           operation_type_id: number | null
@@ -1048,6 +1049,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string
           invoice_series?: string | null
+          is_annulled?: boolean
           journal_entry_id?: number | null
           net_amount: number
           operation_type_id?: number | null
@@ -1071,6 +1073,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: string
           invoice_series?: string | null
+          is_annulled?: boolean
           journal_entry_id?: number | null
           net_amount?: number
           operation_type_id?: number | null
