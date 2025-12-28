@@ -56,7 +56,7 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
+    <Sidebar collapsible="icon" className="border-r [&_*]:text-sidebar-foreground">
       <SidebarContent>
         {menuItems.map((section, idx) => {
           if ("items" in section) {
