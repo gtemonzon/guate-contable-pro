@@ -23,6 +23,7 @@ interface FELDocumentType {
   code: string;
   name: string;
   applies_vat: boolean;
+  affects_total: number;
 }
 
 interface PurchaseEntry {
@@ -116,23 +117,56 @@ export default function LibrosFiscales() {
   ];
 
   const purchaseTotals = useMemo(() => {
-    const totalWithVAT = purchases.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0);
-    const totalVAT = purchases.reduce((sum, p) => sum + (Number(p.vat_amount) || 0), 0);
-    const totalBase = purchases.reduce((sum, p) => sum + (Number(p.base_amount) || 0), 0);
+    // Calculate totals considering affects_total from document type
+    const totalWithVAT = purchases.reduce((sum, p) => {
+      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(p.total_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalVAT = purchases.reduce((sum, p) => {
+      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(p.vat_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalBase = purchases.reduce((sum, p) => {
+      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(p.base_amount) || 0) * multiplier);
+    }, 0);
+    
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalBase: formatCurrency(totalBase),
       documentCount: purchases.length,
     };
-  }, [purchases]);
+  }, [purchases, felDocTypes]);
 
   const salesTotals = useMemo(() => {
     const activeSales = sales.filter(s => !s.is_annulled);
     const annulledSales = sales.filter(s => s.is_annulled);
-    const totalWithVAT = activeSales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-    const totalVAT = activeSales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
-    const totalNet = activeSales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
+    
+    // Calculate totals considering affects_total from document type
+    const totalWithVAT = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.total_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalVAT = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.vat_amount) || 0) * multiplier);
+    }, 0);
+    
+    const totalNet = activeSales.reduce((sum, s) => {
+      const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+      const multiplier = docType?.affects_total ?? 1;
+      return sum + ((Number(s.net_amount) || 0) * multiplier);
+    }, 0);
+    
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
@@ -141,7 +175,7 @@ export default function LibrosFiscales() {
       activeCount: activeSales.length,
       annulledCount: annulledSales.length,
     };
-  }, [sales]);
+  }, [sales, felDocTypes]);
 
   // Resumen de compras por Tipo de Operación
   const purchasesByOperationType = useMemo(() => {

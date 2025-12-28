@@ -30,6 +30,7 @@ interface FelDocumentType {
   name: string;
   is_active: boolean;
   applies_vat: boolean;
+  affects_total: number;
   created_at: string;
 }
 
@@ -43,6 +44,7 @@ export function FelDocumentTypesManager() {
     code: "",
     name: "",
     applies_vat: true,
+    affects_total: 1 as 1 | -1,
   });
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export function FelDocumentTypesManager() {
         code: type.code,
         name: type.name,
         applies_vat: type.applies_vat,
+        affects_total: type.affects_total as 1 | -1,
       });
     } else {
       setEditingType(null);
@@ -107,6 +110,7 @@ export function FelDocumentTypesManager() {
         code: "",
         name: "",
         applies_vat: true,
+        affects_total: 1,
       });
     }
     setDialogOpen(true);
@@ -137,6 +141,7 @@ export function FelDocumentTypesManager() {
           .update({
             name: formData.name.trim(),
             applies_vat: formData.applies_vat,
+            affects_total: formData.affects_total,
           })
           .eq("id", editingType.id);
 
@@ -150,6 +155,7 @@ export function FelDocumentTypesManager() {
             code: codeUpper,
             name: formData.name.trim(),
             applies_vat: formData.applies_vat,
+            affects_total: formData.affects_total,
             is_active: true,
           });
 
@@ -216,6 +222,7 @@ export function FelDocumentTypesManager() {
               <TableHead>Código</TableHead>
               <TableHead>Nombre</TableHead>
               <TableHead>IVA</TableHead>
+              <TableHead>Efecto</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
@@ -223,7 +230,7 @@ export function FelDocumentTypesManager() {
           <TableBody>
             {documentTypes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   No hay tipos de documentos registrados
                 </TableCell>
               </TableRow>
@@ -235,6 +242,11 @@ export function FelDocumentTypesManager() {
                   <TableCell>
                     <Badge variant={type.applies_vat ? "default" : "secondary"}>
                       {type.applies_vat ? "Aplica IVA" : "Sin IVA"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={type.affects_total === 1 ? "default" : "destructive"}>
+                      {type.affects_total === 1 ? "Suma (+)" : "Resta (-)"}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -322,6 +334,24 @@ export function FelDocumentTypesManager() {
                 checked={formData.applies_vat}
                 onCheckedChange={(checked) =>
                   setFormData({ ...formData, applies_vat: checked })
+                }
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="space-y-0.5">
+                <Label htmlFor="affects_total">Efecto en totales</Label>
+                <p className="text-xs text-muted-foreground">
+                  {formData.affects_total === 1 
+                    ? "Este documento SUMA a los totales (Ej: Facturas)" 
+                    : "Este documento RESTA a los totales (Ej: Notas de Crédito)"}
+                </p>
+              </div>
+              <Switch
+                id="affects_total"
+                checked={formData.affects_total === 1}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, affects_total: checked ? 1 : -1 })
                 }
               />
             </div>
