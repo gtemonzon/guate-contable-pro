@@ -59,6 +59,7 @@ interface SaleEntry {
   operation_type_id: number | null;
   income_account_id: number | null;
   journal_entry_id: number | null;
+  is_annulled?: boolean;
   isNew?: boolean;
 }
 
@@ -127,14 +128,18 @@ export default function LibrosFiscales() {
   }, [purchases]);
 
   const salesTotals = useMemo(() => {
-    const totalWithVAT = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-    const totalVAT = sales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
-    const totalNet = sales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
+    const activeSales = sales.filter(s => !s.is_annulled);
+    const annulledSales = sales.filter(s => s.is_annulled);
+    const totalWithVAT = activeSales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+    const totalVAT = activeSales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
+    const totalNet = activeSales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalNet: formatCurrency(totalNet),
       documentCount: sales.length,
+      activeCount: activeSales.length,
+      annulledCount: annulledSales.length,
     };
   }, [sales]);
 
@@ -1010,9 +1015,12 @@ export default function LibrosFiscales() {
               {/* Resumen principal */}
               <div className="flex justify-between items-center">
                 <div className="flex gap-6 text-sm">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Documentos: </span>
-                    <Badge variant="secondary">{salesTotals.documentCount}</Badge>
+                    <Badge variant="secondary">{salesTotals.activeCount} activos</Badge>
+                    {salesTotals.annulledCount > 0 && (
+                      <Badge variant="destructive">{salesTotals.annulledCount} anulados</Badge>
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Neto: </span>
@@ -1162,7 +1170,10 @@ export default function LibrosFiscales() {
                 </>
               ) : (
                 <>
-                  <p><strong>Documentos:</strong> {salesTotals.documentCount}</p>
+                  <p><strong>Documentos activos:</strong> {salesTotals.activeCount}</p>
+                  {salesTotals.annulledCount > 0 && (
+                    <p><strong>Documentos anulados:</strong> {salesTotals.annulledCount}</p>
+                  )}
                   <p><strong>Neto:</strong> Q {salesTotals.totalNet}</p>
                   <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>
                   <p><strong>Total:</strong> Q {salesTotals.totalWithVAT}</p>

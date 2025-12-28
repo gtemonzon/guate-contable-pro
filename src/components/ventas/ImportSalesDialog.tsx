@@ -69,12 +69,13 @@ interface ValidSale {
   total_amount: number;
   income_account_id?: number | null;
   operation_type_id?: number | null;
+  is_annulled: boolean;
 }
 
 interface ValidationResult {
   validRecords: ValidSale[];
   errors: ValidationError[];
-  skippedAnuladas: number;
+  annulledCount: number;
   duplicatesCount: number;
   periodSummary: { period: string; count: number }[];
 }
@@ -327,11 +328,6 @@ export function ImportSalesDialog({
         const values = rows[i];
         if (!values || values.length < 5) continue;
         
-        // Skip anulados
-        if (colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado])) {
-          continue;
-        }
-        
         const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
         const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
         const numAutorizacion = sanitizeCSVField(String(values[colIndices.numero_autorizacion] || ""));
@@ -352,7 +348,7 @@ export function ImportSalesDialog({
       // Process rows for validation
       const validRecords: ValidSale[] = [];
       const errors: ValidationError[] = [];
-      let skippedAnuladas = 0;
+      let annulledCount = 0;
       let duplicatesCount = 0;
       const periodCounts = new Map<string, number>();
       const seenInFile = new Set<string>(); // Track duplicates within file
@@ -363,11 +359,8 @@ export function ImportSalesDialog({
 
         const rowNum = i + 1;
 
-        // Check if anulado
-        if (colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado])) {
-          skippedAnuladas++;
-          continue;
-        }
+        // Check if anulado - will be imported but marked as annulled
+        const isAnnulled = colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado]);
 
         // Parse date
         const rawDate = values[colIndices.fecha];
@@ -495,6 +488,10 @@ export function ImportSalesDialog({
         const periodKey = `${monthNames[month - 1]} ${year}`;
         periodCounts.set(periodKey, (periodCounts.get(periodKey) || 0) + 1);
 
+        if (isAnnulled) {
+          annulledCount++;
+        }
+
         validRecords.push({
           enterprise_id: enterpriseId,
           accounting_period_id: period.id,
@@ -508,6 +505,7 @@ export function ImportSalesDialog({
           net_amount: montoNeto,
           vat_amount: iva,
           total_amount: total,
+          is_annulled: isAnnulled,
         });
       }
 
@@ -519,7 +517,7 @@ export function ImportSalesDialog({
       setValidationResult({
         validRecords,
         errors,
-        skippedAnuladas,
+        annulledCount,
         duplicatesCount,
         periodSummary
       });
@@ -675,11 +673,12 @@ export function ImportSalesDialog({
                   <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                      <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Anulados</span>
+                      <span className="text-sm font-medium text-amber-800 dark:text-amber-200">Anuladas</span>
                     </div>
                     <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 mt-1">
-                      {validationResult.skippedAnuladas}
+                      {validationResult.annulledCount}
                     </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Se importarán marcadas</p>
                   </div>
 
                   <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
