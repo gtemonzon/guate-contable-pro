@@ -1,5 +1,5 @@
-// SAT Guatemala CSV column mappings
-// These mappings allow flexible detection of SAT-exported CSV files
+// SAT Guatemala CSV/XLS column mappings
+// These mappings allow flexible detection of SAT-exported files
 
 // Normalize header: remove accents, special chars, convert to lowercase
 export function normalizeHeader(header: string): string {
@@ -9,7 +9,8 @@ export function normalizeHeader(header: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove accents
     .replace(/[()]/g, "") // Remove parentheses
-    .replace(/\s+/g, " "); // Normalize spaces
+    .replace(/\s+/g, " ") // Normalize spaces
+    .trim(); // Trim again after replacements
 }
 
 // SAT column mappings for purchases (emisor data)
@@ -17,12 +18,12 @@ export const SAT_PURCHASES_MAPPING: Record<string, string[]> = {
   fecha: ["fecha de emision", "fecha de emisión"],
   serie: ["serie"],
   numero: ["numero del dte", "número del dte"],
-  tipo_documento: ["tipo de dte"],
+  tipo_documento: ["tipo de dte nombre", "tipo de dte"],
   numero_autorizacion: ["numero de autorizacion", "número de autorización"],
   nit: ["nit del emisor"],
   nombre: ["nombre completo del emisor"],
-  total: ["gran total", "gran total moneda original"],
-  iva: ["iva", "iva monto de este impuesto"],
+  total: ["gran total moneda original", "gran total"],
+  iva: ["iva monto de este impuesto", "iva"],
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
 };
@@ -32,12 +33,12 @@ export const SAT_SALES_MAPPING: Record<string, string[]> = {
   fecha: ["fecha de emision", "fecha de emisión"],
   serie: ["serie"],
   numero: ["numero del dte", "número del dte"],
-  tipo_documento: ["tipo de dte"],
+  tipo_documento: ["tipo de dte nombre", "tipo de dte"],
   numero_autorizacion: ["numero de autorizacion", "número de autorización"],
   nit: ["id del receptor"],
   nombre: ["nombre completo del receptor"],
-  total: ["gran total", "gran total moneda original"],
-  iva: ["iva", "iva monto de este impuesto"],
+  total: ["gran total moneda original", "gran total"],
+  iva: ["iva monto de este impuesto", "iva"],
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
 };
@@ -49,17 +50,47 @@ export function findSATColumnIndex(
 ): number {
   for (const name of possibleNames) {
     const normalizedName = normalizeHeader(name);
-    const index = normalizedHeaders.findIndex(h => h.includes(normalizedName) || normalizedName.includes(h));
-    if (index !== -1) return index;
+    // First try exact match
+    const exactIndex = normalizedHeaders.findIndex(h => h === normalizedName);
+    if (exactIndex !== -1) return exactIndex;
+    // Then try partial match (header contains name or name contains header)
+    const partialIndex = normalizedHeaders.findIndex(h => 
+      h.includes(normalizedName) || normalizedName.includes(h)
+    );
+    if (partialIndex !== -1) return partialIndex;
   }
   return -1;
 }
 
+// Check if a value indicates the invoice is annulled
+export function isAnulado(value: string | undefined | null): boolean {
+  if (!value) return false;
+  const normalized = value.toString().trim().toUpperCase();
+  // "S", "SI", "SÍ", "YES", "TRUE", "1" = Anulado
+  // "N", "NO", "FALSE", "0" = No anulado
+  return normalized === "S" || normalized === "SI" || normalized === "SÍ" || 
+         normalized === "YES" || normalized === "TRUE" || normalized === "1";
+}
+
 // Parse date flexibly (ISO 8601 with time, DD/MM/YYYY or YYYY-MM-DD)
-export function parseDateFlexible(dateStr: string): string | null {
-  if (!dateStr || typeof dateStr !== "string") return null;
+export function parseDateFlexible(dateStr: string | number | undefined | null): string | null {
+  if (dateStr === null || dateStr === undefined) return null;
+  
+  // Handle Excel serial date numbers
+  if (typeof dateStr === "number") {
+    // Excel serial date: days since 1899-12-30
+    const excelEpoch = new Date(1899, 11, 30);
+    const date = new Date(excelEpoch.getTime() + dateStr * 24 * 60 * 60 * 1000);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  if (typeof dateStr !== "string") return null;
   
   const trimmed = dateStr.trim();
+  if (!trimmed) return null;
   
   // Try ISO 8601 format with time: 2025-03-31T06:41:19
   const iso8601 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T/);
@@ -84,8 +115,15 @@ export function parseDateFlexible(dateStr: string): string | null {
 }
 
 // Parse number from SAT format (handles commas as decimal separator or thousands)
-export function parseNumber(value: string): number {
-  if (!value || typeof value !== "string") return 0;
+export function parseNumber(value: string | number | undefined | null): number {
+  if (value === null || value === undefined) return 0;
+  
+  // If already a number, return it
+  if (typeof value === "number") {
+    return isNaN(value) ? 0 : value;
+  }
+  
+  if (typeof value !== "string") return 0;
   
   const trimmed = value.trim();
   if (!trimmed) return 0;
@@ -126,12 +164,12 @@ export function parseNumber(value: string): number {
   return isNaN(num) ? 0 : num;
 }
 
-// Detect if CSV is in SAT format
+// Detect if headers are in SAT format
 export function isSATFormat(headers: string[]): boolean {
   const normalizedHeaders = headers.map(normalizeHeader);
   
   // Check for key SAT columns
-  const satColumns = ["fecha de emision", "numero del dte", "gran total", "nit del emisor"];
+  const satColumns = ["fecha de emision", "numero del dte", "gran total", "nit del emisor", "id del receptor"];
   let matchCount = 0;
   
   for (const col of satColumns) {

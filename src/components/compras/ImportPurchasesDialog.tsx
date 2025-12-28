@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from "xlsx";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
   parseDateFlexible,
   parseNumber,
   isSATFormat,
+  isAnulado,
 } from "@/utils/satImportMapping";
 
 interface ImportPurchasesDialogProps {
@@ -64,6 +66,46 @@ async function findOrCreatePurchaseBook(
   return newBook;
 }
 
+// Parse file (CSV or Excel) and return rows as 2D array
+async function parseFile(file: File): Promise<any[][]> {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  
+  if (extension === "xls" || extension === "xlsx") {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false }) as any[][];
+    return data.filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ""));
+  } else {
+    const text = await file.text();
+    const lines = text.split("\n").filter(line => line.trim());
+    return lines.map(line => parseCSVLine(line));
+  }
+}
+
+// Helper to parse CSV line handling quoted fields
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
+}
+
 export function ImportPurchasesDialog({
   open,
   onOpenChange,
@@ -74,14 +116,13 @@ export function ImportPurchasesDialog({
   const [importing, setImporting] = useState(false);
 
   const { isDragging, dragProps } = useFileDrop({
-    accept: [".csv", "text/csv"],
+    accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
     onFile: (file) => handleImport(file),
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
     disabled: importing,
   });
 
   const downloadTemplate = () => {
-    // SAT Guatemala format template
     const headers = [
       "Fecha de emisión",
       "Número de Autorización",
@@ -90,14 +131,14 @@ export function ImportPurchasesDialog({
       "Número del DTE",
       "NIT del emisor",
       "Nombre completo del emisor",
-      "Gran Total",
-      "IVA",
+      "Gran Total (Moneda Original)",
+      "IVA (monto de este impuesto)",
       "Marca de anulado"
     ];
 
     const csvContent = headers.join(",") + "\n" +
-      "15/01/2025,ABC123456789,FACT,A,12345,12345678,Proveedor Ejemplo S.A.,112.00,12.00,N\n" +
-      "20/02/2025,DEF987654321,FACT,B,67890,87654321,Otro Proveedor S.A.,224.00,24.00,N";
+      "15/01/2025,ABC123456789,FACT,A,12345,12345678,Proveedor Ejemplo S.A.,112.00,12.00,No\n" +
+      "20/02/2025,DEF987654321,FACT,B,67890,87654321,Otro Proveedor S.A.,224.00,24.00,No";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -124,15 +165,14 @@ export function ImportPurchasesDialog({
     setImporting(true);
 
     try {
-      const text = await file.text();
-      const lines = text.split("\n").filter(line => line.trim());
+      const rows = await parseFile(file);
       
-      if (lines.length < 2) {
+      if (rows.length < 2) {
         throw new Error("El archivo está vacío o no tiene datos");
       }
 
       // Parse headers
-      const rawHeaders = lines[0].split(",").map(h => h.trim());
+      const rawHeaders = rows[0].map(h => String(h || "").trim());
       const normalizedHeaders = rawHeaders.map(normalizeHeader);
       
       // Detect if SAT format
@@ -154,7 +194,6 @@ export function ImportPurchasesDialog({
           anulado: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.anulado),
         };
       } else {
-        // Legacy format
         colIndices = {
           fecha: normalizedHeaders.indexOf("fecha"),
           serie: normalizedHeaders.indexOf("serie"),
@@ -184,18 +223,14 @@ export function ImportPurchasesDialog({
       const errors: string[] = [];
       let skippedAnuladas = 0;
       
-      for (let i = 1; i < lines.length; i++) {
-        // Handle CSV with quoted fields
-        const values = parseCSVLine(lines[i]);
-        if (values.length < 5) continue;
+      for (let i = 1; i < rows.length; i++) {
+        const values = rows[i];
+        if (!values || values.length < 5) continue;
 
         // Check if anulado
-        if (colIndices.anulado !== -1) {
-          const anulado = values[colIndices.anulado]?.trim().toUpperCase();
-          if (anulado === "S" || anulado === "SI" || anulado === "SÍ" || anulado === "TRUE" || anulado === "1") {
-            skippedAnuladas++;
-            continue;
-          }
+        if (colIndices.anulado !== -1 && isAnulado(values[colIndices.anulado])) {
+          skippedAnuladas++;
+          continue;
         }
 
         // Parse date
@@ -218,11 +253,11 @@ export function ImportPurchasesDialog({
         }
 
         // Get other fields
-        const serie = sanitizeCSVField(values[colIndices.serie] || "");
-        const numero = sanitizeCSVField(values[colIndices.numero]);
-        const tipoDoc = sanitizeCSVField(values[colIndices.tipo_documento] || "FACT");
-        const nit = sanitizeCSVField(values[colIndices.nit]);
-        const nombre = sanitizeCSVField(values[colIndices.nombre]);
+        const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
+        const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
+        const tipoDoc = sanitizeCSVField(String(values[colIndices.tipo_documento] || "FACT"));
+        const nit = sanitizeCSVField(String(values[colIndices.nit] || ""));
+        const nombre = sanitizeCSVField(String(values[colIndices.nombre] || ""));
 
         if (!numero) {
           errors.push(`Fila ${i + 1}: Número de factura es requerido`);
@@ -351,7 +386,7 @@ export function ImportPurchasesDialog({
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV exportado de SAT Guatemala. Las facturas se asignarán automáticamente al mes correspondiente.
+            Carga un archivo CSV o Excel exportado de SAT Guatemala. Las facturas se asignarán automáticamente al mes correspondiente.
           </DialogDescription>
         </DialogHeader>
 
@@ -373,11 +408,11 @@ export function ImportPurchasesDialog({
           >
             <Upload className={cn("h-12 w-12 mx-auto mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
             <p className="text-sm text-muted-foreground mb-4">
-              {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o haz clic para seleccionar"}
+              {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o Excel, o haz clic para seleccionar"}
             </p>
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,.xls,.xlsx"
               onChange={handleFileUpload}
               className="hidden"
               id="file-upload-purchases"
@@ -393,45 +428,22 @@ export function ImportPurchasesDialog({
           <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg">
             <p className="font-medium mb-2">Formato SAT Guatemala - Columnas utilizadas:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
-              <li><strong>Fecha de emisión:</strong> DD/MM/YYYY o YYYY-MM-DD</li>
+              <li><strong>Fecha de emisión:</strong> DD/MM/YYYY, YYYY-MM-DD o ISO 8601</li>
               <li><strong>Serie:</strong> Serie de la factura</li>
               <li><strong>Número del DTE:</strong> Número de factura</li>
               <li><strong>Tipo de DTE:</strong> Tipo de documento</li>
               <li><strong>NIT del emisor:</strong> NIT del proveedor</li>
               <li><strong>Nombre completo del emisor:</strong> Nombre del proveedor</li>
-              <li><strong>Gran Total:</strong> Monto total (se calcula monto base automáticamente)</li>
-              <li><strong>IVA:</strong> Monto del IVA</li>
-              <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/N)</li>
+              <li><strong>Gran Total (Moneda Original):</strong> Monto total</li>
+              <li><strong>IVA (monto de este impuesto):</strong> Monto del IVA</li>
+              <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/Si/No)</li>
             </ul>
             <p className="mt-3 text-xs text-primary font-medium">
-              💡 Use el archivo exportado directamente de SAT sin modificaciones.
+              Soporta archivos CSV, XLS y XLSX exportados directamente de SAT.
             </p>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
-}
-
-// Helper to parse CSV line handling quoted fields
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    
-    if (char === '"') {
-      inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  
-  result.push(current.trim());
-  return result;
 }
