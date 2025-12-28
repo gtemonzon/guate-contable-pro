@@ -1407,14 +1407,13 @@ export default function LibrosFiscales() {
         </DialogContent>
       </Dialog>
 
-      {activeTab === "compras" && currentEnterpriseId && currentBookId && (
+      {activeTab === "compras" && currentEnterpriseId && (
         <ImportPurchasesDialog
           open={showImportDialog}
           onOpenChange={setShowImportDialog}
           enterpriseId={parseInt(currentEnterpriseId)}
-          bookId={currentBookId}
           onSuccess={() => {
-            if (currentBookId) fetchPurchases(currentBookId);
+            if (currentEnterpriseId) fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }}
         />
       )}

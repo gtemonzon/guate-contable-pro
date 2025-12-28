@@ -22,6 +22,24 @@ interface ImportSalesDialogProps {
   onSuccess: () => void;
 }
 
+// Helper to find accounting period for a given date
+async function findAccountingPeriod(
+  enterpriseId: number,
+  invoiceDate: string
+): Promise<{ id: number } | null> {
+  const { data: period, error } = await supabase
+    .from("tab_accounting_periods")
+    .select("id")
+    .eq("enterprise_id", enterpriseId)
+    .lte("start_date", invoiceDate)
+    .gte("end_date", invoiceDate)
+    .eq("status", "abierto")
+    .maybeSingle();
+
+  if (error) throw error;
+  return period;
+}
+
 export function ImportSalesDialog({
   open,
   onOpenChange,
@@ -53,7 +71,8 @@ export function ImportSalesDialog({
     ];
 
     const csvContent = headers.join(",") + "\n" +
-      "A,12345,2025-01-15,FACT,ABC123456789,12345678,Cliente Ejemplo,100.00,12.00,112.00";
+      "A,12345,2025-01-15,FACT,ABC123456789,12345678,Cliente Ejemplo,100.00,12.00,112.00\n" +
+      "B,67890,2025-02-20,FACT,DEF987654321,87654321,Otro Cliente,200.00,24.00,224.00";
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -80,7 +99,7 @@ export function ImportSalesDialog({
         throw new Error("El archivo está vacío o no tiene datos");
       }
 
-      // Validar encabezados
+      // Validate headers
       const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
       const requiredHeaders = ["serie", "numero", "fecha", "tipo_documento_fel", "numero_autorizacion", 
                                "nit_cliente", "nombre_cliente", "monto_neto", "iva", "total"];
@@ -90,8 +109,11 @@ export function ImportSalesDialog({
         throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(", ")}`);
       }
 
-      // Procesar y validar filas
-      const sales = [];
+      // Group sales by period for summary
+      const salesByPeriod = new Map<string, Array<{
+        sale: any;
+        periodId: number;
+      }>>();
       const errors: string[] = [];
       
       for (let i = 1; i < lines.length; i++) {
@@ -126,8 +148,38 @@ export function ImportSalesDialog({
           continue;
         }
 
+        // Validate date format
+        const dateParts = rowData.fecha.split("-");
+        if (dateParts.length !== 3) {
+          errors.push(`Fila ${i + 1}: Formato de fecha inválido. Use YYYY-MM-DD`);
+          continue;
+        }
+
+        const year = parseInt(dateParts[0]);
+        const month = parseInt(dateParts[1]);
+        
+        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+          errors.push(`Fila ${i + 1}: Fecha inválida`);
+          continue;
+        }
+
+        // Find accounting period for this invoice date
+        const period = await findAccountingPeriod(enterpriseId, rowData.fecha);
+        
+        if (!period) {
+          errors.push(`Fila ${i + 1}: No existe período contable abierto para la fecha ${rowData.fecha}`);
+          continue;
+        }
+
+        const periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        
+        if (!salesByPeriod.has(periodKey)) {
+          salesByPeriod.set(periodKey, []);
+        }
+
         const sale = {
           enterprise_id: enterpriseId,
+          accounting_period_id: period.id,
           invoice_series: rowData.serie,
           invoice_number: rowData.numero,
           invoice_date: rowData.fecha,
@@ -140,27 +192,47 @@ export function ImportSalesDialog({
           total_amount: rowData.total,
         };
 
-        sales.push(sale);
+        salesByPeriod.get(periodKey)!.push({ sale, periodId: period.id });
       }
 
-      if (errors.length > 0 && sales.length === 0) {
-        throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
-      }
-
-      if (sales.length === 0) {
+      if (salesByPeriod.size === 0) {
+        if (errors.length > 0) {
+          throw new Error(`Errores de validación:\n${errors.slice(0, 5).join("\n")}${errors.length > 5 ? `\n...y ${errors.length - 5} errores más` : ""}`);
+        }
         throw new Error("No se encontraron registros válidos para importar");
       }
 
-      // Insertar en la base de datos
-      const { error } = await supabase
+      // Insert all sales
+      const allSales: any[] = [];
+      const importSummary: { period: string; count: number }[] = [];
+
+      for (const [periodKey, periodSales] of salesByPeriod) {
+        const [yearStr, monthStr] = periodKey.split("-");
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
+        
+        const salesToInsert = periodSales.map(p => p.sale);
+        allSales.push(...salesToInsert);
+
+        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        importSummary.push({
+          period: `${monthNames[month - 1]} ${year}`,
+          count: periodSales.length,
+        });
+      }
+
+      // Batch insert all sales
+      const { error: insertError } = await supabase
         .from("tab_sales_ledger")
-        .insert(sales);
+        .insert(allSales);
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
+      const totalImported = allSales.length;
+      const summaryText = importSummary.map(s => `${s.count} en ${s.period}`).join(", ");
       const message = errors.length > 0 
-        ? `Se importaron ${sales.length} registros. ${errors.length} filas con errores fueron omitidas.`
-        : `Se importaron ${sales.length} registros de ventas`;
+        ? `Se importaron ${totalImported} registros (${summaryText}). ${errors.length} filas con errores fueron omitidas.`
+        : `Se importaron ${totalImported} registros: ${summaryText}`;
 
       toast({
         title: "Importación exitosa",
@@ -186,7 +258,7 @@ export function ImportSalesDialog({
         <DialogHeader>
           <DialogTitle>Importar Facturas de Ventas</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV con las facturas de ventas
+            Carga un archivo CSV con facturas de ventas. Las facturas se asignarán automáticamente al período contable según su fecha.
           </DialogDescription>
         </DialogHeader>
 
@@ -230,7 +302,7 @@ export function ImportSalesDialog({
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li><strong>serie:</strong> Serie de la factura (ej. A)</li>
               <li><strong>numero:</strong> Número de factura</li>
-              <li><strong>fecha:</strong> Fecha en formato YYYY-MM-DD</li>
+              <li><strong>fecha:</strong> Fecha en formato YYYY-MM-DD (las facturas se organizan por mes automáticamente)</li>
               <li><strong>tipo_documento_fel:</strong> Tipo de documento FEL</li>
               <li><strong>numero_autorizacion:</strong> Número de autorización</li>
               <li><strong>nit_cliente:</strong> NIT del cliente</li>
@@ -239,6 +311,9 @@ export function ImportSalesDialog({
               <li><strong>iva:</strong> Monto del IVA</li>
               <li><strong>total:</strong> Monto total con IVA</li>
             </ul>
+            <p className="mt-3 text-xs text-primary font-medium">
+              💡 Puedes importar facturas de distintos meses en un solo archivo. Se organizarán automáticamente por período contable.
+            </p>
           </div>
         </div>
       </DialogContent>
