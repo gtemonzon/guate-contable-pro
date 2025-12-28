@@ -38,9 +38,10 @@ interface PurchaseCardProps {
   onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
+  isHighlighted?: boolean;
 }
 
-export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete }: PurchaseCardProps) {
+export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete, isHighlighted }: PurchaseCardProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -103,13 +104,21 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
     };
   }, []);
 
+  // Scroll into view when highlighted
+  useEffect(() => {
+    if (isHighlighted && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [isHighlighted]);
+
   return (
     <Card 
       ref={cardRef}
       className={cn(
         "hover:shadow-md transition-all",
         isFocused && "ring-2 ring-green-500 border-green-500",
-        hasChanges && "ring-1 ring-amber-400"
+        hasChanges && "ring-1 ring-amber-400",
+        isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse"
       )}
     >
       <CardContent className="p-4">
