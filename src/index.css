@@ -54,7 +54,7 @@ All colors MUST be HSL.
 
     /* Sidebar colors */
     --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 240 5% 10%;
+    --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 258 89% 66%;
     --sidebar-primary-foreground: 250 100% 97%;
     --sidebar-accent: 240 5% 33%;
