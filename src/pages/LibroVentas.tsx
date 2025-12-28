@@ -42,6 +42,7 @@ interface SaleEntry {
   operation_type_id: number | null;
   income_account_id: number | null;
   journal_entry_id: number | null;
+  is_annulled?: boolean;
   isNew?: boolean;
 }
 
@@ -440,6 +441,39 @@ export default function LibroVentas() {
       toast({
         title: "Error al guardar",
         description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleAnnulled = async (index: number) => {
+    const entry = sales[index];
+    if (!entry.id) return;
+
+    const newStatus = !entry.is_annulled;
+
+    try {
+      const { error } = await supabase
+        .from("tab_sales_ledger")
+        .update({ is_annulled: newStatus })
+        .eq("id", entry.id);
+
+      if (error) throw error;
+
+      const updated = [...sales];
+      updated[index] = { ...updated[index], is_annulled: newStatus };
+      setSales(updated);
+
+      toast({
+        title: newStatus ? "Factura anulada" : "Factura reactivada",
+        description: newStatus 
+          ? "La factura fue marcada como anulada" 
+          : "La factura fue reactivada correctamente",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     }
@@ -930,6 +964,7 @@ export default function LibroVentas() {
                   onUpdate={updateRow}
                   onSave={saveRow}
                   onDelete={deleteRow}
+                  onToggleAnnulled={toggleAnnulled}
                 />
               ))}
             </div>

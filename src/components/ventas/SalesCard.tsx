@@ -3,12 +3,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface SaleEntry {
   id?: number;
@@ -37,10 +48,11 @@ interface SalesCardProps {
   onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
+  onToggleAnnulled: (index: number) => void;
   isHighlighted?: boolean;
 }
 
-export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete, isHighlighted }: SalesCardProps) {
+export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete, onToggleAnnulled, isHighlighted }: SalesCardProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -269,6 +281,48 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
               />
             </div>
             <div className="col-span-1 flex items-end gap-1">
+              <TooltipProvider>
+                <AlertDialog>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          size="sm" 
+                          variant={sale.is_annulled ? "outline" : "ghost"}
+                          className={cn(
+                            "h-8 w-8 p-0",
+                            sale.is_annulled && "text-green-600 hover:text-green-700 border-green-300"
+                          )}
+                        >
+                          {sale.is_annulled ? <RotateCcw className="h-3 w-3" /> : <Ban className="h-3 w-3" />}
+                        </Button>
+                      </AlertDialogTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{sale.is_annulled ? "Reactivar factura" : "Anular factura"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {sale.is_annulled ? "¿Reactivar esta factura?" : "¿Anular esta factura?"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {sale.is_annulled 
+                          ? `La factura ${sale.invoice_series}-${sale.invoice_number} será reactivada y se incluirá nuevamente en los cálculos.`
+                          : `La factura ${sale.invoice_series}-${sale.invoice_number} será marcada como anulada. No se incluirá en los totales pero seguirá visible para las declaraciones fiscales.`
+                        }
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => onToggleAnnulled(index)}>
+                        {sale.is_annulled ? "Reactivar" : "Anular"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </TooltipProvider>
               <Button 
                 size="sm" 
                 variant={hasChanges ? "default" : "outline"} 
