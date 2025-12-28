@@ -1556,6 +1556,8 @@ export default function LibrosFiscales() {
           onSuccess={() => {
             if (currentEnterpriseId) fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }}
+          expenseAccounts={expenseAccounts}
+          operationTypes={operationTypes}
         />
       )}
 
@@ -1567,6 +1569,8 @@ export default function LibrosFiscales() {
           onSuccess={() => {
             if (currentEnterpriseId) fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
           }}
+          incomeAccounts={incomeAccounts}
+          operationTypes={operationTypes}
         />
       )}
 
