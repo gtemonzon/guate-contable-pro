@@ -19,6 +19,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface TaxForm {
   id: number;
@@ -70,6 +78,8 @@ export default function FormulariosImpuestos() {
   const [editingForm, setEditingForm] = useState<TaxForm | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [formToDelete, setFormToDelete] = useState<TaxForm | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toast } = useToast();
 
   useEffect(() => {
@@ -227,6 +237,16 @@ export default function FormulariosImpuestos() {
     );
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredForms.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedForms = filteredForms.slice(startIndex, startIndex + itemsPerPage);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   const handleDialogClose = (success?: boolean) => {
     setDialogOpen(false);
     setEditingForm(null);
@@ -315,83 +335,129 @@ export default function FormulariosImpuestos() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {filteredForms.map((form) => (
-            <Card key={form.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <span className="font-semibold text-lg">
-                        Formulario: {form.form_number}
-                      </span>
-                      {form.tax_type && (
-                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          {form.tax_type}
+        <div className="space-y-4">
+          <div className="grid gap-4">
+            {paginatedForms.map((form) => (
+              <Card key={form.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <span className="font-semibold text-lg">
+                          Formulario: {form.form_number}
                         </span>
-                      )}
-                      {form.period_type && (
-                        <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
-                          {formatPeriod(form)}
-                        </span>
-                      )}
+                        {form.tax_type && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            {form.tax_type}
+                          </span>
+                        )}
+                        {form.period_type && (
+                          <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                            {formatPeriod(form)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p>Código de acceso: {form.access_code}</p>
+                        <p>
+                          Fecha de pago:{" "}
+                          {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
+                            locale: es,
+                          })}
+                        </p>
+                        {form.notes && (
+                          <p className="text-xs italic">Notas: {form.notes}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground space-y-1">
-                      <p>Código de acceso: {form.access_code}</p>
-                      <p>
-                        Fecha de pago:{" "}
-                        {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
-                          locale: es,
-                        })}
-                      </p>
-                      {form.notes && (
-                        <p className="text-xs italic">Notas: {form.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-primary">
-                        {formatCurrency(form.amount_paid)}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      {form.file_path && (
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-primary">
+                          {formatCurrency(form.amount_paid)}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {form.file_path && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownloadPdf(form)}
+                            title="Descargar PDF"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDownloadPdf(form)}
-                          title="Descargar PDF"
+                          onClick={() => handleEdit(form)}
+                          title="Editar"
                         >
-                          <Download className="h-4 w-4" />
+                          <Edit className="h-4 w-4" />
                         </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(form)}
-                        title="Editar"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setFormToDelete(form);
-                          setDeleteDialogOpen(true);
-                        }}
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setFormToDelete(form);
+                            setDeleteDialogOpen(true);
+                          }}
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredForms.length)} de {filteredForms.length} formularios
+              </p>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // Show first, last, current, and adjacent pages
+                      return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+                    })
+                    .map((page, idx, arr) => (
+                      <PaginationItem key={page}>
+                        {idx > 0 && arr[idx - 1] !== page - 1 && (
+                          <span className="px-2 text-muted-foreground">...</span>
+                        )}
+                        <PaginationLink
+                          onClick={() => setCurrentPage(page)}
+                          isActive={currentPage === page}
+                          className="cursor-pointer"
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
       )}
 
