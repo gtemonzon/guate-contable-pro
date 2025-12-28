@@ -215,8 +215,8 @@ export default function TaxFormDialog({
     }
   };
 
-  const extractTextFromPdf = async (file: File): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
+  const extractTextFromPdf = async (pdfFile: File): Promise<string> => {
+    const arrayBuffer = await pdfFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = "";
     
@@ -239,6 +239,9 @@ export default function TaxFormDialog({
     try {
       // Extract text from PDF in client-side
       const pdfText = await extractTextFromPdf(file);
+      
+      console.log("Extracted PDF text length:", pdfText.length);
+      console.log("PDF text preview:", pdfText.substring(0, 500));
 
       const { data, error } = await supabase.functions.invoke("parse-tax-form-pdf", {
         body: { pdfText },
