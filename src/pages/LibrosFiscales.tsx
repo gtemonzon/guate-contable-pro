@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus } from "lucide-react";
+import { FileText, Upload, Plus, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard } from "@/components/compras/PurchaseCard";
 import { SalesCard } from "@/components/ventas/SalesCard";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
+import { InvoiceSearchDialog } from "@/components/search/InvoiceSearchDialog";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
@@ -73,6 +74,8 @@ export default function LibrosFiscales() {
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   
   // Estados para listas de cuentas
@@ -874,6 +877,14 @@ export default function LibrosFiscales() {
             <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
           </div>
           <div className="flex gap-4 items-end">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => setShowSearchDialog(true)}
+              title="Buscar factura"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <div>
               <Label htmlFor="month-select">Mes</Label>
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
@@ -1067,6 +1078,7 @@ export default function LibrosFiscales() {
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
+                      isHighlighted={highlightedInvoiceId === purchase.id}
                     />
                   ))}
                 </div>
@@ -1089,6 +1101,7 @@ export default function LibrosFiscales() {
                       onUpdate={updateSaleRow}
                       onSave={saveSaleRow}
                       onDelete={deleteSaleRow}
+                      isHighlighted={highlightedInvoiceId === sale.id}
                     />
                   ))}
                 </div>
@@ -1425,6 +1438,22 @@ export default function LibrosFiscales() {
           enterpriseId={parseInt(currentEnterpriseId)}
           onSuccess={() => {
             if (currentEnterpriseId) fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
+          }}
+        />
+      )}
+
+      {currentEnterpriseId && (
+        <InvoiceSearchDialog
+          isOpen={showSearchDialog}
+          onClose={() => setShowSearchDialog(false)}
+          enterpriseId={currentEnterpriseId}
+          onSelectInvoice={(month, year, tab, invoiceId) => {
+            setSelectedMonth(month);
+            setSelectedYear(year);
+            setActiveTab(tab);
+            setHighlightedInvoiceId(invoiceId);
+            // Clear highlight after 3 seconds
+            setTimeout(() => setHighlightedInvoiceId(null), 3000);
           }}
         />
       )}
