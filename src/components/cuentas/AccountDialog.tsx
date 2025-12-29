@@ -100,25 +100,19 @@ export function AccountDialog({
     return { level, parentAccountId };
   };
 
-  // Calcular el siguiente código sugerido
+  // Calcular el siguiente código sugerido basado en la última cuenta creada
   const getNextSuggestedCode = () => {
     if (accounts.length === 0) return "1";
     
-    const sortedCodes = accounts
-      .map(acc => acc.account_code)
-      .sort((a, b) => {
-        const aParts = a.split('.').map(Number);
-        const bParts = b.split('.').map(Number);
-        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-          const aVal = aParts[i] || 0;
-          const bVal = bParts[i] || 0;
-          if (aVal !== bVal) return aVal - bVal;
-        }
-        return 0;
-      });
+    // Ordenar por fecha de creación descendente para obtener la última creada
+    const sortedByDate = [...accounts].sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
     
-    const lastCode = sortedCodes[sortedCodes.length - 1];
-    const parts = lastCode.split('.');
+    const lastCreatedCode = sortedByDate[0].account_code;
+    const parts = lastCreatedCode.split('.');
     const lastPart = parseInt(parts[parts.length - 1]) + 1;
     parts[parts.length - 1] = lastPart.toString().padStart(parts[parts.length - 1].length, '0');
     return parts.join('.');
