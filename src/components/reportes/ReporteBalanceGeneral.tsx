@@ -230,29 +230,31 @@ export default function ReporteBalanceGeneral() {
           const account = accountBalances.find(a => a.id === sectionAccount.account_id);
           if (!account) continue;
 
-          let accountTotal = account.balance * sectionAccount.sign_multiplier;
-
-          // Include children if configured
+          // Get all accounts to display (parent + children if include_children)
+          const accountsToDisplay: AccountBalance[] = [account];
+          
           if (sectionAccount.include_children) {
             const childIds = getAllChildAccountIds(account.id, accountBalances);
             for (const childId of childIds) {
               const childAcc = accountBalances.find(a => a.id === childId);
               if (childAcc) {
-                accountTotal += childAcc.balance * sectionAccount.sign_multiplier;
+                accountsToDisplay.push(childAcc);
               }
             }
           }
 
-          // Show the account line
-          lines.push({
-            type: 'account',
-            label: `${account.account_code} - ${account.account_name}`,
-            amount: accountTotal,
-            level: 1,
-            accountLevel: account.level,
-          });
-
-          sectionTotal += accountTotal;
+          // Show each account line with its own balance
+          for (const acc of accountsToDisplay) {
+            const accAmount = acc.balance * sectionAccount.sign_multiplier;
+            lines.push({
+              type: 'account',
+              label: `${acc.account_code} - ${acc.account_name}`,
+              amount: accAmount,
+              level: acc.level,
+              accountLevel: acc.level,
+            });
+            sectionTotal += accAmount;
+          }
         }
 
         sectionTotals.set(section.section_name, sectionTotal);
