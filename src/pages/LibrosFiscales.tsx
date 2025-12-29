@@ -1366,6 +1366,97 @@ export default function LibrosFiscales() {
                   }
 
                   if (activeTab === "compras") {
+                    // Obtener configuración de empresa para cuentas de IVA
+                    const { data: enterpriseConfig } = await supabase
+                      .from("tab_enterprise_config")
+                      .select("vat_credit_account_id, suppliers_account_id")
+                      .eq("enterprise_id", parseInt(currentEnterpriseId))
+                      .maybeSingle();
+
+                    const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
+                    const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
+
+                    // Función auxiliar para crear líneas de detalle de compras
+                    const createPurchaseDetailLines = async (
+                      journalEntryId: number,
+                      purchaseItems: PurchaseEntry[],
+                      description: string
+                    ) => {
+                      const detailLines: Array<{
+                        journal_entry_id: number;
+                        line_number: number;
+                        account_id: number;
+                        description: string;
+                        debit_amount: number;
+                        credit_amount: number;
+                      }> = [];
+
+                      let lineNumber = 1;
+
+                      // Agrupar por cuenta de gasto (débitos)
+                      const expenseByAccount = new Map<number, number>();
+                      let totalVAT = 0;
+                      let totalAmount = 0;
+
+                      for (const p of purchaseItems) {
+                        if (p.expense_account_id) {
+                          const base = p.total_amount / 1.12;
+                          expenseByAccount.set(
+                            p.expense_account_id,
+                            (expenseByAccount.get(p.expense_account_id) || 0) + base
+                          );
+                        }
+                        totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+                        totalAmount += p.total_amount;
+                      }
+
+                      // Débitos: Cuentas de gasto (base sin IVA)
+                      for (const [accountId, amount] of expenseByAccount) {
+                        detailLines.push({
+                          journal_entry_id: journalEntryId,
+                          line_number: lineNumber++,
+                          account_id: accountId,
+                          description,
+                          debit_amount: parseFloat(amount.toFixed(2)),
+                          credit_amount: 0,
+                        });
+                      }
+
+                      // Débito: IVA Crédito Fiscal
+                      if (vatCreditAccountId && totalVAT > 0) {
+                        detailLines.push({
+                          journal_entry_id: journalEntryId,
+                          line_number: lineNumber++,
+                          account_id: vatCreditAccountId,
+                          description,
+                          debit_amount: parseFloat(totalVAT.toFixed(2)),
+                          credit_amount: 0,
+                        });
+                      }
+
+                      // Crédito: Proveedores o Banco/Caja
+                      const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
+                      if (creditAccountId) {
+                        detailLines.push({
+                          journal_entry_id: journalEntryId,
+                          line_number: lineNumber++,
+                          account_id: creditAccountId,
+                          description,
+                          debit_amount: 0,
+                          credit_amount: parseFloat(totalAmount.toFixed(2)),
+                        });
+                      }
+
+                      if (detailLines.length > 0) {
+                        const { error: detailError } = await supabase
+                          .from("tab_journal_entry_details")
+                          .insert(detailLines);
+                        if (detailError) throw detailError;
+                      }
+
+                      return detailLines.length;
+                    };
+
                     // Lógica de pólizas de COMPRAS
                     if (journalType === "mes") {
                       // Póliza consolidada del mes
@@ -1389,6 +1480,13 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
+                      // Crear líneas de detalle
+                      const linesCreated = await createPurchaseDetailLines(
+                        journalEntry.id,
+                        purchases,
+                        `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`
+                      );
+
                       const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
                       if (purchaseIds.length > 0) {
                         await supabase
@@ -1399,7 +1497,7 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Póliza generada",
-                        description: `Póliza ${entryNumber} creada en borrador`,
+                        description: `Póliza ${entryNumber} creada con ${linesCreated} líneas de detalle`,
                       });
                     } else if (journalType === "banco") {
                       // Agrupar por batch_reference
@@ -1410,6 +1508,7 @@ export default function LibrosFiscales() {
                         return acc;
                       }, {} as Record<string, PurchaseEntry[]>);
 
+                      let totalLines = 0;
                       for (const [ref, items] of Object.entries(byBank)) {
                         const total = items.reduce((sum, p) => sum + p.total_amount, 0);
                         const entryNumber = `COMP-BANCO-${ref}-${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
@@ -1433,6 +1532,14 @@ export default function LibrosFiscales() {
 
                         if (journalError) throw journalError;
 
+                        // Crear líneas de detalle
+                        const linesCreated = await createPurchaseDetailLines(
+                          journalEntry.id,
+                          items,
+                          `Compras Ref. ${ref}`
+                        );
+                        totalLines += linesCreated;
+
                         const ids = items.filter(p => p.id).map(p => p.id);
                         if (ids.length > 0) {
                           await supabase
@@ -1444,10 +1551,11 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Pólizas generadas",
-                        description: `${Object.keys(byBank).length} pólizas creadas en borrador`,
+                        description: `${Object.keys(byBank).length} pólizas creadas con ${totalLines} líneas de detalle`,
                       });
                     } else {
                       // Póliza por documento
+                      let totalLines = 0;
                       for (const p of purchases) {
                         if (!p.id) continue;
                         
@@ -1471,6 +1579,14 @@ export default function LibrosFiscales() {
 
                         if (journalError) throw journalError;
 
+                        // Crear líneas de detalle
+                        const linesCreated = await createPurchaseDetailLines(
+                          journalEntry.id,
+                          [p],
+                          `Compra ${p.supplier_name}`
+                        );
+                        totalLines += linesCreated;
+
                         await supabase
                           .from("tab_purchase_ledger")
                           .update({ journal_entry_id: journalEntry.id })
@@ -1479,12 +1595,36 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Pólizas generadas",
-                        description: `${purchases.length} pólizas creadas en borrador`,
+                        description: `${purchases.length} pólizas creadas con ${totalLines} líneas de detalle`,
                       });
                     }
 
                     if (currentBookId) await fetchPurchases(currentBookId);
                   } else {
+                    // Obtener configuración de empresa para cuenta de IVA Débito
+                    const { data: enterpriseConfig } = await supabase
+                      .from("tab_enterprise_config")
+                      .select("vat_debit_account_id, customers_account_id")
+                      .eq("enterprise_id", parseInt(currentEnterpriseId))
+                      .maybeSingle();
+
+                    const vatDebitAccountId = enterpriseConfig?.vat_debit_account_id;
+                    const customersAccountId = enterpriseConfig?.customers_account_id;
+
+                    // Cuenta de Caja/Bancos (activo, código 1xx) como fallback
+                    const { data: cashAccounts, error: cashError } = await supabase
+                      .from("tab_accounts")
+                      .select("id")
+                      .eq("enterprise_id", parseInt(currentEnterpriseId))
+                      .eq("allows_movement", true)
+                      .eq("is_active", true)
+                      .like("account_code", "1%")
+                      .order("account_code")
+                      .limit(1);
+
+                    if (cashError) throw cashError;
+                    const cashAccountId = customersAccountId || (cashAccounts?.[0]?.id ?? null);
+
                     // Lógica de pólizas de VENTAS
                     if (journalType === "mes") {
                       // Póliza consolidada del mes
@@ -1514,28 +1654,19 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      // Crear líneas de detalle (débitos/céditos)
-                      const accountTotals = new Map<number, number>();
+                      // Calcular totales de ingresos (neto sin IVA) y IVA
+                      const incomeByAccount = new Map<number, number>();
+                      let totalVAT = 0;
+
                       for (const s of sales) {
                         if (!s.income_account_id) continue;
                         const key = Number(s.income_account_id);
-                        accountTotals.set(key, (accountTotals.get(key) || 0) + (Number(s.total_amount) || 0));
+                        const total = Number(s.total_amount) || 0;
+                        const base = total / 1.12;
+                        const vat = total - base;
+                        incomeByAccount.set(key, (incomeByAccount.get(key) || 0) + base);
+                        totalVAT += vat;
                       }
-
-                      // Cuenta de Caja/Bancos (activo, código 1xx)
-                      const { data: cashAccounts, error: cashError } = await supabase
-                        .from("tab_accounts")
-                        .select("id")
-                        .eq("enterprise_id", parseInt(currentEnterpriseId))
-                        .eq("allows_movement", true)
-                        .eq("is_active", true)
-                        .like("account_code", "1%")
-                        .order("account_code")
-                        .limit(1);
-
-                      if (cashError) throw cashError;
-
-                      const cashAccountId = cashAccounts?.[0]?.id ?? null;
 
                       const detailLines: Array<{
                         journal_entry_id: number;
@@ -1549,27 +1680,39 @@ export default function LibrosFiscales() {
                       let lineNumber = 1;
                       const description = `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`;
 
-                      // Débito total
+                      // Débito: Caja/Clientes (total con IVA)
                       if (cashAccountId) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
                           account_id: cashAccountId,
                           description,
-                          debit_amount: totalAmount,
+                          debit_amount: parseFloat(totalAmount.toFixed(2)),
                           credit_amount: 0,
                         });
                       }
 
-                      // Créditos por cuenta de ingreso
-                      for (const [accountId, credit] of accountTotals) {
+                      // Créditos: Cuentas de ingreso (neto sin IVA)
+                      for (const [accountId, credit] of incomeByAccount) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
                           account_id: accountId,
                           description,
                           debit_amount: 0,
-                          credit_amount: credit,
+                          credit_amount: parseFloat(credit.toFixed(2)),
+                        });
+                      }
+
+                      // Crédito: IVA Débito Fiscal
+                      if (vatDebitAccountId && totalVAT > 0) {
+                        detailLines.push({
+                          journal_entry_id: journalEntry.id,
+                          line_number: lineNumber++,
+                          account_id: vatDebitAccountId,
+                          description,
+                          debit_amount: 0,
+                          credit_amount: parseFloat(totalVAT.toFixed(2)),
                         });
                       }
 
@@ -1595,20 +1738,7 @@ export default function LibrosFiscales() {
                       });
                     } else {
                       // Póliza por documento
-                      const { data: cashAccounts, error: cashError } = await supabase
-                        .from("tab_accounts")
-                        .select("id")
-                        .eq("enterprise_id", parseInt(currentEnterpriseId))
-                        .eq("allows_movement", true)
-                        .eq("is_active", true)
-                        .like("account_code", "1%")
-                        .order("account_code")
-                        .limit(1);
-
-                      if (cashError) throw cashError;
-
-                      const cashAccountId = cashAccounts?.[0]?.id ?? null;
-
+                      let totalLines = 0;
                       for (const s of sales) {
                         if (!s.id) continue;
 
@@ -1642,26 +1772,45 @@ export default function LibrosFiscales() {
                         }> = [];
 
                         const description = `Venta ${s.customer_name}`;
+                        const total = Number(s.total_amount) || 0;
+                        const base = total / 1.12;
+                        const vat = total - base;
 
+                        let lineNumber = 1;
+
+                        // Débito: Caja/Clientes
                         if (cashAccountId) {
                           detailLines.push({
                             journal_entry_id: journalEntry.id,
-                            line_number: 1,
+                            line_number: lineNumber++,
                             account_id: cashAccountId,
                             description,
-                            debit_amount: Number(s.total_amount) || 0,
+                            debit_amount: parseFloat(total.toFixed(2)),
                             credit_amount: 0,
                           });
                         }
 
+                        // Crédito: Ingreso (neto)
                         if (s.income_account_id) {
                           detailLines.push({
                             journal_entry_id: journalEntry.id,
-                            line_number: 2,
+                            line_number: lineNumber++,
                             account_id: Number(s.income_account_id),
                             description,
                             debit_amount: 0,
-                            credit_amount: Number(s.total_amount) || 0,
+                            credit_amount: parseFloat(base.toFixed(2)),
+                          });
+                        }
+
+                        // Crédito: IVA Débito Fiscal
+                        if (vatDebitAccountId && vat > 0) {
+                          detailLines.push({
+                            journal_entry_id: journalEntry.id,
+                            line_number: lineNumber++,
+                            account_id: vatDebitAccountId,
+                            description,
+                            debit_amount: 0,
+                            credit_amount: parseFloat(vat.toFixed(2)),
                           });
                         }
 
@@ -1673,6 +1822,8 @@ export default function LibrosFiscales() {
                           if (detailError) throw detailError;
                         }
 
+                        totalLines += detailLines.length;
+
                         await supabase
                           .from("tab_sales_ledger")
                           .update({ journal_entry_id: journalEntry.id })
@@ -1681,7 +1832,7 @@ export default function LibrosFiscales() {
 
                       toast({
                         title: "Pólizas generadas",
-                        description: `${sales.length} pólizas creadas con líneas de detalle`,
+                        description: `${sales.length} pólizas creadas con ${totalLines} líneas de detalle`,
                       });
                     }
 
