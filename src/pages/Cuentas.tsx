@@ -92,6 +92,63 @@ const Cuentas = () => {
     setDialogOpen(true);
   };
 
+  const handleDelete = async (account: Account, childrenIds: number[]): Promise<{ canDelete: boolean; message?: string }> => {
+    try {
+      // Get all account IDs to check (the account + all descendants)
+      const allAccountIds = [account.id, ...childrenIds];
+      
+      // Check if any of these accounts have transactions
+      const { data: transactions, error: checkError } = await supabase
+        .from('tab_journal_entry_details')
+        .select('id, account_id')
+        .in('account_id', allAccountIds)
+        .limit(1);
+
+      if (checkError) throw checkError;
+
+      if (transactions && transactions.length > 0) {
+        // Find which account has transactions
+        const accountWithTransactions = accounts.find(acc => acc.id === transactions[0].account_id);
+        return {
+          canDelete: false,
+          message: `No se puede eliminar. La cuenta "${accountWithTransactions?.account_code} - ${accountWithTransactions?.account_name}" tiene movimientos en partidas contables.`
+        };
+      }
+
+      // Delete all accounts (children first, then parent) - delete in reverse order by level
+      const accountsToDelete = [account, ...accounts.filter(acc => childrenIds.includes(acc.id))]
+        .sort((a, b) => b.level - a.level);
+
+      for (const acc of accountsToDelete) {
+        const { error: deleteError } = await supabase
+          .from('tab_accounts')
+          .delete()
+          .eq('id', acc.id);
+
+        if (deleteError) throw deleteError;
+      }
+
+      toast({
+        title: "Cuenta eliminada",
+        description: childrenIds.length > 0 
+          ? `Se eliminó la cuenta y ${childrenIds.length} cuenta(s) dependiente(s)` 
+          : "La cuenta ha sido eliminada correctamente",
+      });
+
+      // Refresh accounts
+      if (selectedEnterprise) {
+        fetchAccounts(selectedEnterprise);
+      }
+
+      return { canDelete: true };
+    } catch (error: any) {
+      return {
+        canDelete: false,
+        message: getSafeErrorMessage(error)
+      };
+    }
+  };
+
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedAccount(null);
@@ -270,6 +327,7 @@ const Cuentas = () => {
             <AccountTreeView
               accounts={filteredAccounts}
               onEdit={handleEdit}
+              onDelete={handleDelete}
             />
           </CardContent>
         </Card>
