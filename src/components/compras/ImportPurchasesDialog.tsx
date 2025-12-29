@@ -22,6 +22,7 @@ import {
   parseNumber,
   isSATFormat,
   isAnulado,
+  calculateVATFromTotal,
 } from "@/utils/satImportMapping";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -297,8 +298,8 @@ export function ImportPurchasesDialog({
         };
       }
 
-      // Validate required columns
-      const requiredCols = ["fecha", "numero", "nit", "nombre", "total", "iva"];
+      // Validate required columns - IVA column is now optional since we calculate from total
+      const requiredCols = ["fecha", "numero", "nit", "nombre", "total"];
       const missingCols = requiredCols.filter(c => colIndices[c] === -1);
       
       if (missingCols.length > 0) {
@@ -336,10 +337,11 @@ export function ImportPurchasesDialog({
           continue;
         }
 
-        // Parse amounts
+        // Get document type first (needed for VAT calculation)
+        const tipoDoc = sanitizeCSVField(String(values[colIndices.tipo_documento] || "FACT"));
+        
+        // Parse total and calculate VAT from it (ignore SAT's IVA column as it may be incorrect)
         const total = parseNumber(values[colIndices.total]);
-        const iva = parseNumber(values[colIndices.iva]);
-        const montoBase = total - iva;
 
         if (total <= 0) {
           errors.push({
@@ -351,10 +353,12 @@ export function ImportPurchasesDialog({
           continue;
         }
 
+        // Calculate VAT based on document type - SAT exports may have incorrect IVA values
+        const { vatAmount, baseAmount } = calculateVATFromTotal(total, tipoDoc);
+
         // Get other fields
         const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
         const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
-        const tipoDoc = sanitizeCSVField(String(values[colIndices.tipo_documento] || "FACT"));
         const nit = sanitizeCSVField(String(values[colIndices.nit] || ""));
         const nombre = sanitizeCSVField(String(values[colIndices.nombre] || ""));
 
@@ -406,9 +410,9 @@ export function ImportPurchasesDialog({
           fel_document_type: tipoDoc,
           supplier_nit: nit,
           supplier_name: nombre,
-          base_amount: montoBase,
-          vat_amount: iva,
-          net_amount: montoBase,
+          base_amount: baseAmount,
+          vat_amount: vatAmount,
+          net_amount: baseAmount,
           total_amount: total,
         });
       }

@@ -183,3 +183,34 @@ export function isSATFormat(headers: string[]): boolean {
   // If at least 2 SAT columns found, it's SAT format
   return matchCount >= 2;
 }
+
+// FEL document types that do NOT generate VAT (pequeño contribuyente, etc.)
+const NO_VAT_DOCUMENT_TYPES = ["FPEQ", "FESP", "NABN", "RDON", "RECI"];
+
+// Calculate VAT from total amount based on document type
+// SAT exports sometimes have incorrect VAT values, so we calculate from total
+export function calculateVATFromTotal(
+  totalAmount: number, 
+  documentType: string,
+  vatRate: number = 0.12
+): { vatAmount: number; baseAmount: number } {
+  // Normalize document type
+  const docType = (documentType || "FACT").toUpperCase().trim();
+  
+  // Check if document type generates VAT
+  if (NO_VAT_DOCUMENT_TYPES.includes(docType)) {
+    // No VAT - entire total is base amount
+    return {
+      vatAmount: 0,
+      baseAmount: totalAmount
+    };
+  }
+  
+  // Standard VAT calculation: Total = Base * (1 + vatRate)
+  // So: Base = Total / (1 + vatRate)
+  // And: VAT = Total - Base
+  const baseAmount = Math.round((totalAmount / (1 + vatRate)) * 100) / 100;
+  const vatAmount = Math.round((totalAmount - baseAmount) * 100) / 100;
+  
+  return { vatAmount, baseAmount };
+}
