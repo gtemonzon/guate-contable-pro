@@ -8,33 +8,46 @@ import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { formatCurrency } from "@/lib/utils";
+import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
 
-interface BalanceAccount {
+interface ReportLine {
+  type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
+  label: string;
+  amount: number;
+  level?: number;
+  isBold?: boolean;
+  showLine?: boolean;
+}
+
+interface AccountBalance {
+  id: number;
   account_code: string;
   account_name: string;
-  debit_balance: number;
-  credit_balance: number;
+  account_type: string;
   level: number;
+  parent_account_id: number | null;
+  balance: number;
 }
 
 export default function ReporteBalanceGeneral() {
-  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [reportDate, setReportDate] = useState("");
-  const [accounts, setAccounts] = useState<BalanceAccount[]>([]);
+  const [reportLines, setReportLines] = useState<ReportLine[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  const { format, loading: formatLoading } = useFinancialStatementFormat(
+    currentEnterpriseId,
+    'balance_general'
+  );
+
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
-    setCurrentEnterpriseId(enterpriseId);
-    
     if (enterpriseId) {
+      setCurrentEnterpriseId(parseInt(enterpriseId));
       fetchEnterpriseName(enterpriseId);
     }
-
-    // Set default date to today
     setReportDate(new Date().toISOString().split('T')[0]);
   }, []);
 
@@ -51,6 +64,17 @@ export default function ReporteBalanceGeneral() {
     } catch (error: any) {
       console.error("Error fetching enterprise:", error);
     }
+  };
+
+  // Get all child account IDs recursively
+  const getAllChildAccountIds = (parentId: number, allAccounts: AccountBalance[]): number[] => {
+    const children = allAccounts.filter(a => a.parent_account_id === parentId);
+    let ids: number[] = [];
+    for (const child of children) {
+      ids.push(child.id);
+      ids = ids.concat(getAllChildAccountIds(child.id, allAccounts));
+    }
+    return ids;
   };
 
   const generateReport = async () => {
@@ -74,19 +98,18 @@ export default function ReporteBalanceGeneral() {
 
     try {
       setLoading(true);
-      
-      // Get balance-sheet accounts only
+
+      // Get ALL accounts for the enterprise (needed for hierarchy)
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
-        .select("id, account_code, account_name, account_type, level")
-        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .select("id, account_code, account_name, account_type, level, parent_account_id")
+        .eq("enterprise_id", currentEnterpriseId)
         .eq("is_active", true)
-        .in("account_type", ["activo", "pasivo", "capital"])
         .order("account_code");
 
       if (accountsError) throw accountsError;
 
-      // Get all journal entry details up to the report date (con paginación automática)
+      // Get all journal entry details up to the report date
       const detailsData = await fetchAllRecords<any>(
         supabase
           .from("tab_journal_entry_details")
@@ -98,13 +121,13 @@ export default function ReporteBalanceGeneral() {
               is_posted
             )
           `)
-          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+          .eq("tab_journal_entries.enterprise_id", currentEnterpriseId)
           .eq("tab_journal_entries.is_posted", true)
           .lte("tab_journal_entries.entry_date", reportDate)
       );
 
       // Calculate balances per account
-      const balanceMap = new Map<number, { debit: number, credit: number }>();
+      const balanceMap = new Map<number, { debit: number; credit: number }>();
       
       (detailsData || []).forEach((detail: any) => {
         const current = balanceMap.get(detail.account_id) || { debit: 0, credit: 0 };
@@ -113,27 +136,43 @@ export default function ReporteBalanceGeneral() {
         balanceMap.set(detail.account_id, current);
       });
 
-      // Create balance data
-      const balanceData: BalanceAccount[] = (accountsData || []).map((acc: any) => {
-        const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
-
-        // Activo: Deudor (debe - haber). Pasivo/Capital: Acreedor (haber - debe)
-        const netBalance = acc.account_type === "activo"
-          ? (balance.debit - balance.credit)
-          : (balance.credit - balance.debit);
+      // Create balance data with correct sign logic
+      const accountBalances: AccountBalance[] = (accountsData || []).map((acc: any) => {
+        const movements = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
+        // Activo: Debe - Haber. Pasivo/Capital: Haber - Debe
+        const balance = acc.account_type === "activo"
+          ? (movements.debit - movements.credit)
+          : (movements.credit - movements.debit);
 
         return {
+          id: acc.id,
           account_code: acc.account_code,
           account_name: acc.account_name,
-          debit_balance: netBalance > 0 ? netBalance : 0,
-          credit_balance: netBalance < 0 ? Math.abs(netBalance) : 0,
+          account_type: acc.account_type,
           level: acc.level,
+          parent_account_id: acc.parent_account_id,
+          balance,
         };
-      }).filter(acc => acc.debit_balance !== 0 || acc.credit_balance !== 0);
+      });
 
-      setAccounts(balanceData);
-      
-      if (balanceData.length === 0) {
+      // If we have a configured format, use it
+      if (format && format.sections.length > 0) {
+        const lines = generateFormattedReport(format.sections, accountBalances);
+        setReportLines(lines);
+      } else {
+        // Fallback to simple list of accounts with movements
+        const simpleLines: ReportLine[] = accountBalances
+          .filter(a => ['activo', 'pasivo', 'capital'].includes(a.account_type) && a.balance !== 0)
+          .map(a => ({
+            type: 'account' as const,
+            label: `${a.account_code} - ${a.account_name}`,
+            amount: a.balance,
+            level: a.level,
+          }));
+        setReportLines(simpleLines);
+      }
+
+      if (reportLines.length === 0 && !format) {
         toast({
           title: "Sin datos",
           description: "No hay movimientos contabilizados hasta la fecha seleccionada",
@@ -150,13 +189,137 @@ export default function ReporteBalanceGeneral() {
     }
   };
 
+  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[]): ReportLine[] => {
+    const lines: ReportLine[] = [];
+    const sectionTotals: Map<string, number> = new Map();
+    let totalIngresos = 0;
+    let totalGastos = 0;
+
+    // Calculate income and expenses for "RESULTADO DEL PERÍODO"
+    accountBalances.forEach(acc => {
+      if (acc.account_type === 'ingreso') {
+        totalIngresos += acc.balance;
+      } else if (acc.account_type === 'gasto') {
+        totalGastos += acc.balance;
+      }
+    });
+    const periodResult = totalIngresos - totalGastos;
+
+    for (const section of sections) {
+      if (!section.show_in_report) continue;
+
+      if (section.section_type === 'group') {
+        // Section header
+        lines.push({
+          type: 'section',
+          label: section.section_name,
+          amount: 0,
+          isBold: true,
+        });
+
+        // Calculate section total from assigned accounts
+        let sectionTotal = 0;
+
+        for (const sectionAccount of section.accounts) {
+          const account = accountBalances.find(a => a.id === sectionAccount.account_id);
+          if (!account) continue;
+
+          let accountTotal = account.balance * sectionAccount.sign_multiplier;
+
+          // Include children if configured
+          if (sectionAccount.include_children) {
+            const childIds = getAllChildAccountIds(account.id, accountBalances);
+            for (const childId of childIds) {
+              const childAcc = accountBalances.find(a => a.id === childId);
+              if (childAcc) {
+                accountTotal += childAcc.balance * sectionAccount.sign_multiplier;
+              }
+            }
+          }
+
+          // Show the account line
+          lines.push({
+            type: 'account',
+            label: `${account.account_code} - ${account.account_name}`,
+            amount: accountTotal,
+            level: 1,
+          });
+
+          sectionTotal += accountTotal;
+        }
+
+        sectionTotals.set(section.section_name, sectionTotal);
+
+      } else if (section.section_type === 'subtotal') {
+        // Sum all previous group sections until another subtotal or total
+        let subtotal = 0;
+        for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
+          const prevSection = sections[i];
+          if (prevSection.section_type === 'subtotal' || prevSection.section_type === 'total') {
+            break;
+          }
+          if (prevSection.section_type === 'group') {
+            subtotal += sectionTotals.get(prevSection.section_name) || 0;
+          }
+        }
+        sectionTotals.set(section.section_name, subtotal);
+
+        lines.push({
+          type: 'subtotal',
+          label: section.section_name,
+          amount: subtotal,
+          isBold: true,
+          showLine: true,
+        });
+
+      } else if (section.section_type === 'total') {
+        // Sum all subtotals
+        let total = 0;
+        for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
+          const prevSection = sections[i];
+          if (prevSection.section_type === 'total') {
+            break;
+          }
+          if (prevSection.section_type === 'subtotal') {
+            total += sectionTotals.get(prevSection.section_name) || 0;
+          } else if (prevSection.section_type === 'group') {
+            // If no subtotals, sum groups directly
+            const hasSubtotalAfter = sections.slice(i + 1, sections.indexOf(section))
+              .some(s => s.section_type === 'subtotal');
+            if (!hasSubtotalAfter) {
+              total += sectionTotals.get(prevSection.section_name) || 0;
+            }
+          }
+        }
+        sectionTotals.set(section.section_name, total);
+
+        lines.push({
+          type: 'total',
+          label: section.section_name,
+          amount: total,
+          isBold: true,
+          showLine: true,
+        });
+
+      } else if (section.section_type === 'calculated') {
+        // Special calculation: RESULTADO DEL PERÍODO = Ingresos - Gastos
+        lines.push({
+          type: 'calculated',
+          label: section.section_name,
+          amount: periodResult,
+          isBold: true,
+        });
+      }
+    }
+
+    return lines;
+  };
+
   const handleExportExcel = () => {
-    const headers = ["Código", "Cuenta", "Debe", "Haber"];
-    const data = accounts.map(a => [
-      a.account_code,
-      "  ".repeat(a.level - 1) + a.account_name,
-      a.debit_balance.toFixed(2),
-      a.credit_balance.toFixed(2),
+    const headers = ["Concepto", "Monto"];
+    const data = reportLines.map(line => [
+      line.type === 'account' ? `  ${line.label}` : line.label,
+      line.amount.toFixed(2),
     ]);
 
     exportToExcel({
@@ -174,12 +337,10 @@ export default function ReporteBalanceGeneral() {
   };
 
   const handleExportPDF = () => {
-    const headers = ["Código", "Cuenta", "Debe", "Haber"];
-    const data = accounts.map(a => [
-      a.account_code,
-      "  ".repeat(a.level - 1) + a.account_name,
-      `Q ${a.debit_balance.toFixed(2)}`,
-      `Q ${a.credit_balance.toFixed(2)}`,
+    const headers = ["Concepto", "Monto"];
+    const data = reportLines.map(line => [
+      line.type === 'account' ? `  ${line.label}` : line.label,
+      `Q ${line.amount.toFixed(2)}`,
     ]);
 
     exportToPDF({
@@ -210,13 +371,13 @@ export default function ReporteBalanceGeneral() {
         </div>
 
         <div className="flex items-end">
-          <Button onClick={generateReport} disabled={loading} className="w-full">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          <Button onClick={generateReport} disabled={loading || formatLoading} className="w-full">
+            {(loading || formatLoading) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Generar Balance
           </Button>
         </div>
 
-        {accounts.length > 0 && (
+        {reportLines.length > 0 && (
           <div className="flex items-end gap-2">
             <Button variant="outline" onClick={handleExportExcel} className="flex-1">
               <FileSpreadsheet className="h-4 w-4 mr-2" />
@@ -230,7 +391,13 @@ export default function ReporteBalanceGeneral() {
         )}
       </div>
 
-      {accounts.length > 0 && (
+      {!format && !formatLoading && currentEnterpriseId && (
+        <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+          No hay un formato de Balance General configurado. Ve a Configuración → Estados Financieros para definir la estructura del reporte.
+        </div>
+      )}
+
+      {reportLines.length > 0 && (
         <div className="rounded-lg border p-4 bg-card">
           <div className="text-center mb-4">
             <h3 className="font-bold text-lg">{enterpriseName}</h3>
@@ -239,16 +406,16 @@ export default function ReporteBalanceGeneral() {
             </p>
           </div>
           <div className="space-y-1 font-mono text-sm">
-            {accounts.map((account, idx) => (
+            {reportLines.map((line, idx) => (
               <div
                 key={idx}
-                className={`grid grid-cols-4 gap-2 ${account.level === 1 ? 'font-bold' : ''}`}
-                style={{ paddingLeft: `${(account.level - 1) * 20}px` }}
+                className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
+                style={{ paddingLeft: line.type === 'account' ? '24px' : '0' }}
               >
-                <div>{account.account_code}</div>
-                <div className="col-span-1">{account.account_name}</div>
-                <div className="text-right">{account.debit_balance > 0 ? `Q ${account.debit_balance.toFixed(2)}` : '-'}</div>
-                <div className="text-right">{account.credit_balance > 0 ? `Q ${account.credit_balance.toFixed(2)}` : '-'}</div>
+                <div>{line.label}</div>
+                <div className="text-right">
+                  {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+                </div>
               </div>
             ))}
           </div>
