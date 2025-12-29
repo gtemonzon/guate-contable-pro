@@ -756,6 +756,97 @@ export default function LibroCompras() {
                             return;
                           }
 
+                          // Obtener configuración de empresa para cuentas de IVA
+                          const { data: enterpriseConfig } = await supabase
+                            .from("tab_enterprise_config")
+                            .select("vat_credit_account_id, suppliers_account_id")
+                            .eq("enterprise_id", parseInt(currentEnterpriseId))
+                            .maybeSingle();
+
+                          const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
+                          const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
+
+                          // Función auxiliar para crear líneas de detalle de compras
+                          const createPurchaseDetailLines = async (
+                            journalEntryId: number,
+                            purchaseItems: PurchaseEntry[],
+                            description: string
+                          ) => {
+                            const detailLines: Array<{
+                              journal_entry_id: number;
+                              line_number: number;
+                              account_id: number;
+                              description: string;
+                              debit_amount: number;
+                              credit_amount: number;
+                            }> = [];
+
+                            let lineNumber = 1;
+
+                            // Agrupar por cuenta de gasto (débitos)
+                            const expenseByAccount = new Map<number, number>();
+                            let totalVAT = 0;
+                            let totalAmount = 0;
+
+                            for (const p of purchaseItems) {
+                              if (p.expense_account_id) {
+                                const base = p.total_amount / 1.12;
+                                expenseByAccount.set(
+                                  p.expense_account_id,
+                                  (expenseByAccount.get(p.expense_account_id) || 0) + base
+                                );
+                              }
+                              totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+                              totalAmount += p.total_amount;
+                            }
+
+                            // Débitos: Cuentas de gasto (base sin IVA)
+                            for (const [accountId, amount] of expenseByAccount) {
+                              detailLines.push({
+                                journal_entry_id: journalEntryId,
+                                line_number: lineNumber++,
+                                account_id: accountId,
+                                description,
+                                debit_amount: parseFloat(amount.toFixed(2)),
+                                credit_amount: 0,
+                              });
+                            }
+
+                            // Débito: IVA Crédito Fiscal
+                            if (vatCreditAccountId && totalVAT > 0) {
+                              detailLines.push({
+                                journal_entry_id: journalEntryId,
+                                line_number: lineNumber++,
+                                account_id: vatCreditAccountId,
+                                description,
+                                debit_amount: parseFloat(totalVAT.toFixed(2)),
+                                credit_amount: 0,
+                              });
+                            }
+
+                            // Crédito: Proveedores o Banco/Caja
+                            const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
+                            if (creditAccountId) {
+                              detailLines.push({
+                                journal_entry_id: journalEntryId,
+                                line_number: lineNumber++,
+                                account_id: creditAccountId,
+                                description,
+                                debit_amount: 0,
+                                credit_amount: parseFloat(totalAmount.toFixed(2)),
+                              });
+                            }
+
+                            if (detailLines.length > 0) {
+                              const { error: detailError } = await supabase
+                                .from("tab_journal_entry_details")
+                                .insert(detailLines);
+                              if (detailError) throw detailError;
+                            }
+
+                            return detailLines.length;
+                          };
+
                           if (journalType === "mes") {
                             // Póliza consolidada del mes
                             const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -778,6 +869,13 @@ export default function LibroCompras() {
 
                             if (journalError) throw journalError;
 
+                            // Crear líneas de detalle
+                            const linesCreated = await createPurchaseDetailLines(
+                              journalEntry.id,
+                              purchases,
+                              `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`
+                            );
+
                             // Marcar facturas
                             const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
                             if (purchaseIds.length > 0) {
@@ -789,7 +887,7 @@ export default function LibroCompras() {
 
                             toast({
                               title: "Póliza generada",
-                              description: `Póliza ${entryNumber} creada en borrador`,
+                              description: `Póliza ${entryNumber} creada con ${linesCreated} líneas de detalle`,
                             });
                           } else if (journalType === "banco") {
                             // Agrupar por batch_reference
@@ -800,6 +898,7 @@ export default function LibroCompras() {
                               return acc;
                             }, {} as Record<string, PurchaseEntry[]>);
 
+                            let totalLines = 0;
                             for (const [ref, items] of Object.entries(byBank)) {
                               const total = items.reduce((sum, p) => sum + p.total_amount, 0);
                               const entryNumber = `COMP-BANCO-${ref}-${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
@@ -823,6 +922,14 @@ export default function LibroCompras() {
 
                               if (journalError) throw journalError;
 
+                              // Crear líneas de detalle
+                              const linesCreated = await createPurchaseDetailLines(
+                                journalEntry.id,
+                                items,
+                                `Compras Ref. ${ref}`
+                              );
+                              totalLines += linesCreated;
+
                               const ids = items.filter(p => p.id).map(p => p.id);
                               if (ids.length > 0) {
                                 await supabase
@@ -834,10 +941,11 @@ export default function LibroCompras() {
 
                             toast({
                               title: "Pólizas generadas",
-                              description: `${Object.keys(byBank).length} pólizas creadas en borrador`,
+                              description: `${Object.keys(byBank).length} pólizas creadas con ${totalLines} líneas de detalle`,
                             });
                           } else {
                             // Póliza por documento
+                            let totalLines = 0;
                             for (const p of purchases) {
                               if (!p.id) continue;
                               
@@ -861,6 +969,14 @@ export default function LibroCompras() {
 
                               if (journalError) throw journalError;
 
+                              // Crear líneas de detalle
+                              const linesCreated = await createPurchaseDetailLines(
+                                journalEntry.id,
+                                [p],
+                                `Compra ${p.supplier_name}`
+                              );
+                              totalLines += linesCreated;
+
                               await supabase
                                 .from("tab_purchase_ledger")
                                 .update({ journal_entry_id: journalEntry.id })
@@ -869,7 +985,7 @@ export default function LibroCompras() {
 
                             toast({
                               title: "Pólizas generadas",
-                              description: `${purchases.length} pólizas creadas en borrador`,
+                              description: `${purchases.length} pólizas creadas con ${totalLines} líneas de detalle`,
                             });
                           }
 
