@@ -379,9 +379,9 @@ export default function LibrosFiscales() {
       if (movementError) throw movementError;
 
       // Separar por tipo de cuenta
-      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos) o 6 (Costos)
-      const expenses = movementAccounts?.filter(acc => 
-        acc.account_code.startsWith('5') || acc.account_code.startsWith('6')
+      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos), 6 (Costos) o 7 (Gastos/Costos de operación)
+      const expenses = movementAccounts?.filter(acc =>
+        acc.account_code.startsWith('5') || acc.account_code.startsWith('6') || acc.account_code.startsWith('7')
       ) || [];
 
       // Ingresos: Cuentas que empiezan con 4 (Ingresos)
