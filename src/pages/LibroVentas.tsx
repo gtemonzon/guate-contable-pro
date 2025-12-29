@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Loader2, AlertCircle } from "lucide-react";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { SalesCard } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
@@ -59,7 +59,8 @@ export default function LibroVentas() {
   const [journalType, setJournalType] = useState<"mes" | "documento">("mes");
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
-  const [existingJournalEntry, setExistingJournalEntry] = useState<boolean>(false);
+  const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
+  const [confirmReplace, setConfirmReplace] = useState(false);
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
     id: number;
@@ -280,11 +281,31 @@ export default function LibroVentas() {
         .maybeSingle();
 
       if (error) throw error;
-      setExistingJournalEntry(!!data);
+      setExistingJournalEntry({ exists: !!data, id: data?.id });
     } catch (error) {
       console.error("Error checking existing journal entry:", error);
-      setExistingJournalEntry(false);
+      setExistingJournalEntry({ exists: false });
     }
+  };
+
+  const deleteExistingJournalEntry = async (journalEntryId: number) => {
+    // Primero eliminar detalles
+    await supabase
+      .from("tab_journal_entry_details")
+      .delete()
+      .eq("journal_entry_id", journalEntryId);
+
+    // Limpiar referencias en ventas
+    await supabase
+      .from("tab_sales_ledger")
+      .update({ journal_entry_id: null })
+      .eq("journal_entry_id", journalEntryId);
+
+    // Eliminar póliza
+    await supabase
+      .from("tab_journal_entries")
+      .delete()
+      .eq("id", journalEntryId);
   };
 
   const fetchSales = async (enterpriseId: string, month: number, year: number) => {
@@ -557,7 +578,7 @@ export default function LibroVentas() {
     }
   };
 
-  const generateJournalEntry = async () => {
+  const generateJournalEntry = async (replaceExisting: boolean = false) => {
     setIsGeneratingJournal(true);
     try {
       if (!currentEnterpriseId) {
@@ -582,6 +603,11 @@ export default function LibroVentas() {
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
+
+      // Si existe póliza y se debe reemplazar, eliminarla primero
+      if (replaceExisting && existingJournalEntry.exists && existingJournalEntry.id) {
+        await deleteExistingJournalEntry(existingJournalEntry.id);
+      }
 
       // Obtener período contable activo (primero intentar desde localStorage)
       let period;
@@ -960,7 +986,7 @@ export default function LibroVentas() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
-                    {existingJournalEntry && journalType === "mes" && (
+                    {existingJournalEntry.exists && journalType === "mes" && (
                       <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-600 dark:text-amber-400 text-sm">
                         <AlertCircle className="h-4 w-4 flex-shrink-0" />
                         <span>Ya existe una póliza consolidada para {monthNames[selectedMonth - 1]} {selectedYear}</span>
@@ -984,20 +1010,44 @@ export default function LibroVentas() {
                       <p><strong>IVA:</strong> Q {totals.totalVAT}</p>
                       <p><strong>Total:</strong> Q {totals.totalWithVAT}</p>
                     </div>
-                    <Button 
-                      className="w-full" 
-                      onClick={generateJournalEntry}
-                      disabled={isGeneratingJournal || (existingJournalEntry && journalType === "mes")}
-                    >
-                      {isGeneratingJournal ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Generando...
-                        </>
-                      ) : (
-                        "Generar"
-                      )}
-                    </Button>
+                    
+                    {existingJournalEntry.exists && journalType === "mes" ? (
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="destructive"
+                          className="flex-1" 
+                          onClick={() => generateJournalEntry(true)}
+                          disabled={isGeneratingJournal}
+                        >
+                          {isGeneratingJournal ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Reemplazando...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Reemplazar Póliza
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        className="w-full" 
+                        onClick={() => generateJournalEntry(false)}
+                        disabled={isGeneratingJournal}
+                      >
+                        {isGeneratingJournal ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Generando...
+                          </>
+                        ) : (
+                          "Generar"
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>
