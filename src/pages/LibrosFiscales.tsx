@@ -1447,6 +1447,10 @@ export default function LibrosFiscales() {
                       let totalAmount = 0;
 
                       for (const p of purchases) {
+                        // Obtener multiplicador del tipo de documento (NCRE = -1)
+                        const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+                        const multiplier = docType?.affects_total ?? 1;
+                        
                         if (p.expense_account_id) {
                           // Respetar IVA real: si vat_amount es 0, la base es el total
                           const baseAmount = p.vat_amount > 0
@@ -1454,12 +1458,12 @@ export default function LibrosFiscales() {
                             : p.total_amount;
                           expenseByAccount.set(
                             p.expense_account_id,
-                            (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
+                            (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
                           );
                         }
-                        // Usar IVA real, no recalcular
-                        totalVAT += p.vat_amount || 0;
-                        totalAmount += p.total_amount;
+                        // Usar IVA real con multiplicador, no recalcular
+                        totalVAT += (p.vat_amount || 0) * multiplier;
+                        totalAmount += p.total_amount * multiplier;
                       }
 
                       for (const [accountId, amount] of expenseByAccount) {
@@ -1757,6 +1761,10 @@ export default function LibrosFiscales() {
                         let totalAmount = 0;
 
                         for (const p of purchaseItems) {
+                          // Obtener multiplicador del tipo de documento (NCRE = -1)
+                          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+                          const multiplier = docType?.affects_total ?? 1;
+                          
                           if (p.expense_account_id) {
                             // Respetar IVA real: si vat_amount es 0, la base es el total
                             const baseAmount = p.vat_amount > 0
@@ -1764,12 +1772,12 @@ export default function LibrosFiscales() {
                               : p.total_amount;
                             expenseByAccount.set(
                               p.expense_account_id,
-                              (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
+                              (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
                             );
                           }
-                          // Usar IVA real, no recalcular
-                          totalVAT += p.vat_amount || 0;
-                          totalAmount += p.total_amount;
+                          // Usar IVA real con multiplicador, no recalcular
+                          totalVAT += (p.vat_amount || 0) * multiplier;
+                          totalAmount += p.total_amount * multiplier;
                         }
 
                         // Débitos: Cuentas de gasto (base sin IVA)
