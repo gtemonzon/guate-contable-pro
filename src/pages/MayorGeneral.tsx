@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AccountCombobox } from "@/components/ui/account-combobox";
 import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -411,21 +411,13 @@ export default function MayorGeneral() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label htmlFor="account-select">Cuenta Contable</Label>
-              <Select 
-                value={selectedAccount ? String(selectedAccount) : undefined} 
-                onValueChange={(v) => setSelectedAccount(parseInt(v))}
-              >
-                <SelectTrigger id="account-select">
-                  <SelectValue placeholder="Seleccionar cuenta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)}>
-                      {account.account_code} - {account.account_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AccountCombobox
+                accounts={accounts}
+                value={selectedAccount}
+                onValueChange={(v) => setSelectedAccount(v)}
+                placeholder="Seleccionar cuenta"
+                className="w-full h-10 text-sm"
+              />
             </div>
             <div>
               <Label htmlFor="start-date">Desde</Label>
