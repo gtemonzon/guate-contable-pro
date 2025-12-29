@@ -4,6 +4,7 @@ import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
@@ -15,6 +16,7 @@ interface ReportLine {
   label: string;
   amount: number;
   level?: number;
+  accountLevel?: number;
   isBold?: boolean;
   showLine?: boolean;
 }
@@ -36,6 +38,7 @@ export default function ReporteEstadoResultados() {
   const [dateTo, setDateTo] = useState("");
   const [reportLines, setReportLines] = useState<ReportLine[]>([]);
   const [loading, setLoading] = useState(false);
+  const [displayLevel, setDisplayLevel] = useState<number>(0);
   const { toast } = useToast();
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
@@ -246,6 +249,7 @@ export default function ReporteEstadoResultados() {
             label: `${account.account_code} - ${account.account_name}`,
             amount: accountTotal,
             level: 1,
+            accountLevel: account.level,
           });
 
           sectionTotal += accountTotal;
@@ -383,9 +387,16 @@ export default function ReporteEstadoResultados() {
     });
   };
 
+  // Filter lines based on display level
+  const filteredReportLines = displayLevel === 0 
+    ? reportLines 
+    : reportLines.filter(line => 
+        line.type !== 'account' || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
+      );
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <Label htmlFor="dateFrom">Fecha Desde</Label>
           <Input
@@ -404,6 +415,23 @@ export default function ReporteEstadoResultados() {
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
+        </div>
+
+        <div>
+          <Label>Nivel de Detalle</Label>
+          <Select value={displayLevel.toString()} onValueChange={(v) => setDisplayLevel(parseInt(v))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar nivel" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Todos los niveles</SelectItem>
+              <SelectItem value="1">Nivel 1</SelectItem>
+              <SelectItem value="2">Nivel 2</SelectItem>
+              <SelectItem value="3">Nivel 3</SelectItem>
+              <SelectItem value="4">Nivel 4</SelectItem>
+              <SelectItem value="5">Nivel 5</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-end">
@@ -433,7 +461,7 @@ export default function ReporteEstadoResultados() {
         </div>
       )}
 
-      {reportLines.length > 0 && (
+      {filteredReportLines.length > 0 && (
         <div className="rounded-lg border p-4 bg-card">
           <div className="text-center mb-4">
             <h3 className="font-bold text-lg">{enterpriseName}</h3>
@@ -442,7 +470,7 @@ export default function ReporteEstadoResultados() {
             </p>
           </div>
           <div className="space-y-1 font-mono text-sm">
-            {reportLines.map((line, idx) => (
+            {filteredReportLines.map((line, idx) => (
               <div
                 key={idx}
                 className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
