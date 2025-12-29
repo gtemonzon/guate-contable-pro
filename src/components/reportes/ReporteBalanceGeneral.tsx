@@ -198,106 +198,129 @@ export default function ReporteBalanceGeneral() {
     let totalIngresos = 0;
     let totalGastos = 0;
 
+    // Build children index for roll-up calculations
+    const childrenByParent = new Map<number, AccountBalance[]>();
+    for (const acc of accountBalances) {
+      if (acc.parent_account_id == null) continue;
+      const list = childrenByParent.get(acc.parent_account_id) || [];
+      list.push(acc);
+      childrenByParent.set(acc.parent_account_id, list);
+    }
+
+    const aggCache = new Map<number, number>();
+    const getAggregatedBalance = (accId: number): number => {
+      const cached = aggCache.get(accId);
+      if (cached !== undefined) return cached;
+
+      const acc = accountBalances.find(a => a.id === accId);
+      if (!acc) return 0;
+
+      const children = childrenByParent.get(accId) || [];
+      const total = acc.balance + children.reduce((sum, c) => sum + getAggregatedBalance(c.id), 0);
+      aggCache.set(accId, total);
+      return total;
+    };
+
+    const pushAccountTree = (root: AccountBalance, signMultiplier: number, depth: number) => {
+      const amount = getAggregatedBalance(root.id) * signMultiplier;
+      lines.push({
+        type: "account",
+        label: `${root.account_code} - ${root.account_name}`,
+        amount,
+        level: depth,
+        accountLevel: root.level,
+      });
+
+      const children = (childrenByParent.get(root.id) || []).slice().sort((a, b) => a.account_code.localeCompare(b.account_code));
+      for (const child of children) {
+        pushAccountTree(child, signMultiplier, depth + 1);
+      }
+    };
+
     // Calculate income and expenses for "RESULTADO DEL PERÍODO"
     accountBalances.forEach(acc => {
-      if (acc.account_type === 'ingreso') {
+      if (acc.account_type === "ingreso") {
         totalIngresos += acc.balance;
-      } else if (acc.account_type === 'gasto') {
+      } else if (acc.account_type === "gasto") {
         totalGastos += acc.balance;
       }
     });
     const periodResult = totalIngresos - totalGastos;
 
-    // Store calculated values for use in totals
-    let lastCalculatedValue = 0;
-
     for (const section of sections) {
       if (!section.show_in_report) continue;
 
-      if (section.section_type === 'group') {
+      if (section.section_type === "group") {
         // Section header
         lines.push({
-          type: 'section',
+          type: "section",
           label: section.section_name,
           amount: 0,
           isBold: true,
         });
 
-        // Calculate section total from assigned accounts
         let sectionTotal = 0;
 
         for (const sectionAccount of section.accounts) {
           const account = accountBalances.find(a => a.id === sectionAccount.account_id);
           if (!account) continue;
 
-          // Get all accounts to display (parent + children if include_children)
-          const accountsToDisplay: AccountBalance[] = [account];
-          
           if (sectionAccount.include_children) {
-            const childIds = getAllChildAccountIds(account.id, accountBalances);
-            for (const childId of childIds) {
-              const childAcc = accountBalances.find(a => a.id === childId);
-              if (childAcc) {
-                accountsToDisplay.push(childAcc);
-              }
-            }
-          }
-
-          // Show each account line with its own balance
-          for (const acc of accountsToDisplay) {
-            const accAmount = acc.balance * sectionAccount.sign_multiplier;
+            // Add ONLY the top aggregated value to the section total (avoid double counting children)
+            sectionTotal += getAggregatedBalance(account.id) * sectionAccount.sign_multiplier;
+            // Render full hierarchy (parents show roll-up)
+            pushAccountTree(account, sectionAccount.sign_multiplier, 1);
+          } else {
+            const amount = account.balance * sectionAccount.sign_multiplier;
+            sectionTotal += amount;
             lines.push({
-              type: 'account',
-              label: `${acc.account_code} - ${acc.account_name}`,
-              amount: accAmount,
-              level: acc.level,
-              accountLevel: acc.level,
+              type: "account",
+              label: `${account.account_code} - ${account.account_name}`,
+              amount,
+              level: 1,
+              accountLevel: account.level,
             });
-            sectionTotal += accAmount;
           }
         }
 
         sectionTotals.set(section.section_name, sectionTotal);
-
-      } else if (section.section_type === 'subtotal') {
+      } else if (section.section_type === "subtotal") {
         // Sum all previous group sections until another subtotal or total
         let subtotal = 0;
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
-          if (prevSection.section_type === 'subtotal' || prevSection.section_type === 'total') {
+          if (prevSection.section_type === "subtotal" || prevSection.section_type === "total") {
             break;
           }
-          if (prevSection.section_type === 'group') {
+          if (prevSection.section_type === "group") {
             subtotal += sectionTotals.get(prevSection.section_name) || 0;
           }
         }
         sectionTotals.set(section.section_name, subtotal);
 
         lines.push({
-          type: 'subtotal',
+          type: "subtotal",
           label: section.section_name,
           amount: subtotal,
           isBold: true,
           showLine: true,
         });
-
-      } else if (section.section_type === 'total') {
+      } else if (section.section_type === "total") {
         // Sum previous groups, subtotals, and calculated sections
         let total = 0;
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
-          if (prevSection.section_type === 'total') {
+          if (prevSection.section_type === "total") {
             break;
           }
-          if (prevSection.section_type === 'calculated') {
-            // Include calculated values in total (e.g., RESULTADO DEL PERÍODO in TOTAL CAPITAL)
+          if (prevSection.section_type === "calculated") {
             total += sectionTotals.get(prevSection.section_name) || 0;
-          } else if (prevSection.section_type === 'subtotal') {
+          } else if (prevSection.section_type === "subtotal") {
             total += sectionTotals.get(prevSection.section_name) || 0;
-          } else if (prevSection.section_type === 'group') {
-            // If no subtotals, sum groups directly
-            const hasSubtotalAfter = sections.slice(i + 1, sections.indexOf(section))
-              .some(s => s.section_type === 'subtotal');
+          } else if (prevSection.section_type === "group") {
+            const hasSubtotalAfter = sections
+              .slice(i + 1, sections.indexOf(section))
+              .some(s => s.section_type === "subtotal");
             if (!hasSubtotalAfter) {
               total += sectionTotals.get(prevSection.section_name) || 0;
             }
@@ -306,20 +329,18 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
 
         lines.push({
-          type: 'total',
+          type: "total",
           label: section.section_name,
           amount: total,
           isBold: true,
           showLine: true,
         });
-
-      } else if (section.section_type === 'calculated') {
+      } else if (section.section_type === "calculated") {
         // Special calculation: RESULTADO DEL PERÍODO = Ingresos - Gastos
-        lastCalculatedValue = periodResult;
         sectionTotals.set(section.section_name, periodResult);
-        
+
         lines.push({
-          type: 'calculated',
+          type: "calculated",
           label: section.section_name,
           amount: periodResult,
           isBold: true,
@@ -372,12 +393,14 @@ export default function ReporteBalanceGeneral() {
     });
   };
 
-  // Filter lines based on display level
-  const filteredReportLines = displayLevel === 0 
-    ? reportLines 
-    : reportLines.filter(line => 
-        line.type !== 'account' || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
-      );
+  // Filter lines based on display level + hide zero-balance accounts
+  const filteredReportLines = reportLines
+    .filter((line) => line.type !== "account" || Math.abs(line.amount) > 0.00001)
+    .filter((line) =>
+      displayLevel === 0
+        ? true
+        : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
+    );
 
   return (
     <div className="space-y-6">
@@ -449,7 +472,7 @@ export default function ReporteBalanceGeneral() {
               <div
                 key={idx}
                 className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
-                style={{ paddingLeft: line.type === 'account' ? '24px' : '0' }}
+                style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
               >
                 <div>{line.label}</div>
                 <div className="text-right">
