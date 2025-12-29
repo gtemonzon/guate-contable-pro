@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload } from "lucide-react";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { PurchaseCard } from "@/components/compras/PurchaseCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
@@ -60,6 +60,8 @@ export default function LibroCompras() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
+  const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
     id: number;
@@ -326,6 +328,11 @@ export default function LibroCompras() {
           .order("invoice_number", { ascending: true })
       );
       setPurchases(data || []);
+      
+      // Verificar si ya existe póliza consolidada para este mes
+      if (currentEnterpriseId) {
+        await checkExistingJournalEntry(currentEnterpriseId, selectedMonth, selectedYear);
+      }
     } catch (error: any) {
       toast({
         title: "Error al cargar facturas",
@@ -333,6 +340,44 @@ export default function LibroCompras() {
         variant: "destructive",
       });
     }
+  };
+
+  const checkExistingJournalEntry = async (enterpriseId: string, month: number, year: number) => {
+    try {
+      const entryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+      const { data, error } = await supabase
+        .from("tab_journal_entries")
+        .select("id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("entry_number", entryNumber)
+        .maybeSingle();
+
+      if (error) throw error;
+      setExistingJournalEntry({ exists: !!data, id: data?.id });
+    } catch (error) {
+      console.error("Error checking existing journal entry:", error);
+      setExistingJournalEntry({ exists: false });
+    }
+  };
+
+  const deleteExistingJournalEntry = async (journalEntryId: number) => {
+    // Primero eliminar detalles
+    await supabase
+      .from("tab_journal_entry_details")
+      .delete()
+      .eq("journal_entry_id", journalEntryId);
+
+    // Limpiar referencias en compras
+    await supabase
+      .from("tab_purchase_ledger")
+      .update({ journal_entry_id: null })
+      .eq("journal_entry_id", journalEntryId);
+
+    // Eliminar póliza
+    await supabase
+      .from("tab_journal_entries")
+      .delete()
+      .eq("id", journalEntryId);
   };
 
   const addNewRow = () => {
@@ -543,6 +588,323 @@ export default function LibroCompras() {
     }
   };
 
+  const generatePurchaseJournalEntry = async (replaceExisting: boolean = false) => {
+    setIsGeneratingJournal(true);
+    try {
+      if (!currentEnterpriseId || !currentBookId) {
+        toast({
+          title: "Error",
+          description: "No se puede generar la póliza",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Validar que todas las facturas tengan cuenta asignada
+      const withoutAccount = purchases.filter(p => !p.expense_account_id);
+      if (withoutAccount.length > 0) {
+        toast({
+          title: "Documentos sin cuenta",
+          description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
+      // Si existe póliza y se debe reemplazar, eliminarla primero
+      if (replaceExisting && existingJournalEntry.exists && existingJournalEntry.id) {
+        await deleteExistingJournalEntry(existingJournalEntry.id);
+      }
+
+      // Obtener período contable activo
+      let period;
+      const activePeriodId = localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`);
+      
+      if (activePeriodId) {
+        const { data, error: periodError } = await supabase
+          .from("tab_accounting_periods")
+          .select("id")
+          .eq("id", parseInt(activePeriodId))
+          .eq("status", "abierto")
+          .maybeSingle();
+        
+        if (!periodError) period = data;
+      }
+      
+      if (!period) {
+        const { data, error: periodError } = await supabase
+          .from("tab_accounting_periods")
+          .select("id")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("status", "abierto")
+          .eq("year", selectedYear)
+          .maybeSingle();
+        
+        if (periodError) throw periodError;
+        period = data;
+      }
+
+      if (!period) {
+        toast({
+          title: "Error",
+          description: "No hay período contable abierto para este año",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Obtener configuración de empresa para cuentas de IVA
+      const { data: enterpriseConfig } = await supabase
+        .from("tab_enterprise_config")
+        .select("vat_credit_account_id, suppliers_account_id")
+        .eq("enterprise_id", parseInt(currentEnterpriseId))
+        .maybeSingle();
+
+      const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
+      const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
+
+      // Función auxiliar para crear líneas de detalle
+      const createPurchaseDetailLines = async (
+        journalEntryId: number,
+        purchaseItems: PurchaseEntry[],
+        description: string
+      ) => {
+        const detailLines: Array<{
+          journal_entry_id: number;
+          line_number: number;
+          account_id: number;
+          description: string;
+          debit_amount: number;
+          credit_amount: number;
+        }> = [];
+
+        let lineNumber = 1;
+
+        // Agrupar por cuenta de gasto (débitos)
+        const expenseByAccount = new Map<number, number>();
+        let totalVAT = 0;
+        let totalAmount = 0;
+
+        for (const p of purchaseItems) {
+          if (p.expense_account_id) {
+            const base = p.total_amount / 1.12;
+            expenseByAccount.set(
+              p.expense_account_id,
+              (expenseByAccount.get(p.expense_account_id) || 0) + base
+            );
+          }
+          totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+          totalAmount += p.total_amount;
+        }
+
+        // Débitos: Cuentas de gasto (base sin IVA)
+        for (const [accountId, amount] of expenseByAccount) {
+          detailLines.push({
+            journal_entry_id: journalEntryId,
+            line_number: lineNumber++,
+            account_id: accountId,
+            description,
+            debit_amount: parseFloat(amount.toFixed(2)),
+            credit_amount: 0,
+          });
+        }
+
+        // Débito: IVA Crédito Fiscal
+        if (vatCreditAccountId && totalVAT > 0) {
+          detailLines.push({
+            journal_entry_id: journalEntryId,
+            line_number: lineNumber++,
+            account_id: vatCreditAccountId,
+            description,
+            debit_amount: parseFloat(totalVAT.toFixed(2)),
+            credit_amount: 0,
+          });
+        }
+
+        // Crédito: Proveedores o Banco/Caja
+        const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
+        if (creditAccountId) {
+          detailLines.push({
+            journal_entry_id: journalEntryId,
+            line_number: lineNumber++,
+            account_id: creditAccountId,
+            description,
+            debit_amount: 0,
+            credit_amount: parseFloat(totalAmount.toFixed(2)),
+          });
+        }
+
+        if (detailLines.length > 0) {
+          const { error: detailError } = await supabase
+            .from("tab_journal_entry_details")
+            .insert(detailLines);
+          if (detailError) throw detailError;
+        }
+
+        return detailLines.length;
+      };
+
+      if (journalType === "mes") {
+        // Póliza consolidada del mes
+        const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        const { data: journalEntry, error: journalError } = await supabase
+          .from("tab_journal_entries")
+          .insert({
+            enterprise_id: parseInt(currentEnterpriseId),
+            accounting_period_id: period.id,
+            entry_number: entryNumber,
+            entry_date: new Date().toISOString().split('T')[0],
+            entry_type: "diario",
+            description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+            total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+            total_credit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
+            is_posted: false,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (journalError) throw journalError;
+
+        const linesCreated = await createPurchaseDetailLines(
+          journalEntry.id,
+          purchases,
+          `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`
+        );
+
+        // Marcar facturas
+        const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
+        if (purchaseIds.length > 0) {
+          await supabase
+            .from("tab_purchase_ledger")
+            .update({ journal_entry_id: journalEntry.id })
+            .in("id", purchaseIds);
+        }
+
+        toast({
+          title: replaceExisting ? "Póliza reemplazada" : "Póliza generada",
+          description: `Póliza ${entryNumber} creada con ${linesCreated} líneas de detalle`,
+        });
+      } else if (journalType === "banco") {
+        // Agrupar por batch_reference
+        const byBank = purchases.reduce((acc, p) => {
+          const key = p.batch_reference || "SIN_REF";
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(p);
+          return acc;
+        }, {} as Record<string, PurchaseEntry[]>);
+
+        let totalEntries = 0;
+        let totalLines = 0;
+
+        for (const [ref, items] of Object.entries(byBank)) {
+          const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${ref}`;
+          const batchTotal = items.reduce((sum, p) => sum + p.total_amount, 0);
+
+          const { data: journalEntry, error: journalError } = await supabase
+            .from("tab_journal_entries")
+            .insert({
+              enterprise_id: parseInt(currentEnterpriseId),
+              accounting_period_id: period.id,
+              entry_number: entryNumber,
+              entry_date: new Date().toISOString().split('T')[0],
+              entry_type: "diario",
+              description: `Compras ${ref} - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+              total_debit: batchTotal,
+              total_credit: batchTotal,
+              is_posted: false,
+              created_by: user.id,
+            })
+            .select()
+            .single();
+
+          if (journalError) throw journalError;
+
+          const linesCreated = await createPurchaseDetailLines(
+            journalEntry.id,
+            items,
+            `Compras ${ref} - ${monthNames[selectedMonth - 1]} ${selectedYear}`
+          );
+          totalLines += linesCreated;
+
+          const itemIds = items.filter(p => p.id).map(p => p.id);
+          if (itemIds.length > 0) {
+            await supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: journalEntry.id })
+              .in("id", itemIds);
+          }
+
+          totalEntries++;
+        }
+
+        toast({
+          title: "Pólizas generadas",
+          description: `${totalEntries} pólizas creadas con ${totalLines} líneas de detalle`,
+        });
+      } else {
+        // Póliza por documento
+        let totalLines = 0;
+        for (const p of purchases) {
+          if (!p.id) continue;
+          
+          const entryNumber = `COMP-DOC-${p.invoice_series || 'S'}-${p.invoice_number}`;
+          const { data: journalEntry, error: journalError } = await supabase
+            .from("tab_journal_entries")
+            .insert({
+              enterprise_id: parseInt(currentEnterpriseId),
+              accounting_period_id: period.id,
+              entry_number: entryNumber,
+              entry_date: p.invoice_date,
+              entry_type: "diario",
+              description: `Compra ${p.supplier_name}`,
+              total_debit: p.total_amount,
+              total_credit: p.total_amount,
+              is_posted: false,
+              created_by: user.id,
+            })
+            .select()
+            .single();
+
+          if (journalError) throw journalError;
+
+          const linesCreated = await createPurchaseDetailLines(
+            journalEntry.id,
+            [p],
+            `Compra ${p.supplier_name}`
+          );
+          totalLines += linesCreated;
+
+          await supabase
+            .from("tab_purchase_ledger")
+            .update({ journal_entry_id: journalEntry.id })
+            .eq("id", p.id);
+        }
+
+        toast({
+          title: "Pólizas generadas",
+          description: `${purchases.length} pólizas creadas con ${totalLines} líneas de detalle`,
+        });
+      }
+
+      setShowJournalDialog(false);
+      await fetchPurchases(currentBookId);
+      // Actualizar estado de póliza existente
+      await checkExistingJournalEntry(currentEnterpriseId, selectedMonth, selectedYear);
+    } catch (error: any) {
+      toast({
+        title: "Error al generar póliza",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingJournal(false);
+    }
+  };
+
   if (!currentEnterpriseId) {
     return (
       <div className="p-8">
@@ -672,6 +1034,12 @@ export default function LibroCompras() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
+                    {existingJournalEntry.exists && journalType === "mes" && (
+                      <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-600 dark:text-amber-400 text-sm">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        <span>Ya existe una póliza consolidada para {monthNames[selectedMonth - 1]} {selectedYear}</span>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label>Tipo de Póliza</Label>
                       <Select value={journalType} onValueChange={(v) => setJournalType(v as "mes" | "banco" | "documento")}>
@@ -691,317 +1059,44 @@ export default function LibroCompras() {
                       <p><strong>IVA:</strong> {totals.totalVAT}</p>
                       <p><strong>Total:</strong> {totals.totalWithVAT}</p>
                     </div>
-                    <Button 
-                      className="w-full" 
-                      onClick={async () => {
-                        try {
-                          if (!currentEnterpriseId || !currentBookId) {
-                            toast({
-                              title: "Error",
-                              description: "No se puede generar la póliza",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          // Validar que todas las facturas tengan cuenta asignada
-                          const withoutAccount = purchases.filter(p => !p.expense_account_id);
-                          if (withoutAccount.length > 0) {
-                            toast({
-                              title: "Documentos sin cuenta",
-                              description: `Hay ${withoutAccount.length} documentos sin cuenta contable asignada`,
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          const { data: { user } } = await supabase.auth.getUser();
-                          if (!user) throw new Error("Usuario no autenticado");
-
-                          // Obtener período contable activo (primero intentar desde localStorage)
-                          let period;
-                          const activePeriodId = localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`);
-                          
-                          if (activePeriodId) {
-                            const { data, error: periodError } = await supabase
-                              .from("tab_accounting_periods")
-                              .select("id")
-                              .eq("id", parseInt(activePeriodId))
-                              .eq("status", "abierto")
-                              .maybeSingle();
-                            
-                            if (!periodError) period = data;
-                          }
-                          
-                          // Fallback: buscar período abierto por año
-                          if (!period) {
-                            const { data, error: periodError } = await supabase
-                              .from("tab_accounting_periods")
-                              .select("id")
-                              .eq("enterprise_id", parseInt(currentEnterpriseId))
-                              .eq("status", "abierto")
-                              .eq("year", selectedYear)
-                              .maybeSingle();
-                            
-                            if (periodError) throw periodError;
-                            period = data;
-                          }
-
-                          if (!period) {
-                            toast({
-                              title: "Error",
-                              description: "No hay período contable abierto para este año",
-                              variant: "destructive",
-                            });
-                            return;
-                          }
-
-                          // Obtener configuración de empresa para cuentas de IVA
-                          const { data: enterpriseConfig } = await supabase
-                            .from("tab_enterprise_config")
-                            .select("vat_credit_account_id, suppliers_account_id")
-                            .eq("enterprise_id", parseInt(currentEnterpriseId))
-                            .maybeSingle();
-
-                          const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
-                          const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
-
-                          // Función auxiliar para crear líneas de detalle de compras
-                          const createPurchaseDetailLines = async (
-                            journalEntryId: number,
-                            purchaseItems: PurchaseEntry[],
-                            description: string
-                          ) => {
-                            const detailLines: Array<{
-                              journal_entry_id: number;
-                              line_number: number;
-                              account_id: number;
-                              description: string;
-                              debit_amount: number;
-                              credit_amount: number;
-                            }> = [];
-
-                            let lineNumber = 1;
-
-                            // Agrupar por cuenta de gasto (débitos)
-                            const expenseByAccount = new Map<number, number>();
-                            let totalVAT = 0;
-                            let totalAmount = 0;
-
-                            for (const p of purchaseItems) {
-                              if (p.expense_account_id) {
-                                const base = p.total_amount / 1.12;
-                                expenseByAccount.set(
-                                  p.expense_account_id,
-                                  (expenseByAccount.get(p.expense_account_id) || 0) + base
-                                );
-                              }
-                              totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
-                              totalAmount += p.total_amount;
-                            }
-
-                            // Débitos: Cuentas de gasto (base sin IVA)
-                            for (const [accountId, amount] of expenseByAccount) {
-                              detailLines.push({
-                                journal_entry_id: journalEntryId,
-                                line_number: lineNumber++,
-                                account_id: accountId,
-                                description,
-                                debit_amount: parseFloat(amount.toFixed(2)),
-                                credit_amount: 0,
-                              });
-                            }
-
-                            // Débito: IVA Crédito Fiscal
-                            if (vatCreditAccountId && totalVAT > 0) {
-                              detailLines.push({
-                                journal_entry_id: journalEntryId,
-                                line_number: lineNumber++,
-                                account_id: vatCreditAccountId,
-                                description,
-                                debit_amount: parseFloat(totalVAT.toFixed(2)),
-                                credit_amount: 0,
-                              });
-                            }
-
-                            // Crédito: Proveedores o Banco/Caja
-                            const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
-                            if (creditAccountId) {
-                              detailLines.push({
-                                journal_entry_id: journalEntryId,
-                                line_number: lineNumber++,
-                                account_id: creditAccountId,
-                                description,
-                                debit_amount: 0,
-                                credit_amount: parseFloat(totalAmount.toFixed(2)),
-                              });
-                            }
-
-                            if (detailLines.length > 0) {
-                              const { error: detailError } = await supabase
-                                .from("tab_journal_entry_details")
-                                .insert(detailLines);
-                              if (detailError) throw detailError;
-                            }
-
-                            return detailLines.length;
-                          };
-
-                          if (journalType === "mes") {
-                            // Póliza consolidada del mes
-                            const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-                            const { data: journalEntry, error: journalError } = await supabase
-                              .from("tab_journal_entries")
-                              .insert({
-                                enterprise_id: parseInt(currentEnterpriseId),
-                                accounting_period_id: period.id,
-                                entry_number: entryNumber,
-                                entry_date: new Date().toISOString().split('T')[0],
-                                entry_type: "diario",
-                                description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                                total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
-                                total_credit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
-                                is_posted: false,
-                                created_by: user.id,
-                              })
-                              .select()
-                              .single();
-
-                            if (journalError) throw journalError;
-
-                            // Crear líneas de detalle
-                            const linesCreated = await createPurchaseDetailLines(
-                              journalEntry.id,
-                              purchases,
-                              `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`
-                            );
-
-                            // Marcar facturas
-                            const purchaseIds = purchases.filter(p => p.id).map(p => p.id);
-                            if (purchaseIds.length > 0) {
-                              await supabase
-                                .from("tab_purchase_ledger")
-                                .update({ journal_entry_id: journalEntry.id })
-                                .in("id", purchaseIds);
-                            }
-
-                            toast({
-                              title: "Póliza generada",
-                              description: `Póliza ${entryNumber} creada con ${linesCreated} líneas de detalle`,
-                            });
-                          } else if (journalType === "banco") {
-                            // Agrupar por batch_reference
-                            const byBank = purchases.reduce((acc, p) => {
-                              const key = p.batch_reference || "SIN_REF";
-                              if (!acc[key]) acc[key] = [];
-                              acc[key].push(p);
-                              return acc;
-                            }, {} as Record<string, PurchaseEntry[]>);
-
-                            let totalLines = 0;
-                            for (const [ref, items] of Object.entries(byBank)) {
-                              const total = items.reduce((sum, p) => sum + p.total_amount, 0);
-                              const entryNumber = `COMP-BANCO-${ref}-${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
-                              
-                              const { data: journalEntry, error: journalError } = await supabase
-                                .from("tab_journal_entries")
-                                .insert({
-                                  enterprise_id: parseInt(currentEnterpriseId),
-                                  accounting_period_id: period.id,
-                                  entry_number: entryNumber,
-                                  entry_date: new Date().toISOString().split('T')[0],
-                                  entry_type: "diario",
-                                  description: `Compras Ref. ${ref}`,
-                                  total_debit: total,
-                                  total_credit: total,
-                                  is_posted: false,
-                                  created_by: user.id,
-                                })
-                                .select()
-                                .single();
-
-                              if (journalError) throw journalError;
-
-                              // Crear líneas de detalle
-                              const linesCreated = await createPurchaseDetailLines(
-                                journalEntry.id,
-                                items,
-                                `Compras Ref. ${ref}`
-                              );
-                              totalLines += linesCreated;
-
-                              const ids = items.filter(p => p.id).map(p => p.id);
-                              if (ids.length > 0) {
-                                await supabase
-                                  .from("tab_purchase_ledger")
-                                  .update({ journal_entry_id: journalEntry.id })
-                                  .in("id", ids);
-                              }
-                            }
-
-                            toast({
-                              title: "Pólizas generadas",
-                              description: `${Object.keys(byBank).length} pólizas creadas con ${totalLines} líneas de detalle`,
-                            });
-                          } else {
-                            // Póliza por documento
-                            let totalLines = 0;
-                            for (const p of purchases) {
-                              if (!p.id) continue;
-                              
-                              const entryNumber = `COMP-DOC-${p.invoice_series}-${p.invoice_number}`;
-                              const { data: journalEntry, error: journalError } = await supabase
-                                .from("tab_journal_entries")
-                                .insert({
-                                  enterprise_id: parseInt(currentEnterpriseId),
-                                  accounting_period_id: period.id,
-                                  entry_number: entryNumber,
-                                  entry_date: p.invoice_date,
-                                  entry_type: "diario",
-                                  description: `Compra ${p.supplier_name}`,
-                                  total_debit: p.total_amount,
-                                  total_credit: p.total_amount,
-                                  is_posted: false,
-                                  created_by: user.id,
-                                })
-                                .select()
-                                .single();
-
-                              if (journalError) throw journalError;
-
-                              // Crear líneas de detalle
-                              const linesCreated = await createPurchaseDetailLines(
-                                journalEntry.id,
-                                [p],
-                                `Compra ${p.supplier_name}`
-                              );
-                              totalLines += linesCreated;
-
-                              await supabase
-                                .from("tab_purchase_ledger")
-                                .update({ journal_entry_id: journalEntry.id })
-                                .eq("id", p.id);
-                            }
-
-                            toast({
-                              title: "Pólizas generadas",
-                              description: `${purchases.length} pólizas creadas con ${totalLines} líneas de detalle`,
-                            });
-                          }
-
-                          setShowJournalDialog(false);
-                          await fetchPurchases(currentBookId);
-                        } catch (error: any) {
-                          toast({
-                            title: "Error al generar póliza",
-                            description: getSafeErrorMessage(error),
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                    >
-                      Generar
-                    </Button>
+                    
+                    {existingJournalEntry.exists && journalType === "mes" ? (
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="destructive"
+                          className="flex-1" 
+                          onClick={() => generatePurchaseJournalEntry(true)}
+                          disabled={isGeneratingJournal}
+                        >
+                          {isGeneratingJournal ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Reemplazando...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Reemplazar Póliza
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        className="w-full" 
+                        onClick={() => generatePurchaseJournalEntry(false)}
+                        disabled={isGeneratingJournal}
+                      >
+                        {isGeneratingJournal ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Generando...
+                          </>
+                        ) : (
+                          "Generar"
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>
