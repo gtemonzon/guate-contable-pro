@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,6 +7,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -89,6 +99,10 @@ export default function JournalEntryDialog({
   
   // Estado para búsqueda de cuentas por línea
   const [accountSearch, setAccountSearch] = useState<Record<string, string>>({});
+  
+  // Estado para el diálogo de confirmación al cerrar
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
 
   const { toast } = useToast();
 
@@ -196,6 +210,55 @@ export default function JournalEntryDialog({
       { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
       { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
     ]);
+    setShowCloseConfirm(false);
+    setPendingClose(false);
+  };
+
+  // Verificar si hay cambios sin guardar
+  const hasUnsavedChanges = useCallback(() => {
+    // Si estamos editando, verificar si algo cambió
+    if (entryToEdit) {
+      if (headerDescription !== entryToEdit.description) return true;
+      if (entryDate !== entryToEdit.entry_date) return true;
+      if (entryType !== entryToEdit.entry_type) return true;
+    }
+    
+    // Si es nueva partida, verificar si hay datos ingresados
+    const hasDescription = headerDescription.trim() !== "";
+    const hasDocRef = documentReference.trim() !== "";
+    const hasLineData = detailLines.some(line => 
+      line.account_id !== null || 
+      line.description.trim() !== "" ||
+      line.debit_amount > 0 || 
+      line.credit_amount > 0
+    );
+    
+    return hasDescription || hasDocRef || hasLineData;
+  }, [entryToEdit, headerDescription, entryDate, entryType, documentReference, detailLines]);
+
+  // Manejar intento de cerrar el modal
+  const handleCloseAttempt = useCallback((newOpen: boolean) => {
+    if (!newOpen && hasUnsavedChanges()) {
+      setShowCloseConfirm(true);
+      setPendingClose(true);
+    } else {
+      onOpenChange(newOpen);
+    }
+  }, [hasUnsavedChanges, onOpenChange]);
+
+  // Cerrar sin guardar
+  const handleDiscardAndClose = () => {
+    setShowCloseConfirm(false);
+    setPendingClose(false);
+    resetForm();
+    onOpenChange(false);
+  };
+
+  // Guardar como borrador y cerrar
+  const handleSaveDraftAndClose = async () => {
+    setShowCloseConfirm(false);
+    await saveEntry(false);
+    setPendingClose(false);
   };
 
   const loadEntryData = async (entryId: number) => {
@@ -582,7 +645,8 @@ export default function JournalEntryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={handleCloseAttempt}>
       <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{entryToEdit ? 'Editar' : 'Nueva'} Partida Contable</DialogTitle>
@@ -866,5 +930,25 @@ export default function JournalEntryDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Guardar borrador?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tiene cambios sin guardar. ¿Desea guardar la partida como borrador antes de salir?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={handleDiscardAndClose}>
+            No, descartar
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleSaveDraftAndClose}>
+            Sí, guardar borrador
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
