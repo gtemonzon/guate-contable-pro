@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -102,7 +102,6 @@ export default function JournalEntryDialog({
   
   // Estado para el diálogo de confirmación al cerrar
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const [pendingClose, setPendingClose] = useState(false);
 
   const { toast } = useToast();
 
@@ -200,47 +199,107 @@ export default function JournalEntryDialog({
     }
   };
 
+  // Snapshot inicial para detectar cambios reales (evita falsos positivos al cargar borradores)
+  const initialSnapshotRef = useRef<string>("");
+
+  const serializeForDirtyCheck = useCallback(
+    (state: {
+      entryDate: string;
+      entryType: string;
+      periodId: number | null;
+      documentReference: string;
+      headerDescription: string;
+      detailLines: Array<Omit<DetailLine, "id">>;
+    }) => {
+      return JSON.stringify({
+        entryDate: state.entryDate,
+        entryType: state.entryType,
+        periodId: state.periodId,
+        documentReference: state.documentReference,
+        headerDescription: state.headerDescription,
+        detailLines: state.detailLines.map((l) => ({
+          account_id: l.account_id,
+          description: l.description,
+          bank_reference: l.bank_reference,
+          cost_center: l.cost_center,
+          debit_amount: Number(l.debit_amount || 0),
+          credit_amount: Number(l.credit_amount || 0),
+        })),
+      });
+    },
+    [],
+  );
+
   const resetForm = () => {
-    setEntryDate(new Date().toISOString().split('T')[0]);
+    const freshEntryDate = new Date().toISOString().split("T")[0];
+    const freshLines: DetailLine[] = [
+      {
+        id: crypto.randomUUID(),
+        account_id: null,
+        description: "",
+        bank_reference: "",
+        cost_center: "",
+        debit_amount: 0,
+        credit_amount: 0,
+      },
+      {
+        id: crypto.randomUUID(),
+        account_id: null,
+        description: "",
+        bank_reference: "",
+        cost_center: "",
+        debit_amount: 0,
+        credit_amount: 0,
+      },
+    ];
+
+    // Guardar snapshot inicial (nuevo)
+    initialSnapshotRef.current = serializeForDirtyCheck({
+      entryDate: freshEntryDate,
+      entryType: "diario",
+      periodId: null,
+      documentReference: "",
+      headerDescription: "",
+      detailLines: freshLines.map(({ id, ...rest }) => rest),
+    });
+
+    setEntryDate(freshEntryDate);
     setEntryType("diario");
     setPeriodId(null);
     setDocumentReference("");
     setHeaderDescription("");
-    setDetailLines([
-      { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
-      { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
-    ]);
+    setDetailLines(freshLines);
     setShowCloseConfirm(false);
-    setPendingClose(false);
   };
 
-  // Verificar si hay cambios sin guardar
+  // Verificar si hay cambios sin guardar (comparando contra snapshot inicial)
   const hasUnsavedChanges = useCallback(() => {
-    // Si estamos editando, verificar si algo cambió
-    if (entryToEdit) {
-      if (headerDescription !== entryToEdit.description) return true;
-      if (entryDate !== entryToEdit.entry_date) return true;
-      if (entryType !== entryToEdit.entry_type) return true;
-    }
-    
-    // Si es nueva partida, verificar si hay datos ingresados
-    const hasDescription = headerDescription.trim() !== "";
-    const hasDocRef = documentReference.trim() !== "";
-    const hasLineData = detailLines.some(line => 
-      line.account_id !== null || 
-      line.description.trim() !== "" ||
-      line.debit_amount > 0 || 
-      line.credit_amount > 0
-    );
-    
-    return hasDescription || hasDocRef || hasLineData;
-  }, [entryToEdit, headerDescription, entryDate, entryType, documentReference, detailLines]);
+    if (!initialSnapshotRef.current) return false;
+
+    const currentSnapshot = serializeForDirtyCheck({
+      entryDate,
+      entryType,
+      periodId,
+      documentReference,
+      headerDescription,
+      detailLines: detailLines.map(({ id, ...rest }) => rest),
+    });
+
+    return currentSnapshot !== initialSnapshotRef.current;
+  }, [
+    detailLines,
+    documentReference,
+    entryDate,
+    entryType,
+    headerDescription,
+    periodId,
+    serializeForDirtyCheck,
+  ]);
 
   // Manejar intento de cerrar el modal
   const handleCloseAttempt = useCallback((newOpen: boolean) => {
     if (!newOpen && hasUnsavedChanges()) {
       setShowCloseConfirm(true);
-      setPendingClose(true);
     } else {
       onOpenChange(newOpen);
     }
@@ -249,7 +308,6 @@ export default function JournalEntryDialog({
   // Cerrar sin guardar
   const handleDiscardAndClose = () => {
     setShowCloseConfirm(false);
-    setPendingClose(false);
     resetForm();
     onOpenChange(false);
   };
@@ -258,7 +316,6 @@ export default function JournalEntryDialog({
   const handleSaveDraftAndClose = async () => {
     setShowCloseConfirm(false);
     await saveEntry(false);
-    setPendingClose(false);
   };
 
   const loadEntryData = async (entryId: number) => {
@@ -296,7 +353,7 @@ export default function JournalEntryDialog({
       setHeaderDescription(entry.description);
 
       // Convertir detalles a formato de líneas
-      const lines: DetailLine[] = details.map(d => ({
+      const lines: DetailLine[] = details.map((d) => ({
         id: crypto.randomUUID(),
         account_id: d.account_id,
         description: d.description || "",
@@ -305,6 +362,16 @@ export default function JournalEntryDialog({
         debit_amount: d.debit_amount,
         credit_amount: d.credit_amount,
       }));
+
+      // Guardar snapshot inicial (editar / borrador)
+      initialSnapshotRef.current = serializeForDirtyCheck({
+        entryDate: entry.entry_date,
+        entryType: entry.entry_type,
+        periodId: entry.accounting_period_id,
+        documentReference: entry.document_reference || "",
+        headerDescription: entry.description,
+        detailLines: lines.map(({ id, ...rest }) => rest),
+      });
 
       setDetailLines(lines);
     } catch (error: any) {
@@ -909,7 +976,7 @@ export default function JournalEntryDialog({
 
           {/* Acciones */}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button variant="outline" onClick={() => handleCloseAttempt(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button 
@@ -941,9 +1008,14 @@ export default function JournalEntryDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={handleDiscardAndClose}>
-            No, descartar
+          <AlertDialogCancel
+            onClick={() => {
+              setShowCloseConfirm(false);
+            }}
+          >
+            Cancelar
           </AlertDialogCancel>
+          <AlertDialogCancel onClick={handleDiscardAndClose}>No, descartar</AlertDialogCancel>
           <AlertDialogAction onClick={handleSaveDraftAndClose}>
             Sí, guardar borrador
           </AlertDialogAction>
