@@ -117,8 +117,8 @@ export default function JournalEntryDialog({
     }
   }, [open, entryToEdit]);
 
-  useEffect(() => {
-    // Auto-llenar descripción de líneas cuando cambia la descripción del encabezado
+  // Función para propagar la descripción del encabezado a líneas vacías (llamada al perder el foco)
+  const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
       setDetailLines(lines => 
         lines.map(line => ({
@@ -127,7 +127,7 @@ export default function JournalEntryDialog({
         }))
       );
     }
-  }, [headerDescription]);
+  }, [headerDescription, entryToEdit]);
 
   const loadInitialData = async () => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -725,6 +725,7 @@ export default function JournalEntryDialog({
                 placeholder="Descripción de la partida..."
                 value={headerDescription}
                 onChange={(e) => setHeaderDescription(e.target.value)}
+                onBlur={propagateDescriptionToLines}
                 rows={2}
               />
             </div>
