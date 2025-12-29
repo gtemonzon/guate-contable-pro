@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -85,6 +86,9 @@ export default function JournalEntryDialog({
     { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
     { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
   ]);
+  
+  // Estado para búsqueda de cuentas por línea
+  const [accountSearch, setAccountSearch] = useState<Record<string, string>>({});
 
   const { toast } = useToast();
 
@@ -691,7 +695,11 @@ export default function JournalEntryDialog({
                     return (
                       <TableRow key={line.id}>
                          <TableCell>
-                          <Popover>
+                          <Popover onOpenChange={(open) => {
+                            if (!open) {
+                              setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
+                            }
+                          }}>
                             <PopoverTrigger asChild>
                               <Button
                                 variant="outline"
@@ -711,31 +719,40 @@ export default function JournalEntryDialog({
                               <Command shouldFilter={false}>
                                 <CommandInput 
                                   placeholder="Buscar cuenta..." 
-                                  onKeyDown={(e) => {
-                                    // Prevenir que se cierre el popover al escribir
-                                    e.stopPropagation();
+                                  value={accountSearch[line.id] || ""}
+                                  onValueChange={(value) => {
+                                    setAccountSearch(prev => ({ ...prev, [line.id]: value }));
                                   }}
                                 />
                                 <CommandList>
                                   <CommandEmpty>No se encontró la cuenta.</CommandEmpty>
                                   <CommandGroup>
-                                    {accounts.map((acc) => (
-                                      <CommandItem
-                                        key={acc.id}
-                                        value={`${acc.account_code} ${acc.account_name}`}
-                                        onSelect={() => {
-                                          updateLine(line.id, "account_id" as keyof DetailLine, acc.id as any);
-                                        }}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            line.account_id === acc.id ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        {acc.account_code} - {acc.account_name}
-                                      </CommandItem>
-                                    ))}
+                                    <ScrollArea className="h-[300px]">
+                                      {accounts
+                                        .filter(acc => {
+                                          const search = (accountSearch[line.id] || "").toLowerCase();
+                                          if (!search) return true;
+                                          return `${acc.account_code} ${acc.account_name}`.toLowerCase().includes(search);
+                                        })
+                                        .map((acc) => (
+                                          <CommandItem
+                                            key={acc.id}
+                                            value={`${acc.account_code} ${acc.account_name}`}
+                                            onSelect={() => {
+                                              updateLine(line.id, "account_id" as keyof DetailLine, acc.id as any);
+                                              setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                line.account_id === acc.id ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            {acc.account_code} - {acc.account_name}
+                                          </CommandItem>
+                                        ))}
+                                    </ScrollArea>
                                   </CommandGroup>
                                 </CommandList>
                               </Command>
