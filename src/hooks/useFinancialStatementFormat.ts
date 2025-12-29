@@ -128,6 +128,20 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
     try {
       let formatId = newFormat.id;
 
+      // Check if format already exists for this enterprise/type combination
+      if (!formatId) {
+        const { data: existingFormat } = await supabase
+          .from('tab_financial_statement_formats')
+          .select('id')
+          .eq('enterprise_id', enterpriseId)
+          .eq('format_type', formatType)
+          .maybeSingle();
+        
+        if (existingFormat) {
+          formatId = existingFormat.id;
+        }
+      }
+
       // Create or update format
       if (formatId) {
         const { error } = await supabase
@@ -154,12 +168,10 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
       }
 
       // Delete existing sections (cascade will delete accounts)
-      if (newFormat.id) {
-        await supabase
-          .from('tab_financial_statement_sections')
-          .delete()
-          .eq('format_id', formatId);
-      }
+      await supabase
+        .from('tab_financial_statement_sections')
+        .delete()
+        .eq('format_id', formatId);
 
       // Insert new sections
       for (const section of newFormat.sections) {
