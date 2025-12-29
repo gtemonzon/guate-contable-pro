@@ -557,18 +557,25 @@ export default function JournalEntryDialog({
       const account = accounts.find(a => a.id === line.account_id);
       if (!account) continue;
 
-      // Obtener saldo actual de la cuenta
-      const { data: movements, error: movError } = await supabase
+      // Obtener saldo actual de la cuenta (excluyendo la póliza que se está editando)
+      let query = supabase
         .from("tab_journal_entry_details")
         .select("debit_amount, credit_amount")
         .eq("account_id", line.account_id);
+      
+      // Si estamos editando una póliza existente, excluir sus movimientos del cálculo
+      if (entryToEdit?.id) {
+        query = query.neq("journal_entry_id", entryToEdit.id);
+      }
+      
+      const { data: movements, error: movError } = await query;
 
       if (movError) {
         console.error("Error al obtener movimientos:", movError);
         continue;
       }
 
-      // Calcular saldo actual
+      // Calcular saldo actual (sin incluir la póliza en edición)
       const currentBalance = (movements || []).reduce((acc, mov) => {
         return acc + (mov.debit_amount || 0) - (mov.credit_amount || 0);
       }, 0);
