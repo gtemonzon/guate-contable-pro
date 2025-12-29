@@ -227,9 +227,9 @@ export default function LibroCompras() {
 
       if (movementError) throw movementError;
 
-      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos) o 6 (Costos)
+      // Gastos/Compras: Cuentas que empiezan con 5 (Gastos), 6 (Costos) o 7 (Gastos)
       const expenses = movementAccounts?.filter(acc => 
-        acc.account_code.startsWith('5') || acc.account_code.startsWith('6')
+        acc.account_code.startsWith('5') || acc.account_code.startsWith('6') || acc.account_code.startsWith('7')
       ) || [];
 
       setExpenseAccounts(expenses);
