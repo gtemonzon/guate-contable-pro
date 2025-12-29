@@ -39,7 +39,7 @@ const formSchema = z.object({
   account_code: z.string().min(1, "Código es requerido"),
   account_name: z.string().min(1, "Nombre es requerido"),
   account_type: z.enum(["activo", "pasivo", "capital", "ingreso", "gasto", "costo"]),
-  balance_type: z.enum(["deudor", "acreedor"]),
+  balance_type: z.enum(["deudor", "acreedor", "indiferente"]),
   parent_account_id: z.number().nullable(),
   level: z.number().min(1).max(10),
   allows_movement: z.boolean().default(true),
@@ -346,10 +346,11 @@ export function AccountDialog({
                       <SelectContent>
                         <SelectItem value="deudor">Deudor</SelectItem>
                         <SelectItem value="acreedor">Acreedor</SelectItem>
+                        <SelectItem value="indiferente">Indiferente</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Capital, Ingreso
+                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Capital, Ingreso | Indiferente: Permite sobregiro
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

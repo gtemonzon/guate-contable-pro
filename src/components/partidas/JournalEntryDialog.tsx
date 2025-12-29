@@ -583,7 +583,11 @@ export default function JournalEntryDialog({
       // Calcular nuevo saldo después de este movimiento
       const newBalance = currentBalance + (line.debit_amount || 0) - (line.credit_amount || 0);
 
-      // Validar según tipo de saldo
+      // Validar según tipo de saldo (omitir validación para cuentas con saldo indiferente)
+      if (account.balance_type === 'indiferente') {
+        continue; // Permitir cualquier saldo para cuentas indiferentes
+      }
+
       if (account.balance_type === 'deudor' && newBalance < 0) {
         toast({
           title: "Sobregiro detectado",
