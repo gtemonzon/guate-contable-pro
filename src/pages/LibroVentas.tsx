@@ -651,10 +651,39 @@ export default function LibroVentas() {
         // Póliza consolidada del mes
         const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
         
-        // Calcular totales numéricos
-        const totalAmount = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-        const totalVAT = sales.reduce((sum, s) => sum + (Number(s.vat_amount) || 0), 0);
-        const totalNet = sales.reduce((sum, s) => sum + (Number(s.net_amount) || 0), 0);
+        // Filtrar facturas anuladas y calcular totales con multiplicador affects_total
+        const validSales = sales.filter(s => !s.is_annulled);
+        
+        // Obtener configuración de cuentas de la empresa (IVA Débito)
+        const { data: enterpriseConfig } = await supabase
+          .from("tab_enterprise_config")
+          .select("vat_debit_account_id")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .maybeSingle();
+        
+        const vatDebitAccountId = enterpriseConfig?.vat_debit_account_id;
+        
+        // Calcular totales aplicando multiplicador para notas de crédito
+        let totalAmount = 0;
+        let totalVAT = 0;
+        const accountTotals = new Map<number, number>();
+        
+        for (const s of validSales) {
+          // Obtener multiplicador del tipo de documento (NCRE = -1)
+          const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          
+          totalAmount += (Number(s.total_amount) || 0) * multiplier;
+          totalVAT += (Number(s.vat_amount) || 0) * multiplier;
+          
+          if (s.income_account_id) {
+            const netAmount = (Number(s.net_amount) || 0) * multiplier;
+            accountTotals.set(
+              s.income_account_id,
+              (accountTotals.get(s.income_account_id) || 0) + netAmount
+            );
+          }
+        }
         
         const { data: journalEntry, error: journalError } = await supabase
           .from("tab_journal_entries")
@@ -675,19 +704,6 @@ export default function LibroVentas() {
 
         if (journalError) throw journalError;
 
-        // Crear líneas de detalle agrupando por cuenta
-        const accountTotals = new Map<number, { debit: number; credit: number; name: string }>();
-        
-        // Agrupar ventas por cuenta de ingreso (créditos)
-        for (const s of sales) {
-          if (!s.income_account_id) continue;
-          const current = accountTotals.get(s.income_account_id) || { debit: 0, credit: 0, name: '' };
-          const account = incomeAccounts.find(a => a.id === s.income_account_id);
-          current.credit += Number(s.total_amount) || 0;
-          current.name = account ? `${account.account_code} - ${account.account_name}` : '';
-          accountTotals.set(s.income_account_id, current);
-        }
-
         // Buscar cuenta de Caja o Bancos (cuenta de activo - código que empiece con 1)
         const { data: cashAccounts, error: cashError } = await supabase
           .from("tab_accounts")
@@ -700,9 +716,6 @@ export default function LibroVentas() {
           .limit(1);
 
         const cashAccountId = cashAccounts && cashAccounts.length > 0 ? cashAccounts[0].id : null;
-        const cashAccountName = cashAccounts && cashAccounts.length > 0 
-          ? `${cashAccounts[0].account_code} - ${cashAccounts[0].account_name}` 
-          : 'Caja';
 
         // Crear las líneas de detalle
         const detailLines = [];
@@ -720,15 +733,29 @@ export default function LibroVentas() {
           });
         }
 
-        // Líneas de crédito por cada cuenta de ingreso
-        for (const [accountId, totals] of accountTotals) {
+        // Líneas de crédito por cada cuenta de ingreso (monto neto sin IVA)
+        for (const [accountId, netAmount] of accountTotals) {
+          if (netAmount !== 0) {
+            detailLines.push({
+              journal_entry_id: journalEntry.id,
+              line_number: lineNumber++,
+              account_id: accountId,
+              description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+              debit_amount: 0,
+              credit_amount: netAmount,
+            });
+          }
+        }
+        
+        // Línea de crédito para IVA Débito Fiscal
+        if (vatDebitAccountId && totalVAT !== 0) {
           detailLines.push({
             journal_entry_id: journalEntry.id,
             line_number: lineNumber++,
-            account_id: accountId,
+            account_id: vatDebitAccountId,
             description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
             debit_amount: 0,
-            credit_amount: totals.credit,
+            credit_amount: totalVAT,
           });
         }
 
@@ -741,8 +768,8 @@ export default function LibroVentas() {
           if (detailError) throw detailError;
         }
 
-        // Marcar facturas con el journal_entry_id
-        const saleIds = sales.filter(s => s.id).map(s => s.id);
+        // Marcar facturas válidas con el journal_entry_id
+        const saleIds = validSales.filter(s => s.id).map(s => s.id);
         if (saleIds.length > 0) {
           await supabase
             .from("tab_sales_ledger")
