@@ -1448,13 +1448,17 @@ export default function LibrosFiscales() {
 
                       for (const p of purchases) {
                         if (p.expense_account_id) {
-                          const base = p.total_amount / 1.12;
+                          // Respetar IVA real: si vat_amount es 0, la base es el total
+                          const baseAmount = p.vat_amount > 0
+                            ? (p.base_amount || p.total_amount - p.vat_amount)
+                            : p.total_amount;
                           expenseByAccount.set(
                             p.expense_account_id,
-                            (expenseByAccount.get(p.expense_account_id) || 0) + base
+                            (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
                           );
                         }
-                        totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+                        // Usar IVA real, no recalcular
+                        totalVAT += p.vat_amount || 0;
                         totalAmount += p.total_amount;
                       }
 
@@ -1754,13 +1758,17 @@ export default function LibrosFiscales() {
 
                         for (const p of purchaseItems) {
                           if (p.expense_account_id) {
-                            const base = p.total_amount / 1.12;
+                            // Respetar IVA real: si vat_amount es 0, la base es el total
+                            const baseAmount = p.vat_amount > 0
+                              ? (p.base_amount || p.total_amount - p.vat_amount)
+                              : p.total_amount;
                             expenseByAccount.set(
                               p.expense_account_id,
-                              (expenseByAccount.get(p.expense_account_id) || 0) + base
+                              (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
                             );
                           }
-                          totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+                          // Usar IVA real, no recalcular
+                          totalVAT += p.vat_amount || 0;
                           totalAmount += p.total_amount;
                         }
 
