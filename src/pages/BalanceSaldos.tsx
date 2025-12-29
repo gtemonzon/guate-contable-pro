@@ -275,12 +275,14 @@ export default function BalanceSaldos() {
           previousBalance = prevCredit - prevDebit;
         }
         
-        // Calcular balance actual según tipo de cuenta
+        // Calcular balance actual: saldo anterior + movimientos del período
         let balance = 0;
         if (account.balance_type === "deudor") {
-          balance = debit - credit;
+          // Cuenta deudora: saldo anterior + debe - haber
+          balance = previousBalance + debit - credit;
         } else {
-          balance = credit - debit;
+          // Cuenta acreedora: saldo anterior + haber - debe
+          balance = previousBalance + credit - debit;
         }
 
         return {
