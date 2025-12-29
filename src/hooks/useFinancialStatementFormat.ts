@@ -73,17 +73,30 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
       for (const section of sectionsData || []) {
         const { data: accountsData, error: accountsError } = await supabase
           .from('tab_financial_statement_section_accounts')
-          .select(`
-            *,
-            account:account_id (
-              account_code,
-              account_name
-            )
-          `)
+          .select('*')
           .eq('section_id', section.id)
           .order('display_order');
 
         if (accountsError) throw accountsError;
+
+        const accountIds = (accountsData || []).map((a: any) => a.account_id);
+        const accountDetailsMap = new Map<number, { account_code: string; account_name: string }>();
+
+        if (accountIds.length > 0) {
+          const { data: accountDetails, error: accountDetailsError } = await supabase
+            .from('tab_accounts')
+            .select('id, account_code, account_name')
+            .in('id', accountIds);
+
+          if (accountDetailsError) throw accountDetailsError;
+
+          (accountDetails || []).forEach((acc: any) => {
+            accountDetailsMap.set(acc.id, {
+              account_code: acc.account_code,
+              account_name: acc.account_name,
+            });
+          });
+        }
 
         sections.push({
           id: section.id,
@@ -92,16 +105,19 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
           section_type: section.section_type as SectionType,
           display_order: section.display_order,
           show_in_report: section.show_in_report,
-          accounts: (accountsData || []).map((a: any) => ({
-            id: a.id,
-            section_id: a.section_id,
-            account_id: a.account_id,
-            display_order: a.display_order,
-            sign_multiplier: a.sign_multiplier as 1 | -1,
-            include_children: a.include_children,
-            account_code: a.account?.account_code,
-            account_name: a.account?.account_name,
-          })),
+          accounts: (accountsData || []).map((a: any) => {
+            const details = accountDetailsMap.get(a.account_id);
+            return {
+              id: a.id,
+              section_id: a.section_id,
+              account_id: a.account_id,
+              display_order: a.display_order,
+              sign_multiplier: a.sign_multiplier as 1 | -1,
+              include_children: a.include_children,
+              account_code: details?.account_code,
+              account_name: details?.account_name,
+            };
+          }),
         });
       }
 
