@@ -75,12 +75,13 @@ export default function ReporteBalanceGeneral() {
     try {
       setLoading(true);
       
-      // Get all accounts
+      // Get balance-sheet accounts only
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
-        .select("*")
+        .select("id, account_code, account_name, account_type, level")
         .eq("enterprise_id", parseInt(currentEnterpriseId))
         .eq("is_active", true)
+        .in("account_type", ["activo", "pasivo", "capital"])
         .order("account_code");
 
       if (accountsError) throw accountsError;
@@ -113,10 +114,14 @@ export default function ReporteBalanceGeneral() {
       });
 
       // Create balance data
-      const balanceData: BalanceAccount[] = (accountsData || []).map(acc => {
+      const balanceData: BalanceAccount[] = (accountsData || []).map((acc: any) => {
         const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
-        const netBalance = balance.debit - balance.credit;
-        
+
+        // Activo: Deudor (debe - haber). Pasivo/Capital: Acreedor (haber - debe)
+        const netBalance = acc.account_type === "activo"
+          ? (balance.debit - balance.credit)
+          : (balance.credit - balance.debit);
+
         return {
           account_code: acc.account_code,
           account_name: acc.account_name,

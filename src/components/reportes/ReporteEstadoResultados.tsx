@@ -82,10 +82,10 @@ export default function ReporteEstadoResultados() {
       // Get accounts classified for income statement
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
-        .select("*")
+        .select("id, account_code, account_name, account_type, level")
         .eq("enterprise_id", parseInt(currentEnterpriseId))
         .eq("is_active", true)
-        .or("is_income_account.eq.true,is_cost_account.eq.true,is_expense_account.eq.true")
+        .in("account_type", ["ingreso", "gasto"])
         .order("account_code");
 
       if (accountsError) throw accountsError;
@@ -110,15 +110,26 @@ export default function ReporteEstadoResultados() {
 
       // Calculate amounts per account
       const amountMap = new Map<number, number>();
+      const accountTypeMap = new Map<number, string>();
+
+      (accountsData || []).forEach((acc: any) => {
+        accountTypeMap.set(acc.id, acc.account_type);
+      });
       
       (detailsData || []).forEach((detail: any) => {
         const current = amountMap.get(detail.account_id) || 0;
-        const amount = Number(detail.credit_amount || 0) - Number(detail.debit_amount || 0);
+        const accType = accountTypeMap.get(detail.account_id);
+
+        // Ingreso: Haber - Debe. Gasto: Debe - Haber
+        const amount = accType === "gasto"
+          ? (Number(detail.debit_amount || 0) - Number(detail.credit_amount || 0))
+          : (Number(detail.credit_amount || 0) - Number(detail.debit_amount || 0));
+
         amountMap.set(detail.account_id, current + amount);
       });
 
       // Create result data
-      const resultData: ResultAccount[] = (accountsData || []).map(acc => ({
+      const resultData: ResultAccount[] = (accountsData || []).map((acc: any) => ({
         account_code: acc.account_code,
         account_name: acc.account_name,
         amount: amountMap.get(acc.id) || 0,
