@@ -690,13 +690,16 @@ export default function LibroCompras() {
 
         for (const p of purchaseItems) {
           if (p.expense_account_id) {
-            const base = p.total_amount / 1.12;
+            // Usar base_amount real de la factura (respeta si aplica IVA o no)
+            // Si vat_amount es 0, la base es igual al total (pequeño contribuyente, etc.)
+            const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
             expenseByAccount.set(
               p.expense_account_id,
-              (expenseByAccount.get(p.expense_account_id) || 0) + base
+              (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
             );
           }
-          totalVAT += p.vat_amount || (p.total_amount - p.total_amount / 1.12);
+          // Usar el IVA real de la factura, no recalcular
+          totalVAT += p.vat_amount || 0;
           totalAmount += p.total_amount;
         }
 
