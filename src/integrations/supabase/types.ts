@@ -786,6 +786,8 @@ export type Database = {
           posted_at: string | null
           total_credit: number
           total_debit: number
+          updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           accounting_period_id?: number | null
@@ -805,6 +807,8 @@ export type Database = {
           posted_at?: string | null
           total_credit?: number
           total_debit?: number
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           accounting_period_id?: number | null
@@ -824,6 +828,8 @@ export type Database = {
           posted_at?: string | null
           total_credit?: number
           total_debit?: number
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -852,6 +858,13 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entries_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "tab_users"
             referencedColumns: ["id"]
           },
         ]
