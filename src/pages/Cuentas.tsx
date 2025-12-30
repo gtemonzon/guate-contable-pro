@@ -14,6 +14,15 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
+interface PresetConfig {
+  suggestedCode: string;
+  accountType: string;
+  balanceType: string;
+  parentAccountId: number | null;
+  level: number;
+  allowsMovement: boolean;
+}
+
 const Cuentas = () => {
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -24,6 +33,7 @@ const Cuentas = () => {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedEnterprise, setSelectedEnterprise] = useState<number | null>(null);
+  const [presetConfig, setPresetConfig] = useState<PresetConfig | null>(null);
 
   useEffect(() => {
     fetchEnterprises();
@@ -152,9 +162,91 @@ const Cuentas = () => {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedAccount(null);
+    setPresetConfig(null);
     if (selectedEnterprise) {
       fetchAccounts(selectedEnterprise);
     }
+  };
+
+  // Calculate the next sibling code
+  const calculateNextSiblingCode = (referenceAccount: Account): string => {
+    const siblings = accounts
+      .filter(acc => acc.parent_account_id === referenceAccount.parent_account_id)
+      .sort((a, b) => a.account_code.localeCompare(b.account_code));
+    
+    if (siblings.length === 0) return referenceAccount.account_code;
+    
+    const lastSibling = siblings[siblings.length - 1];
+    const parts = lastSibling.account_code.split('.');
+    const lastPart = parts[parts.length - 1];
+    const numericPart = parseInt(lastPart);
+    
+    if (isNaN(numericPart)) {
+      // Non-numeric last part, just append 1
+      return lastSibling.account_code + ".1";
+    }
+    
+    const paddingLength = lastPart.length;
+    const nextNum = (numericPart + 1).toString().padStart(paddingLength, '0');
+    parts[parts.length - 1] = nextNum;
+    return parts.join('.');
+  };
+
+  // Calculate the next child code
+  const calculateNextChildCode = (parentAccount: Account): string => {
+    const children = accounts
+      .filter(acc => acc.parent_account_id === parentAccount.id)
+      .sort((a, b) => a.account_code.localeCompare(b.account_code));
+    
+    if (children.length === 0) {
+      // No children yet, suggest first child
+      return `${parentAccount.account_code}.1`;
+    }
+    
+    const lastChild = children[children.length - 1];
+    const parts = lastChild.account_code.split('.');
+    const lastPart = parts[parts.length - 1];
+    const numericPart = parseInt(lastPart);
+    
+    if (isNaN(numericPart)) {
+      return `${parentAccount.account_code}.1`;
+    }
+    
+    const paddingLength = lastPart.length;
+    const nextNum = (numericPart + 1).toString().padStart(paddingLength, '0');
+    parts[parts.length - 1] = nextNum;
+    return parts.join('.');
+  };
+
+  const handleQuickCreate = (referenceAccount: Account, createType: 'sibling' | 'child') => {
+    let suggestedCode: string;
+    let parentAccountId: number | null;
+    let level: number;
+    let allowsMovement: boolean;
+
+    if (createType === 'sibling') {
+      parentAccountId = referenceAccount.parent_account_id;
+      level = referenceAccount.level;
+      allowsMovement = false;
+      suggestedCode = calculateNextSiblingCode(referenceAccount);
+    } else {
+      parentAccountId = referenceAccount.id;
+      level = referenceAccount.level + 1;
+      allowsMovement = true;
+      suggestedCode = calculateNextChildCode(referenceAccount);
+    }
+
+    setPresetConfig({
+      suggestedCode,
+      accountType: referenceAccount.account_type,
+      balanceType: referenceAccount.balance_type || 'deudor',
+      parentAccountId,
+      level,
+      allowsMovement,
+    });
+    
+    setSelectedAccount(null);
+    setDialogOpen(true);
   };
 
   const handleImportClose = () => {
@@ -328,6 +420,7 @@ const Cuentas = () => {
               accounts={filteredAccounts}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onQuickCreate={handleQuickCreate}
             />
           </CardContent>
         </Card>
@@ -335,11 +428,15 @@ const Cuentas = () => {
 
       <AccountDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setPresetConfig(null);
+        }}
         account={selectedAccount}
         enterpriseId={selectedEnterprise}
         accounts={accounts}
         onSuccess={handleDialogClose}
+        presetConfig={presetConfig}
       />
 
       <ImportAccountsDialog

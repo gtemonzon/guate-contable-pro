@@ -49,6 +49,15 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface PresetConfig {
+  suggestedCode: string;
+  accountType: string;
+  balanceType: string;
+  parentAccountId: number | null;
+  level: number;
+  allowsMovement: boolean;
+}
+
 interface AccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,6 +65,7 @@ interface AccountDialogProps {
   enterpriseId: number | null;
   accounts: Account[];
   onSuccess: () => void;
+  presetConfig?: PresetConfig | null;
 }
 
 export function AccountDialog({
@@ -65,6 +75,7 @@ export function AccountDialog({
   enterpriseId,
   accounts,
   onSuccess,
+  presetConfig,
 }: AccountDialogProps) {
   const { toast } = useToast();
   const form = useForm<FormValues>({
@@ -131,6 +142,19 @@ export function AccountDialog({
         is_bank_account: account.is_bank_account ?? false,
         is_active: account.is_active ?? true,
       });
+    } else if (presetConfig) {
+      // Use preset configuration from quick create
+      form.reset({
+        account_code: presetConfig.suggestedCode,
+        account_name: "",
+        account_type: presetConfig.accountType as any,
+        balance_type: presetConfig.balanceType as any,
+        parent_account_id: presetConfig.parentAccountId,
+        level: presetConfig.level,
+        allows_movement: presetConfig.allowsMovement,
+        is_bank_account: false,
+        is_active: true,
+      });
     } else {
       const suggestedCode = getNextSuggestedCode();
       const { level, parentAccountId } = calculateLevelAndParent(suggestedCode);
@@ -147,7 +171,7 @@ export function AccountDialog({
         is_active: true,
       });
     }
-  }, [account, accounts]);
+  }, [account, accounts, presetConfig]);
 
   // Manejar cambio de código
   const handleCodeChange = (code: string) => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Edit, Circle, Trash2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +12,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Database } from "@/integrations/supabase/types";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
@@ -20,6 +26,7 @@ interface AccountTreeViewProps {
   accounts: Account[];
   onEdit: (account: Account) => void;
   onDelete: (account: Account, childrenIds: number[]) => Promise<{ canDelete: boolean; message?: string }>;
+  onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
 }
 
 interface TreeNodeProps {
@@ -27,6 +34,7 @@ interface TreeNodeProps {
   children: Account[];
   onEdit: (account: Account) => void;
   onDelete: (account: Account, childrenIds: number[]) => Promise<{ canDelete: boolean; message?: string }>;
+  onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
   level: number;
   allAccounts: Account[];
 }
@@ -49,7 +57,7 @@ const ACCOUNT_TYPE_COLORS: Record<string, string> = {
   costo: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
 };
 
-function TreeNode({ account, children, onEdit, onDelete, level, allAccounts }: TreeNodeProps) {
+function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, allAccounts }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 4);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -90,6 +98,7 @@ function TreeNode({ account, children, onEdit, onDelete, level, allAccounts }: T
   };
 
   const descendantCount = getAllDescendantIds(account.id).length;
+  const canCreateChild = !account.allows_movement;
 
   return (
     <div>
@@ -136,13 +145,39 @@ function TreeNode({ account, children, onEdit, onDelete, level, allAccounts }: T
             </Badge>
           )}
 
+          {onQuickCreate && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onQuickCreate(account, 'sibling')}>
+                  <Users className="h-4 w-4 mr-2" />
+                  Crear Cuenta Hermana
+                </DropdownMenuItem>
+                {canCreateChild && (
+                  <DropdownMenuItem onClick={() => onQuickCreate(account, 'child')}>
+                    <FolderPlus className="h-4 w-4 mr-2" />
+                    Crear Cuenta Hija
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onEdit(account)}
             className="opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            <Edit className="h-4 w-4" />
+            <Pencil className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -200,6 +235,7 @@ function TreeNode({ account, children, onEdit, onDelete, level, allAccounts }: T
               children={allAccounts.filter(acc => acc.parent_account_id === child.id)}
               onEdit={onEdit}
               onDelete={onDelete}
+              onQuickCreate={onQuickCreate}
               level={level + 1}
               allAccounts={allAccounts}
             />
@@ -210,7 +246,7 @@ function TreeNode({ account, children, onEdit, onDelete, level, allAccounts }: T
   );
 }
 
-export function AccountTreeView({ accounts, onEdit, onDelete }: AccountTreeViewProps) {
+export function AccountTreeView({ accounts, onEdit, onDelete, onQuickCreate }: AccountTreeViewProps) {
   const buildTree = (parentId: number | null = null): Account[] => {
     return accounts
       .filter((account) => account.parent_account_id === parentId)
@@ -227,6 +263,7 @@ export function AccountTreeView({ accounts, onEdit, onDelete }: AccountTreeViewP
         children={buildTree(account.id)}
         onEdit={onEdit}
         onDelete={onDelete}
+        onQuickCreate={onQuickCreate}
         level={level}
         allAccounts={accounts}
       />
