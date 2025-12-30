@@ -610,11 +610,13 @@ export default function JournalEntryDialog({
 
       // Calcular saldo actual (sin incluir la póliza en edición)
       const currentBalance = (movements || []).reduce((acc, mov) => {
-        return acc + (mov.debit_amount || 0) - (mov.credit_amount || 0);
+        return acc + (Number(mov.debit_amount) || 0) - (Number(mov.credit_amount) || 0);
       }, 0);
 
       // Calcular nuevo saldo después de este movimiento
-      const newBalance = currentBalance + (line.debit_amount || 0) - (line.credit_amount || 0);
+      // Redondear a 2 decimales para evitar errores de precisión de punto flotante
+      const rawNewBalance = currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0);
+      const newBalance = Math.round(rawNewBalance * 100) / 100;
 
       // Validar según tipo de saldo (omitir validación para cuentas con saldo indiferente)
       if (account.balance_type === 'indiferente') {
