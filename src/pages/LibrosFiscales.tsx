@@ -2000,10 +2000,33 @@ export default function LibrosFiscales() {
                         // Póliza consolidada del mes
                         const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
 
-                        const totalAmount = sales.reduce(
-                          (sum, s) => sum + (Number(s.total_amount) || 0),
-                          0
-                        );
+                        // Filtrar facturas anuladas y calcular totales con multiplicador affects_total
+                        const validSales = sales.filter(s => !s.is_annulled);
+                        
+                        // Agrupar por cuenta de ingreso y calcular totales aplicando multiplicador
+                        const accountTotals = new Map<number, number>();
+                        let totalVAT = 0;
+                        let totalAmount = 0;
+
+                        for (const s of validSales) {
+                          // Obtener multiplicador del tipo de documento (NCRE = -1)
+                          const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+                          const multiplier = docType?.affects_total ?? 1;
+                          
+                          const amount = (Number(s.total_amount) || 0) * multiplier;
+                          const vat = (Number(s.vat_amount) || 0) * multiplier;
+                          const net = (Number(s.net_amount) || 0) * multiplier;
+                          
+                          totalAmount += amount;
+                          totalVAT += vat;
+                          
+                          if (s.income_account_id) {
+                            accountTotals.set(
+                              s.income_account_id,
+                              (accountTotals.get(s.income_account_id) || 0) + net
+                            );
+                          }
+                        }
 
                         const { data: journalEntry, error: journalError } = await supabase
                           .from("tab_journal_entries")
@@ -2014,8 +2037,8 @@ export default function LibrosFiscales() {
                             entry_date: new Date().toISOString().split("T")[0],
                             entry_type: "diario",
                             description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                            total_debit: totalAmount,
-                            total_credit: totalAmount,
+                            total_debit: parseFloat(totalAmount.toFixed(2)),
+                            total_credit: parseFloat(totalAmount.toFixed(2)),
                             is_posted: false,
                             created_by: user.id,
                           })
@@ -2023,22 +2046,6 @@ export default function LibrosFiscales() {
                           .single();
 
                         if (journalError) throw journalError;
-
-                        // Agrupar por cuenta de ingreso y calcular IVA
-                        const accountTotals = new Map<number, { base: number; vat: number }>();
-                        let totalVAT = 0;
-
-                        for (const s of sales) {
-                          if (!s.income_account_id) continue;
-                          const total = Number(s.total_amount) || 0;
-                          const base = total / 1.12;
-                          const vat = total - base;
-                          const current = accountTotals.get(s.income_account_id) || { base: 0, vat: 0 };
-                          current.base += base;
-                          current.vat += vat;
-                          accountTotals.set(s.income_account_id, current);
-                          totalVAT += vat;
-                        }
 
                         const detailLines: Array<{
                           journal_entry_id: number;
@@ -2064,19 +2071,21 @@ export default function LibrosFiscales() {
                         }
 
                         // Créditos: Ingresos (neto, sin IVA)
-                        for (const [accountId, totals] of accountTotals) {
-                          detailLines.push({
-                            journal_entry_id: journalEntry.id,
-                            line_number: lineNumber++,
-                            account_id: accountId,
-                            description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                            debit_amount: 0,
-                            credit_amount: parseFloat(totals.base.toFixed(2)),
-                          });
+                        for (const [accountId, netAmount] of accountTotals) {
+                          if (netAmount !== 0) {
+                            detailLines.push({
+                              journal_entry_id: journalEntry.id,
+                              line_number: lineNumber++,
+                              account_id: accountId,
+                              description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                              debit_amount: 0,
+                              credit_amount: parseFloat(netAmount.toFixed(2)),
+                            });
+                          }
                         }
 
                         // Crédito: IVA Débito Fiscal
-                        if (vatDebitAccountId && totalVAT > 0) {
+                        if (vatDebitAccountId && totalVAT !== 0) {
                           detailLines.push({
                             journal_entry_id: journalEntry.id,
                             line_number: lineNumber++,
@@ -2094,7 +2103,8 @@ export default function LibrosFiscales() {
                           if (detailError) throw detailError;
                         }
 
-                        const saleIds = sales.filter((s) => s.id).map((s) => s.id);
+                        // Marcar solo facturas válidas (no anuladas)
+                        const saleIds = validSales.filter((s) => s.id).map((s) => s.id);
                         if (saleIds.length > 0) {
                           await supabase
                             .from("tab_sales_ledger")
@@ -2107,11 +2117,20 @@ export default function LibrosFiscales() {
                           description: `Póliza ${entryNumber} creada con ${detailLines.length} líneas de detalle`,
                         });
                       } else {
-                        // Póliza por documento
+                        // Póliza por documento - filtrar facturas anuladas
+                        const validSalesForDoc = sales.filter(s => !s.is_annulled);
                         let totalEntries = 0;
                         let totalLines = 0;
-                        for (const s of sales) {
+                        for (const s of validSalesForDoc) {
                           if (!s.id) continue;
+
+                          // Obtener multiplicador del tipo de documento (NCRE = -1)
+                          const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+                          const multiplier = docType?.affects_total ?? 1;
+
+                          const total = (Number(s.total_amount) || 0) * multiplier;
+                          const vat = (Number(s.vat_amount) || 0) * multiplier;
+                          const net = (Number(s.net_amount) || 0) * multiplier;
 
                           const entryNumber = `VENT-DOC-${s.invoice_series || 'S'}-${s.invoice_number}`;
                           const { data: journalEntry, error: journalError } = await supabase
@@ -2123,8 +2142,8 @@ export default function LibrosFiscales() {
                               entry_date: s.invoice_date,
                               entry_type: "diario",
                               description: `Venta ${s.customer_name}`,
-                              total_debit: Number(s.total_amount) || 0,
-                              total_credit: Number(s.total_amount) || 0,
+                              total_debit: parseFloat(Math.abs(total).toFixed(2)),
+                              total_credit: parseFloat(Math.abs(total).toFixed(2)),
                               is_posted: false,
                               created_by: user.id,
                             })
@@ -2143,10 +2162,6 @@ export default function LibrosFiscales() {
                           }> = [];
 
                           const description = `Venta ${s.customer_name}`;
-                          const total = Number(s.total_amount) || 0;
-                          const base = total / 1.12;
-                          const vat = total - base;
-
                           let lineNumber = 1;
 
                           // Débito: Caja/Clientes
@@ -2161,7 +2176,7 @@ export default function LibrosFiscales() {
                             });
                           }
 
-                          // Crédito: Ingreso (neto)
+                          // Crédito: Ingreso (neto usando valor real, no recalculado)
                           if (s.income_account_id) {
                             detailLines.push({
                               journal_entry_id: journalEntry.id,
@@ -2169,12 +2184,12 @@ export default function LibrosFiscales() {
                               account_id: Number(s.income_account_id),
                               description,
                               debit_amount: 0,
-                              credit_amount: parseFloat(base.toFixed(2)),
+                              credit_amount: parseFloat(net.toFixed(2)),
                             });
                           }
 
                           // Crédito: IVA Débito Fiscal
-                          if (vatDebitAccountId && vat > 0) {
+                          if (vatDebitAccountId && vat !== 0) {
                             detailLines.push({
                               journal_entry_id: journalEntry.id,
                               line_number: lineNumber++,
