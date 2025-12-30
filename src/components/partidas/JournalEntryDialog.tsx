@@ -700,6 +700,24 @@ export default function JournalEntryDialog({
           description: `Partida ${nextEntryNumber} actualizada exitosamente`,
         });
       } else {
+        // Verificar si el número de partida ya existe
+        const { data: existingEntry } = await supabase
+          .from("tab_journal_entries")
+          .select("id")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("entry_number", nextEntryNumber)
+          .maybeSingle();
+
+        if (existingEntry) {
+          toast({
+            title: "Número de partida duplicado",
+            description: `Ya existe una partida con el número ${nextEntryNumber}. Por favor, use un número diferente.`,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         // Insertar nueva partida
         const { data: entry, error: entryError } = await supabase
           .from("tab_journal_entries")
