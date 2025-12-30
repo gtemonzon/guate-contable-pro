@@ -54,6 +54,10 @@ interface JournalEntry {
   total_debit: number;
   total_credit: number;
   details: JournalEntryDetail[];
+  created_by_name?: string;
+  created_at?: string;
+  updated_by_name?: string;
+  updated_at?: string;
 }
 
 interface JournalEntryDetail {
@@ -64,6 +68,19 @@ interface JournalEntryDetail {
   debit_amount: number;
   credit_amount: number;
 }
+
+// Función para formatear fecha y hora
+const formatDateTime = (dateString: string | null | undefined) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleString('es-GT', {
+    day: '2-digit',
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 export default function MayorGeneral() {
   const [searchParams] = useSearchParams();
@@ -331,10 +348,14 @@ export default function MayorGeneral() {
 
   const viewJournalEntry = async (journalEntryId: number) => {
     try {
-      // Obtener la partida completa
+      // Obtener la partida completa con información de auditoría
       const { data: entry, error: entryError } = await supabase
         .from("tab_journal_entries")
-        .select("*")
+        .select(`
+          *,
+          creator:tab_users!tab_journal_entries_created_by_fkey(full_name),
+          modifier:tab_users!tab_journal_entries_updated_by_fkey(full_name)
+        `)
         .eq("id", journalEntryId)
         .single();
 
@@ -357,6 +378,10 @@ export default function MayorGeneral() {
 
       const journalEntry: JournalEntry = {
         ...entry,
+        created_by_name: entry.creator?.full_name,
+        created_at: entry.created_at,
+        updated_by_name: entry.modifier?.full_name,
+        updated_at: entry.updated_at,
         details: (details || []).map((d: any) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
@@ -591,6 +616,20 @@ export default function MayorGeneral() {
                   </TableRow>
                 </TableBody>
               </Table>
+
+              {/* Información de Auditoría */}
+              <div className="text-xs text-muted-foreground border-t pt-3 mt-4 space-y-1">
+                {selectedJournalEntry.created_by_name && (
+                  <p>
+                    <span className="font-medium">Creado por:</span> {selectedJournalEntry.created_by_name} - {formatDateTime(selectedJournalEntry.created_at)}
+                  </p>
+                )}
+                {selectedJournalEntry.updated_by_name && selectedJournalEntry.updated_at && (
+                  <p>
+                    <span className="font-medium">Modificado por:</span> {selectedJournalEntry.updated_by_name} - {formatDateTime(selectedJournalEntry.updated_at)}
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>

@@ -103,7 +103,28 @@ export default function JournalEntryDialog({
   // Estado para el diálogo de confirmación al cerrar
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  // Estado para información de auditoría
+  const [auditInfo, setAuditInfo] = useState<{
+    createdBy: string | null;
+    createdAt: string | null;
+    updatedBy: string | null;
+    updatedAt: string | null;
+  } | null>(null);
+
   const { toast } = useToast();
+
+  // Función para formatear fecha y hora
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('es-GT', {
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   useEffect(() => {
     if (open) {
@@ -326,10 +347,14 @@ export default function JournalEntryDialog({
       // Cargar datos comunes (cuentas y períodos)
       await loadInitialData();
 
-      // Cargar datos de la partida
+      // Cargar datos de la partida con información de auditoría
       const { data: entry, error: entryError } = await supabase
         .from("tab_journal_entries")
-        .select("*")
+        .select(`
+          *,
+          creator:tab_users!tab_journal_entries_created_by_fkey(full_name),
+          modifier:tab_users!tab_journal_entries_updated_by_fkey(full_name)
+        `)
         .eq("id", entryId)
         .single();
 
@@ -351,6 +376,14 @@ export default function JournalEntryDialog({
       setPeriodId(entry.accounting_period_id);
       setDocumentReference(entry.document_reference || "");
       setHeaderDescription(entry.description);
+
+      // Establecer información de auditoría
+      setAuditInfo({
+        createdBy: entry.creator?.full_name || null,
+        createdAt: entry.created_at,
+        updatedBy: entry.modifier?.full_name || null,
+        updatedAt: entry.updated_at,
+      });
 
       // Convertir detalles a formato de líneas
       const lines: DetailLine[] = details.map((d) => ({
@@ -627,6 +660,8 @@ export default function JournalEntryDialog({
             total_credit: getTotalCredit(),
             is_posted: post,
             posted_at: post ? new Date().toISOString() : null,
+            updated_by: user.id,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", entryToEdit.id);
 
@@ -984,6 +1019,22 @@ export default function JournalEntryDialog({
               </p>
             )}
           </div>
+
+          {/* Información de Auditoría */}
+          {entryToEdit && auditInfo && (
+            <div className="text-xs text-muted-foreground border-t pt-3 space-y-1">
+              {auditInfo.createdBy && (
+                <p>
+                  <span className="font-medium">Creado por:</span> {auditInfo.createdBy} - {formatDateTime(auditInfo.createdAt)}
+                </p>
+              )}
+              {auditInfo.updatedBy && auditInfo.updatedAt && (
+                <p>
+                  <span className="font-medium">Modificado por:</span> {auditInfo.updatedBy} - {formatDateTime(auditInfo.updatedAt)}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Acciones */}
           <div className="flex justify-end gap-2">
