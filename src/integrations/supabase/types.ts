@@ -1391,6 +1391,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_super_admin: boolean | null
+          last_enterprise_id: number | null
         }
         Insert: {
           created_at?: string | null
@@ -1399,6 +1400,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
+          last_enterprise_id?: number | null
         }
         Update: {
           created_at?: string | null
@@ -1407,8 +1409,17 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
+          last_enterprise_id?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tab_users_last_enterprise_id_fkey"
+            columns: ["last_enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

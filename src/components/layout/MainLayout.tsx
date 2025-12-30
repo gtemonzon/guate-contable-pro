@@ -56,7 +56,26 @@ const MainLayout = () => {
   // Fetch and listen for current enterprise changes
   useEffect(() => {
     const fetchCurrentEnterprise = async () => {
-      const enterpriseId = localStorage.getItem("currentEnterpriseId");
+      let enterpriseId = localStorage.getItem("currentEnterpriseId");
+      
+      // Si no hay empresa en localStorage, buscar última empresa del usuario en BD
+      if (!enterpriseId && user) {
+        try {
+          const { data: userData } = await supabase
+            .from('tab_users')
+            .select('last_enterprise_id')
+            .eq('id', user.id)
+            .single();
+          
+          if (userData?.last_enterprise_id) {
+            enterpriseId = userData.last_enterprise_id.toString();
+            localStorage.setItem("currentEnterpriseId", enterpriseId);
+          }
+        } catch (error) {
+          console.error("Error fetching last enterprise from DB:", error);
+        }
+      }
+      
       setCurrentEnterpriseId(enterpriseId);
       
       if (enterpriseId) {
@@ -78,8 +97,10 @@ const MainLayout = () => {
       }
     };
 
-    // Fetch on mount
-    fetchCurrentEnterprise();
+    // Only fetch when user is available
+    if (user) {
+      fetchCurrentEnterprise();
+    }
 
     // Listen for storage events (from other tabs)
     const handleStorageChange = () => {
@@ -98,7 +119,7 @@ const MainLayout = () => {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("enterpriseChanged", handleEnterpriseChanged);
     };
-  }, []);
+  }, [user]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
