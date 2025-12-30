@@ -149,6 +149,15 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
     setIsSelected(true);
     
+    // Guardar última empresa seleccionada en la base de datos
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('tab_users')
+        .update({ last_enterprise_id: enterprise.id })
+        .eq('id', user.id);
+    }
+    
     // Cargar período activo de la empresa (si existe)
     const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterprise.id}`);
     
