@@ -196,20 +196,46 @@ export default function JournalEntryDialog({
         }
       }
 
-      // Obtener siguiente número de partida
-      const { data: lastEntry } = await supabase
+      // Obtener siguiente número de partida (solo PD-*) y evitar duplicados
+      const { data: pdEntries, error: pdError } = await supabase
         .from("tab_journal_entries")
         .select("entry_number")
         .eq("enterprise_id", parseInt(enterpriseId))
+        .ilike("entry_number", "PD-%")
         .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(300);
 
-      if (lastEntry) {
-        const lastNumber = parseInt(lastEntry.entry_number.replace(/\D/g, '')) || 0;
-        setNextEntryNumber(`PD-${String(lastNumber + 1).padStart(6, '0')}`);
-      } else {
-        setNextEntryNumber("PD-000001");
+      if (pdError) throw pdError;
+
+      const maxPdNumber = (pdEntries || []).reduce((max, row) => {
+        const match = String(row.entry_number || "").match(/^PD-(\d+)/i);
+        const n = match ? Number(match[1]) : NaN;
+        return Number.isFinite(n) ? Math.max(max, n) : max;
+      }, 0);
+
+      let candidate = maxPdNumber > 0 ? maxPdNumber + 1 : 1;
+      let found = false;
+      // Evitar sugerir un número ya tomado (por si hay huecos/duplicados)
+      for (let i = 0; i < 50; i++) {
+        const candidateStr = `PD-${String(candidate).padStart(6, "0")}`;
+        const { data: existing } = await supabase
+          .from("tab_journal_entries")
+          .select("id")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("entry_number", candidateStr)
+          .maybeSingle();
+
+        if (!existing) {
+          setNextEntryNumber(candidateStr);
+          found = true;
+          break;
+        }
+        candidate++;
+      }
+
+      if (!found) {
+        // Fallback (muy improbable): sugerir el siguiente correlativo
+        setNextEntryNumber(`PD-${String(candidate).padStart(6, "0")}`);
       }
     } catch (error: any) {
       toast({
