@@ -1541,7 +1541,15 @@ export default function LibrosFiscales() {
                       const cashAccountId = customersAccountId || (cashAccounts?.[0]?.id ?? null);
 
                       const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
-                      const totalAmount = sales.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+
+                      const validSales = sales.filter(s => !s.is_annulled);
+
+                      // Totales aplicando multiplicador (NCRE = -1) y usando montos reales almacenados
+                      const totalAmount = validSales.reduce((sum, s) => {
+                        const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+                        const multiplier = docType?.affects_total ?? 1;
+                        return sum + ((Number(s.total_amount) || 0) * multiplier);
+                      }, 0);
 
                       const { data: journalEntry, error: journalError } = await supabase
                         .from("tab_journal_entries")
@@ -1573,19 +1581,23 @@ export default function LibrosFiscales() {
                       }> = [];
 
                       let lineNumber = 1;
-                      const accountTotals = new Map<number, { base: number; vat: number }>();
+                      const accountTotals = new Map<number, number>();
                       let totalVAT = 0;
 
-                      for (const s of sales) {
-                        if (!s.income_account_id) continue;
-                        const total = Number(s.total_amount) || 0;
-                        const base = total / 1.12;
-                        const vat = total - base;
-                        const current = accountTotals.get(s.income_account_id) || { base: 0, vat: 0 };
-                        current.base += base;
-                        current.vat += vat;
-                        accountTotals.set(s.income_account_id, current);
+                      for (const s of validSales) {
+                        const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+                        const multiplier = docType?.affects_total ?? 1;
+
+                        const vat = (Number(s.vat_amount) || 0) * multiplier;
+                        const net = (Number(s.net_amount) || 0) * multiplier;
+
                         totalVAT += vat;
+
+                        if (!s.income_account_id) continue;
+                        accountTotals.set(
+                          s.income_account_id,
+                          (accountTotals.get(s.income_account_id) || 0) + net
+                        );
                       }
 
                       if (cashAccountId) {
@@ -1599,18 +1611,18 @@ export default function LibrosFiscales() {
                         });
                       }
 
-                      for (const [accountId, totals] of accountTotals) {
+                      for (const [accountId, netTotal] of accountTotals) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
                           account_id: accountId,
                           description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
                           debit_amount: 0,
-                          credit_amount: parseFloat(totals.base.toFixed(2)),
+                          credit_amount: parseFloat(netTotal.toFixed(2)),
                         });
                       }
 
-                      if (vatDebitAccountId && totalVAT > 0) {
+                      if (vatDebitAccountId && totalVAT !== 0) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
@@ -1625,7 +1637,7 @@ export default function LibrosFiscales() {
                         await supabase.from("tab_journal_entry_details").insert(detailLines);
                       }
 
-                      const saleIds = sales.filter(s => s.id).map(s => s.id);
+                      const saleIds = validSales.filter(s => s.id).map(s => s.id);
                       if (saleIds.length > 0) {
                         await supabase.from("tab_sales_ledger")
                           .update({ journal_entry_id: journalEntry.id })
