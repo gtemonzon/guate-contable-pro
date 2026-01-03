@@ -142,8 +142,11 @@ export default function ReporteBalanceGeneral() {
       // Create balance data with correct sign logic
       const accountBalances: AccountBalance[] = (accountsData || []).map((acc: any) => {
         const movements = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
-        // Activo: Debe - Haber. Pasivo/Capital: Haber - Debe
-        const balance = acc.account_type === "activo"
+
+        // Sign rules (Guatemala):
+        // - Activo / Gasto: Debe - Haber
+        // - Pasivo / Capital / Ingreso: Haber - Debe
+        const balance = (acc.account_type === "activo" || acc.account_type === "gasto")
           ? (movements.debit - movements.credit)
           : (movements.credit - movements.debit);
 
