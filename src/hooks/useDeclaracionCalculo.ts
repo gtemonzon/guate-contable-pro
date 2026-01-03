@@ -348,7 +348,8 @@ export function useDeclaracionCalculo(
     });
 
     // Calcular totales
-    const totalComprasGravadas = comprasBienes + comprasServicios + importaciones + comprasActivosFijos;
+    // Total compras gravadas incluye las exentas (FPEQ, FESP) para el cálculo del neto
+    const totalComprasGravadas = comprasBienes + comprasServicios + importaciones + comprasActivosFijos + comprasExentas;
     const comprasNetoGravadas = totalComprasGravadas - notasCreditoCompras;
     const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
     const creditoFiscal = creditoFiscalBruto - notasCreditoIVA;
