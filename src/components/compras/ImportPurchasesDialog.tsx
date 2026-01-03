@@ -723,10 +723,39 @@ export function ImportPurchasesDialog({
           {/* Options State - Account and Operation Type Selection */}
           {dialogState === "options" && validationResult && (
             <div className="space-y-6">
-              <div className="bg-muted/50 rounded-lg p-4">
-                <p className="text-sm">
-                  Se encontraron <strong>{validationResult.validRecords.length}</strong> registros válidos para importar.
-                </p>
+              {/* Summary of records found */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-4">
+                  {validationResult.validRecords.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">
+                        <strong>{validationResult.validRecords.length}</strong> registros nuevos
+                      </span>
+                    </div>
+                  )}
+                  {validationResult.duplicateRecords.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Copy className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">
+                        <strong>{validationResult.duplicateRecords.length}</strong> duplicados
+                      </span>
+                    </div>
+                  )}
+                  {validationResult.errors.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      <span className="text-sm">
+                        <strong>{validationResult.errors.length}</strong> errores
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {validationResult.validRecords.length === 0 && validationResult.duplicateRecords.length > 0 && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    Todos los registros ya existen. En el siguiente paso podrás elegir si deseas sobrescribirlos.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -797,7 +826,11 @@ export function ImportPurchasesDialog({
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Cancelar
                 </Button>
-                <Button onClick={handleProceedToSummary} className="flex-1">
+                <Button 
+                  onClick={handleProceedToSummary} 
+                  className="flex-1"
+                  disabled={validationResult.validRecords.length === 0 && validationResult.duplicateRecords.length === 0}
+                >
                   Continuar
                 </Button>
               </div>
