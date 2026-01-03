@@ -22,6 +22,7 @@ import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import Reportes from "./pages/Reportes";
 import Configuracion from "./pages/Configuracion";
+import Ayuda from "./pages/Ayuda";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/reportes" element={<Reportes />} />
             <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/importar" element={<div>Importación (próximamente)</div>} />
+            <Route path="/ayuda" element={<Ayuda />} />
           </Route>
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

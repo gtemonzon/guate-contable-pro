@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users, Calculator } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users, Calculator, HelpCircle } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -49,6 +49,11 @@ const menuItems = [
     title: "Importación",
     url: "/importar",
     icon: Upload,
+  },
+  {
+    title: "Ayuda",
+    url: "/ayuda",
+    icon: HelpCircle,
   },
 ];
 
