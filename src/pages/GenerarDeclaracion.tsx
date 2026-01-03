@@ -49,11 +49,11 @@ export default function GenerarDeclaracion() {
 
   // Load active enterprise
   useEffect(() => {
-    const stored = localStorage.getItem("activeEnterprise");
+    const stored = localStorage.getItem("currentEnterpriseId");
+    const storedName = localStorage.getItem("currentEnterpriseName");
     if (stored) {
-      const parsed = JSON.parse(stored);
-      setEnterpriseId(parsed.id);
-      setEnterpriseName(parsed.business_name || parsed.trade_name || "");
+      setEnterpriseId(parseInt(stored, 10));
+      setEnterpriseName(storedName || "");
     }
   }, []);
 

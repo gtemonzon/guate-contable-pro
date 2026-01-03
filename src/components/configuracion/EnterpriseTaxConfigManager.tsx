@@ -33,15 +33,11 @@ export function EnterpriseTaxConfigManager() {
 
   // Load active enterprise
   useEffect(() => {
-    const loadEnterprise = async () => {
-      const stored = localStorage.getItem("activeEnterprise");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setEnterpriseId(parsed.id);
-      }
-      setLoading(false);
-    };
-    loadEnterprise();
+    const stored = localStorage.getItem("currentEnterpriseId");
+    if (stored) {
+      setEnterpriseId(parseInt(stored, 10));
+    }
+    setLoading(false);
   }, []);
 
   // Load configs when enterprise changes
