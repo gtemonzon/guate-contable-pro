@@ -45,17 +45,39 @@ export interface FelDocType {
 }
 
 export interface IVAGeneralCalculo {
+  // Ventas
   ventasGravadasLocales: number; // Casilla 14
   exportaciones: number; // Casilla 15
   ventasExentas: number; // Casilla 17
   totalVentas: number; // Casilla 19
   debitoFiscal: number; // Casilla 26
-  comprasGravadas: number; // Casilla 30
-  creditoFiscal: number; // Casilla 34
+  // Compras desglosadas por tipo de operación
+  comprasBienes: number; // Casilla 27 - Otras compras / Bienes
+  comprasServicios: number; // Casilla 28 - Servicios
+  importaciones: number; // Casilla 29 - Importaciones
+  comprasActivosFijos: number; // Casilla 30 - Activos fijos (si aplica)
+  comprasExentas: number; // Casilla 32 - Compras exentas (FPEQ, FESP, etc.)
+  totalComprasGravadas: number; // Total de compras gravadas (suma de casillas 27-30)
+  notasCreditoCompras: number; // Notas de crédito recibidas (resta)
+  comprasNetoGravadas: number; // Neto de compras gravadas
+  // Crédito fiscal
+  creditoFiscalBienes: number; // IVA de bienes
+  creditoFiscalServicios: number; // IVA de servicios
+  creditoFiscalImportaciones: number; // IVA de importaciones
+  creditoFiscalActivosFijos: number; // IVA de activos fijos
+  notasCreditoIVA: number; // IVA de notas de crédito (resta)
+  creditoFiscal: number; // Casilla 34 - Total crédito fiscal del período
   creditoRemanente: number; // Casilla 38 (del mes anterior, user input)
   diferencia: number; // Casilla 40 (débito - crédito)
   ivaAPagar: number; // Casilla 42
   creditoRemanenteProximoMes: number; // Casilla 43 - when crédito > débito
+  // Estadísticas adicionales
+  documentosPorTipo: {
+    tipo: string;
+    cantidad: number;
+    monto: number;
+    iva: number;
+  }[];
 }
 
 export interface IVAPequenoCalculo {
@@ -241,22 +263,95 @@ export function useDeclaracionCalculo(
       if (exentosTypes.includes(sale.fel_document_type)) {
         ventasExentas += sale.total_amount * multiplier;
       } else {
-        // TODO: Detect exportaciones by operation_type when available
+    // TODO: Detect exportaciones by operation_type when available
         ventasGravadasLocales += netWithSign;
         debitoFiscal += vatWithSign;
       }
     });
 
-    let comprasGravadas = 0;
-    let creditoFiscal = 0;
+    // IDs de tipos de operación del sistema
+    const OPERATION_TYPE_BIENES = 1;
+    const OPERATION_TYPE_SERVICIOS = 2;
+    const OPERATION_TYPE_ACTIVOS_FIJOS = 3;
+    const OPERATION_TYPE_IMPORTACIONES = 4;
+    const OPERATION_TYPE_OTRAS = 5;
+
+    // Inicializar compras por tipo de operación
+    let comprasBienes = 0;
+    let comprasServicios = 0;
+    let importaciones = 0;
+    let comprasActivosFijos = 0;
+    let comprasExentas = 0;
+    let notasCreditoCompras = 0;
+
+    // Crédito fiscal por tipo
+    let creditoFiscalBienes = 0;
+    let creditoFiscalServicios = 0;
+    let creditoFiscalImportaciones = 0;
+    let creditoFiscalActivosFijos = 0;
+    let notasCreditoIVA = 0;
+
+    // Estadísticas por tipo de documento
+    const docTypeStats: Record<string, { cantidad: number; monto: number; iva: number }> = {};
 
     purchases.forEach(purchase => {
-      const multiplier = getMultiplier(purchase.fel_document_type || 'FACT');
-      if (!exentosTypes.includes(purchase.fel_document_type || '')) {
-        comprasGravadas += (purchase.base_amount || purchase.net_amount) * multiplier;
-        creditoFiscal += purchase.vat_amount * multiplier;
+      const docType = purchase.fel_document_type || 'FACT';
+      const multiplier = getMultiplier(docType);
+      const baseAmount = (purchase.base_amount || purchase.net_amount) * multiplier;
+      const vatAmount = purchase.vat_amount * multiplier;
+      const operationType = purchase.operation_type_id;
+
+      // Inicializar estadísticas del tipo de documento
+      if (!docTypeStats[docType]) {
+        docTypeStats[docType] = { cantidad: 0, monto: 0, iva: 0 };
+      }
+      docTypeStats[docType].cantidad += 1;
+      docTypeStats[docType].monto += baseAmount;
+      docTypeStats[docType].iva += vatAmount;
+
+      // Si es documento exento (FPEQ, FESP, etc.), va a compras exentas
+      if (exentosTypes.includes(docType)) {
+        comprasExentas += (purchase.total_amount * multiplier);
+        return; // No suma a crédito fiscal
+      }
+
+      // Si es Nota de Crédito (NCRE), se registra por separado (multiplier ya es -1)
+      if (docType === 'NCRE') {
+        // El multiplier ya es -1, así que estos valores serán negativos
+        notasCreditoCompras += Math.abs(baseAmount);
+        notasCreditoIVA += Math.abs(vatAmount);
+        return;
+      }
+
+      // Clasificar por tipo de operación
+      switch (operationType) {
+        case OPERATION_TYPE_SERVICIOS:
+          comprasServicios += baseAmount;
+          creditoFiscalServicios += vatAmount;
+          break;
+        case OPERATION_TYPE_IMPORTACIONES:
+          importaciones += baseAmount;
+          creditoFiscalImportaciones += vatAmount;
+          break;
+        case OPERATION_TYPE_ACTIVOS_FIJOS:
+          comprasActivosFijos += baseAmount;
+          creditoFiscalActivosFijos += vatAmount;
+          break;
+        case OPERATION_TYPE_BIENES:
+        case OPERATION_TYPE_OTRAS:
+        default:
+          // Bienes, Otras o sin clasificar van a "Otras Compras" (Casilla 27)
+          comprasBienes += baseAmount;
+          creditoFiscalBienes += vatAmount;
+          break;
       }
     });
+
+    // Calcular totales
+    const totalComprasGravadas = comprasBienes + comprasServicios + importaciones + comprasActivosFijos;
+    const comprasNetoGravadas = totalComprasGravadas - notasCreditoCompras;
+    const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
+    const creditoFiscal = creditoFiscalBruto - notasCreditoIVA;
 
     const totalVentas = ventasGravadasLocales + exportaciones + ventasExentas;
     const diferencia = debitoFiscal - creditoFiscal;
@@ -267,18 +362,41 @@ export function useDeclaracionCalculo(
     const ivaAPagar = Math.max(0, debitoFiscal - totalCredito);
     const creditoRemanenteProximoMes = Math.max(0, totalCredito - debitoFiscal);
 
+    // Convertir estadísticas a array
+    const documentosPorTipo = Object.entries(docTypeStats).map(([tipo, stats]) => ({
+      tipo,
+      cantidad: stats.cantidad,
+      monto: Math.round(stats.monto),
+      iva: Math.round(stats.iva),
+    }));
+
     return {
       ventasGravadasLocales: Math.round(ventasGravadasLocales),
       exportaciones: Math.round(exportaciones),
       ventasExentas: Math.round(ventasExentas),
       totalVentas: Math.round(totalVentas),
       debitoFiscal: Math.round(debitoFiscal),
-      comprasGravadas: Math.round(comprasGravadas),
+      // Compras desglosadas
+      comprasBienes: Math.round(comprasBienes),
+      comprasServicios: Math.round(comprasServicios),
+      importaciones: Math.round(importaciones),
+      comprasActivosFijos: Math.round(comprasActivosFijos),
+      comprasExentas: Math.round(comprasExentas),
+      totalComprasGravadas: Math.round(totalComprasGravadas),
+      notasCreditoCompras: Math.round(notasCreditoCompras),
+      comprasNetoGravadas: Math.round(comprasNetoGravadas),
+      // Crédito fiscal desglosado
+      creditoFiscalBienes: Math.round(creditoFiscalBienes),
+      creditoFiscalServicios: Math.round(creditoFiscalServicios),
+      creditoFiscalImportaciones: Math.round(creditoFiscalImportaciones),
+      creditoFiscalActivosFijos: Math.round(creditoFiscalActivosFijos),
+      notasCreditoIVA: Math.round(notasCreditoIVA),
       creditoFiscal: Math.round(creditoFiscal),
       creditoRemanente: Math.round(creditoRemanenteInput),
       diferencia: Math.round(diferencia),
       ivaAPagar: Math.round(ivaAPagar),
       creditoRemanenteProximoMes: Math.round(creditoRemanenteProximoMes),
+      documentosPorTipo,
     };
   }, [sales, purchases, felDocTypes, creditoRemanenteInput]);
 
