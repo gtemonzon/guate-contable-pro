@@ -484,6 +484,33 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_enterprise_tax_config: {
+        Row: {
+          created_at: string | null
+          enterprise_id: number
+          id: number
+          is_active: boolean | null
+          tax_form_type: string
+          tax_rate: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          enterprise_id: number
+          id?: number
+          is_active?: boolean | null
+          tax_form_type: string
+          tax_rate?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean | null
+          tax_form_type?: string
+          tax_rate?: number | null
+        }
+        Relationships: []
+      }
       tab_enterprises: {
         Row: {
           address: string | null
