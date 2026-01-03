@@ -180,7 +180,24 @@ export function DeclaracionPreview({
               </div>
             </div>
             
-            <TotalRow label="IVA A PAGAR (Casilla 42)" value={ivaGeneral.ivaAPagar} isHighlight />
+            {ivaGeneral.ivaAPagar > 0 ? (
+              <TotalRow label="IVA A PAGAR (Casilla 42)" value={ivaGeneral.ivaAPagar} isHighlight />
+            ) : ivaGeneral.creditoRemanenteProximoMes > 0 ? (
+              <div className="space-y-2">
+                <TotalRow label="IVA A PAGAR (Casilla 42)" value={0} />
+                <div className="flex items-center justify-between py-3 bg-blue-500/10 px-3 rounded-lg">
+                  <span className="font-semibold text-blue-600">Crédito Remanente Próximo Mes (Casilla 43)</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-lg text-blue-600">
+                      {formatCurrency(ivaGeneral.creditoRemanenteProximoMes)}
+                    </span>
+                    <CopyButton value={ivaGeneral.creditoRemanenteProximoMes} />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <TotalRow label="IVA A PAGAR (Casilla 42)" value={0} isHighlight />
+            )}
           </div>
         </CardContent>
       </Card>

@@ -55,6 +55,7 @@ export interface IVAGeneralCalculo {
   creditoRemanente: number; // Casilla 38 (del mes anterior, user input)
   diferencia: number; // Casilla 40 (débito - crédito)
   ivaAPagar: number; // Casilla 42
+  creditoRemanenteProximoMes: number; // Casilla 43 - when crédito > débito
 }
 
 export interface IVAPequenoCalculo {
@@ -259,8 +260,12 @@ export function useDeclaracionCalculo(
 
     const totalVentas = ventasGravadasLocales + exportaciones + ventasExentas;
     const diferencia = debitoFiscal - creditoFiscal;
-    // IVA a pagar considers the crédito remanente from previous month
-    const ivaAPagar = Math.max(0, diferencia - creditoRemanenteInput);
+    // Total crédito incluyendo remanente del mes anterior
+    const totalCredito = creditoFiscal + creditoRemanenteInput;
+    // Si débito > totalCredito, hay IVA a pagar
+    // Si totalCredito > débito, hay crédito remanente para el próximo mes
+    const ivaAPagar = Math.max(0, debitoFiscal - totalCredito);
+    const creditoRemanenteProximoMes = Math.max(0, totalCredito - debitoFiscal);
 
     return {
       ventasGravadasLocales,
@@ -273,6 +278,7 @@ export function useDeclaracionCalculo(
       creditoRemanente: creditoRemanenteInput,
       diferencia,
       ivaAPagar,
+      creditoRemanenteProximoMes,
     };
   }, [sales, purchases, felDocTypes, creditoRemanenteInput]);
 
