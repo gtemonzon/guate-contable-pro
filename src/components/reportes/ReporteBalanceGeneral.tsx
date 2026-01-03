@@ -195,8 +195,6 @@ export default function ReporteBalanceGeneral() {
   const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[]): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
-    let totalIngresos = 0;
-    let totalGastos = 0;
 
     // Build children index for roll-up calculations
     const childrenByParent = new Map<number, AccountBalance[]>();
@@ -237,14 +235,13 @@ export default function ReporteBalanceGeneral() {
       }
     };
 
-    // Calculate income and expenses for "RESULTADO DEL PERÍODO"
-    accountBalances.forEach(acc => {
-      if (acc.account_type === "ingreso") {
-        totalIngresos += acc.balance;
-      } else if (acc.account_type === "gasto") {
-        totalGastos += acc.balance;
-      }
-    });
+    // Calculate "RESULTADO DEL PERÍODO" correctly:
+    // Only sum root-level income and expense accounts to avoid double-counting
+    const rootIncomeAccounts = accountBalances.filter(a => a.account_type === "ingreso" && a.parent_account_id === null);
+    const rootExpenseAccounts = accountBalances.filter(a => a.account_type === "gasto" && a.parent_account_id === null);
+    
+    const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
+    const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
     const periodResult = totalIngresos - totalGastos;
 
     for (const section of sections) {
