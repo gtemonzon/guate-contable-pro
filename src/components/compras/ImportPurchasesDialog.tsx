@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -71,8 +71,20 @@ interface ValidPurchase {
   operation_type_id?: number | null;
 }
 
+interface DuplicateRecord {
+  id: number;
+  invoice_series: string;
+  invoice_number: string;
+  supplier_nit: string;
+  supplier_name: string;
+  total_amount: number;
+  invoice_date: string;
+}
+
 interface ValidationResult {
   validRecords: ValidPurchase[];
+  duplicateRecords: ValidPurchase[];
+  existingDuplicates: DuplicateRecord[];
   errors: ValidationError[];
   skippedAnuladas: number;
   periodSummary: { period: string; count: number }[];
@@ -174,6 +186,9 @@ export function ImportPurchasesDialog({
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
   const [selectedExpenseAccount, setSelectedExpenseAccount] = useState<number | null>(null);
   const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
+  
+  // Option to overwrite duplicates
+  const [overwriteDuplicates, setOverwriteDuplicates] = useState(false);
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
@@ -189,6 +204,7 @@ export function ImportPurchasesDialog({
     setApplyBulkOptions(false);
     setSelectedExpenseAccount(null);
     setSelectedOperationType(null);
+    setOverwriteDuplicates(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -418,7 +434,7 @@ export function ImportPurchasesDialog({
       }
 
       // Now create purchase books and build valid records
-      const validRecords: ValidPurchase[] = [];
+      const allRecords: ValidPurchase[] = [];
       const periodSummary: { period: string; count: number }[] = [];
       const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -429,7 +445,7 @@ export function ImportPurchasesDialog({
         const book = await findOrCreatePurchaseBook(enterpriseId, month, year);
 
         for (const record of records) {
-          validRecords.push({
+          allRecords.push({
             enterprise_id: enterpriseId,
             purchase_book_id: book.id,
             ...record
@@ -442,8 +458,72 @@ export function ImportPurchasesDialog({
         });
       }
 
+      // Check for duplicates in the database
+      // Group records by purchase_book_id for efficient querying
+      const recordsByBook = new Map<number, ValidPurchase[]>();
+      for (const record of allRecords) {
+        if (!recordsByBook.has(record.purchase_book_id)) {
+          recordsByBook.set(record.purchase_book_id, []);
+        }
+        recordsByBook.get(record.purchase_book_id)!.push(record);
+      }
+
+      const duplicateRecords: ValidPurchase[] = [];
+      const existingDuplicates: DuplicateRecord[] = [];
+      const validRecords: ValidPurchase[] = [];
+
+      for (const [bookId, records] of recordsByBook) {
+        // Build keys to check
+        const keys = records.map(r => ({
+          supplier_nit: r.supplier_nit,
+          fel_document_type: r.fel_document_type,
+          invoice_series: r.invoice_series || '',
+          invoice_number: r.invoice_number,
+        }));
+
+        // Query existing records for this book
+        const { data: existingRecords } = await supabase
+          .from("tab_purchase_ledger")
+          .select("id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type")
+          .eq("purchase_book_id", bookId)
+          .eq("enterprise_id", enterpriseId);
+
+        if (existingRecords && existingRecords.length > 0) {
+          // Create a set of existing keys for fast lookup
+          const existingKeys = new Set(
+            existingRecords.map(r => 
+              `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
+            )
+          );
+
+          for (const record of records) {
+            const key = `${record.supplier_nit}|${record.fel_document_type}|${record.invoice_series || ''}|${record.invoice_number}`;
+            if (existingKeys.has(key)) {
+              duplicateRecords.push(record);
+              // Find the existing record to show details
+              const existing = existingRecords.find(r => 
+                r.supplier_nit === record.supplier_nit &&
+                r.fel_document_type === record.fel_document_type &&
+                (r.invoice_series || '') === (record.invoice_series || '') &&
+                r.invoice_number === record.invoice_number
+              );
+              if (existing) {
+                existingDuplicates.push(existing);
+              }
+            } else {
+              validRecords.push(record);
+            }
+          }
+        } else {
+          // No existing records for this book, all are valid
+          validRecords.push(...records);
+        }
+      }
+
       setValidationResult({
         validRecords,
+        duplicateRecords,
+        existingDuplicates,
         errors,
         skippedAnuladas,
         periodSummary
@@ -468,37 +548,87 @@ export function ImportPurchasesDialog({
 
   const handleProceedToSummary = () => {
     if (validationResult && applyBulkOptions) {
-      // Apply selected account and operation type to all records
-      const updatedRecords = validationResult.validRecords.map(record => ({
+      // Apply selected account and operation type to all records (both valid and duplicates)
+      const updatedValidRecords = validationResult.validRecords.map(record => ({
+        ...record,
+        expense_account_id: selectedExpenseAccount,
+        operation_type_id: selectedOperationType,
+      }));
+      const updatedDuplicateRecords = validationResult.duplicateRecords.map(record => ({
         ...record,
         expense_account_id: selectedExpenseAccount,
         operation_type_id: selectedOperationType,
       }));
       setValidationResult({
         ...validationResult,
-        validRecords: updatedRecords,
+        validRecords: updatedValidRecords,
+        duplicateRecords: updatedDuplicateRecords,
       });
     }
     setDialogState("summary");
   };
 
   const handleImport = async () => {
-    if (!validationResult || validationResult.validRecords.length === 0) return;
+    if (!validationResult) return;
+    
+    const recordsToInsert = validationResult.validRecords;
+    const recordsToUpsert = overwriteDuplicates ? validationResult.duplicateRecords : [];
+    
+    const totalRecords = recordsToInsert.length + recordsToUpsert.length;
+    if (totalRecords === 0) return;
 
     setImporting(true);
 
     try {
-      const { error: insertError } = await supabase
-        .from("tab_purchase_ledger")
-        .insert(validationResult.validRecords);
+      let insertedCount = 0;
+      let updatedCount = 0;
 
-      if (insertError) throw insertError;
+      // Insert new records
+      if (recordsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from("tab_purchase_ledger")
+          .insert(recordsToInsert);
+
+        if (insertError) throw insertError;
+        insertedCount = recordsToInsert.length;
+      }
+
+      // Upsert duplicate records if user chose to overwrite
+      if (recordsToUpsert.length > 0) {
+        // For each duplicate, we need to delete the existing record and insert the new one
+        // since upsert requires the primary key, we'll use delete + insert
+        for (const record of recordsToUpsert) {
+          // Delete existing
+          const { error: deleteError } = await supabase
+            .from("tab_purchase_ledger")
+            .delete()
+            .eq("enterprise_id", record.enterprise_id)
+            .eq("purchase_book_id", record.purchase_book_id)
+            .eq("supplier_nit", record.supplier_nit)
+            .eq("fel_document_type", record.fel_document_type)
+            .eq("invoice_series", record.invoice_series || '')
+            .eq("invoice_number", record.invoice_number);
+
+          if (deleteError) throw deleteError;
+
+          // Insert new
+          const { error: insertError } = await supabase
+            .from("tab_purchase_ledger")
+            .insert(record);
+
+          if (insertError) throw insertError;
+          updatedCount++;
+        }
+      }
 
       const summaryText = validationResult.periodSummary.map(s => `${s.count} en ${s.period}`).join(", ");
+      const actionSummary = [];
+      if (insertedCount > 0) actionSummary.push(`${insertedCount} nuevos`);
+      if (updatedCount > 0) actionSummary.push(`${updatedCount} actualizados`);
       
       toast({
         title: "Importación exitosa",
-        description: `Se importaron ${validationResult.validRecords.length} registros: ${summaryText}`,
+        description: `Se procesaron ${totalRecords} registros (${actionSummary.join(", ")}): ${summaryText}`,
       });
 
       onSuccess();
@@ -678,14 +808,24 @@ export function ImportPurchasesDialog({
           {dialogState === "summary" && validationResult && (
             <div className="space-y-4">
               {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-green-800 dark:text-green-200">Válidos</span>
+                    <span className="text-sm font-medium text-green-800 dark:text-green-200">Nuevos</span>
                   </div>
                   <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
                     {validationResult.validRecords.length}
+                  </p>
+                </div>
+                
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <Copy className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Duplicados</span>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 mt-1">
+                    {validationResult.duplicateRecords.length}
                   </p>
                 </div>
                 
@@ -710,6 +850,65 @@ export function ImportPurchasesDialog({
                 </div>
               </div>
 
+              {/* Duplicates Section with Overwrite Option */}
+              {validationResult.duplicateRecords.length > 0 && (
+                <div className="border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
+                  <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-b border-blue-200 dark:border-blue-900">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                          {validationResult.duplicateRecords.length} registro(s) ya existen en el sistema
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="overwrite-duplicates" className="text-sm text-blue-700 dark:text-blue-300">
+                          ¿Sobrescribir?
+                        </Label>
+                        <Switch
+                          id="overwrite-duplicates"
+                          checked={overwriteDuplicates}
+                          onCheckedChange={setOverwriteDuplicates}
+                        />
+                      </div>
+                    </div>
+                    {overwriteDuplicates && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                        Los registros duplicados serán actualizados con la información del nuevo archivo.
+                      </p>
+                    )}
+                  </div>
+                  <ScrollArea className="h-[120px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24">Serie-No.</TableHead>
+                          <TableHead className="w-32">NIT</TableHead>
+                          <TableHead>Proveedor</TableHead>
+                          <TableHead className="w-24 text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {validationResult.duplicateRecords.map((dup, idx) => (
+                          <TableRow key={idx} className={overwriteDuplicates ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}>
+                            <TableCell className="font-mono text-xs">
+                              {dup.invoice_series ? `${dup.invoice_series}-` : ''}{dup.invoice_number}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{dup.supplier_nit}</TableCell>
+                            <TableCell className="text-xs max-w-[200px] truncate" title={dup.supplier_name}>
+                              {dup.supplier_name}
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-mono">
+                              Q{dup.total_amount.toLocaleString('es-GT', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              )}
+
               {/* Period Summary */}
               {validationResult.periodSummary.length > 0 && (
                 <div className="bg-muted/50 rounded-lg p-3">
@@ -731,7 +930,7 @@ export function ImportPurchasesDialog({
                     <FileWarning className="h-4 w-4 text-destructive" />
                     <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
                   </div>
-                  <ScrollArea className="h-[200px]">
+                  <ScrollArea className="h-[150px]">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -759,12 +958,23 @@ export function ImportPurchasesDialog({
               )}
 
               {/* No valid records warning */}
-              {validationResult.validRecords.length === 0 && (
+              {validationResult.validRecords.length === 0 && validationResult.duplicateRecords.length === 0 && (
                 <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-center">
                   <XCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
-                  <p className="font-medium text-destructive">No hay registros válidos para importar</p>
+                  <p className="font-medium text-destructive">No hay registros para importar</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     Revisa los errores arriba y corrige el archivo antes de volver a intentar.
+                  </p>
+                </div>
+              )}
+
+              {/* Only duplicates - show message */}
+              {validationResult.validRecords.length === 0 && validationResult.duplicateRecords.length > 0 && !overwriteDuplicates && (
+                <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-4 text-center">
+                  <Copy className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                  <p className="font-medium text-blue-700 dark:text-blue-300">Todos los registros ya existen</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Activa la opción "Sobrescribir" arriba para actualizar los registros existentes.
                   </p>
                 </div>
               )}
@@ -776,7 +986,7 @@ export function ImportPurchasesDialog({
                 </Button>
                 <Button 
                   onClick={handleImport} 
-                  disabled={validationResult.validRecords.length === 0 || importing}
+                  disabled={(validationResult.validRecords.length === 0 && (!overwriteDuplicates || validationResult.duplicateRecords.length === 0)) || importing}
                   className="flex-1"
                 >
                   {importing ? (
@@ -787,7 +997,7 @@ export function ImportPurchasesDialog({
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Importar {validationResult.validRecords.length} Registros
+                      Importar {validationResult.validRecords.length + (overwriteDuplicates ? validationResult.duplicateRecords.length : 0)} Registros
                     </>
                   )}
                 </Button>
