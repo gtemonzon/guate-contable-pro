@@ -307,24 +307,35 @@ export default function ReporteEstadoResultados() {
           showLine: true,
         });
       } else if (section.section_type === "total") {
-        // Sum all subtotals until another total
+        // For Estado de Resultados, the "total" should take the last calculated/subtotal value
+        // and add any groups that appear after it (like OTROS INGRESOS Y GASTOS)
         let total = 0;
+        let foundLastCalculatedOrSubtotal = false;
+        
+        // Find the most recent calculated or subtotal value before this total
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
           if (prevSection.section_type === "total") {
             break;
           }
-          if (prevSection.section_type === "subtotal") {
-            total += sectionTotals.get(prevSection.section_name) || 0;
-          } else if (prevSection.section_type === "group") {
-            const hasSubtotalAfter = sections
-              .slice(i + 1, sections.indexOf(section))
-              .some(s => s.section_type === "subtotal");
-            if (!hasSubtotalAfter) {
-              total += sectionTotals.get(prevSection.section_name) || 0;
+          
+          // If we haven't found a calculated/subtotal yet, look for groups to add
+          if (!foundLastCalculatedOrSubtotal) {
+            if (prevSection.section_type === "calculated" || prevSection.section_type === "subtotal") {
+              total = sectionTotals.get(prevSection.section_name) || 0;
+              foundLastCalculatedOrSubtotal = true;
+            } else if (prevSection.section_type === "group") {
+              // Add groups that appear after the last calculated (like OTROS INGRESOS Y GASTOS)
+              const groupVal = sectionTotals.get(prevSection.section_name) || 0;
+              const sectionNameLower = prevSection.section_name.toLowerCase();
+              // For "otros ingresos y gastos" sections, add positive for income, subtract for expense
+              if (sectionNameLower.includes("otros") && (sectionNameLower.includes("ingreso") || sectionNameLower.includes("gasto"))) {
+                total += groupVal; // Net effect (ingresos - gastos already in the group value)
+              }
             }
           }
         }
+        
         sectionTotals.set(section.section_name, total);
 
         lines.push({
@@ -335,19 +346,50 @@ export default function ReporteEstadoResultados() {
           showLine: true,
         });
       } else if (section.section_type === "calculated") {
-        // Keep existing heuristic for now, but base it on group totals (already roll-up)
+        // Calculate based on all groups before this calculated section, 
+        // starting from the previous calculated/subtotal/total
         let calculated = 0;
-
-        for (const s of sections) {
+        const currentIndex = sections.indexOf(section);
+        
+        // Find starting point: look back for previous calculated, subtotal or total
+        let startFrom = 0;
+        let baseValue = 0;
+        for (let i = currentIndex - 1; i >= 0; i--) {
+          const prevSection = sections[i];
+          if (prevSection.section_type === "calculated" || 
+              prevSection.section_type === "subtotal" || 
+              prevSection.section_type === "total") {
+            startFrom = i + 1;
+            baseValue = sectionTotals.get(prevSection.section_name) || 0;
+            break;
+          }
+        }
+        
+        // Sum groups between startFrom and current section
+        for (let i = startFrom; i < currentIndex; i++) {
+          const s = sections[i];
           if (s.section_type !== "group") continue;
           const sectionVal = sectionTotals.get(s.section_name) || 0;
           const sectionNameLower = s.section_name.toLowerCase();
+          
+          // Income sections add, expense/cost sections subtract
           if (sectionNameLower.includes("ingreso") || sectionNameLower.includes("venta")) {
             calculated += sectionVal;
           } else if (sectionNameLower.includes("gasto") || sectionNameLower.includes("costo")) {
             calculated -= sectionVal;
+          } else {
+            // For generic sections (like "OTROS"), treat them as net additions
+            calculated += sectionVal;
           }
         }
+        
+        // If we have a base value from a previous calculated, add it
+        // This allows chaining: UTILIDAD BRUTA → UTILIDAD DE OPERACIÓN → UTILIDAD NETA
+        if (startFrom > 0) {
+          calculated = baseValue + calculated;
+        }
+        
+        sectionTotals.set(section.section_name, calculated);
 
         lines.push({
           type: "calculated",
