@@ -268,17 +268,17 @@ export function useDeclaracionCalculo(
     const creditoRemanenteProximoMes = Math.max(0, totalCredito - debitoFiscal);
 
     return {
-      ventasGravadasLocales,
-      exportaciones,
-      ventasExentas,
-      totalVentas,
-      debitoFiscal,
-      comprasGravadas,
-      creditoFiscal,
-      creditoRemanente: creditoRemanenteInput,
-      diferencia,
-      ivaAPagar,
-      creditoRemanenteProximoMes,
+      ventasGravadasLocales: Math.round(ventasGravadasLocales),
+      exportaciones: Math.round(exportaciones),
+      ventasExentas: Math.round(ventasExentas),
+      totalVentas: Math.round(totalVentas),
+      debitoFiscal: Math.round(debitoFiscal),
+      comprasGravadas: Math.round(comprasGravadas),
+      creditoFiscal: Math.round(creditoFiscal),
+      creditoRemanente: Math.round(creditoRemanenteInput),
+      diferencia: Math.round(diferencia),
+      ivaAPagar: Math.round(ivaAPagar),
+      creditoRemanenteProximoMes: Math.round(creditoRemanenteProximoMes),
     };
   }, [sales, purchases, felDocTypes, creditoRemanenteInput]);
 
@@ -296,9 +296,9 @@ export function useDeclaracionCalculo(
     const impuestoAPagar = totalIngresos * (tasaImpuesto / 100);
 
     return {
-      totalIngresos,
+      totalIngresos: Math.round(totalIngresos),
       tasaImpuesto,
-      impuestoAPagar,
+      impuestoAPagar: Math.round(impuestoAPagar),
     };
   }, [sales, taxConfigs, felDocTypes]);
 
