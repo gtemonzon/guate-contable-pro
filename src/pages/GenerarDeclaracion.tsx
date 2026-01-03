@@ -34,6 +34,7 @@ export default function GenerarDeclaracion() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedFormType, setSelectedFormType] = useState<TaxFormType | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
 
   const {
     loading,
@@ -44,8 +45,9 @@ export default function GenerarDeclaracion() {
     ivaGeneralCalculo,
     ivaPequenoCalculo,
     isrMensualCalculo,
+    creditoRemanenteSugerido,
     fetchData,
-  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear);
+  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente);
 
   // Load active enterprise
   useEffect(() => {
@@ -229,6 +231,9 @@ export default function GenerarDeclaracion() {
           isrMensual={isrMensualCalculo}
           month={selectedMonth}
           year={selectedYear}
+          creditoRemanente={creditoRemanente}
+          onCreditoRemanenteChange={setCreditoRemanente}
+          creditoRemanenteSugerido={creditoRemanenteSugerido}
         />
       )}
 

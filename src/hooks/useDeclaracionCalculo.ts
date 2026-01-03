@@ -69,13 +69,19 @@ export interface ISRMensualCalculo {
   isrAPagar: number;
 }
 
-export function useDeclaracionCalculo(enterpriseId: number | null, month: number, year: number) {
+export function useDeclaracionCalculo(
+  enterpriseId: number | null, 
+  month: number, 
+  year: number,
+  creditoRemanenteInput: number = 0
+) {
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocType[]>([]);
   const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [creditoRemanenteSugerido, setCreditoRemanenteSugerido] = useState<number>(0);
 
   // Fetch FEL document types
   useEffect(() => {
@@ -137,10 +143,86 @@ export function useDeclaracionCalculo(enterpriseId: number | null, month: number
       const purchasesData = await fetchAllRecords<PurchaseRecord>(purchasesQuery);
       setPurchases(purchasesData);
 
+      // Calculate suggested crédito remanente from previous month
+      await calcularCreditoRemanenteSugerido();
+
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Calculate suggested crédito remanente based on previous month's data
+  const calcularCreditoRemanenteSugerido = async () => {
+    if (!enterpriseId) return;
+
+    // Calculate previous month
+    let prevMonth = month - 1;
+    let prevYear = year;
+    if (prevMonth === 0) {
+      prevMonth = 12;
+      prevYear = year - 1;
+    }
+
+    const prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+    const prevEndDate = new Date(prevYear, prevMonth, 0).toISOString().split('T')[0];
+
+    try {
+      // Fetch previous month sales
+      const prevSalesQuery = supabase
+        .from("tab_sales_ledger")
+        .select("vat_amount, fel_document_type, is_annulled")
+        .eq("enterprise_id", enterpriseId)
+        .gte("invoice_date", prevStartDate)
+        .lte("invoice_date", prevEndDate)
+        .eq("is_annulled", false);
+      
+      const prevSalesData = await fetchAllRecords<{ vat_amount: number; fel_document_type: string; is_annulled: boolean }>(prevSalesQuery);
+
+      // Fetch previous month purchases
+      const prevPurchasesQuery = supabase
+        .from("tab_purchase_ledger")
+        .select("vat_amount, fel_document_type")
+        .eq("enterprise_id", enterpriseId)
+        .gte("invoice_date", prevStartDate)
+        .lte("invoice_date", prevEndDate);
+      
+      const prevPurchasesData = await fetchAllRecords<{ vat_amount: number; fel_document_type: string }>(prevPurchasesQuery);
+
+      const exentosTypes = ['FPEQ', 'FESP', 'NABN', 'RDON', 'RECI'];
+
+      // Calculate previous month's débito fiscal
+      let prevDebitoFiscal = 0;
+      prevSalesData.forEach(sale => {
+        const docType = felDocTypes.find(d => d.code === sale.fel_document_type);
+        const multiplier = docType?.affects_total ?? 1;
+        if (!exentosTypes.includes(sale.fel_document_type)) {
+          prevDebitoFiscal += sale.vat_amount * multiplier;
+        }
+      });
+
+      // Calculate previous month's crédito fiscal
+      let prevCreditoFiscal = 0;
+      prevPurchasesData.forEach(purchase => {
+        const docType = felDocTypes.find(d => d.code === (purchase.fel_document_type || 'FACT'));
+        const multiplier = docType?.affects_total ?? 1;
+        if (!exentosTypes.includes(purchase.fel_document_type || '')) {
+          prevCreditoFiscal += purchase.vat_amount * multiplier;
+        }
+      });
+
+      // If crédito > débito in previous month, the difference is the suggested remanente
+      const diferenciaPrev = prevDebitoFiscal - prevCreditoFiscal;
+      if (diferenciaPrev < 0) {
+        setCreditoRemanenteSugerido(Math.abs(diferenciaPrev));
+      } else {
+        setCreditoRemanenteSugerido(0);
+      }
+
+    } catch (err) {
+      console.error("Error calculating suggested crédito remanente:", err);
+      setCreditoRemanenteSugerido(0);
     }
   };
 
@@ -187,7 +269,8 @@ export function useDeclaracionCalculo(enterpriseId: number | null, month: number
 
     const totalVentas = ventasGravadasLocales + exportaciones + ventasExentas;
     const diferencia = debitoFiscal - creditoFiscal;
-    const ivaAPagar = Math.max(0, diferencia);
+    // IVA a pagar considers the crédito remanente from previous month
+    const ivaAPagar = Math.max(0, diferencia - creditoRemanenteInput);
 
     return {
       ventasGravadasLocales,
@@ -197,11 +280,11 @@ export function useDeclaracionCalculo(enterpriseId: number | null, month: number
       debitoFiscal,
       comprasGravadas,
       creditoFiscal,
-      creditoRemanente: 0,
+      creditoRemanente: creditoRemanenteInput,
       diferencia,
       ivaAPagar,
     };
-  }, [sales, purchases, felDocTypes]);
+  }, [sales, purchases, felDocTypes, creditoRemanenteInput]);
 
   // Calculate IVA Pequeño Contribuyente (SAT-2046)
   const ivaPequenoCalculo = useMemo((): IVAPequenoCalculo => {
@@ -252,6 +335,7 @@ export function useDeclaracionCalculo(enterpriseId: number | null, month: number
     ivaGeneralCalculo,
     ivaPequenoCalculo,
     isrMensualCalculo,
+    creditoRemanenteSugerido,
     fetchData,
   };
 }

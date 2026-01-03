@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Copy, Check, Info } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
 
 interface DeclaracionPreviewProps {
@@ -12,6 +14,9 @@ interface DeclaracionPreviewProps {
   isrMensual?: ISRMensualCalculo;
   month: number;
   year: number;
+  creditoRemanente?: number;
+  onCreditoRemanenteChange?: (value: number) => void;
+  creditoRemanenteSugerido?: number;
 }
 
 const MONTHS = [
@@ -73,7 +78,18 @@ function TotalRow({ label, value, isHighlight = false }: { label: string; value:
   );
 }
 
-export function DeclaracionPreview({ formType, ivaGeneral, ivaPequeno, isrMensual, month, year }: DeclaracionPreviewProps) {
+export function DeclaracionPreview({ 
+  formType, 
+  ivaGeneral, 
+  ivaPequeno, 
+  isrMensual, 
+  month, 
+  year,
+  creditoRemanente = 0,
+  onCreditoRemanenteChange,
+  creditoRemanenteSugerido = 0
+}: DeclaracionPreviewProps) {
+  const { toast } = useToast();
   const periodLabel = `${MONTHS[month - 1]} ${year}`;
 
   if (formType === 'IVA_GENERAL' && ivaGeneral) {
@@ -115,8 +131,55 @@ export function DeclaracionPreview({ formType, ivaGeneral, ivaPequeno, isrMensua
           </div>
 
           {/* Resultado */}
-          <div className="pt-4 border-t">
+          <div className="pt-4 border-t space-y-3">
             <CasillaRow casilla="40" label="Diferencia (Débito - Crédito)" value={ivaGeneral.diferencia} />
+            
+            {/* Casilla 38 - Crédito Remanente Editable */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-muted-foreground w-8">38</span>
+                <span className="text-sm">Crédito Remanente del Mes Anterior</span>
+                {creditoRemanenteSugerido > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 px-2 text-xs gap-1"
+                          onClick={() => {
+                            onCreditoRemanenteChange?.(creditoRemanenteSugerido);
+                            toast({ 
+                              title: "Sugerencia aplicada", 
+                              description: `Se aplicó el crédito remanente sugerido de ${formatCurrency(creditoRemanenteSugerido)}` 
+                            });
+                          }}
+                        >
+                          <Info className="h-3 w-3" />
+                          Sugerido: {formatCurrency(creditoRemanenteSugerido)}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Calculado del mes anterior: si el crédito fiscal fue mayor que el débito fiscal</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={creditoRemanente}
+                  onChange={(e) => onCreditoRemanenteChange?.(parseFloat(e.target.value) || 0)}
+                  className="w-32 text-right font-mono h-8"
+                  placeholder="0.00"
+                />
+                <CopyButton value={creditoRemanente} />
+              </div>
+            </div>
+            
             <TotalRow label="IVA A PAGAR (Casilla 42)" value={ivaGeneral.ivaAPagar} isHighlight />
           </div>
         </CardContent>
