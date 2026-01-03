@@ -5,6 +5,7 @@ import { FelDocumentTypesManager } from "@/components/configuracion/FelDocumentT
 import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalEntryPrefixesManager";
 import { EnterpriseAccountsManager } from "@/components/configuracion/EnterpriseAccountsManager";
 import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
+import { EnterpriseTaxConfigManager } from "@/components/configuracion/EnterpriseTaxConfigManager";
 
 export default function Configuracion() {
   return (
@@ -20,6 +21,7 @@ export default function Configuracion() {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="enterprise-accounts">Cuentas Contables</TabsTrigger>
           <TabsTrigger value="financial-statements">Estados Financieros</TabsTrigger>
+          <TabsTrigger value="tax-forms">Formularios de Impuestos</TabsTrigger>
           <TabsTrigger value="operation-types">Tipos de Operaciones</TabsTrigger>
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
@@ -31,6 +33,10 @@ export default function Configuracion() {
 
         <TabsContent value="financial-statements" className="mt-6">
           <FinancialStatementDesigner />
+        </TabsContent>
+
+        <TabsContent value="tax-forms" className="mt-6">
+          <EnterpriseTaxConfigManager />
         </TabsContent>
 
         <TabsContent value="operation-types" className="mt-6">

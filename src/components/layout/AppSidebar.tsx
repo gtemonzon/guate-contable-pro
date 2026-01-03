@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users, Calculator } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -30,6 +30,7 @@ const menuItems = [
       { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart },
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote },
       { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt },
+      { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator },
     ],
   },
   {

@@ -17,6 +17,7 @@ import BalanceSaldos from "./pages/BalanceSaldos";
 import MayorGeneral from "./pages/MayorGeneral";
 import ConciliacionBancaria from "./pages/ConciliacionBancaria";
 import FormulariosImpuestos from "./pages/FormulariosImpuestos";
+import GenerarDeclaracion from "./pages/GenerarDeclaracion";
 import MainLayout from "./components/layout/MainLayout";
 import NotFound from "./pages/NotFound";
 import Reportes from "./pages/Reportes";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/libros-fiscales" element={<LibrosFiscales />} />
             <Route path="/conciliacion" element={<ConciliacionBancaria />} />
             <Route path="/formularios-impuestos" element={<FormulariosImpuestos />} />
+            <Route path="/generar-declaracion" element={<GenerarDeclaracion />} />
             <Route path="/saldos" element={<BalanceSaldos />} />
             <Route path="/mayor" element={<MayorGeneral />} />
             <Route path="/reportes" element={<Reportes />} />
