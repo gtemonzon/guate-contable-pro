@@ -153,72 +153,62 @@ export function useDeclaracionCalculo(
     }
   };
 
-  // Calculate suggested crédito remanente based on previous month's data
+  // Calculate suggested crédito remanente based on VAT credit account balance (saldo anterior)
   const calcularCreditoRemanenteSugerido = async () => {
     if (!enterpriseId) return;
 
-    // Calculate previous month
-    let prevMonth = month - 1;
-    let prevYear = year;
-    if (prevMonth === 0) {
-      prevMonth = 12;
-      prevYear = year - 1;
-    }
-
-    const prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-    const prevEndDate = new Date(prevYear, prevMonth, 0).toISOString().split('T')[0];
-
     try {
-      // Fetch previous month sales
-      const prevSalesQuery = supabase
-        .from("tab_sales_ledger")
-        .select("vat_amount, fel_document_type, is_annulled")
+      // Get the VAT credit account from enterprise config
+      const { data: configData } = await supabase
+        .from("tab_enterprise_config")
+        .select("vat_credit_account_id")
         .eq("enterprise_id", enterpriseId)
-        .gte("invoice_date", prevStartDate)
-        .lte("invoice_date", prevEndDate)
-        .eq("is_annulled", false);
-      
-      const prevSalesData = await fetchAllRecords<{ vat_amount: number; fel_document_type: string; is_annulled: boolean }>(prevSalesQuery);
+        .maybeSingle();
 
-      // Fetch previous month purchases
-      const prevPurchasesQuery = supabase
-        .from("tab_purchase_ledger")
-        .select("vat_amount, fel_document_type")
-        .eq("enterprise_id", enterpriseId)
-        .gte("invoice_date", prevStartDate)
-        .lte("invoice_date", prevEndDate);
-      
-      const prevPurchasesData = await fetchAllRecords<{ vat_amount: number; fel_document_type: string }>(prevPurchasesQuery);
-
-      const exentosTypes = ['FPEQ', 'FESP', 'NABN', 'RDON', 'RECI'];
-
-      // Calculate previous month's débito fiscal
-      let prevDebitoFiscal = 0;
-      prevSalesData.forEach(sale => {
-        const docType = felDocTypes.find(d => d.code === sale.fel_document_type);
-        const multiplier = docType?.affects_total ?? 1;
-        if (!exentosTypes.includes(sale.fel_document_type)) {
-          prevDebitoFiscal += sale.vat_amount * multiplier;
-        }
-      });
-
-      // Calculate previous month's crédito fiscal
-      let prevCreditoFiscal = 0;
-      prevPurchasesData.forEach(purchase => {
-        const docType = felDocTypes.find(d => d.code === (purchase.fel_document_type || 'FACT'));
-        const multiplier = docType?.affects_total ?? 1;
-        if (!exentosTypes.includes(purchase.fel_document_type || '')) {
-          prevCreditoFiscal += purchase.vat_amount * multiplier;
-        }
-      });
-
-      // If crédito > débito in previous month, the difference is the suggested remanente
-      const diferenciaPrev = prevDebitoFiscal - prevCreditoFiscal;
-      if (diferenciaPrev < 0) {
-        setCreditoRemanenteSugerido(Math.abs(diferenciaPrev));
-      } else {
+      if (!configData?.vat_credit_account_id) {
         setCreditoRemanenteSugerido(0);
+        return;
       }
+
+      const vatCreditAccountId = configData.vat_credit_account_id;
+
+      // Calculate the start date of the selected month (we need balance BEFORE this date)
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+
+      // Get all journal entry details for the VAT credit account BEFORE the selected month
+      const { data: journalDetails } = await supabase
+        .from("tab_journal_entry_details")
+        .select(`
+          debit_amount,
+          credit_amount,
+          tab_journal_entries!inner (
+            enterprise_id,
+            entry_date,
+            is_posted
+          )
+        `)
+        .eq("account_id", vatCreditAccountId)
+        .eq("tab_journal_entries.enterprise_id", enterpriseId)
+        .lt("tab_journal_entries.entry_date", startDate);
+
+      if (!journalDetails || journalDetails.length === 0) {
+        setCreditoRemanenteSugerido(0);
+        return;
+      }
+
+      // Calculate the balance: for a debit account (IVA por Cobrar), balance = debit - credit
+      let totalDebit = 0;
+      let totalCredit = 0;
+
+      journalDetails.forEach((detail: any) => {
+        totalDebit += Number(detail.debit_amount) || 0;
+        totalCredit += Number(detail.credit_amount) || 0;
+      });
+
+      const saldoAnterior = totalDebit - totalCredit;
+      
+      // Only set positive balance as suggested (negative would mean we owe, not a credit)
+      setCreditoRemanenteSugerido(Math.max(0, saldoAnterior));
 
     } catch (err) {
       console.error("Error calculating suggested crédito remanente:", err);
