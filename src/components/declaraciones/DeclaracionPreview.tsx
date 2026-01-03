@@ -121,14 +121,91 @@ export function DeclaracionPreview({
             </div>
           </div>
 
+          {/* Compras */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Compras</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              {ivaGeneral.comprasBienes > 0 && (
+                <CasillaRow casilla="27" label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
+              )}
+              {ivaGeneral.comprasServicios > 0 && (
+                <CasillaRow casilla="28" label="Compras de Servicios" value={ivaGeneral.comprasServicios} />
+              )}
+              {ivaGeneral.importaciones > 0 && (
+                <CasillaRow casilla="29" label="Importaciones" value={ivaGeneral.importaciones} />
+              )}
+              {ivaGeneral.comprasActivosFijos > 0 && (
+                <CasillaRow casilla="30" label="Activos Fijos" value={ivaGeneral.comprasActivosFijos} />
+              )}
+              {ivaGeneral.comprasExentas > 0 && (
+                <CasillaRow casilla="32" label="Compras Exentas" value={ivaGeneral.comprasExentas} />
+              )}
+              {ivaGeneral.notasCreditoCompras > 0 && (
+                <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-destructive">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-foreground w-8">-</span>
+                    <span className="text-sm">(-) Notas de Crédito Recibidas</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium">-{formatCurrency(ivaGeneral.notasCreditoCompras)}</span>
+                    <CopyButton value={ivaGeneral.notasCreditoCompras} />
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-border mt-2 pt-2">
+                <CasillaRow casilla="" label="Total Compras Gravadas Neto" value={ivaGeneral.comprasNetoGravadas} />
+              </div>
+            </div>
+          </div>
+
           {/* Crédito Fiscal */}
           <div>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Crédito Fiscal</h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <CasillaRow casilla="30" label="Compras Gravadas" value={ivaGeneral.comprasGravadas} />
-              <CasillaRow casilla="34" label="Crédito Fiscal del Período" value={ivaGeneral.creditoFiscal} />
+              {ivaGeneral.creditoFiscalBienes > 0 && (
+                <CasillaRow casilla="" label="IVA Otras Compras (Bienes)" value={ivaGeneral.creditoFiscalBienes} />
+              )}
+              {ivaGeneral.creditoFiscalServicios > 0 && (
+                <CasillaRow casilla="" label="IVA Servicios" value={ivaGeneral.creditoFiscalServicios} />
+              )}
+              {ivaGeneral.creditoFiscalImportaciones > 0 && (
+                <CasillaRow casilla="" label="IVA Importaciones" value={ivaGeneral.creditoFiscalImportaciones} />
+              )}
+              {ivaGeneral.creditoFiscalActivosFijos > 0 && (
+                <CasillaRow casilla="" label="IVA Activos Fijos" value={ivaGeneral.creditoFiscalActivosFijos} />
+              )}
+              {ivaGeneral.notasCreditoIVA > 0 && (
+                <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-destructive">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-foreground w-8">-</span>
+                    <span className="text-sm">(-) IVA Notas de Crédito</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium">-{formatCurrency(ivaGeneral.notasCreditoIVA)}</span>
+                    <CopyButton value={ivaGeneral.notasCreditoIVA} />
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-border mt-2 pt-2">
+                <CasillaRow casilla="34" label="Crédito Fiscal del Período" value={ivaGeneral.creditoFiscal} />
+              </div>
             </div>
           </div>
+
+          {/* Resumen por Tipo de Documento */}
+          {ivaGeneral.documentosPorTipo && ivaGeneral.documentosPorTipo.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Por Tipo de Documento</h4>
+              <div className="bg-muted/30 rounded-lg p-3">
+                {ivaGeneral.documentosPorTipo.map((doc) => (
+                  <div key={doc.tipo} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="text-muted-foreground">{doc.tipo} ({doc.cantidad})</span>
+                    <span className="font-mono">{formatCurrency(doc.monto)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Resultado */}
           <div className="pt-4 border-t space-y-3">
