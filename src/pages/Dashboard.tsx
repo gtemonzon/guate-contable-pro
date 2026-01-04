@@ -49,6 +49,7 @@ const Dashboard = () => {
   const [yearlyChartsLoading, setYearlyChartsLoading] = useState(true);
   const [yearlySalesData, setYearlySalesData] = useState<MonthlyChartData[]>([]);
   const [yearlyPurchasesData, setYearlyPurchasesData] = useState<MonthlyChartData[]>([]);
+  const [activeYear, setActiveYear] = useState<number>(new Date().getFullYear());
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -453,6 +454,59 @@ const Dashboard = () => {
     fetchBookSummaries();
   }, []);
 
+  // Obtener año del período contable activo
+  useEffect(() => {
+    const fetchActiveYear = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      const activePeriodId = localStorage.getItem("activePeriodId");
+      
+      if (!currentEnterpriseId) return;
+
+      try {
+        if (activePeriodId) {
+          // Obtener el año del período activo guardado
+          const { data: period } = await supabase
+            .from("tab_accounting_periods")
+            .select("year")
+            .eq("id", parseInt(activePeriodId))
+            .single();
+          
+          if (period) {
+            setActiveYear(period.year);
+            return;
+          }
+        }
+
+        // Fallback: buscar el período abierto más reciente
+        const { data: periods } = await supabase
+          .from("tab_accounting_periods")
+          .select("year")
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("status", "abierto")
+          .order("year", { ascending: false })
+          .limit(1);
+
+        if (periods && periods.length > 0) {
+          setActiveYear(periods[0].year);
+        }
+      } catch (error) {
+        console.error("Error fetching active year:", error);
+      }
+    };
+
+    fetchActiveYear();
+
+    // Escuchar cambios en el período activo
+    const handlePeriodChange = () => fetchActiveYear();
+    window.addEventListener("periodChanged", handlePeriodChange);
+    window.addEventListener("storage", handlePeriodChange);
+
+    return () => {
+      window.removeEventListener("periodChanged", handlePeriodChange);
+      window.removeEventListener("storage", handlePeriodChange);
+    };
+  }, []);
+
   // Cargar datos anuales para gráficas
   useEffect(() => {
     const fetchYearlyData = async () => {
@@ -463,20 +517,19 @@ const Dashboard = () => {
       }
 
       try {
-        const currentYear = new Date().getFullYear();
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
         // Inicializar datos mensuales con ceros
         const initializeMonthlyData = (): MonthlyChartData[] => 
           monthNames.map((month, index) => ({ month, monthNum: index + 1, total: 0 }));
 
-        // Fetch ventas del año
+        // Fetch ventas del año del período contable
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date, total_amount")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .gte("invoice_date", `${currentYear}-01-01`)
-          .lte("invoice_date", `${currentYear}-12-31`);
+          .gte("invoice_date", `${activeYear}-01-01`)
+          .lte("invoice_date", `${activeYear}-12-31`);
 
         const salesByMonth = initializeMonthlyData();
         if (sales) {
@@ -487,12 +540,12 @@ const Dashboard = () => {
         }
         setYearlySalesData(salesByMonth);
 
-        // Fetch compras del año
+        // Fetch compras del año del período contable
         const { data: purchaseBooks } = await supabase
           .from("tab_purchase_books")
           .select("id, month, year")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .eq("year", currentYear);
+          .eq("year", activeYear);
 
         const purchasesByMonth = initializeMonthlyData();
         if (purchaseBooks && purchaseBooks.length > 0) {
@@ -517,7 +570,7 @@ const Dashboard = () => {
     };
 
     fetchYearlyData();
-  }, []);
+  }, [activeYear]);
 
   // KPIs dinámicos
   const formatChange = (change: number | null | undefined, isPercentage = true): string => {
@@ -821,7 +874,7 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Ventas del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de ventas {new Date().getFullYear()}
+                  Total mensual de ventas {activeYear}
                 </CardDescription>
               </div>
               <Receipt className="h-6 w-6 text-success" />
@@ -879,7 +932,7 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Compras del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de compras {new Date().getFullYear()}
+                  Total mensual de compras {activeYear}
                 </CardDescription>
               </div>
               <ShoppingCart className="h-6 w-6 text-destructive" />
