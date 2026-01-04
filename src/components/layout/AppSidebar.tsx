@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Upload, Settings, Users, Calculator, HelpCircle } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -15,14 +15,6 @@ import {
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   {
-    title: "Administración",
-    items: [
-      { title: "Usuarios", url: "/usuarios", icon: Users },
-      { title: "Empresas", url: "/empresas", icon: Building2 },
-      { title: "Configuración", url: "/configuracion", icon: Settings },
-    ],
-  },
-  {
     title: "Contabilidad",
     items: [
       { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen },
@@ -38,22 +30,17 @@ const menuItems = [
     items: [
       { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart },
       { title: "Mayor General", url: "/mayor", icon: BookOpen },
+      { title: "Reportes", url: "/reportes", icon: FileBarChart },
     ],
   },
   {
-    title: "Reportes",
-    url: "/reportes",
-    icon: FileBarChart,
-  },
-  {
-    title: "Importación",
-    url: "/importar",
-    icon: Upload,
-  },
-  {
-    title: "Ayuda",
-    url: "/ayuda",
-    icon: HelpCircle,
+    title: "Administración",
+    items: [
+      { title: "Usuarios", url: "/usuarios", icon: Users },
+      { title: "Empresas", url: "/empresas", icon: Building2 },
+      { title: "Configuración", url: "/configuracion", icon: Settings },
+      { title: "Ayuda", url: "/ayuda", icon: HelpCircle },
+    ],
   },
 ];
 
@@ -68,7 +55,7 @@ export function AppSidebar() {
           if ("items" in section) {
             return (
               <SidebarGroup key={idx}>
-                <SidebarGroupLabel className="text-sidebar-foreground/60">{section.title}</SidebarGroupLabel>
+                <SidebarGroupLabel className="text-sidebar-foreground/80 font-semibold">{section.title}</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {section.items.map((item) => (
@@ -78,8 +65,8 @@ export function AppSidebar() {
                             to={item.url}
                             className={({ isActive }) =>
                               [
-                                "text-sidebar-foreground/70 hover:text-sidebar-foreground",
-                                isActive ? "bg-accent text-accent-foreground" : "",
+                                "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
+                                isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "",
                               ].join(" ")
                             }
                           >
@@ -105,8 +92,8 @@ export function AppSidebar() {
                         to={section.url}
                         className={({ isActive }) =>
                           [
-                            "text-sidebar-foreground/70 hover:text-sidebar-foreground",
-                            isActive ? "bg-accent text-accent-foreground" : "",
+                            "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
+                            isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "",
                           ].join(" ")
                         }
                       >
