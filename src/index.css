@@ -52,15 +52,15 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
-    /* Sidebar colors - Purple/Lilac theme */
-    --sidebar-background: 258 89% 66%;
-    --sidebar-foreground: 270 95% 90%;
-    --sidebar-primary: 270 100% 95%;
-    --sidebar-primary-foreground: 258 89% 30%;
-    --sidebar-accent: 258 89% 55%;
-    --sidebar-accent-foreground: 270 100% 95%;
-    --sidebar-border: 258 70% 75%;
-    --sidebar-ring: 270 95% 90%;
+    /* Sidebar colors - Lilac/Purple theme (inverted) */
+    --sidebar-background: 270 95% 90%;
+    --sidebar-foreground: 258 89% 66%;
+    --sidebar-primary: 258 89% 30%;
+    --sidebar-primary-foreground: 270 100% 95%;
+    --sidebar-accent: 270 80% 80%;
+    --sidebar-accent-foreground: 258 89% 50%;
+    --sidebar-border: 270 70% 75%;
+    --sidebar-ring: 258 89% 66%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 91% 70%) 100%);
@@ -120,14 +120,14 @@ All colors MUST be HSL.
     --input: 240 5% 33%;
     --ring: 255 91% 76%;
 
-    --sidebar-background: 258 89% 66%;
-    --sidebar-foreground: 270 95% 90%;
-    --sidebar-primary: 270 100% 95%;
-    --sidebar-primary-foreground: 258 89% 30%;
-    --sidebar-accent: 258 89% 55%;
-    --sidebar-accent-foreground: 270 100% 95%;
-    --sidebar-border: 258 70% 75%;
-    --sidebar-ring: 270 95% 90%;
+    --sidebar-background: 270 95% 90%;
+    --sidebar-foreground: 258 89% 66%;
+    --sidebar-primary: 258 89% 30%;
+    --sidebar-primary-foreground: 270 100% 95%;
+    --sidebar-accent: 270 80% 80%;
+    --sidebar-accent-foreground: 258 89% 50%;
+    --sidebar-border: 270 70% 75%;
+    --sidebar-ring: 258 89% 66%;
     --chart-1: 252 94% 85%;
     --chart-2: 269 97% 85%;
     --chart-3: 229 93% 81%;
