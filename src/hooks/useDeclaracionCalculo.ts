@@ -68,6 +68,7 @@ export interface IVAGeneralCalculo {
   notasCreditoIVA: number; // IVA de notas de crédito (resta)
   creditoFiscal: number; // Casilla 34 - Total crédito fiscal del período
   creditoRemanente: number; // Casilla 38 (del mes anterior, user input)
+  exencionIVA: number; // Exención IVA realizada (user input, resta del impuesto)
   diferencia: number; // Casilla 40 (débito - crédito)
   ivaAPagar: number; // Casilla 42
   creditoRemanenteProximoMes: number; // Casilla 43 - when crédito > débito
@@ -88,15 +89,21 @@ export interface IVAPequenoCalculo {
 
 export interface ISRMensualCalculo {
   ingresosBrutos: number;
-  tasaISR: number;
-  isrAPagar: number;
+  // Escala progresiva
+  primerTramo: number; // Hasta Q30,000 al 5%
+  segundoTramo: number; // Excedente de Q30,000 al 7%
+  isrBruto: number; // Impuesto calculado antes de retenciones
+  retencionRealizada: number; // Retenciones ISR de terceros (input del usuario)
+  isrAPagar: number; // ISR neto a pagar
 }
 
 export function useDeclaracionCalculo(
   enterpriseId: number | null, 
   month: number, 
   year: number,
-  creditoRemanenteInput: number = 0
+  creditoRemanenteInput: number = 0,
+  exencionIVAInput: number = 0,
+  retencionISRInput: number = 0
 ) {
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
@@ -358,9 +365,11 @@ export function useDeclaracionCalculo(
     const diferencia = debitoFiscal - creditoFiscal;
     // Total crédito incluyendo remanente del mes anterior
     const totalCredito = creditoFiscal + creditoRemanenteInput;
-    // Si débito > totalCredito, hay IVA a pagar
+    // Si débito > totalCredito, hay IVA a pagar (antes de exención)
     // Si totalCredito > débito, hay crédito remanente para el próximo mes
-    const ivaAPagar = Math.max(0, debitoFiscal - totalCredito);
+    const ivaAPagarBruto = Math.max(0, debitoFiscal - totalCredito);
+    // Aplicar exención IVA realizada (resta del impuesto a pagar)
+    const ivaAPagar = Math.max(0, ivaAPagarBruto - exencionIVAInput);
     const creditoRemanenteProximoMes = Math.max(0, totalCredito - debitoFiscal);
 
     // Convertir estadísticas a array
@@ -394,12 +403,13 @@ export function useDeclaracionCalculo(
       notasCreditoIVA: Math.round(notasCreditoIVA),
       creditoFiscal: Math.round(creditoFiscal),
       creditoRemanente: Math.round(creditoRemanenteInput),
+      exencionIVA: Math.round(exencionIVAInput),
       diferencia: Math.round(diferencia),
       ivaAPagar: Math.round(ivaAPagar),
       creditoRemanenteProximoMes: Math.round(creditoRemanenteProximoMes),
       documentosPorTipo,
     };
-  }, [sales, purchases, felDocTypes, creditoRemanenteInput]);
+  }, [sales, purchases, felDocTypes, creditoRemanenteInput, exencionIVAInput]);
 
   // Calculate IVA Pequeño Contribuyente (SAT-2046)
   const ivaPequenoCalculo = useMemo((): IVAPequenoCalculo => {
@@ -421,10 +431,13 @@ export function useDeclaracionCalculo(
     };
   }, [sales, taxConfigs, felDocTypes]);
 
-  // Calculate ISR Mensual
+  // Calculate ISR Mensual con escala progresiva (5% hasta Q30,000 / 7% excedente)
   const isrMensualCalculo = useMemo((): ISRMensualCalculo => {
-    const config = taxConfigs.find(c => c.tax_form_type === 'ISR_MENSUAL');
-    const tasaISR = config?.tax_rate ?? 5; // Default 5%
+    // Umbral para el primer tramo (Q30,000)
+    const UMBRAL_PRIMER_TRAMO = 30000;
+    const TASA_PRIMER_TRAMO = 0.05; // 5%
+    const TASA_SEGUNDO_TRAMO = 0.07; // 7%
+    const IMPUESTO_FIJO_SEGUNDO_TRAMO = 1500; // Q1,500 del primer tramo
 
     let ingresosBrutos = 0;
     sales.forEach(sale => {
@@ -432,14 +445,35 @@ export function useDeclaracionCalculo(
       ingresosBrutos += sale.total_amount * multiplier;
     });
 
-    const isrAPagar = ingresosBrutos * (tasaISR / 100);
+    // Calcular ISR con escala progresiva
+    let primerTramo = 0;
+    let segundoTramo = 0;
+    let isrBruto = 0;
+
+    if (ingresosBrutos <= UMBRAL_PRIMER_TRAMO) {
+      // Solo primer tramo (5%)
+      primerTramo = ingresosBrutos;
+      segundoTramo = 0;
+      isrBruto = ingresosBrutos * TASA_PRIMER_TRAMO;
+    } else {
+      // Primer tramo completo + segundo tramo
+      primerTramo = UMBRAL_PRIMER_TRAMO;
+      segundoTramo = ingresosBrutos - UMBRAL_PRIMER_TRAMO;
+      isrBruto = IMPUESTO_FIJO_SEGUNDO_TRAMO + (segundoTramo * TASA_SEGUNDO_TRAMO);
+    }
+
+    // Aplicar retención realizada (resta del impuesto)
+    const isrAPagar = Math.max(0, isrBruto - retencionISRInput);
 
     return {
-      ingresosBrutos,
-      tasaISR,
-      isrAPagar,
+      ingresosBrutos: Math.round(ingresosBrutos),
+      primerTramo: Math.round(primerTramo),
+      segundoTramo: Math.round(segundoTramo),
+      isrBruto: Math.round(isrBruto),
+      retencionRealizada: Math.round(retencionISRInput),
+      isrAPagar: Math.round(isrAPagar),
     };
-  }, [sales, taxConfigs, felDocTypes]);
+  }, [sales, felDocTypes, retencionISRInput]);
 
   return {
     loading,

@@ -17,6 +17,10 @@ interface DeclaracionPreviewProps {
   creditoRemanente?: number;
   onCreditoRemanenteChange?: (value: number) => void;
   creditoRemanenteSugerido?: number;
+  exencionIVA?: number;
+  onExencionIVAChange?: (value: number) => void;
+  retencionISR?: number;
+  onRetencionISRChange?: (value: number) => void;
 }
 
 const MONTHS = [
@@ -87,7 +91,11 @@ export function DeclaracionPreview({
   year,
   creditoRemanente = 0,
   onCreditoRemanenteChange,
-  creditoRemanenteSugerido = 0
+  creditoRemanenteSugerido = 0,
+  exencionIVA = 0,
+  onExencionIVAChange,
+  retencionISR = 0,
+  onRetencionISRChange
 }: DeclaracionPreviewProps) {
   const { toast } = useToast();
   const periodLabel = `${MONTHS[month - 1]} ${year}`;
@@ -256,6 +264,26 @@ export function DeclaracionPreview({
                 <CopyButton value={creditoRemanente} />
               </div>
             </div>
+
+            {/* Exención IVA Realizada */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-muted-foreground w-8">-</span>
+                <span className="text-sm">(-) Exención IVA Realizada</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={exencionIVA}
+                  onChange={(e) => onExencionIVAChange?.(parseFloat(e.target.value) || 0)}
+                  className="w-32 text-right font-mono h-8"
+                  placeholder="0.00"
+                />
+                <CopyButton value={exencionIVA} />
+              </div>
+            </div>
             
             {ivaGeneral.ivaAPagar > 0 ? (
               <TotalRow label="IVA A PAGAR (Casilla 42)" value={ivaGeneral.ivaAPagar} isHighlight />
@@ -311,6 +339,9 @@ export function DeclaracionPreview({
   }
 
   if (formType === 'ISR_MENSUAL' && isrMensual) {
+    const UMBRAL = 30000;
+    const usaSegundoTramo = isrMensual.ingresosBrutos > UMBRAL;
+    
     return (
       <Card>
         <CardHeader>
@@ -320,14 +351,84 @@ export function DeclaracionPreview({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="bg-muted/30 rounded-lg p-3">
-            <CasillaRow casilla="" label="Ingresos Brutos del Mes" value={isrMensual.ingresosBrutos} />
-            <div className="flex items-center justify-between py-2 border-b border-border/50">
-              <span className="text-sm">Tasa ISR</span>
-              <span className="font-mono font-medium">{isrMensual.tasaISR}%</span>
+          {/* Ingresos */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Ingresos</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <CasillaRow casilla="" label="Ingresos Brutos del Mes" value={isrMensual.ingresosBrutos} />
             </div>
           </div>
 
+          {/* Cálculo del ISR con escala progresiva */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+              Cálculo del ISR (Escala Progresiva)
+            </h4>
+            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between py-2 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-muted-foreground w-8">1</span>
+                  <span className="text-sm">Primer Tramo (hasta Q30,000 al 5%)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono">{formatCurrency(isrMensual.primerTramo)}</span>
+                  <span className="text-xs text-muted-foreground">× 5%</span>
+                  <span className="font-mono font-medium">=</span>
+                  <span className="font-mono font-medium">
+                    {formatCurrency(Math.min(isrMensual.primerTramo * 0.05, 1500))}
+                  </span>
+                </div>
+              </div>
+              
+              {usaSegundoTramo && (
+                <div className="flex items-center justify-between py-2 border-b border-border/50">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-muted-foreground w-8">2</span>
+                    <span className="text-sm">Segundo Tramo (excedente al 7%)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono">{formatCurrency(isrMensual.segundoTramo)}</span>
+                    <span className="text-xs text-muted-foreground">× 7%</span>
+                    <span className="font-mono font-medium">=</span>
+                    <span className="font-mono font-medium">
+                      {formatCurrency(isrMensual.segundoTramo * 0.07)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="border-t border-border mt-2 pt-2">
+                <CasillaRow casilla="" label="ISR Bruto Calculado" value={isrMensual.isrBruto} />
+              </div>
+            </div>
+          </div>
+
+          {/* Retención ISR */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Retenciones</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-muted-foreground w-8">-</span>
+                  <span className="text-sm">(-) Retención ISR Realizada</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={retencionISR}
+                    onChange={(e) => onRetencionISRChange?.(parseFloat(e.target.value) || 0)}
+                    className="w-32 text-right font-mono h-8"
+                    placeholder="0.00"
+                  />
+                  <CopyButton value={retencionISR} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Resultado */}
           <div className="pt-4 border-t">
             <TotalRow label="ISR A PAGAR" value={isrMensual.isrAPagar} isHighlight />
           </div>
