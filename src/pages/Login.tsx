@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { getSafeAuthError } from "@/utils/errorMessages";
 
 const Login = () => {
@@ -96,11 +96,10 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-accent/20 to-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary text-primary-foreground mb-4">
-            <Building2 className="w-8 h-8" />
+          <div className="inline-flex items-center justify-center w-20 h-20 mb-4">
+            <img src="/favicon.png" alt="Conta-Online" className="w-16 h-16" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Sistema Contable</h1>
-          <p className="text-muted-foreground mt-2">Guatemala</p>
+          <h1 className="text-3xl font-bold text-foreground">Conta-Online</h1>
         </div>
 
         <Card>
