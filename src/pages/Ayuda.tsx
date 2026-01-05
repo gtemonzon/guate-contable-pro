@@ -16,8 +16,10 @@ import {
   ChevronRight,
   ExternalLink,
   Lightbulb,
-  AlertCircle
+  AlertCircle,
+  FileDown
 } from "lucide-react";
+import jsPDF from 'jspdf';
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -522,6 +524,111 @@ const Ayuda = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    let y = 20;
+    const lineHeight = 6;
+    const maxWidth = pageWidth - margin * 2;
+
+    const addText = (text: string, fontSize: number, isBold: boolean = false, indent: number = 0) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFontSize(fontSize);
+      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+      const lines = doc.splitTextToSize(text, maxWidth - indent);
+      doc.text(lines, margin + indent, y);
+      y += lines.length * lineHeight;
+    };
+
+    // Title
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Centro de Ayuda - Manual de Usuario', margin, y);
+    y += 15;
+
+    // Sections
+    helpSections.forEach((section) => {
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+      
+      // Section title
+      addText(`■ ${section.title}`, 14, true);
+      addText(section.description, 10, false, 4);
+      y += 3;
+
+      // Steps
+      if (section.steps) {
+        section.steps.forEach((step, idx) => {
+          addText(`${idx + 1}. ${step.title}`, 10, true, 6);
+          addText(step.description, 9, false, 10);
+        });
+      }
+
+      // Tips
+      if (section.tips) {
+        addText('Tips:', 10, true, 6);
+        section.tips.forEach((tip) => {
+          addText(`• ${tip}`, 9, false, 10);
+        });
+      }
+
+      // Subsections
+      if (section.subsections) {
+        section.subsections.forEach((sub) => {
+          if (y > 250) {
+            doc.addPage();
+            y = 20;
+          }
+          addText(`► ${sub.title}`, 11, true, 6);
+          addText(sub.description, 9, false, 10);
+          
+          if (sub.steps) {
+            sub.steps.forEach((step, idx) => {
+              addText(`${idx + 1}. ${step.title}`, 9, true, 12);
+              addText(step.description, 8, false, 16);
+            });
+          }
+          
+          if (sub.tips) {
+            addText('Tips:', 9, true, 12);
+            sub.tips.forEach((tip) => {
+              addText(`• ${tip}`, 8, false, 16);
+            });
+          }
+          y += 2;
+        });
+      }
+      y += 5;
+    });
+
+    // FAQ
+    if (y > 230) {
+      doc.addPage();
+      y = 20;
+    }
+    y += 5;
+    addText('PREGUNTAS FRECUENTES', 14, true);
+    y += 3;
+
+    faqItems.forEach((item, idx) => {
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+      addText(`${idx + 1}. ${item.question}`, 10, true, 4);
+      addText(item.answer, 9, false, 8);
+      y += 3;
+    });
+
+    doc.save('Manual_de_Ayuda.pdf');
+  };
+
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) return helpSections;
     
@@ -651,13 +758,19 @@ const Ayuda = () => {
     <div className="container mx-auto py-6 max-w-5xl">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <HelpCircle className="h-6 w-6 text-primary" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <HelpCircle className="h-6 w-6 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-foreground">Centro de Ayuda</h1>
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Centro de Ayuda</h1>
+          <Button onClick={handleExportPDF} variant="outline">
+            <FileDown className="h-4 w-4 mr-2" />
+            Exportar PDF
+          </Button>
         </div>
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground mt-2">
           Manual de usuario interactivo. Encuentre instrucciones detalladas sobre cómo utilizar cada función del sistema.
         </p>
       </div>
