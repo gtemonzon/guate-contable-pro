@@ -356,13 +356,35 @@ function extractDataFromText(text: string): ExtractedData {
     }
   }
 
-  // Strategy 4: Last fallback for year - any 20XX in text near period context
+  // Strategy 4: Look for year near month context or "Año" label
   if (!result.periodYear) {
-    // Try to find year near "Año" label
+    // If we found a month, look for year near that month
+    if (result.periodMonth) {
+      const monthName = Object.entries(MONTH_MAP).find(([_, v]) => v === result.periodMonth)?.[0];
+      if (monthName) {
+        const monthPattern = new RegExp(monthName, 'i');
+        const monthMatch = text.match(monthPattern);
+        if (monthMatch) {
+          const idx = monthMatch.index || 0;
+          // Look for year after the month name (within 100 chars)
+          const afterMonth = text.substring(idx, idx + 100);
+          const yearMatch = afterMonth.match(/\b(202[0-9]|201[0-9])\b/);
+          if (yearMatch) {
+            result.periodYear = parseInt(yearMatch[1]);
+            result.fieldsFound++;
+            console.log("Found periodYear (near month):", result.periodYear);
+          }
+        }
+      }
+    }
+  }
+  
+  if (!result.periodYear) {
+    // Try to find year near "Año" label in normalized text
     const yearWithLabelMatch = normalizedText.match(/A[ñn]o[:\s]*(\d{4})/i);
     if (yearWithLabelMatch) {
       const year = parseInt(yearWithLabelMatch[1]);
-      if (year >= 2000 && year <= 2100) {
+      if (year >= 2010 && year <= 2100) {
         result.periodYear = year;
         result.fieldsFound++;
         console.log("Found periodYear (normalized text):", result.periodYear);
@@ -371,12 +393,31 @@ function extractDataFromText(text: string): ExtractedData {
   }
   
   if (!result.periodYear) {
-    // Last resort: find any 20XX year
-    const yearMatch = text.match(/\b(20\d{2})\b/);
-    if (yearMatch) {
-      result.periodYear = parseInt(yearMatch[1]);
-      result.fieldsFound++;
-      console.log("Found periodYear (fallback):", result.periodYear);
+    // Look for year near "PERÍODO DE IMPOSICIÓN" section
+    const periodIdx = text.search(/PER[IÍ]ODO\s+DE\s+IMPOSICI[ÓO]N/i);
+    if (periodIdx !== -1) {
+      const periodContext = text.substring(periodIdx, periodIdx + 300);
+      // Find years between 2010-2099 (avoid matching SAT-2000)
+      const yearMatch = periodContext.match(/\b(202[0-9]|201[0-9])\b/);
+      if (yearMatch) {
+        result.periodYear = parseInt(yearMatch[1]);
+        result.fieldsFound++;
+        console.log("Found periodYear (period context):", result.periodYear);
+      }
+    }
+  }
+  
+  if (!result.periodYear) {
+    // Last resort: find any year 2010-2099 (excluding 2000 which is SAT-2000)
+    const yearMatches = text.matchAll(/\b(20[1-9][0-9])\b/g);
+    for (const match of yearMatches) {
+      const year = parseInt(match[1]);
+      if (year >= 2010 && year <= 2099) {
+        result.periodYear = year;
+        result.fieldsFound++;
+        console.log("Found periodYear (fallback 2010+):", result.periodYear);
+        break;
+      }
     }
   }
 
