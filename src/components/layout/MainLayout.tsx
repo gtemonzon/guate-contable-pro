@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { User, Session } from "@supabase/supabase-js";
-import { Building2, Bell, LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -157,7 +157,7 @@ const MainLayout = () => {
             <SidebarTrigger />
             
             <div className="flex items-center gap-2 text-lg font-semibold">
-              <Building2 className="h-5 w-5 text-primary" />
+              <img src="/favicon.png" alt="Logo" className="h-6 w-6" />
               <span className="hidden sm:inline truncate max-w-md">
                 {currentEnterprise 
                   ? `Sistema Contable - ${currentEnterprise}`
