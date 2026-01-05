@@ -35,6 +35,8 @@ export default function GenerarDeclaracion() {
   const [selectedFormType, setSelectedFormType] = useState<TaxFormType | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
+  const [exencionIVA, setExencionIVA] = useState<number>(0);
+  const [retencionISR, setRetencionISR] = useState<number>(0);
 
   const {
     loading,
@@ -47,7 +49,7 @@ export default function GenerarDeclaracion() {
     isrMensualCalculo,
     creditoRemanenteSugerido,
     fetchData,
-  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente);
+  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR);
 
   // Load active enterprise
   useEffect(() => {
@@ -234,6 +236,10 @@ export default function GenerarDeclaracion() {
           creditoRemanente={creditoRemanente}
           onCreditoRemanenteChange={setCreditoRemanente}
           creditoRemanenteSugerido={creditoRemanenteSugerido}
+          exencionIVA={exencionIVA}
+          onExencionIVAChange={setExencionIVA}
+          retencionISR={retencionISR}
+          onRetencionISRChange={setRetencionISR}
         />
       )}
 
