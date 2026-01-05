@@ -29,72 +29,75 @@ interface TaxConfig {
 }
 
 // Default tax configurations for Guatemala
+// calculation_type values: 'last_business_day', 'business_days_after', 'fixed_day'
+// reference_period values: 'current_month', 'next_month', 'quarter_end_next_month'
 const DEFAULT_TAXES: Omit<TaxConfig, 'id'>[] = [
   {
     tax_type: "iva_mensual",
     tax_label: "IVA Mensual",
-    calculation_type: "ultimo_dia_habil",
+    calculation_type: "last_business_day",
     days_value: null,
-    reference_period: "mes_actual",
+    reference_period: "current_month",
     consider_holidays: true,
     is_active: true,
   },
   {
     tax_type: "isr_trimestral",
     tax_label: "ISR Trimestral",
-    calculation_type: "ultimo_dia_habil",
+    calculation_type: "last_business_day",
     days_value: null,
-    reference_period: "mes_siguiente",
+    reference_period: "next_month",
     consider_holidays: true,
     is_active: true,
   },
   {
     tax_type: "iso_trimestral",
     tax_label: "ISO Trimestral",
-    calculation_type: "ultimo_dia_habil",
+    calculation_type: "last_business_day",
     days_value: null,
-    reference_period: "mes_actual",
+    reference_period: "current_month",
     consider_holidays: true,
     is_active: false,
   },
   {
     tax_type: "retencion_isr",
     tax_label: "Retención ISR",
-    calculation_type: "dias_habiles_despues",
+    calculation_type: "business_days_after",
     days_value: 10,
-    reference_period: "mes_siguiente",
+    reference_period: "next_month",
     consider_holidays: true,
     is_active: false,
   },
   {
     tax_type: "retencion_iva",
     tax_label: "Retención IVA",
-    calculation_type: "dias_habiles_despues",
+    calculation_type: "business_days_after",
     days_value: 15,
-    reference_period: "mes_siguiente",
+    reference_period: "next_month",
     consider_holidays: true,
     is_active: false,
   },
   {
     tax_type: "isr_anual",
     tax_label: "ISR Anual",
-    calculation_type: "dia_fijo",
+    calculation_type: "fixed_day",
     days_value: 31,
-    reference_period: "mes_siguiente",
+    reference_period: "next_month",
     consider_holidays: true,
     is_active: false,
   },
 ];
 
 const CALCULATION_TYPE_LABELS: Record<string, string> = {
-  ultimo_dia_habil: "Último día hábil del mes",
-  dias_habiles_despues: "Días hábiles después",
-  dia_fijo: "Día fijo del mes",
+  last_business_day: "Último día hábil del mes",
+  business_days_after: "Días hábiles después",
+  fixed_day: "Día fijo del mes",
 };
 
 const REFERENCE_PERIOD_LABELS: Record<string, string> = {
-  mes_actual: "del período",
-  mes_siguiente: "del mes siguiente al período",
+  current_month: "del período",
+  next_month: "del mes siguiente al período",
+  quarter_end_next_month: "del mes siguiente al trimestre",
 };
 
 export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
