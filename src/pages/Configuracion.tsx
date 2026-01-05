@@ -7,6 +7,9 @@ import { EnterpriseAccountsManager } from "@/components/configuracion/Enterprise
 import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
 import { EnterpriseTaxConfigManager } from "@/components/configuracion/EnterpriseTaxConfigManager";
 import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix";
+import { AlertConfigManager } from "@/components/configuracion/AlertConfigManager";
+import { TaxDueDateConfig } from "@/components/configuracion/TaxDueDateConfig";
+import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
 
 export default function Configuracion() {
   return (
@@ -26,6 +29,8 @@ export default function Configuracion() {
           <TabsTrigger value="operation-types">Tipos de Operaciones</TabsTrigger>
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
+          <TabsTrigger value="alerts">Alertas</TabsTrigger>
+          <TabsTrigger value="due-dates">Fechas Vencimiento</TabsTrigger>
           <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
         </TabsList>
 
@@ -81,6 +86,15 @@ export default function Configuracion() {
               <JournalEntryPrefixesManager />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="alerts" className="mt-6">
+          <AlertConfigManager />
+        </TabsContent>
+
+        <TabsContent value="due-dates" className="mt-6 space-y-6">
+          <TaxDueDateConfig />
+          <HolidaysManager />
         </TabsContent>
 
         <TabsContent value="permissions" className="mt-6">
