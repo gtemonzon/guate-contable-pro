@@ -6,10 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { cn } from "@/lib/utils";
+
+type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
 interface JournalEntry {
   id: number;
@@ -20,8 +24,40 @@ interface JournalEntry {
   total_debit: number;
   total_credit: number;
   is_posted: boolean;
+  status: EntryStatus;
+  rejection_reason: string | null;
   created_at: string;
 }
+
+const STATUS_CONFIG: Record<EntryStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; className?: string }> = {
+  borrador: { 
+    label: "Borrador", 
+    variant: "secondary", 
+    icon: <FileText className="h-3 w-3" />,
+  },
+  pendiente_revision: { 
+    label: "Pendiente Revisión", 
+    variant: "outline", 
+    icon: <Clock className="h-3 w-3" />,
+    className: "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+  },
+  aprobado: { 
+    label: "Aprobado", 
+    variant: "outline", 
+    icon: <CheckCircle className="h-3 w-3" />,
+    className: "border-green-500 text-green-600 bg-green-50 dark:bg-green-950/20"
+  },
+  contabilizado: { 
+    label: "Contabilizado", 
+    variant: "default", 
+    icon: <CheckCircle className="h-3 w-3" />,
+  },
+  rechazado: { 
+    label: "Rechazado", 
+    variant: "destructive", 
+    icon: <XCircle className="h-3 w-3" />,
+  },
+};
 
 export default function Partidas() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -39,6 +75,7 @@ export default function Partidas() {
   const [filterDateTo, setFilterDateTo] = useState("");
 
   const { toast } = useToast();
+  const permissions = useUserPermissions();
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -90,7 +127,14 @@ export default function Partidas() {
         .order("entry_number", { ascending: false });
 
       if (error) throw error;
-      setEntries(data || []);
+      
+      // Mapear datos con status por defecto para partidas sin status
+      const mappedData = (data || []).map(entry => ({
+        ...entry,
+        status: (entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus,
+      }));
+      
+      setEntries(mappedData);
     } catch (error: any) {
       toast({
         title: "Error al cargar partidas",
@@ -116,8 +160,7 @@ export default function Partidas() {
     }
 
     if (filterStatus !== "all") {
-      const isPosted = filterStatus === "posted";
-      filtered = filtered.filter(e => e.is_posted === isPosted);
+      filtered = filtered.filter(e => e.status === filterStatus);
     }
 
     if (filterDateFrom) {
@@ -138,6 +181,9 @@ export default function Partidas() {
     setFilterDateFrom("");
     setFilterDateTo("");
   };
+
+  // Contador de partidas pendientes de revisión
+  const pendingReviewCount = entries.filter(e => e.status === 'pendiente_revision').length;
 
   if (!currentEnterpriseId) {
     return (
@@ -160,10 +206,24 @@ export default function Partidas() {
           <h1 className="text-3xl font-bold">Partidas Contables</h1>
           <p className="text-muted-foreground">Gestiona el libro diario de la empresa</p>
         </div>
-        <Button onClick={() => setShowDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Partida
-        </Button>
+        <div className="flex items-center gap-4">
+          {/* Indicador de partidas pendientes */}
+          {permissions.canApproveEntries && pendingReviewCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                {pendingReviewCount} partida{pendingReviewCount > 1 ? 's' : ''} pendiente{pendingReviewCount > 1 ? 's' : ''} de revisión
+              </span>
+            </div>
+          )}
+          
+          {permissions.canCreateEntries && (
+            <Button onClick={() => setShowDialog(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Partida
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -207,8 +267,11 @@ export default function Partidas() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="draft">Borrador</SelectItem>
-                  <SelectItem value="posted">Contabilizado</SelectItem>
+                  <SelectItem value="borrador">Borrador</SelectItem>
+                  <SelectItem value="pendiente_revision">Pendiente Revisión</SelectItem>
+                  <SelectItem value="aprobado">Aprobado</SelectItem>
+                  <SelectItem value="contabilizado">Contabilizado</SelectItem>
+                  <SelectItem value="rechazado">Rechazado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -256,46 +319,59 @@ export default function Partidas() {
             </p>
           ) : (
             <div className="space-y-2">
-              {filteredEntries.map((entry) => (
-                <Card key={entry.id} className="hover:bg-accent/50 transition-colors">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 flex-1">
-                        <FileText className="h-8 w-8 text-muted-foreground" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{entry.entry_number}</h3>
-                            <Badge variant={entry.is_posted ? "default" : "secondary"}>
-                              {entry.is_posted ? "Contabilizado" : "Borrador"}
-                            </Badge>
-                            <Badge variant="outline">{entry.entry_type}</Badge>
+              {filteredEntries.map((entry) => {
+                const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
+                
+                return (
+                  <Card key={entry.id} className="hover:bg-accent/50 transition-colors">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-1">
+                          <FileText className="h-8 w-8 text-muted-foreground" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-semibold">{entry.entry_number}</h3>
+                              <Badge 
+                                variant={statusConfig.variant}
+                                className={cn("flex items-center gap-1", statusConfig.className)}
+                              >
+                                {statusConfig.icon}
+                                {statusConfig.label}
+                              </Badge>
+                              <Badge variant="outline">{entry.entry_type}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {entry.description}
+                            </p>
+                            {entry.status === 'rechazado' && entry.rejection_reason && (
+                              <p className="text-sm text-destructive mt-1">
+                                <span className="font-medium">Motivo de rechazo:</span> {entry.rejection_reason}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
+                              Debe: Q{entry.total_debit.toFixed(2)} • 
+                              Haber: Q{entry.total_credit.toFixed(2)}
+                            </p>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {entry.description}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
-                            Debe: Q{entry.total_debit.toFixed(2)} • 
-                            Haber: Q{entry.total_credit.toFixed(2)}
-                          </p>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingEntry(entry);
+                            setShowDialog(true);
+                          }}
+                          title={entry.status === 'contabilizado' ? "Ver partida contabilizada" : "Editar partida"}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingEntry(entry);
-                          setShowDialog(true);
-                        }}
-                        title={entry.is_posted ? "Ver partida contabilizada" : "Editar partida"}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -23,13 +23,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown, XCircle, Clock, ThumbsUp, ThumbsDown } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { Badge } from "@/components/ui/badge";
+
+type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
 interface Account {
   id: number;
@@ -70,6 +74,8 @@ interface JournalEntryDialogProps {
     total_debit: number;
     total_credit: number;
     is_posted: boolean;
+    status?: EntryStatus;
+    rejection_reason?: string | null;
   } | null;
 }
 
@@ -102,6 +108,13 @@ export default function JournalEntryDialog({
   
   // Estado para el diálogo de confirmación al cerrar
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  
+  // Estado para el diálogo de rechazo
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  
+  // Estado actual de la partida
+  const [entryStatus, setEntryStatus] = useState<EntryStatus>('borrador');
 
   // Estado para información de auditoría
   const [auditInfo, setAuditInfo] = useState<{
@@ -112,6 +125,7 @@ export default function JournalEntryDialog({
   } | null>(null);
 
   const { toast } = useToast();
+  const permissions = useUserPermissions();
 
   // Función para formatear fecha y hora
   const formatDateTime = (dateString: string | null) => {
@@ -317,6 +331,9 @@ export default function JournalEntryDialog({
     setHeaderDescription("");
     setDetailLines(freshLines);
     setShowCloseConfirm(false);
+    setShowRejectDialog(false);
+    setRejectionReason("");
+    setEntryStatus('borrador');
   };
 
   // Verificar si hay cambios sin guardar (comparando contra snapshot inicial)
@@ -410,6 +427,9 @@ export default function JournalEntryDialog({
         updatedBy: entry.modifier?.full_name || null,
         updatedAt: entry.updated_at,
       });
+      
+      // Establecer estado de la partida
+      setEntryStatus((entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus);
 
       // Convertir detalles a formato de líneas
       const lines: DetailLine[] = details.map((d) => ({
@@ -1083,25 +1103,47 @@ export default function JournalEntryDialog({
           )}
 
           {/* Acciones */}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => handleCloseAttempt(false)} disabled={loading}>
-              Cancelar
-            </Button>
-            <Button 
-              variant="secondary" 
-              onClick={() => saveEntry(false)} 
-              disabled={loading}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Guardar Borrador
-            </Button>
-            <Button 
-              onClick={() => saveEntry(true)} 
-              disabled={loading || !isBalanced()}
-            >
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Contabilizar
-            </Button>
+          <div className="flex justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {/* Mostrar estado actual */}
+              {entryToEdit && (
+                <Badge variant={entryStatus === 'contabilizado' ? 'default' : entryStatus === 'rechazado' ? 'destructive' : 'secondary'}>
+                  {entryStatus === 'borrador' && 'Borrador'}
+                  {entryStatus === 'pendiente_revision' && 'Pendiente de Revisión'}
+                  {entryStatus === 'aprobado' && 'Aprobado'}
+                  {entryStatus === 'contabilizado' && 'Contabilizado'}
+                  {entryStatus === 'rechazado' && 'Rechazado'}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleCloseAttempt(false)} disabled={loading}>
+                Cancelar
+              </Button>
+              
+              {/* Botones según permisos y estado */}
+              {entryStatus !== 'contabilizado' && permissions.canCreateEntries && (
+                <Button 
+                  variant="secondary" 
+                  onClick={() => saveEntry(false)} 
+                  disabled={loading}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  Guardar
+                </Button>
+              )}
+              
+              {entryStatus !== 'contabilizado' && permissions.canPostEntries && (
+                <Button 
+                  onClick={() => saveEntry(true)} 
+                  disabled={loading || !isBalanced()}
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Contabilizar
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

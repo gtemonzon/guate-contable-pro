@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import {
   Dialog,
   DialogContent,
@@ -23,10 +24,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RoleSelector, RoleBadge } from "./RoleSelector";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const userFormSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -43,6 +45,11 @@ interface Enterprise {
   business_name: string;
 }
 
+interface EnterpriseRole {
+  enterprise_id: number;
+  role: string;
+}
+
 interface UserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -53,7 +60,7 @@ interface UserDialogProps {
 const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
-  const [selectedEnterprises, setSelectedEnterprises] = useState<number[]>([]);
+  const [enterpriseRoles, setEnterpriseRoles] = useState<EnterpriseRole[]>([]);
   const isEditing = !!user;
 
   const form = useForm<UserFormData>({
@@ -78,9 +85,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           is_active: user.is_active,
           is_admin: user.is_super_admin,
         });
-        setSelectedEnterprises(
-          user.enterprises?.map((e: any) => e.enterprise_id) || []
-        );
+        fetchUserRoles(user.id);
       } else {
         form.reset({
           email: "",
@@ -89,7 +94,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           is_active: true,
           is_admin: false,
         });
-        setSelectedEnterprises([]);
+        setEnterpriseRoles([]);
       }
     }
   }, [open, user]);
@@ -111,16 +116,81 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     }
   };
 
-  const toggleEnterprise = (enterpriseId: number) => {
-    setSelectedEnterprises((prev) =>
-      prev.includes(enterpriseId)
-        ? prev.filter((id) => id !== enterpriseId)
-        : [...prev, enterpriseId]
-    );
+  const fetchUserRoles = async (userId: string) => {
+    try {
+      // Obtener roles de user_roles
+      const { data: rolesData, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("enterprise_id, role")
+        .eq("user_id", userId);
+
+      if (rolesError) throw rolesError;
+
+      // Si no hay roles en user_roles, obtener de tab_user_enterprises para migrar
+      if (!rolesData || rolesData.length === 0) {
+        const { data: enterprisesData, error: entError } = await supabase
+          .from("tab_user_enterprises")
+          .select("enterprise_id, role")
+          .eq("user_id", userId);
+
+        if (entError) throw entError;
+
+        // Mapear roles antiguos a nuevos
+        const mappedRoles = (enterprisesData || []).map(e => ({
+          enterprise_id: e.enterprise_id!,
+          role: mapOldRoleToNew(e.role),
+        }));
+
+        setEnterpriseRoles(mappedRoles);
+      } else {
+        setEnterpriseRoles(
+          rolesData.map(r => ({
+            enterprise_id: r.enterprise_id!,
+            role: r.role as string,
+          }))
+        );
+      }
+    } catch (error: any) {
+      console.error("Error fetching user roles:", error);
+      setEnterpriseRoles([]);
+    }
+  };
+
+  // Mapear roles antiguos a los nuevos
+  const mapOldRoleToNew = (oldRole: string): string => {
+    const roleMap: Record<string, string> = {
+      'admin_empresa': 'enterprise_admin',
+      'usuario_basico': 'auxiliar_contable',
+      'contador': 'contador_senior',
+      'viewer': 'cliente',
+    };
+    return roleMap[oldRole] || 'auxiliar_contable';
+  };
+
+  const updateEnterpriseRole = (enterpriseId: number, role: string) => {
+    setEnterpriseRoles(prev => {
+      const existing = prev.find(r => r.enterprise_id === enterpriseId);
+      if (existing) {
+        if (role === '') {
+          // Remover rol
+          return prev.filter(r => r.enterprise_id !== enterpriseId);
+        }
+        return prev.map(r => 
+          r.enterprise_id === enterpriseId ? { ...r, role } : r
+        );
+      } else if (role !== '') {
+        return [...prev, { enterprise_id: enterpriseId, role }];
+      }
+      return prev;
+    });
+  };
+
+  const getEnterpriseRole = (enterpriseId: number): string => {
+    return enterpriseRoles.find(r => r.enterprise_id === enterpriseId)?.role || '';
   };
 
   const onSubmit = async (data: UserFormData) => {
-    console.log("Formulario enviado:", data, "Empresas seleccionadas:", selectedEnterprises);
+    console.log("Formulario enviado:", data, "Roles por empresa:", enterpriseRoles);
     try {
       setLoading(true);
 
@@ -141,20 +211,19 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
         if (userError) throw userError;
 
-        // Update enterprise assignments - delete old ones first
-        const { error: deleteError } = await supabase
+        // Update tab_user_enterprises (for backward compatibility)
+        const { error: deleteEntError } = await supabase
           .from("tab_user_enterprises")
           .delete()
           .eq("user_id", user.id);
 
-        if (deleteError) throw deleteError;
+        if (deleteEntError) throw deleteEntError;
 
-        // Insert new enterprise assignments
-        if (selectedEnterprises.length > 0) {
-          const enterpriseRelations = selectedEnterprises.map((enterpriseId) => ({
+        if (enterpriseRoles.length > 0) {
+          const enterpriseRelations = enterpriseRoles.map((er) => ({
             user_id: user.id,
-            enterprise_id: enterpriseId,
-            role: data.is_admin ? "admin_empresa" : "usuario_basico",
+            enterprise_id: er.enterprise_id,
+            role: er.role,
           }));
 
           const { error: entError } = await supabase
@@ -162,6 +231,32 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
             .insert(enterpriseRelations);
 
           if (entError) throw entError;
+        }
+
+        // Update user_roles table
+        const { error: deleteRolesError } = await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", user.id);
+
+        if (deleteRolesError) {
+          console.error("Error deleting old roles:", deleteRolesError);
+        }
+
+        if (enterpriseRoles.length > 0) {
+          const roleRecords = enterpriseRoles.map((er) => ({
+            user_id: user.id,
+            enterprise_id: er.enterprise_id,
+            role: er.role as Database['public']['Enums']['app_role'],
+          }));
+
+          const { error: rolesError } = await supabase
+            .from("user_roles")
+            .insert(roleRecords);
+
+          if (rolesError) {
+            console.error("Error inserting roles:", rolesError);
+          }
         }
 
         toast.success("Usuario actualizado correctamente");
@@ -201,11 +296,11 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
         if (userError) throw userError;
 
         // Add enterprise assignments
-        if (selectedEnterprises.length > 0) {
-          const enterpriseRelations = selectedEnterprises.map((enterpriseId) => ({
+        if (enterpriseRoles.length > 0) {
+          const enterpriseRelations = enterpriseRoles.map((er) => ({
             user_id: authData.user.id,
-            enterprise_id: enterpriseId,
-            role: data.is_admin ? "admin_empresa" : "usuario_basico",
+            enterprise_id: er.enterprise_id,
+            role: er.role,
           }));
 
           const { error: entError } = await supabase
@@ -213,6 +308,21 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
             .insert(enterpriseRelations);
 
           if (entError) throw entError;
+
+          // Also insert into user_roles
+          const roleRecords = enterpriseRoles.map((er) => ({
+            user_id: authData.user.id,
+            enterprise_id: er.enterprise_id,
+            role: er.role as Database['public']['Enums']['app_role'],
+          }));
+
+          const { error: rolesError } = await supabase
+            .from("user_roles")
+            .insert(roleRecords);
+
+          if (rolesError) {
+            console.error("Error inserting roles:", rolesError);
+          }
         }
 
         toast.success("Usuario creado correctamente");
@@ -238,8 +348,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Actualiza la información del usuario y sus empresas asignadas"
-              : "Crea un nuevo usuario y asigna las empresas correspondientes"}
+              ? "Actualiza la información del usuario y sus roles por empresa"
+              : "Crea un nuevo usuario y asigna los roles correspondientes"}
           </DialogDescription>
         </DialogHeader>
 
@@ -248,7 +358,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
             <Tabs defaultValue="general" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="general">Información General</TabsTrigger>
-                <TabsTrigger value="empresas">Empresas</TabsTrigger>
+                <TabsTrigger value="empresas">Empresas y Roles</TabsTrigger>
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
@@ -312,10 +422,10 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
-                          Administrador
+                          Super Administrador
                         </FormLabel>
                         <FormDescription>
-                          Los administradores pueden crear empresas y gestionar otros usuarios
+                          Acceso total a todas las empresas y funciones del sistema
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -353,33 +463,43 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
               <TabsContent value="empresas" className="space-y-4">
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">
-                    Selecciona las empresas a las que tendrá acceso este usuario
+                    Asigna un rol específico para cada empresa. El rol determina los permisos del usuario en esa empresa.
                   </p>
+                  
                   {enterprises.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground py-4 text-center">
                       No hay empresas disponibles
                     </p>
                   ) : (
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {enterprises.map((enterprise) => (
-                        <div
-                          key={enterprise.id}
-                          className="flex items-center space-x-2 rounded-lg border p-3"
-                        >
-                          <Checkbox
-                            id={`enterprise-${enterprise.id}`}
-                            checked={selectedEnterprises.includes(enterprise.id)}
-                            onCheckedChange={() => toggleEnterprise(enterprise.id)}
-                          />
-                          <label
-                            htmlFor={`enterprise-${enterprise.id}`}
-                            className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    <ScrollArea className="h-[400px] pr-4">
+                      <div className="space-y-3">
+                        {enterprises.map((enterprise) => (
+                          <div
+                            key={enterprise.id}
+                            className="flex items-center gap-4 rounded-lg border p-4"
                           >
-                            {enterprise.business_name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">
+                                {enterprise.business_name}
+                              </p>
+                              <div className="mt-1">
+                                {getEnterpriseRole(enterprise.id) ? (
+                                  <RoleBadge role={getEnterpriseRole(enterprise.id)} />
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Sin acceso</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="w-[200px]">
+                              <RoleSelector
+                                value={getEnterpriseRole(enterprise.id)}
+                                onChange={(role) => updateEnterpriseRole(enterprise.id, role)}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   )}
                 </div>
               </TabsContent>
