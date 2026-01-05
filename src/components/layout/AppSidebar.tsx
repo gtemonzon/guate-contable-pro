@@ -11,34 +11,50 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useMemo } from "react";
 
-const menuItems = [
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  requiredPermission?: keyof ReturnType<typeof useUserPermissions>;
+}
+
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+}
+
+type MenuItemOrSection = MenuItem | MenuSection;
+
+const allMenuItems: MenuItemOrSection[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   {
     title: "Contabilidad",
     items: [
-      { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen },
-      { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText },
-      { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart },
-      { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote },
-      { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt },
-      { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator },
+      { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen, requiredPermission: "canViewAccounts" },
+      { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText, requiredPermission: "canViewAccounts" },
+      { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart, requiredPermission: "canViewAccounts" },
+      { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote, requiredPermission: "canBankReconciliation" },
+      { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
+      { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
     ],
   },
   {
     title: "Consultas",
     items: [
-      { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart },
-      { title: "Mayor General", url: "/mayor", icon: BookOpen },
-      { title: "Reportes", url: "/reportes", icon: FileBarChart },
+      { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
+      { title: "Mayor General", url: "/mayor", icon: BookOpen, requiredPermission: "canViewReports" },
+      { title: "Reportes", url: "/reportes", icon: FileBarChart, requiredPermission: "canViewReports" },
     ],
   },
   {
     title: "Administración",
     items: [
-      { title: "Usuarios", url: "/usuarios", icon: Users },
-      { title: "Empresas", url: "/empresas", icon: Building2 },
-      { title: "Configuración", url: "/configuracion", icon: Settings },
+      { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers" },
+      { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
+      { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
       { title: "Ayuda", url: "/ayuda", icon: HelpCircle },
     ],
   },
@@ -47,11 +63,43 @@ const menuItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const permissions = useUserPermissions();
+
+  // Filtrar menú basado en permisos
+  const filteredMenuItems = useMemo(() => {
+    if (permissions.isLoading) return allMenuItems;
+
+    return allMenuItems
+      .map((item) => {
+        if ("items" in item) {
+          // Es una sección con subitems
+          const filteredItems = item.items.filter((subItem) => {
+            if (!subItem.requiredPermission) return true;
+            return permissions[subItem.requiredPermission] === true;
+          });
+
+          if (filteredItems.length === 0) return null;
+
+          return {
+            ...item,
+            items: filteredItems,
+          };
+        }
+
+        // Es un item individual
+        if (item.requiredPermission && permissions[item.requiredPermission] !== true) {
+          return null;
+        }
+
+        return item;
+      })
+      .filter(Boolean) as MenuItemOrSection[];
+  }, [permissions]);
 
   return (
     <Sidebar collapsible="icon" className="border-r [&_*]:text-sidebar-foreground">
       <SidebarContent>
-        {menuItems.map((section, idx) => {
+        {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
             return (
               <SidebarGroup key={idx}>

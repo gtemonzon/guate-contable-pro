@@ -6,6 +6,7 @@ import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalE
 import { EnterpriseAccountsManager } from "@/components/configuracion/EnterpriseAccountsManager";
 import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
 import { EnterpriseTaxConfigManager } from "@/components/configuracion/EnterpriseTaxConfigManager";
+import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix";
 
 export default function Configuracion() {
   return (
@@ -25,6 +26,7 @@ export default function Configuracion() {
           <TabsTrigger value="operation-types">Tipos de Operaciones</TabsTrigger>
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
+          <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="enterprise-accounts" className="mt-6">
@@ -79,6 +81,10 @@ export default function Configuracion() {
               <JournalEntryPrefixesManager />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="permissions" className="mt-6">
+          <PermissionsMatrix />
         </TabsContent>
       </Tabs>
     </div>
