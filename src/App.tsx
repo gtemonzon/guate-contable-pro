@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import Reportes from "./pages/Reportes";
 import Configuracion from "./pages/Configuracion";
 import Ayuda from "./pages/Ayuda";
+import Notificaciones from "./pages/Notificaciones";
 
 const queryClient = new QueryClient();
 
@@ -54,6 +55,7 @@ const App = () => (
             <Route path="/reportes" element={<Reportes />} />
             <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/importar" element={<div>Importación (próximamente)</div>} />
+            <Route path="/notificaciones" element={<Notificaciones />} />
             <Route path="/ayuda" element={<Ayuda />} />
           </Route>
           

@@ -134,6 +134,44 @@ export type Database = {
           },
         ]
       }
+      tab_alert_config: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          days_before: number | null
+          enterprise_id: number | null
+          id: number
+          is_enabled: boolean | null
+          send_email: boolean | null
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string | null
+          days_before?: number | null
+          enterprise_id?: number | null
+          id?: never
+          is_enabled?: boolean | null
+          send_email?: boolean | null
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          days_before?: number | null
+          enterprise_id?: number | null
+          id?: never
+          is_enabled?: boolean | null
+          send_email?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_alert_config_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_audit_log: {
         Row: {
           action: string
@@ -451,6 +489,50 @@ export type Database = {
           symbol?: string
         }
         Relationships: []
+      }
+      tab_custom_reminders: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          enterprise_id: number | null
+          id: number
+          is_completed: boolean | null
+          priority: string | null
+          reminder_date: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          id?: never
+          is_completed?: boolean | null
+          priority?: string | null
+          reminder_date: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          id?: never
+          is_completed?: boolean | null
+          priority?: string | null
+          reminder_date?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_custom_reminders_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_enterprise_config: {
         Row: {
@@ -792,6 +874,41 @@ export type Database = {
           },
         ]
       }
+      tab_holidays: {
+        Row: {
+          created_at: string | null
+          description: string
+          enterprise_id: number | null
+          holiday_date: string
+          id: number
+          is_recurring: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          enterprise_id?: number | null
+          holiday_date: string
+          id?: never
+          is_recurring?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          enterprise_id?: number | null
+          holiday_date?: string
+          id?: never
+          is_recurring?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_holidays_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_import_logs: {
         Row: {
           created_at: string | null
@@ -1046,6 +1163,59 @@ export type Database = {
           prefix?: string
         }
         Relationships: []
+      }
+      tab_notifications: {
+        Row: {
+          action_url: string | null
+          created_at: string | null
+          description: string | null
+          enterprise_id: number | null
+          event_date: string | null
+          id: number
+          is_read: boolean | null
+          notification_type: string
+          priority: string
+          read_at: string | null
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          action_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          event_date?: string | null
+          id?: never
+          is_read?: boolean | null
+          notification_type: string
+          priority?: string
+          read_at?: string | null
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          action_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          enterprise_id?: number | null
+          event_date?: string | null
+          id?: never
+          is_read?: boolean | null
+          notification_type?: string
+          priority?: string
+          read_at?: string | null
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_notifications_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_operation_types: {
         Row: {
@@ -1382,6 +1552,56 @@ export type Database = {
             columns: ["operation_type_id"]
             isOneToOne: false
             referencedRelation: "tab_operation_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_tax_due_date_config: {
+        Row: {
+          calculation_type: string
+          consider_holidays: boolean | null
+          created_at: string | null
+          days_value: number | null
+          display_order: number | null
+          enterprise_id: number | null
+          id: number
+          is_active: boolean | null
+          reference_period: string
+          tax_label: string
+          tax_type: string
+        }
+        Insert: {
+          calculation_type: string
+          consider_holidays?: boolean | null
+          created_at?: string | null
+          days_value?: number | null
+          display_order?: number | null
+          enterprise_id?: number | null
+          id?: never
+          is_active?: boolean | null
+          reference_period?: string
+          tax_label: string
+          tax_type: string
+        }
+        Update: {
+          calculation_type?: string
+          consider_holidays?: boolean | null
+          created_at?: string | null
+          days_value?: number | null
+          display_order?: number | null
+          enterprise_id?: number | null
+          id?: never
+          is_active?: boolean | null
+          reference_period?: string
+          tax_label?: string
+          tax_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_tax_due_date_config_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
             referencedColumns: ["id"]
           },
         ]

@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { DashboardAlerts } from "@/components/dashboard/DashboardAlerts";
 
 interface BookSummary {
   month: number;
@@ -614,6 +615,8 @@ const Dashboard = () => {
     { id: 1, number: "-", date: "-", description: "No hay partidas registradas", amount: "Q 0.00" }
   ];
 
+  const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+
   return (
     <div className="space-y-6">
       <div>
@@ -622,6 +625,9 @@ const Dashboard = () => {
           Resumen general de tu información contable
         </p>
       </div>
+
+      {/* Alerts Section */}
+      <DashboardAlerts enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
 
       {/* KPIs Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
