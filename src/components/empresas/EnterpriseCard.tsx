@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -47,6 +47,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [documentsCount, setDocumentsCount] = useState(0);
   const [activePeriod, setActivePeriod] = useState<any>(null);
+  const [activeTaxes, setActiveTaxes] = useState<string[]>([]);
 
   useEffect(() => {
     const checkSelection = () => {
@@ -106,8 +107,24 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     }
   };
 
+  const fetchActiveTaxes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tab_tax_due_date_config')
+        .select('tax_label')
+        .eq('enterprise_id', enterprise.id)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      setActiveTaxes(data?.map(t => t.tax_label) || []);
+    } catch (error) {
+      console.error('Error fetching active taxes:', error);
+    }
+  };
+
   useEffect(() => {
     fetchDocumentsCount();
+    fetchActiveTaxes();
   }, [enterprise.id]);
 
   const fetchActivePeriod = async () => {
@@ -293,6 +310,23 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
             <span className="text-muted-foreground">Moneda:</span>
             <span className="font-medium">{enterprise.base_currency_code}</span>
           </div>
+          {activeTaxes.length > 0 && (
+            <div className="flex items-start gap-2 text-sm pt-2">
+              <Receipt className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="flex flex-wrap gap-1">
+                {activeTaxes.slice(0, 3).map((tax) => (
+                  <Badge key={tax} variant="outline" className="text-xs">
+                    {tax.replace(' Mensual', '').replace(' Trimestral', '').replace(' Anual', '')}
+                  </Badge>
+                ))}
+                {activeTaxes.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{activeTaxes.length - 3}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {(enterprise.email || enterprise.phone || enterprise.address) && (
