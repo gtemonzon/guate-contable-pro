@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BadgeCheck, Building2, Calendar, Landmark } from "lucide-react";
+import { BadgeCheck, Building2, Calendar, Landmark, Upload } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
@@ -39,6 +40,7 @@ const ConciliacionBancaria = () => {
   const [notes, setNotes] = useState<string>("");
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
   const [selectedEnterprise, setSelectedEnterprise] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const months = [
     { value: "1", label: "Enero" },
@@ -407,12 +409,29 @@ const ConciliacionBancaria = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Conciliación Bancaria</h1>
-        <p className="text-muted-foreground">
-          Concilia los movimientos bancarios con el estado de cuenta
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Conciliación Bancaria</h1>
+          <p className="text-muted-foreground">
+            Concilia los movimientos bancarios con el estado de cuenta
+          </p>
+        </div>
+        <Button onClick={() => setImportDialogOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Importar Extracto
+        </Button>
       </div>
+
+      <ImportBankStatementDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        enterpriseId={selectedEnterprise || ""}
+        onImportSuccess={() => {
+          if (selectedAccount && selectedMonth && selectedYear) {
+            fetchMovements();
+          }
+        }}
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

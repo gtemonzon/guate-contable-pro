@@ -246,6 +246,54 @@ export type Database = {
           },
         ]
       }
+      tab_bank_import_templates: {
+        Row: {
+          bank_account_id: number | null
+          column_mapping: Json
+          created_at: string
+          enterprise_id: number
+          header_row: number | null
+          id: number
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          bank_account_id?: number | null
+          column_mapping: Json
+          created_at?: string
+          enterprise_id: number
+          header_row?: number | null
+          id?: never
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          bank_account_id?: number | null
+          column_mapping?: Json
+          created_at?: string
+          enterprise_id?: number
+          header_row?: number | null
+          id?: never
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_bank_import_templates_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_bank_import_templates_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_bank_movements: {
         Row: {
           balance: number | null
@@ -254,6 +302,7 @@ export type Database = {
           credit_amount: number | null
           debit_amount: number | null
           description: string
+          enterprise_id: number | null
           id: number
           is_reconciled: boolean | null
           journal_entry_id: number | null
@@ -268,6 +317,7 @@ export type Database = {
           credit_amount?: number | null
           debit_amount?: number | null
           description: string
+          enterprise_id?: number | null
           id?: number
           is_reconciled?: boolean | null
           journal_entry_id?: number | null
@@ -282,6 +332,7 @@ export type Database = {
           credit_amount?: number | null
           debit_amount?: number | null
           description?: string
+          enterprise_id?: number | null
           id?: number
           is_reconciled?: boolean | null
           journal_entry_id?: number | null
@@ -295,6 +346,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "tab_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_bank_movements_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
             referencedColumns: ["id"]
           },
           {
