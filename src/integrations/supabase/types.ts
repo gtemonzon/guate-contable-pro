@@ -1438,6 +1438,44 @@ export type Database = {
           },
         ]
       }
+      tab_role_permissions: {
+        Row: {
+          created_at: string | null
+          enterprise_id: number | null
+          id: number
+          is_enabled: boolean | null
+          permission_key: string
+          role_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enterprise_id?: number | null
+          id?: never
+          is_enabled?: boolean | null
+          permission_key: string
+          role_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enterprise_id?: number | null
+          id?: never
+          is_enabled?: boolean | null
+          permission_key?: string
+          role_name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_role_permissions_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_sales_ledger: {
         Row: {
           accounting_period_id: number | null
@@ -1820,6 +1858,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      initialize_default_permissions: {
+        Args: { p_enterprise_id: number }
+        Returns: undefined
       }
       is_admin_for_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }

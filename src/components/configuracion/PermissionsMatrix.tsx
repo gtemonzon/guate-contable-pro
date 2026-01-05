@@ -1,177 +1,227 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Check, X, AlertCircle, RotateCcw, Loader2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Permission {
-  name: string;
-  category: string;
-  administrador: boolean;
-  contadorSenior: boolean;
-  auxiliarContable: boolean | 'partial';
-  cliente: boolean;
-}
-
-const permissions: Permission[] = [
-  // Administración
-  { name: "Gestionar Usuarios", category: "Administración", administrador: true, contadorSenior: false, auxiliarContable: false, cliente: false },
-  { name: "Gestionar Empresas", category: "Administración", administrador: true, contadorSenior: false, auxiliarContable: false, cliente: false },
-  { name: "Configuración del Sistema", category: "Administración", administrador: true, contadorSenior: false, auxiliarContable: false, cliente: false },
-  
-  // Catálogo de Cuentas
-  { name: "Ver Catálogo de Cuentas", category: "Catálogo de Cuentas", administrador: true, contadorSenior: true, auxiliarContable: true, cliente: true },
-  { name: "Editar Catálogo de Cuentas", category: "Catálogo de Cuentas", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  
-  // Partidas Contables
-  { name: "Crear Partidas", category: "Partidas Contables", administrador: true, contadorSenior: true, auxiliarContable: 'partial', cliente: false },
-  { name: "Aprobar Partidas", category: "Partidas Contables", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  { name: "Contabilizar Partidas", category: "Partidas Contables", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  
-  // Compras y Ventas
-  { name: "Importar Compras/Ventas", category: "Compras y Ventas", administrador: true, contadorSenior: true, auxiliarContable: true, cliente: false },
-  { name: "Ver Compras/Ventas", category: "Compras y Ventas", administrador: true, contadorSenior: true, auxiliarContable: true, cliente: true },
-  
-  // Otras Operaciones
-  { name: "Conciliación Bancaria", category: "Operaciones", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  { name: "Formularios de Impuestos", category: "Operaciones", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  { name: "Generar Declaraciones", category: "Operaciones", administrador: true, contadorSenior: true, auxiliarContable: false, cliente: false },
-  
-  // Reportes
-  { name: "Ver Reportes", category: "Reportes", administrador: true, contadorSenior: true, auxiliarContable: true, cliente: true },
-  { name: "Exportar Reportes", category: "Reportes", administrador: true, contadorSenior: true, auxiliarContable: true, cliente: true },
-];
-
-const PermissionIcon = ({ value }: { value: boolean | 'partial' }) => {
-  if (value === 'partial') {
-    return (
-      <div className="flex items-center justify-center">
-        <AlertCircle className="h-4 w-4 text-amber-500" />
-      </div>
-    );
-  }
-  
-  return value ? (
-    <div className="flex items-center justify-center">
-      <Check className="h-4 w-4 text-green-500" />
-    </div>
-  ) : (
-    <div className="flex items-center justify-center">
-      <X className="h-4 w-4 text-muted-foreground/50" />
-    </div>
-  );
-};
+import { 
+  useRolePermissions, 
+  PERMISSION_DEFINITIONS, 
+  AVAILABLE_ROLES_CONFIG 
+} from "@/hooks/useRolePermissions";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function PermissionsMatrix() {
+  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
+  const userPerms = useUserPermissions();
+  const canEdit = userPerms.isSuperAdmin || userPerms.canManageUsers;
+
+  useEffect(() => {
+    const storedId = localStorage.getItem("currentEnterpriseId");
+    if (storedId) {
+      setEnterpriseId(parseInt(storedId));
+    }
+  }, []);
+
+  const { 
+    isLoading, 
+    isSaving,
+    updatePermission, 
+    getPermissionValue,
+    resetToDefaults 
+  } = useRolePermissions(enterpriseId);
+
   // Agrupar permisos por categoría
-  const groupedPermissions = permissions.reduce((acc, permission) => {
+  const groupedPermissions = PERMISSION_DEFINITIONS.reduce((acc, permission) => {
     if (!acc[permission.category]) {
       acc[permission.category] = [];
     }
     acc[permission.category].push(permission);
     return acc;
-  }, {} as Record<string, Permission[]>);
+  }, {} as Record<string, typeof PERMISSION_DEFINITIONS>);
+
+  const handleToggle = async (roleName: string, permissionKey: string) => {
+    if (!canEdit) return;
+    const currentValue = getPermissionValue(roleName, permissionKey);
+    await updatePermission(roleName, permissionKey, !currentValue);
+  };
+
+  if (!enterpriseId) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-center text-muted-foreground">
+            Seleccione una empresa para configurar los permisos
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Matriz de Permisos</CardTitle>
-        <CardDescription>
-          Vista detallada de los permisos asignados a cada rol del sistema
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              Matriz de Permisos
+              {!canEdit && <Lock className="h-4 w-4 text-muted-foreground" />}
+            </CardTitle>
+            <CardDescription>
+              {canEdit 
+                ? "Configure los permisos de cada rol para esta empresa" 
+                : "Vista de permisos asignados a cada rol (solo lectura)"
+              }
+            </CardDescription>
+          </div>
+          {canEdit && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isSaving}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Restaurar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Restaurar permisos por defecto?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esto eliminará todas las personalizaciones y restaurará los permisos 
+                    a sus valores originales. Esta acción no se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={resetToDefaults}>
+                    Restaurar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {/* Leyenda */}
         <div className="flex flex-wrap gap-4 mb-6 p-4 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-2">
-            <Check className="h-4 w-4 text-green-500" />
+            <div className="h-5 w-9 rounded-full bg-primary" />
             <span className="text-sm">Permitido</span>
           </div>
           <div className="flex items-center gap-2">
-            <X className="h-4 w-4 text-muted-foreground/50" />
+            <div className="h-5 w-9 rounded-full bg-muted border" />
             <span className="text-sm">No permitido</span>
           </div>
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <span className="text-sm">Parcial (requiere aprobación)</span>
-          </div>
+          {isSaving && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Guardando...</span>
+            </div>
+          )}
         </div>
 
         {/* Roles */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="p-3 rounded-lg border bg-primary/5 border-primary/20">
-            <Badge variant="default" className="mb-2">Administrador</Badge>
-            <p className="text-xs text-muted-foreground">Acceso total al sistema</p>
-          </div>
-          <div className="p-3 rounded-lg border bg-blue-500/5 border-blue-500/20">
-            <Badge className="mb-2 bg-blue-500">Contador Senior</Badge>
-            <p className="text-xs text-muted-foreground">Contabilizar, aprobar partidas, generar declaraciones</p>
-          </div>
-          <div className="p-3 rounded-lg border bg-amber-500/5 border-amber-500/20">
-            <Badge className="mb-2 bg-amber-500">Auxiliar Contable</Badge>
-            <p className="text-xs text-muted-foreground">Crear partidas en borrador, importar datos</p>
-          </div>
-          <div className="p-3 rounded-lg border bg-slate-500/5 border-slate-500/20">
-            <Badge variant="secondary" className="mb-2">Cliente</Badge>
-            <p className="text-xs text-muted-foreground">Solo lectura de reportes</p>
-          </div>
+          {AVAILABLE_ROLES_CONFIG.map((role) => (
+            <div 
+              key={role.value}
+              className={cn(
+                "p-3 rounded-lg border",
+                role.value === 'enterprise_admin' && "bg-primary/5 border-primary/20",
+                role.value === 'contador_senior' && "bg-blue-500/5 border-blue-500/20",
+                role.value === 'auxiliar_contable' && "bg-amber-500/5 border-amber-500/20",
+                role.value === 'cliente' && "bg-slate-500/5 border-slate-500/20"
+              )}
+            >
+              <Badge className={cn("mb-2", role.color)}>{role.label}</Badge>
+              <p className="text-xs text-muted-foreground">
+                {role.value === 'enterprise_admin' && "Acceso total a la empresa"}
+                {role.value === 'contador_senior' && "Contabilizar, aprobar partidas, generar declaraciones"}
+                {role.value === 'auxiliar_contable' && "Crear partidas en borrador, importar datos"}
+                {role.value === 'cliente' && "Solo lectura de reportes"}
+              </p>
+            </div>
+          ))}
         </div>
 
         {/* Tabla de permisos */}
-        <div className="border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-[250px]">Permiso</TableHead>
-                <TableHead className="text-center w-[120px]">
-                  <Badge variant="default" className="font-normal">Admin</Badge>
-                </TableHead>
-                <TableHead className="text-center w-[120px]">
-                  <Badge className="bg-blue-500 font-normal">Contador</Badge>
-                </TableHead>
-                <TableHead className="text-center w-[120px]">
-                  <Badge className="bg-amber-500 font-normal">Auxiliar</Badge>
-                </TableHead>
-                <TableHead className="text-center w-[120px]">
-                  <Badge variant="secondary" className="font-normal">Cliente</Badge>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(groupedPermissions).map(([category, perms]) => (
-                <>
-                  <TableRow key={category} className="bg-muted/30">
-                    <TableCell colSpan={5} className="font-semibold text-sm py-2">
-                      {category}
-                    </TableCell>
-                  </TableRow>
-                  {perms.map((permission, idx) => (
-                    <TableRow 
-                      key={`${category}-${idx}`}
-                      className={cn(idx % 2 === 0 ? "bg-background" : "bg-muted/10")}
-                    >
-                      <TableCell className="text-sm pl-6">{permission.name}</TableCell>
-                      <TableCell className="text-center">
-                        <PermissionIcon value={permission.administrador} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <PermissionIcon value={permission.contadorSenior} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <PermissionIcon value={permission.auxiliarContable} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <PermissionIcon value={permission.cliente} />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-[250px]">Permiso</TableHead>
+                  {AVAILABLE_ROLES_CONFIG.map((role) => (
+                    <TableHead key={role.value} className="text-center w-[120px]">
+                      <Badge className={cn("font-normal", role.color)}>
+                        {role.label.split(' ')[0]}
+                      </Badge>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(groupedPermissions).map(([category, perms]) => (
+                  <>
+                    <TableRow key={category} className="bg-muted/30">
+                      <TableCell colSpan={5} className="font-semibold text-sm py-2">
+                        {category}
                       </TableCell>
                     </TableRow>
-                  ))}
-                </>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                    {perms.map((permission, idx) => (
+                      <TableRow 
+                        key={`${category}-${permission.key}`}
+                        className={cn(idx % 2 === 0 ? "bg-background" : "bg-muted/10")}
+                      >
+                        <TableCell className="text-sm pl-6">
+                          <div>
+                            <span>{permission.name}</span>
+                            {permission.description && (
+                              <p className="text-xs text-muted-foreground">
+                                {permission.description}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        {AVAILABLE_ROLES_CONFIG.map((role) => (
+                          <TableCell key={role.value} className="text-center">
+                            <div className="flex justify-center">
+                              <Switch
+                                checked={getPermissionValue(role.value, permission.key)}
+                                onCheckedChange={() => handleToggle(role.value, permission.key)}
+                                disabled={!canEdit || isSaving}
+                                className="data-[state=checked]:bg-primary"
+                              />
+                            </div>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
-        {/* Notas */}
+        {/* Nota informativa */}
         <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
           <h4 className="font-medium text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
             <AlertCircle className="h-4 w-4" />
@@ -183,6 +233,15 @@ export function PermissionsMatrix() {
             y deben ser aprobadas por un Contador Senior o Administrador antes de poder contabilizarse.
           </p>
         </div>
+
+        {!canEdit && (
+          <div className="mt-4 p-4 bg-muted/50 border rounded-lg">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Lock className="h-4 w-4" />
+              Solo los administradores pueden modificar los permisos de roles.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
