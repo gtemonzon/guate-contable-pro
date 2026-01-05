@@ -188,6 +188,11 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
         description: "Los impuestos de la empresa se actualizaron correctamente",
       });
 
+      // Dispatch event for EnterpriseCard to refresh
+      window.dispatchEvent(new CustomEvent("taxesChanged", {
+        detail: { enterpriseId }
+      }));
+
       // Refetch to get the new IDs
       fetchTaxConfigs();
     } catch (error: any) {
