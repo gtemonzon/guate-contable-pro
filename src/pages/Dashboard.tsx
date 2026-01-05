@@ -397,11 +397,12 @@ const Dashboard = () => {
           }
         }
 
-        // Fetch sales data
+        // Fetch sales data (excluding annulled invoices)
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date, net_amount, vat_amount, total_amount")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("is_annulled", false)
           .order("invoice_date", { ascending: false })
           .limit(500);
 
@@ -524,11 +525,12 @@ const Dashboard = () => {
         const initializeMonthlyData = (): MonthlyChartData[] => 
           monthNames.map((month, index) => ({ month, monthNum: index + 1, total: 0 }));
 
-        // Fetch ventas del año del período contable
+        // Fetch ventas del año del período contable (excluding annulled invoices)
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date, total_amount")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("is_annulled", false)
           .gte("invoice_date", `${activeYear}-01-01`)
           .lte("invoice_date", `${activeYear}-12-31`);
 
