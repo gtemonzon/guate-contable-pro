@@ -2,6 +2,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { AVAILABLE_ROLES } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface RoleSelectorProps {
   value: string;
@@ -18,34 +20,53 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export function RoleSelector({ value, onChange, disabled, className }: RoleSelectorProps) {
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange('');
+  };
+
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={cn("w-full", className)}>
-        <SelectValue placeholder="Seleccionar rol">
-          {value && (
-            <div className="flex items-center gap-2">
-              <Badge className={cn("text-xs", ROLE_COLORS[value] || 'bg-muted')}>
-                {AVAILABLE_ROLES.find(r => r.value === value)?.label || value}
-              </Badge>
-            </div>
-          )}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {AVAILABLE_ROLES.map((role) => (
-          <SelectItem key={role.value} value={role.value}>
-            <div className="flex flex-col gap-0.5">
+    <div className="flex items-center gap-1">
+      <Select value={value || ""} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger className={cn("w-full", className)}>
+          <SelectValue placeholder="Seleccionar rol">
+            {value && (
               <div className="flex items-center gap-2">
-                <Badge className={cn("text-xs", ROLE_COLORS[role.value])}>
-                  {role.label}
+                <Badge className={cn("text-xs", ROLE_COLORS[value] || 'bg-muted')}>
+                  {AVAILABLE_ROLES.find(r => r.value === value)?.label || value}
                 </Badge>
               </div>
-              <span className="text-xs text-muted-foreground">{role.description}</span>
-            </div>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {AVAILABLE_ROLES.map((role) => (
+            <SelectItem key={role.value} value={role.value}>
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("text-xs", ROLE_COLORS[role.value])}>
+                    {role.label}
+                  </Badge>
+                </div>
+                <span className="text-xs text-muted-foreground">{role.description}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value && !disabled && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={handleClear}
+          title="Quitar acceso"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
   );
 }
 
