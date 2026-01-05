@@ -79,16 +79,26 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
+    // Listen for tax configuration changes
+    const handleTaxesChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.enterpriseId === enterprise.id) {
+        fetchActiveTaxes();
+      }
+    };
+
     window.addEventListener("storage", handleEnterpriseChange);
     window.addEventListener("enterpriseChanged", handleEnterpriseChange);
     window.addEventListener("periodChanged", handlePeriodChange);
     window.addEventListener("documentsChanged", handleDocumentsChange);
+    window.addEventListener("taxesChanged", handleTaxesChange);
 
     return () => {
       window.removeEventListener("storage", handleEnterpriseChange);
       window.removeEventListener("enterpriseChanged", handleEnterpriseChange);
       window.removeEventListener("periodChanged", handlePeriodChange);
       window.removeEventListener("documentsChanged", handleDocumentsChange);
+      window.removeEventListener("taxesChanged", handleTaxesChange);
     };
   }, [enterprise.id]);
 
