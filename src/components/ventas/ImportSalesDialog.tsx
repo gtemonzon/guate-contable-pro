@@ -101,55 +101,93 @@ async function findAccountingPeriod(
   return period;
 }
 
-// Check if invoice already exists in database
+// Check if invoice already exists in database (must match unique index: tipo + serie + numero + mes + año + empresa)
+function buildSaleUniqueKey(input: {
+  fel_document_type: string;
+  invoice_series: string;
+  invoice_number: string;
+  invoice_date: string; // YYYY-MM-DD
+}): string {
+  const [year, month] = input.invoice_date.split("-");
+  return [
+    (input.fel_document_type || "").trim(),
+    (input.invoice_series || "").trim(),
+    (input.invoice_number || "").trim(),
+    month,
+    year,
+  ].join("|");
+}
+
 async function checkDuplicates(
   enterpriseId: number,
-  records: Array<{ authorization_number: string; invoice_series: string; invoice_number: string }>
+  records: Array<{
+    invoice_date: string;
+    fel_document_type: string;
+    invoice_series: string;
+    invoice_number: string;
+  }>
 ): Promise<Set<string>> {
   const duplicateKeys = new Set<string>();
-  
-  // Get all authorization numbers to check
-  const authNumbers = records.map(r => r.authorization_number).filter(Boolean);
-  
-  if (authNumbers.length === 0) return duplicateKeys;
-  
-  // Query existing records by authorization_number
+
+  if (records.length === 0) return duplicateKeys;
+
+  const invoiceNumbers = Array.from(new Set(records.map((r) => r.invoice_number).filter(Boolean)));
+  const docTypes = Array.from(new Set(records.map((r) => r.fel_document_type).filter(Boolean)));
+  const minDate = records.reduce(
+    (min, r) => (!min || r.invoice_date < min ? r.invoice_date : min),
+    ""
+  );
+  const maxDate = records.reduce(
+    (max, r) => (!max || r.invoice_date > max ? r.invoice_date : max),
+    ""
+  );
+
+  if (!minDate || !maxDate || invoiceNumbers.length === 0) return duplicateKeys;
+
+  // NOTE: We query by enterprise + date range + invoice_number + doc type.
+  // Series is checked client-side because the DB uniqueness uses COALESCE(invoice_series,'').
   const { data: existing, error } = await supabase
     .from("tab_sales_ledger")
-    .select("authorization_number, invoice_series, invoice_number")
+    .select("fel_document_type, invoice_series, invoice_number, invoice_date")
     .eq("enterprise_id", enterpriseId)
-    .in("authorization_number", authNumbers);
-  
+    .gte("invoice_date", minDate)
+    .lte("invoice_date", maxDate)
+    .in("invoice_number", invoiceNumbers)
+    .in("fel_document_type", docTypes);
+
   if (error) {
     console.error("Error checking duplicates:", error);
     return duplicateKeys;
   }
-  
-  // Build set of existing keys
+
   for (const row of existing || []) {
-    // Use authorization_number as primary key for duplicates
-    duplicateKeys.add(row.authorization_number);
-    // Also add serie+numero combination
-    duplicateKeys.add(`${row.invoice_series || ""}-${row.invoice_number}`);
+    duplicateKeys.add(
+      buildSaleUniqueKey({
+        fel_document_type: row.fel_document_type,
+        invoice_series: row.invoice_series || "",
+        invoice_number: row.invoice_number,
+        invoice_date: row.invoice_date,
+      })
+    );
   }
-  
+
   return duplicateKeys;
 }
 
 // Parse file (CSV or Excel) and return rows as 2D array
 async function parseFile(file: File): Promise<any[][]> {
   const extension = file.name.split(".").pop()?.toLowerCase();
-  
+
   if (extension === "xls" || extension === "xlsx") {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false }) as any[][];
-    return data.filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ""));
+    return data.filter((row) => row.some((cell) => cell !== undefined && cell !== null && cell !== ""));
   } else {
     const text = await file.text();
-    const lines = text.split("\n").filter(line => line.trim());
-    return lines.map(line => parseCSVLine(line));
+    const lines = text.split("\n").filter((line) => line.trim());
+    return lines.map((line) => parseCSVLine(line));
   }
 }
 
@@ -158,20 +196,20 @@ function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
-  
+
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    
+
     if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === "," && !inQuotes) {
       result.push(current.trim());
       current = "";
     } else {
       current += char;
     }
   }
-  
+
   result.push(current.trim());
   return result;
 }
@@ -190,14 +228,21 @@ export function ImportSalesDialog({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState<string>("");
-  
+
   // Options for bulk assignment - shown in summary view
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
   const [selectedIncomeAccount, setSelectedIncomeAccount] = useState<number | null>(null);
   const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
 
   const { isDragging, dragProps } = useFileDrop({
-    accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    accept: [
+      ".csv",
+      ".xls",
+      ".xlsx",
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
     onFile: (file) => handleValidate(file),
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
     disabled: dialogState !== "initial",
@@ -230,10 +275,12 @@ export function ImportSalesDialog({
       "Nombre completo del receptor",
       "Gran Total (Moneda Original)",
       "IVA (monto de este impuesto)",
-      "Marca de anulado"
+      "Marca de anulado",
     ];
 
-    const csvContent = headers.join(",") + "\n" +
+    const csvContent =
+      headers.join(",") +
+      "\n" +
       "15/01/2025,ABC123456789,FACT,A,12345,12345678,Cliente Ejemplo S.A.,112.00,12.00,No\n" +
       "20/02/2025,DEF987654321,FACT,B,67890,87654321,Otro Cliente S.A.,224.00,24.00,No";
 
@@ -259,21 +306,21 @@ export function ImportSalesDialog({
 
     try {
       const rows = await parseFile(file);
-      
+
       if (rows.length < 2) {
         throw new Error("El archivo está vacío o no tiene datos");
       }
 
       // Parse headers
-      const rawHeaders = rows[0].map(h => String(h || "").trim());
+      const rawHeaders = rows[0].map((h) => String(h || "").trim());
       const normalizedHeaders = rawHeaders.map(normalizeHeader);
-      
+
       // Detect if SAT format
       const useSATFormat = isSATFormat(rawHeaders);
-      
+
       // Get column indices based on format
       let colIndices: Record<string, number>;
-      
+
       if (useSATFormat) {
         colIndices = {
           fecha: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.fecha),
@@ -292,11 +339,16 @@ export function ImportSalesDialog({
         // Validate enterprise NIT from file matches active enterprise
         if (enterpriseNit && colIndices.nit_emisor !== -1 && rows.length > 1) {
           const firstDataRow = rows[1];
-          const fileNitEmisor = sanitizeCSVField(String(firstDataRow[colIndices.nit_emisor] || "")).replace(/[-\s]/g, "");
+          const fileNitEmisor = sanitizeCSVField(String(firstDataRow[colIndices.nit_emisor] || "")).replace(
+            /[-\s]/g,
+            ""
+          );
           const cleanEnterpriseNit = enterpriseNit.replace(/[-\s]/g, "");
-          
+
           if (fileNitEmisor && fileNitEmisor !== cleanEnterpriseNit) {
-            throw new Error(`El NIT del emisor en el archivo (${fileNitEmisor}) no coincide con el NIT de la empresa activa (${cleanEnterpriseNit}). Asegúrese de seleccionar la empresa correcta.`);
+            throw new Error(
+              `El NIT del emisor en el archivo (${fileNitEmisor}) no coincide con el NIT de la empresa activa (${cleanEnterpriseNit}). Asegúrese de seleccionar la empresa correcta.`
+            );
           }
         }
       } else {
@@ -316,31 +368,41 @@ export function ImportSalesDialog({
 
       // Validate required columns - IVA column is now optional since we calculate from total
       const requiredCols = ["fecha", "numero", "numero_autorizacion", "nit", "nombre", "total"];
-      const missingCols = requiredCols.filter(c => colIndices[c] === -1);
-      
+      const missingCols = requiredCols.filter((c) => colIndices[c] === -1);
+
       if (missingCols.length > 0) {
-        throw new Error(`No se encontraron las columnas requeridas: ${missingCols.join(", ")}. Asegúrese de usar el formato de exportación de SAT Guatemala.`);
+        throw new Error(
+          `No se encontraron las columnas requeridas: ${missingCols.join(", ")}. Asegúrese de usar el formato de exportación de SAT Guatemala.`
+        );
       }
 
-      // First pass: collect all records for duplicate checking
-      const recordsToCheck: Array<{ authorization_number: string; invoice_series: string; invoice_number: string; rowNum: number }> = [];
-      
+      // First pass: collect all candidate keys for duplicate checking (matches DB unique index)
+      const recordsToCheck: Array<{
+        invoice_date: string;
+        fel_document_type: string;
+        invoice_series: string;
+        invoice_number: string;
+      }> = [];
+
       for (let i = 1; i < rows.length; i++) {
         const values = rows[i];
         if (!values || values.length < 5) continue;
-        
+
+        const fecha = parseDateFlexible(values[colIndices.fecha]);
+        if (!fecha) continue;
+
+        const tipoDoc = sanitizeCSVField(String(values[colIndices.tipo_documento] || "FACT"));
         const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
         const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
-        const numAutorizacion = sanitizeCSVField(String(values[colIndices.numero_autorizacion] || ""));
-        
-        if (numero && numAutorizacion) {
-          recordsToCheck.push({
-            authorization_number: numAutorizacion,
-            invoice_series: serie,
-            invoice_number: numero,
-            rowNum: i + 1,
-          });
-        }
+
+        if (!numero) continue;
+
+        recordsToCheck.push({
+          invoice_date: fecha,
+          fel_document_type: tipoDoc,
+          invoice_series: serie,
+          invoice_number: numero,
+        });
       }
 
       // Check for duplicates in database
@@ -353,7 +415,7 @@ export function ImportSalesDialog({
       let duplicatesCount = 0;
       const periodCounts = new Map<string, number>();
       const seenInFile = new Set<string>(); // Track duplicates within file
-      
+
       for (let i = 1; i < rows.length; i++) {
         const values = rows[i];
         if (!values || values.length < 5) continue;
@@ -366,13 +428,13 @@ export function ImportSalesDialog({
         // Parse date
         const rawDate = values[colIndices.fecha];
         const fecha = parseDateFlexible(rawDate);
-        
+
         if (!fecha) {
           errors.push({
             row: rowNum,
             field: "Fecha",
             value: String(rawDate || "(vacío)"),
-            message: "Fecha inválida o formato no reconocido"
+            message: "Fecha inválida o formato no reconocido",
           });
           continue;
         }
@@ -388,7 +450,7 @@ export function ImportSalesDialog({
             row: rowNum,
             field: "Total",
             value: String(values[colIndices.total] || "0"),
-            message: "El total debe ser mayor a cero"
+            message: "El total debe ser mayor a cero",
           });
           continue;
         }
@@ -404,12 +466,7 @@ export function ImportSalesDialog({
         const nombre = sanitizeCSVField(String(values[colIndices.nombre] || ""));
 
         if (!numero) {
-          errors.push({
-            row: rowNum,
-            field: "Número",
-            value: "(vacío)",
-            message: "Número de factura es requerido"
-          });
+          errors.push({ row: rowNum, field: "Número", value: "(vacío)", message: "Número de factura es requerido" });
           continue;
         }
 
@@ -418,52 +475,52 @@ export function ImportSalesDialog({
             row: rowNum,
             field: "Autorización",
             value: "(vacío)",
-            message: "Número de autorización es requerido"
+            message: "Número de autorización es requerido",
           });
           continue;
         }
 
         if (!nombre) {
-          errors.push({
-            row: rowNum,
-            field: "Nombre",
-            value: "(vacío)",
-            message: "Nombre del cliente es requerido"
-          });
+          errors.push({ row: rowNum, field: "Nombre", value: "(vacío)", message: "Nombre del cliente es requerido" });
           continue;
         }
 
-        // Check for duplicates in database
-        const serieNumeroKey = `${serie}-${numero}`;
-        if (existingKeys.has(numAutorizacion) || existingKeys.has(serieNumeroKey)) {
+        // Check for duplicates in DB and within file using the same key used by DB uniqueness
+        const uniqueKey = buildSaleUniqueKey({
+          fel_document_type: tipoDoc,
+          invoice_series: serie,
+          invoice_number: numero,
+          invoice_date: fecha,
+        });
+
+        if (existingKeys.has(uniqueKey)) {
           errors.push({
             row: rowNum,
             field: "Duplicado",
-            value: `${serie}-${numero}`,
-            message: "Esta factura ya existe en la base de datos"
+            value: `${tipoDoc} ${serie}-${numero} (${fecha})`,
+            message: "Esta factura ya existe en la base de datos (mismo mes/año)",
           });
           duplicatesCount++;
           continue;
         }
 
-        // Check for duplicates within the file
-        if (seenInFile.has(numAutorizacion) || seenInFile.has(serieNumeroKey)) {
+        if (seenInFile.has(uniqueKey)) {
           errors.push({
             row: rowNum,
             field: "Duplicado",
-            value: `${serie}-${numero}`,
-            message: "Esta factura está duplicada en el archivo"
+            value: `${tipoDoc} ${serie}-${numero} (${fecha})`,
+            message: "Esta factura está duplicada en el archivo",
           });
           duplicatesCount++;
           continue;
         }
-        seenInFile.add(numAutorizacion);
-        seenInFile.add(serieNumeroKey);
+        seenInFile.add(uniqueKey);
 
         // Extract year/month for grouping
         const [yearStr, monthStr] = fecha.split("-");
         const year = parseInt(yearStr);
         const month = parseInt(monthStr);
+
         
         if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
           errors.push({
