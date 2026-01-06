@@ -71,6 +71,8 @@ interface ValidSale {
   income_account_id?: number | null;
   operation_type_id?: number | null;
   is_annulled: boolean;
+  establishment_code?: string | null;
+  establishment_name?: string | null;
 }
 
 interface ValidationResult {
@@ -334,6 +336,8 @@ export function ImportSalesDialog({
           iva: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.iva),
           anulado: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.anulado),
           nit_emisor: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.nit_emisor),
+          codigo_establecimiento: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.codigo_establecimiento),
+          nombre_establecimiento: findSATColumnIndex(normalizedHeaders, SAT_SALES_MAPPING.nombre_establecimiento),
         };
 
         // Validate enterprise NIT from file matches active enterprise
@@ -553,6 +557,14 @@ export function ImportSalesDialog({
           annulledCount++;
         }
 
+        // Extract establishment data if available
+        const establecimientoCodigo = colIndices.codigo_establecimiento !== -1 
+          ? sanitizeCSVField(String(values[colIndices.codigo_establecimiento] || "")).trim() || null
+          : null;
+        const establecimientoNombre = colIndices.nombre_establecimiento !== -1 
+          ? sanitizeCSVField(String(values[colIndices.nombre_establecimiento] || "")).trim() || null
+          : null;
+
         validRecords.push({
           enterprise_id: enterpriseId,
           accounting_period_id: period.id,
@@ -567,6 +579,8 @@ export function ImportSalesDialog({
           vat_amount: vatAmount,
           total_amount: total,
           is_annulled: isAnnulled,
+          establishment_code: establecimientoCodigo,
+          establishment_name: establecimientoNombre,
         });
       }
 

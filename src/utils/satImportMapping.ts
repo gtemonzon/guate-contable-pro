@@ -43,6 +43,8 @@ export const SAT_SALES_MAPPING: Record<string, string[]> = {
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
   nit_emisor: ["nit del emisor"], // Para validar que sea la empresa correcta
+  codigo_establecimiento: ["codigo de establecimiento", "código de establecimiento"],
+  nombre_establecimiento: ["nombre del establecimiento"],
 };
 
 // Find a SAT column index from headers
