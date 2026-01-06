@@ -55,19 +55,16 @@ const Propuesta = () => {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '40px', paddingBottom: '20px', borderBottom: '3px solid #3498db' }}>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '15px' }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: 'linear-gradient(135deg, #8dd4a7 0%, #8dd4a7 100%)',
-              borderRadius: '15px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '3px solid #2c3e50',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-            }}>
-              <span style={{ fontSize: '48px', color: 'white', fontWeight: 'bold', textShadow: '2px 2px 4px rgba(0,0,0,0.2)' }}>+</span>
-            </div>
+            <img 
+              src="/favicon.png" 
+              alt="Conta-Online Logo" 
+              style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '15px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+              }}
+            />
             <div>
               <h1 style={{ fontSize: '36px', color: '#2c3e50', fontWeight: 700, margin: 0 }}>Conta-Online</h1>
               <p style={{ fontSize: '16px', color: '#7f8c8d', fontStyle: 'italic', marginTop: '5px' }}>Sistema Contable en la Nube</p>
