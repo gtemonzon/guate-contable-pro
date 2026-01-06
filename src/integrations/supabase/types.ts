@@ -1485,6 +1485,8 @@ export type Database = {
           customer_name: string
           customer_nit: string
           enterprise_id: number | null
+          establishment_code: string | null
+          establishment_name: string | null
           exchange_rate: number | null
           fel_document_type: string
           fel_xml_path: string | null
@@ -1509,6 +1511,8 @@ export type Database = {
           customer_name: string
           customer_nit: string
           enterprise_id?: number | null
+          establishment_code?: string | null
+          establishment_name?: string | null
           exchange_rate?: number | null
           fel_document_type: string
           fel_xml_path?: string | null
@@ -1533,6 +1537,8 @@ export type Database = {
           customer_name?: string
           customer_nit?: string
           enterprise_id?: number | null
+          establishment_code?: string | null
+          establishment_name?: string | null
           exchange_rate?: number | null
           fel_document_type?: string
           fel_xml_path?: string | null
