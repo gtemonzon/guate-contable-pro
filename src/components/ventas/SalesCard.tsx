@@ -37,6 +37,8 @@ interface SaleEntry {
   journal_entry_id: number | null;
   is_annulled?: boolean;
   isNew?: boolean;
+  establishment_code?: string | null;
+  establishment_name?: string | null;
 }
 
 interface SalesCardProps {
@@ -219,7 +221,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
-            <div className="col-span-4">
+            <div className={sale.establishment_name ? "col-span-2" : "col-span-4"}>
               <label className="text-xs text-muted-foreground">Cliente</label>
               <Input
                 value={sale.customer_name}
@@ -228,6 +230,25 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 className="h-8"
               />
             </div>
+            {sale.establishment_name && (
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Establecimiento</label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Input
+                        value={`${sale.establishment_code || ""} - ${sale.establishment_name}`}
+                        readOnly
+                        className="h-8 bg-muted text-xs truncate"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{sale.establishment_code} - {sale.establishment_name}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
           </div>
 
           {/* Segunda fila: Montos, tipo operación y cuenta con botones */}

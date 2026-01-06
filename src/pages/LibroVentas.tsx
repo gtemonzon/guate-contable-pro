@@ -45,6 +45,8 @@ interface SaleEntry {
   journal_entry_id: number | null;
   is_annulled?: boolean;
   isNew?: boolean;
+  establishment_code?: string | null;
+  establishment_name?: string | null;
 }
 
 export default function LibroVentas() {
@@ -61,6 +63,7 @@ export default function LibroVentas() {
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
     id: number;
@@ -78,9 +81,29 @@ export default function LibroVentas() {
 
   const { toast } = useToast();
 
+  // Get unique establishments from sales data
+  const establishments = useMemo(() => {
+    const uniqueEstablishments = new Map<string, string>();
+    sales.forEach(s => {
+      if (s.establishment_code && s.establishment_name) {
+        uniqueEstablishments.set(s.establishment_code, s.establishment_name);
+      }
+    });
+    return Array.from(uniqueEstablishments.entries()).map(([code, name]) => ({
+      code,
+      name,
+    })).sort((a, b) => a.code.localeCompare(b.code));
+  }, [sales]);
+
+  // Filter sales by selected establishment
+  const filteredSales = useMemo(() => {
+    if (selectedEstablishment === "all") return sales;
+    return sales.filter(s => s.establishment_code === selectedEstablishment);
+  }, [sales, selectedEstablishment]);
+
   const totals = useMemo(() => {
-    const activeSales = sales.filter(s => !s.is_annulled);
-    const annulledSales = sales.filter(s => s.is_annulled);
+    const activeSales = filteredSales.filter(s => !s.is_annulled);
+    const annulledSales = filteredSales.filter(s => s.is_annulled);
     
     // Calculate totals considering affects_total from document type
     const totalWithVAT = activeSales.reduce((sum, s) => {
@@ -101,7 +124,7 @@ export default function LibroVentas() {
       return sum + ((Number(s.net_amount) || 0) * multiplier);
     }, 0);
     
-    const documentCount = sales.length;
+    const documentCount = filteredSales.length;
 
     // Calcular totales por tipo de documento
     const byDocType = activeSales.reduce((acc, s) => {
@@ -142,7 +165,7 @@ export default function LibroVentas() {
       byDocType,
       byOperation,
     };
-  }, [sales, operationTypes, felDocTypes]);
+  }, [filteredSales, operationTypes, felDocTypes]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -988,7 +1011,24 @@ export default function LibroVentas() {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Facturas de {monthNames[selectedMonth - 1]} {selectedYear}</CardTitle>
+            <div className="flex items-center gap-4">
+              <CardTitle>Facturas de {monthNames[selectedMonth - 1]} {selectedYear}</CardTitle>
+              {establishments.length > 0 && (
+                <Select value={selectedEstablishment} onValueChange={setSelectedEstablishment}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Establecimiento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los establecimientos</SelectItem>
+                    {establishments.map((est) => (
+                      <SelectItem key={est.code} value={est.code}>
+                        {est.code} - {est.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -1087,26 +1127,33 @@ export default function LibroVentas() {
         <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando...</p>
-          ) : sales.length === 0 ? (
+          ) : filteredSales.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              No hay facturas. Haz clic en "Agregar Línea" para comenzar.
+              {sales.length === 0 
+                ? "No hay facturas. Haz clic en \"Agregar Línea\" para comenzar."
+                : "No hay facturas para el establecimiento seleccionado."
+              }
             </p>
           ) : (
             <div className="space-y-3">
-              {sales.map((sale, index) => (
-                <SalesCard
-                  key={sale.id || `new-${index}`}
-                  sale={sale}
-                  index={index}
-                  felDocTypes={felDocTypes}
-                  operationTypes={operationTypes}
-                  incomeAccounts={incomeAccounts}
-                  onUpdate={updateRow}
-                  onSave={saveRow}
-                  onDelete={deleteRow}
-                  onToggleAnnulled={toggleAnnulled}
-                />
-              ))}
+              {filteredSales.map((sale, index) => {
+                // Get the real index in the sales array for update/delete operations
+                const realIndex = sales.findIndex(s => s === sale);
+                return (
+                  <SalesCard
+                    key={sale.id || `new-${index}`}
+                    sale={sale}
+                    index={realIndex}
+                    felDocTypes={felDocTypes}
+                    operationTypes={operationTypes}
+                    incomeAccounts={incomeAccounts}
+                    onUpdate={updateRow}
+                    onSave={saveRow}
+                    onDelete={deleteRow}
+                    onToggleAnnulled={toggleAnnulled}
+                  />
+                );
+              })}
             </div>
           )}
         </CardContent>

@@ -31,6 +31,8 @@ interface SaleData {
   total_amount: number;
   is_annulled?: boolean;
   operation_type_id?: number | null;
+  establishment_code?: string | null;
+  establishment_name?: string | null;
 }
 
 interface FELDocumentType {
@@ -55,6 +57,7 @@ export default function ReporteVentas() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   const { toast } = useToast();
 
   const monthNames = [
@@ -117,9 +120,29 @@ export default function ReporteVentas() {
     }
   };
 
+  // Get unique establishments from sales data
+  const establishments = useMemo(() => {
+    const uniqueEstablishments = new Map<string, string>();
+    sales.forEach(s => {
+      if (s.establishment_code && s.establishment_name) {
+        uniqueEstablishments.set(s.establishment_code, s.establishment_name);
+      }
+    });
+    return Array.from(uniqueEstablishments.entries()).map(([code, name]) => ({
+      code,
+      name,
+    })).sort((a, b) => a.code.localeCompare(b.code));
+  }, [sales]);
+
+  // Filter sales by selected establishment
+  const filteredSales = useMemo(() => {
+    if (selectedEstablishment === "all") return sales;
+    return sales.filter(s => s.establishment_code === selectedEstablishment);
+  }, [sales, selectedEstablishment]);
+
   // Calcular totales aplicando affects_total
   const calculatedTotals = useMemo(() => {
-    const activeSales = sales.filter(s => !s.is_annulled);
+    const activeSales = filteredSales.filter(s => !s.is_annulled);
     
     const totalNet = activeSales.reduce((sum, s) => {
       const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
@@ -176,11 +199,11 @@ export default function ReporteVentas() {
       totalVAT,
       totalAmount,
       activeCount: activeSales.length,
-      annulledCount: sales.filter(s => s.is_annulled).length,
+      annulledCount: filteredSales.filter(s => s.is_annulled).length,
       byDocType,
       byOperation,
     };
-  }, [sales, felDocTypes, operationTypes]);
+  }, [filteredSales, felDocTypes, operationTypes]);
 
   const generateReport = async () => {
     if (!currentEnterpriseId) {
@@ -365,6 +388,25 @@ export default function ReporteVentas() {
           />
         </div>
 
+        {establishments.length > 0 && (
+          <div>
+            <Label>Establecimiento</Label>
+            <Select value={selectedEstablishment} onValueChange={setSelectedEstablishment}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {establishments.map((est) => (
+                  <SelectItem key={est.code} value={est.code}>
+                    {est.code} - {est.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="flex items-end">
           <Button onClick={generateReport} disabled={loading} className="w-full">
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -404,7 +446,7 @@ export default function ReporteVentas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sales.filter(s => !s.is_annulled).map((sale, idx) => (
+                {filteredSales.filter(s => !s.is_annulled).map((sale, idx) => (
                   <TableRow key={idx}>
                     <TableCell>{new Date(sale.invoice_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                     <TableCell>{sale.invoice_series || '-'}</TableCell>
