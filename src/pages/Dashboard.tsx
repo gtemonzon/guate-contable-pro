@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { DashboardAlerts } from "@/components/dashboard/DashboardAlerts";
-
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 interface BookSummary {
   month: number;
   year: number;
@@ -38,8 +40,16 @@ interface AccountBalance {
 interface MonthlyChartData {
   month: string;
   monthNum: number;
-  total: number;
+  [key: string]: number | string; // Dynamic keys for each year
 }
+
+const YEAR_COLORS = [
+  "hsl(var(--success))",      // Verde
+  "hsl(var(--primary))",      // Azul
+  "hsl(220, 70%, 50%)",       // Azul oscuro
+  "hsl(280, 70%, 50%)",       // Púrpura
+  "hsl(30, 80%, 55%)",        // Naranja
+];
 
 const Dashboard = () => {
   const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
@@ -53,7 +63,7 @@ const Dashboard = () => {
   const [yearlyPurchasesData, setYearlyPurchasesData] = useState<MonthlyChartData[]>([]);
   const [activeYear, setActiveYear] = useState<number>(new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([]);
-  const [selectedChartYear, setSelectedChartYear] = useState<number>(new Date().getFullYear());
+  const [selectedChartYears, setSelectedChartYears] = useState<number[]>([new Date().getFullYear()]);
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -512,46 +522,45 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Cargar años disponibles con datos
+  // Cargar años disponibles con datos REALES
   useEffect(() => {
     const fetchAvailableYears = async () => {
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
       if (!currentEnterpriseId) return;
 
       try {
-        // Obtener años de ventas
+        const yearsSet = new Set<number>();
+
+        // Obtener años de ventas con datos reales (no anuladas)
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date")
-          .eq("enterprise_id", parseInt(currentEnterpriseId));
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("is_annulled", false);
 
-        // Obtener años de compras
-        const { data: purchaseBooks } = await supabase
-          .from("tab_purchase_books")
-          .select("year")
-          .eq("enterprise_id", parseInt(currentEnterpriseId));
-
-        const yearsSet = new Set<number>();
-        
-        // Extraer años de ventas
         sales?.forEach(s => {
           yearsSet.add(new Date(s.invoice_date).getFullYear());
         });
-        
-        // Extraer años de compras
-        purchaseBooks?.forEach(p => {
-          yearsSet.add(p.year);
+
+        // Obtener años de compras con datos reales (JOIN con purchase_ledger)
+        const { data: purchases } = await supabase
+          .from("tab_purchase_ledger")
+          .select("invoice_date")
+          .eq("enterprise_id", parseInt(currentEnterpriseId));
+
+        purchases?.forEach(p => {
+          yearsSet.add(new Date(p.invoice_date).getFullYear());
         });
 
         const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
         setAvailableYears(sortedYears);
         
-        // Inicializar con el año activo o el más reciente
+        // Inicializar selección con el año activo
         if (sortedYears.length > 0) {
           if (sortedYears.includes(activeYear)) {
-            setSelectedChartYear(activeYear);
+            setSelectedChartYears([activeYear]);
           } else {
-            setSelectedChartYear(sortedYears[0]);
+            setSelectedChartYears([sortedYears[0]]);
           }
         }
       } catch (error) {
@@ -562,61 +571,68 @@ const Dashboard = () => {
     fetchAvailableYears();
   }, [activeYear]);
 
-  // Cargar datos anuales para gráficas
+  // Cargar datos anuales para gráficas (multi-año)
   useEffect(() => {
     const fetchYearlyData = async () => {
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
-      if (!currentEnterpriseId) {
+      if (!currentEnterpriseId || selectedChartYears.length === 0) {
         setYearlyChartsLoading(false);
         return;
       }
 
+      setYearlyChartsLoading(true);
+
       try {
         const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-        // Inicializar datos mensuales con ceros
+        // Inicializar datos mensuales base
         const initializeMonthlyData = (): MonthlyChartData[] => 
-          monthNames.map((month, index) => ({ month, monthNum: index + 1, total: 0 }));
-
-        // Fetch ventas del año seleccionado (excluding annulled invoices)
-        const { data: sales } = await supabase
-          .from("tab_sales_ledger")
-          .select("invoice_date, total_amount")
-          .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .eq("is_annulled", false)
-          .gte("invoice_date", `${selectedChartYear}-01-01`)
-          .lte("invoice_date", `${selectedChartYear}-12-31`);
+          monthNames.map((month, index) => ({ month, monthNum: index + 1 }));
 
         const salesByMonth = initializeMonthlyData();
-        if (sales) {
-          sales.forEach((sale) => {
-            const month = new Date(sale.invoice_date).getMonth();
-            salesByMonth[month].total += Number(sale.total_amount || 0);
-          });
-        }
-        setYearlySalesData(salesByMonth);
-
-        // Fetch compras del año seleccionado
-        const { data: purchaseBooks } = await supabase
-          .from("tab_purchase_books")
-          .select("id, month, year")
-          .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .eq("year", selectedChartYear);
-
         const purchasesByMonth = initializeMonthlyData();
-        if (purchaseBooks && purchaseBooks.length > 0) {
-          for (const book of purchaseBooks) {
-            const { data: purchases } = await supabase
-              .from("tab_purchase_ledger")
-              .select("total_amount")
-              .eq("purchase_book_id", book.id);
 
-            if (purchases) {
-              const totalForMonth = purchases.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
-              purchasesByMonth[book.month - 1].total += totalForMonth;
-            }
+        // Obtener datos para cada año seleccionado
+        for (const year of selectedChartYears) {
+          // Fetch ventas del año (excluding annulled invoices)
+          const { data: sales } = await supabase
+            .from("tab_sales_ledger")
+            .select("invoice_date, total_amount")
+            .eq("enterprise_id", parseInt(currentEnterpriseId))
+            .eq("is_annulled", false)
+            .gte("invoice_date", `${year}-01-01`)
+            .lte("invoice_date", `${year}-12-31`);
+
+          // Inicializar año con ceros
+          salesByMonth.forEach(m => { m[year.toString()] = 0; });
+
+          if (sales) {
+            sales.forEach((sale) => {
+              const month = new Date(sale.invoice_date).getMonth();
+              (salesByMonth[month][year.toString()] as number) += Number(sale.total_amount || 0);
+            });
+          }
+
+          // Fetch compras del año
+          const { data: purchases } = await supabase
+            .from("tab_purchase_ledger")
+            .select("invoice_date, total_amount")
+            .eq("enterprise_id", parseInt(currentEnterpriseId))
+            .gte("invoice_date", `${year}-01-01`)
+            .lte("invoice_date", `${year}-12-31`);
+
+          // Inicializar año con ceros
+          purchasesByMonth.forEach(m => { m[year.toString()] = 0; });
+
+          if (purchases) {
+            purchases.forEach((purchase) => {
+              const month = new Date(purchase.invoice_date).getMonth();
+              (purchasesByMonth[month][year.toString()] as number) += Number(purchase.total_amount || 0);
+            });
           }
         }
+
+        setYearlySalesData(salesByMonth);
         setYearlyPurchasesData(purchasesByMonth);
       } catch (error) {
         console.error("Error fetching yearly data:", error);
@@ -626,7 +642,7 @@ const Dashboard = () => {
     };
 
     fetchYearlyData();
-  }, [selectedChartYear]);
+  }, [selectedChartYears]);
 
   // KPIs dinámicos
   const formatChange = (change: number | null | undefined, isPercentage = true): string => {
@@ -935,26 +951,59 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Ventas del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de ventas {selectedChartYear}
+                  {selectedChartYears.length === 1 
+                    ? `Total mensual de ventas ${selectedChartYears[0]}`
+                    : `Comparativa mensual: ${selectedChartYears.sort((a, b) => b - a).join(', ')}`
+                  }
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 {availableYears.length > 1 && (
-                  <Select 
-                    value={selectedChartYear.toString()} 
-                    onValueChange={(v) => setSelectedChartYear(parseInt(v))}
-                  >
-                    <SelectTrigger className="w-[100px] h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableYears.map(year => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 gap-1">
+                        {selectedChartYears.length === 1 
+                          ? selectedChartYears[0]
+                          : `${selectedChartYears.length} años`
+                        }
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2" align="end">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground mb-2">Selecciona años a comparar</p>
+                        {availableYears.map((year, index) => (
+                          <div 
+                            key={year} 
+                            className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                            onClick={() => {
+                              if (selectedChartYears.includes(year)) {
+                                // No permitir deseleccionar el único año
+                                if (selectedChartYears.length > 1) {
+                                  setSelectedChartYears(selectedChartYears.filter(y => y !== year));
+                                }
+                              } else {
+                                // Máximo 5 años
+                                if (selectedChartYears.length < 5) {
+                                  setSelectedChartYears([...selectedChartYears, year]);
+                                }
+                              }
+                            }}
+                          >
+                            <Checkbox 
+                              checked={selectedChartYears.includes(year)} 
+                              className="pointer-events-none"
+                            />
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: selectedChartYears.includes(year) ? YEAR_COLORS[selectedChartYears.indexOf(year) % YEAR_COLORS.length] : 'transparent', border: '1px solid hsl(var(--border))' }}
+                            />
+                            <span className="text-sm">{year}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
                 <Receipt className="h-6 w-6 text-success" />
               </div>
@@ -963,7 +1012,7 @@ const Dashboard = () => {
           <CardContent>
             {yearlyChartsLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : yearlySalesData.some(d => d.total > 0) ? (
+            ) : yearlySalesData.some(d => selectedChartYears.some(y => (d[y.toString()] as number) > 0)) ? (
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={yearlySalesData}>
@@ -979,7 +1028,7 @@ const Dashboard = () => {
                       className="text-muted-foreground"
                     />
                     <Tooltip 
-                      formatter={(value: number) => [`Q ${formatNumber(value)}`, 'Total']}
+                      formatter={(value: number, name: string) => [`Q ${formatNumber(value)}`, name]}
                       labelFormatter={(label) => `Mes: ${label}`}
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -987,20 +1036,25 @@ const Dashboard = () => {
                         borderRadius: '8px'
                       }}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="total" 
-                      stroke="hsl(var(--success))" 
-                      strokeWidth={2}
-                      dot={{ fill: 'hsl(var(--success))', strokeWidth: 2, r: 3 }}
-                      activeDot={{ r: 5 }}
-                    />
+                    {selectedChartYears.length > 1 && <Legend />}
+                    {selectedChartYears.sort((a, b) => b - a).map((year, index) => (
+                      <Line 
+                        key={year}
+                        type="monotone" 
+                        dataKey={year.toString()}
+                        name={year.toString()}
+                        stroke={YEAR_COLORS[index % YEAR_COLORS.length]} 
+                        strokeWidth={2}
+                        dot={{ fill: YEAR_COLORS[index % YEAR_COLORS.length], strokeWidth: 2, r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                <p className="text-sm">No hay ventas registradas este año</p>
+                <p className="text-sm">No hay ventas registradas</p>
               </div>
             )}
           </CardContent>
@@ -1012,26 +1066,57 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Compras del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de compras {selectedChartYear}
+                  {selectedChartYears.length === 1 
+                    ? `Total mensual de compras ${selectedChartYears[0]}`
+                    : `Comparativa mensual: ${selectedChartYears.sort((a, b) => b - a).join(', ')}`
+                  }
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 {availableYears.length > 1 && (
-                  <Select 
-                    value={selectedChartYear.toString()} 
-                    onValueChange={(v) => setSelectedChartYear(parseInt(v))}
-                  >
-                    <SelectTrigger className="w-[100px] h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableYears.map(year => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 gap-1">
+                        {selectedChartYears.length === 1 
+                          ? selectedChartYears[0]
+                          : `${selectedChartYears.length} años`
+                        }
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2" align="end">
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground mb-2">Selecciona años a comparar</p>
+                        {availableYears.map((year, index) => (
+                          <div 
+                            key={year} 
+                            className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer"
+                            onClick={() => {
+                              if (selectedChartYears.includes(year)) {
+                                if (selectedChartYears.length > 1) {
+                                  setSelectedChartYears(selectedChartYears.filter(y => y !== year));
+                                }
+                              } else {
+                                if (selectedChartYears.length < 5) {
+                                  setSelectedChartYears([...selectedChartYears, year]);
+                                }
+                              }
+                            }}
+                          >
+                            <Checkbox 
+                              checked={selectedChartYears.includes(year)} 
+                              className="pointer-events-none"
+                            />
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: selectedChartYears.includes(year) ? YEAR_COLORS[selectedChartYears.indexOf(year) % YEAR_COLORS.length] : 'transparent', border: '1px solid hsl(var(--border))' }}
+                            />
+                            <span className="text-sm">{year}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
                 <ShoppingCart className="h-6 w-6 text-destructive" />
               </div>
@@ -1040,7 +1125,7 @@ const Dashboard = () => {
           <CardContent>
             {yearlyChartsLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : yearlyPurchasesData.some(d => d.total > 0) ? (
+            ) : yearlyPurchasesData.some(d => selectedChartYears.some(y => (d[y.toString()] as number) > 0)) ? (
               <div className="h-[200px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={yearlyPurchasesData}>
@@ -1056,7 +1141,7 @@ const Dashboard = () => {
                       className="text-muted-foreground"
                     />
                     <Tooltip 
-                      formatter={(value: number) => [`Q ${formatNumber(value)}`, 'Total']}
+                      formatter={(value: number, name: string) => [`Q ${formatNumber(value)}`, name]}
                       labelFormatter={(label) => `Mes: ${label}`}
                       contentStyle={{ 
                         backgroundColor: 'hsl(var(--card))', 
@@ -1064,20 +1149,25 @@ const Dashboard = () => {
                         borderRadius: '8px'
                       }}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="total" 
-                      stroke="hsl(var(--destructive))" 
-                      strokeWidth={2}
-                      dot={{ fill: 'hsl(var(--destructive))', strokeWidth: 2, r: 3 }}
-                      activeDot={{ r: 5 }}
-                    />
+                    {selectedChartYears.length > 1 && <Legend />}
+                    {selectedChartYears.sort((a, b) => b - a).map((year, index) => (
+                      <Line 
+                        key={year}
+                        type="monotone" 
+                        dataKey={year.toString()}
+                        name={year.toString()}
+                        stroke={YEAR_COLORS[index % YEAR_COLORS.length]} 
+                        strokeWidth={2}
+                        dot={{ fill: YEAR_COLORS[index % YEAR_COLORS.length], strokeWidth: 2, r: 3 }}
+                        activeDot={{ r: 5 }}
+                      />
+                    ))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                <p className="text-sm">No hay compras registradas este año</p>
+                <p className="text-sm">No hay compras registradas</p>
               </div>
             )}
           </CardContent>
