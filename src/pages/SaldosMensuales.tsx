@@ -253,10 +253,24 @@ export default function SaldosMensuales() {
       setQuerying(true);
       const periodId = parseInt(selectedPeriod);
       
-      // Get accounts to query (all if none selected)
-      const accountsToQuery = selectedAccounts.length > 0 
-        ? allAccounts.filter(a => selectedAccounts.includes(a.id))
-        : allAccounts;
+      // Get accounts to query - if specific accounts are selected, include their ancestors too
+      let accountsToQuery = allAccounts;
+      
+      if (selectedAccounts.length > 0) {
+        // Get selected accounts and all their ancestors for proper tree rendering
+        const accountIdsToInclude = new Set<number>(selectedAccounts);
+        
+        const findAncestors = (accountId: number) => {
+          const account = allAccounts.find(a => a.id === accountId);
+          if (account?.parent_account_id) {
+            accountIdsToInclude.add(account.parent_account_id);
+            findAncestors(account.parent_account_id);
+          }
+        };
+        
+        selectedAccounts.forEach(findAncestors);
+        accountsToQuery = allAccounts.filter(a => accountIdsToInclude.has(a.id));
+      }
 
       // Fetch movements within selected months
       const entries = await fetchAllRecords<any>(
