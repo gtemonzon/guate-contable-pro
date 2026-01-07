@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -45,6 +45,7 @@ const allMenuItems: MenuItemOrSection[] = [
     title: "Consultas",
     items: [
       { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
+      { title: "Saldos Mensuales", url: "/saldos-mensuales", icon: CalendarDays, requiredPermission: "canViewReports" },
       { title: "Mayor General", url: "/mayor", icon: BookOpen, requiredPermission: "canViewReports" },
       { title: "Reportes", url: "/reportes", icon: FileBarChart, requiredPermission: "canViewReports" },
     ],
