@@ -53,13 +53,10 @@ function CopyButton({ value }: { value: number }) {
   );
 }
 
-function CasillaRow({ casilla, label, value }: { casilla: string; label: string; value: number }) {
+function CasillaRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-mono text-muted-foreground w-8">{casilla}</span>
-        <span className="text-sm">{label}</span>
-      </div>
+      <span className="text-sm">{label}</span>
       <div className="flex items-center gap-2">
         <span className="font-mono font-medium">{formatCurrency(value)}</span>
         <CopyButton value={value} />
@@ -114,10 +111,10 @@ export function DeclaracionPreview({
           <div>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Ventas</h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <CasillaRow casilla="14" label="Ventas Gravadas Locales" value={ivaGeneral.ventasGravadasLocales} />
-              <CasillaRow casilla="15" label="Exportaciones" value={ivaGeneral.exportaciones} />
-              <CasillaRow casilla="17" label="Ventas Exentas" value={ivaGeneral.ventasExentas} />
-              <CasillaRow casilla="19" label="Total Ventas" value={ivaGeneral.totalVentas} />
+              <CasillaRow label="Ventas Gravadas Locales" value={ivaGeneral.ventasGravadasLocales} />
+              <CasillaRow label="Exportaciones" value={ivaGeneral.exportaciones} />
+              <CasillaRow label="Ventas Exentas" value={ivaGeneral.ventasExentas} />
+              <CasillaRow label="Total Ventas" value={ivaGeneral.totalVentas} />
             </div>
           </div>
 
@@ -125,7 +122,7 @@ export function DeclaracionPreview({
           <div>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Débito Fiscal</h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <CasillaRow casilla="26" label="Débito Fiscal del Período" value={ivaGeneral.debitoFiscal} />
+              <CasillaRow label="Débito Fiscal del Período" value={ivaGeneral.debitoFiscal} />
             </div>
           </div>
 
@@ -134,24 +131,23 @@ export function DeclaracionPreview({
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Compras</h4>
             <div className="bg-muted/30 rounded-lg p-3">
               {ivaGeneral.comprasBienes > 0 && (
-                <CasillaRow casilla="27" label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
+                <CasillaRow label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
               )}
               {ivaGeneral.comprasServicios > 0 && (
-                <CasillaRow casilla="28" label="Compras de Servicios" value={ivaGeneral.comprasServicios} />
+                <CasillaRow label="Compras de Servicios" value={ivaGeneral.comprasServicios} />
               )}
               {ivaGeneral.importaciones > 0 && (
-                <CasillaRow casilla="29" label="Importaciones" value={ivaGeneral.importaciones} />
+                <CasillaRow label="Importaciones" value={ivaGeneral.importaciones} />
               )}
               {ivaGeneral.comprasActivosFijos > 0 && (
-                <CasillaRow casilla="30" label="Activos Fijos" value={ivaGeneral.comprasActivosFijos} />
+                <CasillaRow label="Activos Fijos" value={ivaGeneral.comprasActivosFijos} />
               )}
               {ivaGeneral.comprasExentas > 0 && (
-                <CasillaRow casilla="32" label="Compras Exentas" value={ivaGeneral.comprasExentas} />
+                <CasillaRow label="Compras Exentas" value={ivaGeneral.comprasExentas} />
               )}
               {ivaGeneral.notasCreditoCompras > 0 && (
                 <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-destructive">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-muted-foreground w-8">-</span>
                     <span className="text-sm">(-) Notas de Crédito Recibidas</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -161,7 +157,7 @@ export function DeclaracionPreview({
                 </div>
               )}
               <div className="border-t border-border mt-2 pt-2">
-                <CasillaRow casilla="" label="Total Compras Gravadas Neto" value={ivaGeneral.comprasNetoGravadas} />
+                <CasillaRow label="Total Compras Gravadas Neto" value={ivaGeneral.comprasNetoGravadas} />
               </div>
             </div>
           </div>
@@ -171,21 +167,20 @@ export function DeclaracionPreview({
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Crédito Fiscal</h4>
             <div className="bg-muted/30 rounded-lg p-3">
               {ivaGeneral.creditoFiscalBienes > 0 && (
-                <CasillaRow casilla="" label="IVA Otras Compras (Bienes)" value={ivaGeneral.creditoFiscalBienes} />
+                <CasillaRow label="IVA Otras Compras (Bienes)" value={ivaGeneral.creditoFiscalBienes} />
               )}
               {ivaGeneral.creditoFiscalServicios > 0 && (
-                <CasillaRow casilla="" label="IVA Servicios" value={ivaGeneral.creditoFiscalServicios} />
+                <CasillaRow label="IVA Servicios" value={ivaGeneral.creditoFiscalServicios} />
               )}
               {ivaGeneral.creditoFiscalImportaciones > 0 && (
-                <CasillaRow casilla="" label="IVA Importaciones" value={ivaGeneral.creditoFiscalImportaciones} />
+                <CasillaRow label="IVA Importaciones" value={ivaGeneral.creditoFiscalImportaciones} />
               )}
               {ivaGeneral.creditoFiscalActivosFijos > 0 && (
-                <CasillaRow casilla="" label="IVA Activos Fijos" value={ivaGeneral.creditoFiscalActivosFijos} />
+                <CasillaRow label="IVA Activos Fijos" value={ivaGeneral.creditoFiscalActivosFijos} />
               )}
               {ivaGeneral.notasCreditoIVA > 0 && (
                 <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-destructive">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-muted-foreground w-8">-</span>
                     <span className="text-sm">(-) IVA Notas de Crédito</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -195,7 +190,7 @@ export function DeclaracionPreview({
                 </div>
               )}
               <div className="border-t border-border mt-2 pt-2">
-                <CasillaRow casilla="34" label="Crédito Fiscal del Período" value={ivaGeneral.creditoFiscal} />
+                <CasillaRow label="Crédito Fiscal del Período" value={ivaGeneral.creditoFiscal} />
               </div>
             </div>
           </div>
@@ -217,12 +212,11 @@ export function DeclaracionPreview({
 
           {/* Resultado */}
           <div className="pt-4 border-t space-y-3">
-            <CasillaRow casilla="40" label="Diferencia (Débito - Crédito)" value={ivaGeneral.diferencia} />
+            <CasillaRow label="Diferencia (Débito - Crédito)" value={ivaGeneral.diferencia} />
             
-            {/* Casilla 38 - Crédito Remanente Editable */}
+            {/* Crédito Remanente Editable */}
             <div className="flex items-center justify-between py-2 border-b border-border/50">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-muted-foreground w-8">38</span>
                 <span className="text-sm">Crédito Remanente del Mes Anterior</span>
                 {creditoRemanenteSugerido > 0 && (
                   <TooltipProvider>
@@ -268,7 +262,6 @@ export function DeclaracionPreview({
             {/* Exención IVA Realizada */}
             <div className="flex items-center justify-between py-2 border-b border-border/50">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-muted-foreground w-8">-</span>
                 <span className="text-sm">(-) Exención IVA Realizada</span>
               </div>
               <div className="flex items-center gap-2">
@@ -286,12 +279,12 @@ export function DeclaracionPreview({
             </div>
             
             {ivaGeneral.ivaAPagar > 0 ? (
-              <TotalRow label="IVA A PAGAR (Casilla 42)" value={ivaGeneral.ivaAPagar} isHighlight />
+              <TotalRow label="IVA A PAGAR" value={ivaGeneral.ivaAPagar} isHighlight />
             ) : ivaGeneral.creditoRemanenteProximoMes > 0 ? (
               <div className="space-y-2">
-                <TotalRow label="IVA A PAGAR (Casilla 42)" value={0} />
+                <TotalRow label="IVA A PAGAR" value={0} />
                 <div className="flex items-center justify-between py-3 bg-blue-500/10 px-3 rounded-lg">
-                  <span className="font-semibold text-blue-600">Crédito Remanente Próximo Mes (Casilla 43)</span>
+                  <span className="font-semibold text-blue-600">Crédito Remanente Próximo Mes</span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-bold text-lg text-blue-600">
                       {formatCurrency(ivaGeneral.creditoRemanenteProximoMes)}
@@ -301,7 +294,7 @@ export function DeclaracionPreview({
                 </div>
               </div>
             ) : (
-              <TotalRow label="IVA A PAGAR (Casilla 42)" value={0} isHighlight />
+              <TotalRow label="IVA A PAGAR" value={0} isHighlight />
             )}
           </div>
         </CardContent>
@@ -320,18 +313,15 @@ export function DeclaracionPreview({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="bg-muted/30 rounded-lg p-3">
-            <CasillaRow casilla="21" label="Total Ingresos del Mes" value={ivaPequeno.totalIngresos} />
+            <CasillaRow label="Total Ingresos del Mes" value={ivaPequeno.totalIngresos} />
             <div className="flex items-center justify-between py-2 border-b border-border/50">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-muted-foreground w-8">23</span>
-                <span className="text-sm">Tasa de Impuesto</span>
-              </div>
+              <span className="text-sm">Tasa de Impuesto</span>
               <span className="font-mono font-medium">{ivaPequeno.tasaImpuesto}%</span>
             </div>
           </div>
 
           <div className="pt-4 border-t">
-            <TotalRow label="IMPUESTO A PAGAR (Casilla 24)" value={ivaPequeno.impuestoAPagar} isHighlight />
+            <TotalRow label="IMPUESTO A PAGAR" value={ivaPequeno.impuestoAPagar} isHighlight />
           </div>
         </CardContent>
       </Card>
@@ -355,7 +345,7 @@ export function DeclaracionPreview({
           <div>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Ingresos</h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <CasillaRow casilla="" label="Ingresos Brutos del Mes" value={isrMensual.ingresosBrutos} />
+              <CasillaRow label="Ingresos Brutos del Mes" value={isrMensual.ingresosBrutos} />
             </div>
           </div>
 
@@ -367,7 +357,6 @@ export function DeclaracionPreview({
             <div className="bg-muted/30 rounded-lg p-3 space-y-1">
               <div className="flex items-center justify-between py-2 border-b border-border/50">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-muted-foreground w-8">1</span>
                   <span className="text-sm">Primer Tramo (hasta Q30,000 al 5%)</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -383,7 +372,6 @@ export function DeclaracionPreview({
               {usaSegundoTramo && (
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-muted-foreground w-8">2</span>
                     <span className="text-sm">Segundo Tramo (excedente al 7%)</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -398,7 +386,7 @@ export function DeclaracionPreview({
               )}
               
               <div className="border-t border-border mt-2 pt-2">
-                <CasillaRow casilla="" label="ISR Bruto Calculado" value={isrMensual.isrBruto} />
+                <CasillaRow label="ISR Bruto Calculado" value={isrMensual.isrBruto} />
               </div>
             </div>
           </div>
@@ -409,7 +397,6 @@ export function DeclaracionPreview({
             <div className="bg-muted/30 rounded-lg p-3">
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-muted-foreground w-8">-</span>
                   <span className="text-sm">(-) Retención ISR Realizada</span>
                 </div>
                 <div className="flex items-center gap-2">
