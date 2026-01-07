@@ -442,7 +442,7 @@ export function useDeclaracionCalculo(
     let ingresosBrutos = 0;
     sales.forEach(sale => {
       const multiplier = getMultiplier(sale.fel_document_type);
-      ingresosBrutos += sale.total_amount * multiplier;
+      ingresosBrutos += sale.net_amount * multiplier;
     });
 
     // Calcular ISR con escala progresiva
