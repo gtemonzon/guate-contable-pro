@@ -86,6 +86,7 @@ export default function JournalEntryDialog({
   entryToEdit = null,
 }: JournalEntryDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [nextEntryNumber, setNextEntryNumber] = useState("");
@@ -140,10 +141,29 @@ export default function JournalEntryDialog({
     });
   };
 
+  // Limpiar formulario antes de cargar datos de edición (evita flash de datos anteriores)
+  const resetFormForEdit = () => {
+    setNextEntryNumber("");
+    setEntryDate("");
+    setEntryType("");
+    setPeriodId(null);
+    setDocumentReference("");
+    setHeaderDescription("");
+    setDetailLines([]);
+    setAuditInfo(null);
+    setEntryStatus('borrador');
+    setAccountSearch({});
+  };
+
   useEffect(() => {
     if (open) {
       if (entryToEdit) {
-        loadEntryData(entryToEdit.id);
+        // Limpiar formulario y mostrar loading antes de cargar
+        resetFormForEdit();
+        setIsLoadingEntry(true);
+        loadEntryData(entryToEdit.id).finally(() => {
+          setIsLoadingEntry(false);
+        });
       } else {
         loadInitialData();
         resetForm();
@@ -833,6 +853,12 @@ export default function JournalEntryDialog({
           <DialogTitle>{entryToEdit ? 'Editar' : 'Nueva'} Partida Contable</DialogTitle>
         </DialogHeader>
 
+        {isLoadingEntry ? (
+          <div className="flex flex-col items-center justify-center py-16 space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="text-muted-foreground">Cargando partida...</p>
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Encabezado */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1148,6 +1174,7 @@ export default function JournalEntryDialog({
             </div>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
 
