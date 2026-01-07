@@ -696,22 +696,23 @@ export default function JournalEntryDialog({
 
       if (entryToEdit) {
         // Actualizar partida existente
-        const { error: updateError } = await supabase
-          .from("tab_journal_entries")
-          .update({
-            entry_date: entryDate,
-            entry_type: entryType,
-            accounting_period_id: periodId,
-            document_reference: documentReference || null,
-            description: headerDescription,
-            total_debit: getTotalDebit(),
-            total_credit: getTotalCredit(),
-            is_posted: post,
-            posted_at: post ? new Date().toISOString() : null,
-            updated_by: user.id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", entryToEdit.id);
+      const { error: updateError } = await supabase
+        .from("tab_journal_entries")
+        .update({
+          entry_date: entryDate,
+          entry_type: entryType,
+          accounting_period_id: periodId,
+          document_reference: documentReference || null,
+          description: headerDescription,
+          total_debit: getTotalDebit(),
+          total_credit: getTotalCredit(),
+          is_posted: post,
+          posted_at: post ? new Date().toISOString() : null,
+          updated_by: user.id,
+          updated_at: new Date().toISOString(),
+          status: post ? 'contabilizado' : 'borrador',
+        })
+        .eq("id", entryToEdit.id);
 
         if (updateError) throw updateError;
 
@@ -765,24 +766,25 @@ export default function JournalEntryDialog({
         }
 
         // Insertar nueva partida
-        const { data: entry, error: entryError } = await supabase
-          .from("tab_journal_entries")
-          .insert({
-            enterprise_id: parseInt(enterpriseId),
-            entry_number: nextEntryNumber,
-            entry_date: entryDate,
-            entry_type: entryType,
-            accounting_period_id: periodId,
-            document_reference: documentReference || null,
-            description: headerDescription,
-            total_debit: getTotalDebit(),
-            total_credit: getTotalCredit(),
-            is_posted: post,
-            posted_at: post ? new Date().toISOString() : null,
-            created_by: user.id,
-          })
-          .select()
-          .single();
+      const { data: entry, error: entryError } = await supabase
+        .from("tab_journal_entries")
+        .insert({
+          enterprise_id: parseInt(enterpriseId),
+          entry_number: nextEntryNumber,
+          entry_date: entryDate,
+          entry_type: entryType,
+          accounting_period_id: periodId,
+          document_reference: documentReference || null,
+          description: headerDescription,
+          total_debit: getTotalDebit(),
+          total_credit: getTotalCredit(),
+          is_posted: post,
+          posted_at: post ? new Date().toISOString() : null,
+          created_by: user.id,
+          status: post ? 'contabilizado' : 'borrador',
+        })
+        .select()
+        .single();
 
         if (entryError) throw entryError;
 
