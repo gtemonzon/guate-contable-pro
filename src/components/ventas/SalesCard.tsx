@@ -150,7 +150,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
             }
           }}
         >
-          {/* Primera fila: Info documento, NIT y cliente */}
+          {/* Primera fila: Fecha, info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2 flex items-end gap-1">
               {sale.is_annulled && (
@@ -166,14 +166,23 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 </TooltipProvider>
               )}
               <div className="flex-1">
-                <label className="text-xs text-muted-foreground">Serie</label>
+                <label className="text-xs text-muted-foreground">Fecha</label>
                 <Input
-                  value={sale.invoice_series}
-                  onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
-                  placeholder="A"
+                  type="date"
+                  value={sale.invoice_date}
+                  onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
                   className="h-8"
                 />
               </div>
+            </div>
+            <div className="col-span-1">
+              <label className="text-xs text-muted-foreground">Serie</label>
+              <Input
+                value={sale.invoice_series}
+                onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
+                placeholder="A"
+                className="h-8"
+              />
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
@@ -181,15 +190,6 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 value={sale.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
                 placeholder="12345"
-                className="h-8"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Fecha</label>
-              <Input
-                type="date"
-                value={sale.invoice_date}
-                onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
                 className="h-8"
               />
             </div>
@@ -211,7 +211,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-1">
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={sale.customer_nit}

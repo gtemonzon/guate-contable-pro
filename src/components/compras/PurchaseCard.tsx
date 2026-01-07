@@ -136,9 +136,18 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
             }
           }}
         >
-          {/* Primera fila: Info documento, NIT y proveedor */}
+          {/* Primera fila: Fecha, info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
+              <label className="text-xs text-muted-foreground">Fecha</label>
+              <Input
+                type="date"
+                value={purchase.invoice_date}
+                onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
+                className="h-8"
+              />
+            </div>
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
                 value={purchase.invoice_series}
@@ -153,15 +162,6 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 value={purchase.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
                 placeholder="12345"
-                className="h-8"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Fecha</label>
-              <Input
-                type="date"
-                value={purchase.invoice_date}
-                onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
                 className="h-8"
               />
             </div>
@@ -183,7 +183,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-1">
+            <div className="col-span-2">
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={purchase.supplier_nit}
