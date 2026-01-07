@@ -473,22 +473,35 @@ function extractDataFromText(text: string): ExtractedData {
   }
 
   // Extract Amount - Total a Pagar
-  const amountPatterns = [
-    /TOTAL\s+A\s+PAGAR[:\s]*([\d\s,\.]+)/i,
-    /MONTO\s+A\s+PAGAR[:\s]*([\d\s,\.]+)/i,
-    /TOTAL[:\s]+Q?\s*([\d\s,\.]+)/i,
-    /PAGAR[:\s]+Q?\s*([\d\s,\.]+)/i,
-  ];
+  // Strategy 1: Look for "TOTAL A PAGAR" heading followed by amount on next line
+  const totalAPagarMatch = text.match(/TOTAL\s+A\s+PAGAR\s*\n+\s*([\d]+(?:[.,]\d{1,2})?)/i);
+  if (totalAPagarMatch) {
+    const amount = parseAmount(totalAPagarMatch[1]);
+    if (amount !== null) {
+      result.amountPaid = amount;
+      result.fieldsFound++;
+      console.log("Found amountPaid (heading style):", result.amountPaid);
+    }
+  }
   
-  for (const pattern of amountPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const amount = parseAmount(match[1]);
-      if (amount !== null) {
-        result.amountPaid = amount;
-        result.fieldsFound++;
-        console.log("Found amountPaid:", result.amountPaid);
-        break;
+  // Strategy 2: Look for inline patterns if not found
+  if (result.amountPaid === undefined) {
+    const amountPatterns = [
+      /TOTAL\s+A\s+PAGAR[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+      /MONTO\s+A\s+PAGAR[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+      /Impuesto\s+a\s+pagar[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+    ];
+    
+    for (const pattern of amountPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const amount = parseAmount(match[1]);
+        if (amount !== null) {
+          result.amountPaid = amount;
+          result.fieldsFound++;
+          console.log("Found amountPaid (inline):", result.amountPaid);
+          break;
+        }
       }
     }
   }
