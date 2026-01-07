@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -51,6 +52,8 @@ const Dashboard = () => {
   const [yearlySalesData, setYearlySalesData] = useState<MonthlyChartData[]>([]);
   const [yearlyPurchasesData, setYearlyPurchasesData] = useState<MonthlyChartData[]>([]);
   const [activeYear, setActiveYear] = useState<number>(new Date().getFullYear());
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [selectedChartYear, setSelectedChartYear] = useState<number>(new Date().getFullYear());
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -509,6 +512,56 @@ const Dashboard = () => {
     };
   }, []);
 
+  // Cargar años disponibles con datos
+  useEffect(() => {
+    const fetchAvailableYears = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) return;
+
+      try {
+        // Obtener años de ventas
+        const { data: sales } = await supabase
+          .from("tab_sales_ledger")
+          .select("invoice_date")
+          .eq("enterprise_id", parseInt(currentEnterpriseId));
+
+        // Obtener años de compras
+        const { data: purchaseBooks } = await supabase
+          .from("tab_purchase_books")
+          .select("year")
+          .eq("enterprise_id", parseInt(currentEnterpriseId));
+
+        const yearsSet = new Set<number>();
+        
+        // Extraer años de ventas
+        sales?.forEach(s => {
+          yearsSet.add(new Date(s.invoice_date).getFullYear());
+        });
+        
+        // Extraer años de compras
+        purchaseBooks?.forEach(p => {
+          yearsSet.add(p.year);
+        });
+
+        const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+        setAvailableYears(sortedYears);
+        
+        // Inicializar con el año activo o el más reciente
+        if (sortedYears.length > 0) {
+          if (sortedYears.includes(activeYear)) {
+            setSelectedChartYear(activeYear);
+          } else {
+            setSelectedChartYear(sortedYears[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching available years:", error);
+      }
+    };
+
+    fetchAvailableYears();
+  }, [activeYear]);
+
   // Cargar datos anuales para gráficas
   useEffect(() => {
     const fetchYearlyData = async () => {
@@ -525,14 +578,14 @@ const Dashboard = () => {
         const initializeMonthlyData = (): MonthlyChartData[] => 
           monthNames.map((month, index) => ({ month, monthNum: index + 1, total: 0 }));
 
-        // Fetch ventas del año del período contable (excluding annulled invoices)
+        // Fetch ventas del año seleccionado (excluding annulled invoices)
         const { data: sales } = await supabase
           .from("tab_sales_ledger")
           .select("invoice_date, total_amount")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .eq("is_annulled", false)
-          .gte("invoice_date", `${activeYear}-01-01`)
-          .lte("invoice_date", `${activeYear}-12-31`);
+          .gte("invoice_date", `${selectedChartYear}-01-01`)
+          .lte("invoice_date", `${selectedChartYear}-12-31`);
 
         const salesByMonth = initializeMonthlyData();
         if (sales) {
@@ -543,12 +596,12 @@ const Dashboard = () => {
         }
         setYearlySalesData(salesByMonth);
 
-        // Fetch compras del año del período contable
+        // Fetch compras del año seleccionado
         const { data: purchaseBooks } = await supabase
           .from("tab_purchase_books")
           .select("id, month, year")
           .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .eq("year", activeYear);
+          .eq("year", selectedChartYear);
 
         const purchasesByMonth = initializeMonthlyData();
         if (purchaseBooks && purchaseBooks.length > 0) {
@@ -573,7 +626,7 @@ const Dashboard = () => {
     };
 
     fetchYearlyData();
-  }, [activeYear]);
+  }, [selectedChartYear]);
 
   // KPIs dinámicos
   const formatChange = (change: number | null | undefined, isPercentage = true): string => {
@@ -882,10 +935,29 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Ventas del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de ventas {activeYear}
+                  Total mensual de ventas {selectedChartYear}
                 </CardDescription>
               </div>
-              <Receipt className="h-6 w-6 text-success" />
+              <div className="flex items-center gap-2">
+                {availableYears.length > 1 && (
+                  <Select 
+                    value={selectedChartYear.toString()} 
+                    onValueChange={(v) => setSelectedChartYear(parseInt(v))}
+                  >
+                    <SelectTrigger className="w-[100px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableYears.map(year => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Receipt className="h-6 w-6 text-success" />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -940,10 +1012,29 @@ const Dashboard = () => {
               <div>
                 <CardTitle>Compras del Año</CardTitle>
                 <CardDescription>
-                  Total mensual de compras {activeYear}
+                  Total mensual de compras {selectedChartYear}
                 </CardDescription>
               </div>
-              <ShoppingCart className="h-6 w-6 text-destructive" />
+              <div className="flex items-center gap-2">
+                {availableYears.length > 1 && (
+                  <Select 
+                    value={selectedChartYear.toString()} 
+                    onValueChange={(v) => setSelectedChartYear(parseInt(v))}
+                  >
+                    <SelectTrigger className="w-[100px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableYears.map(year => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <ShoppingCart className="h-6 w-6 text-destructive" />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
