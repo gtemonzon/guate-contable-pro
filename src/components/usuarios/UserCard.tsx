@@ -2,6 +2,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Mail, Building2, Shield } from "lucide-react";
+import ActivityIndicator from "./ActivityIndicator";
 
 interface UserCardProps {
   user: {
@@ -10,6 +11,8 @@ interface UserCardProps {
     full_name: string;
     is_super_admin: boolean;
     is_active: boolean;
+    last_activity_at?: string | null;
+    current_enterprise_name?: string | null;
     enterprises?: Array<{
       enterprise_id: number;
       role: string;
@@ -30,7 +33,13 @@ const UserCard = ({ user, onEdit }: UserCardProps) => {
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h3 className="font-semibold text-lg">{user.full_name}</h3>
+            <div className="flex items-center gap-2">
+              <ActivityIndicator 
+                lastActivityAt={user.last_activity_at ?? null} 
+                currentEnterpriseName={user.current_enterprise_name ?? null} 
+              />
+              <h3 className="font-semibold text-lg">{user.full_name}</h3>
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <Mail className="h-3 w-3 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{user.email}</p>

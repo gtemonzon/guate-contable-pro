@@ -1760,32 +1760,38 @@ export type Database = {
       tab_users: {
         Row: {
           created_at: string | null
+          current_enterprise_name: string | null
           email: string
           full_name: string
           id: string
           is_active: boolean | null
           is_super_admin: boolean | null
           is_system_user: boolean | null
+          last_activity_at: string | null
           last_enterprise_id: number | null
         }
         Insert: {
           created_at?: string | null
+          current_enterprise_name?: string | null
           email: string
           full_name: string
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
           is_system_user?: boolean | null
+          last_activity_at?: string | null
           last_enterprise_id?: number | null
         }
         Update: {
           created_at?: string | null
+          current_enterprise_name?: string | null
           email?: string
           full_name?: string
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
           is_system_user?: boolean | null
+          last_activity_at?: string | null
           last_enterprise_id?: number | null
         }
         Relationships: [
