@@ -15,6 +15,8 @@ interface User {
   is_super_admin: boolean;
   is_active: boolean;
   created_at: string;
+  last_activity_at: string | null;
+  current_enterprise_name: string | null;
   enterprises?: Array<{
     enterprise_id: number;
     role: string;

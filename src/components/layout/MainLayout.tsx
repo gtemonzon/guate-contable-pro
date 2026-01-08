@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { useActivityTracker } from "@/hooks/useActivityTracker";
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -53,6 +54,9 @@ const MainLayout = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  // Activity tracking
+  useActivityTracker({ userId: user?.id, enterpriseName: currentEnterprise });
 
   // Fetch and listen for current enterprise changes
   useEffect(() => {
