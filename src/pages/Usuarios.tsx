@@ -40,6 +40,34 @@ const Usuarios = () => {
     fetchUsers();
   }, []);
 
+  // Suscripción a cambios en tiempo real para actualizar semáforos
+  useEffect(() => {
+    const channel = supabase
+      .channel('users-activity')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tab_users',
+        },
+        (payload) => {
+          setUsers(prevUsers =>
+            prevUsers.map(user =>
+              user.id === payload.new.id
+                ? { ...user, last_activity_at: payload.new.last_activity_at, current_enterprise_name: payload.new.current_enterprise_name }
+                : user
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
