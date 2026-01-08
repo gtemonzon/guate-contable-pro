@@ -72,6 +72,7 @@ const Usuarios = () => {
             )
           )
         `)
+        .eq("is_system_user", false)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
