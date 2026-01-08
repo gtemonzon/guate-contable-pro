@@ -1765,6 +1765,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_super_admin: boolean | null
+          is_system_user: boolean | null
           last_enterprise_id: number | null
         }
         Insert: {
@@ -1774,6 +1775,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
+          is_system_user?: boolean | null
           last_enterprise_id?: number | null
         }
         Update: {
@@ -1783,6 +1785,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_super_admin?: boolean | null
+          is_system_user?: boolean | null
           last_enterprise_id?: number | null
         }
         Relationships: [
