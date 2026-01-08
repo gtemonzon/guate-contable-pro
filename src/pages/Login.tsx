@@ -32,10 +32,10 @@ const Login = () => {
 
       if (error) throw error;
 
-      // Verificar si el usuario está activo
+      // Verificar si el usuario está activo y obtener última empresa
       const { data: userData, error: userError } = await supabase
         .from("tab_users")
-        .select("is_active")
+        .select("is_active, last_enterprise_id")
         .eq("id", data.user.id)
         .single();
 
@@ -44,6 +44,59 @@ const Login = () => {
       if (!userData.is_active) {
         await supabase.auth.signOut();
         throw new Error("Tu cuenta está inactiva. Contacta al administrador.");
+      }
+
+      // Obtener empresas asignadas al usuario
+      const { data: userEnterprises, error: enterprisesError } = await supabase
+        .from("tab_user_enterprises")
+        .select("enterprise_id, tab_enterprises(id, business_name, is_active)")
+        .eq("user_id", data.user.id);
+
+      if (enterprisesError) throw enterprisesError;
+
+      // Filtrar solo empresas activas
+      const activeEnterprises = userEnterprises?.filter(
+        (ue) => ue.tab_enterprises && (ue.tab_enterprises as any).is_active
+      ) || [];
+
+      if (activeEnterprises.length === 0) {
+        await supabase.auth.signOut();
+        toast({
+          variant: "destructive",
+          title: "Sin acceso a empresas",
+          description: "No tienes empresas asignadas. Contacta a tu administrador para que te asigne acceso a una empresa.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      let enterpriseIdToUse: number | null = null;
+
+      // Prioridad 1: Usar última empresa si existe y está en las asignadas
+      if (userData.last_enterprise_id) {
+        const lastEnterpriseValid = activeEnterprises.find(
+          (ue) => ue.enterprise_id === userData.last_enterprise_id
+        );
+        if (lastEnterpriseValid) {
+          enterpriseIdToUse = userData.last_enterprise_id;
+        }
+      }
+
+      // Prioridad 2: Si no hay última empresa válida, usar la primera asignada
+      if (!enterpriseIdToUse && activeEnterprises.length > 0) {
+        enterpriseIdToUse = activeEnterprises[0].enterprise_id;
+        
+        // Actualizar en BD la última empresa para futuras sesiones
+        await supabase
+          .from("tab_users")
+          .update({ last_enterprise_id: enterpriseIdToUse })
+          .eq("id", data.user.id);
+      }
+
+      // Guardar en localStorage
+      if (enterpriseIdToUse) {
+        localStorage.setItem("currentEnterpriseId", enterpriseIdToUse.toString());
+        window.dispatchEvent(new Event("enterpriseChanged"));
       }
 
       toast({
