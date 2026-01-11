@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown, XCircle, Clock, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown, XCircle, Clock, ThumbsUp, ThumbsDown, Lock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,6 +117,9 @@ export default function JournalEntryDialog({
   // Estado actual de la partida
   const [entryStatus, setEntryStatus] = useState<EntryStatus>('borrador');
 
+  // Estado para modo solo lectura (período cerrado)
+  const [isReadOnly, setIsReadOnly] = useState(false);
+
   // Estado para información de auditoría
   const [auditInfo, setAuditInfo] = useState<{
     createdBy: string | null;
@@ -157,6 +160,7 @@ export default function JournalEntryDialog({
     setAuditInfo(null);
     setEntryStatus('borrador');
     setAccountSearch({});
+    setIsReadOnly(false);
   };
 
   useEffect(() => {
@@ -472,6 +476,23 @@ export default function JournalEntryDialog({
       
       // Establecer estado de la partida
       setEntryStatus((entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus);
+
+      // Verificar si el período está cerrado para modo solo lectura
+      if (entry.accounting_period_id) {
+        const { data: periodData } = await supabase
+          .from('tab_accounting_periods')
+          .select('status')
+          .eq('id', entry.accounting_period_id)
+          .single();
+        
+        if (periodData?.status === 'cerrado') {
+          setIsReadOnly(true);
+          toast({
+            title: "Período cerrado",
+            description: "Esta partida pertenece a un período cerrado y no puede ser editada",
+          });
+        }
+      }
 
       // Convertir detalles a formato de líneas
       const lines: DetailLine[] = details.map((d) => ({
@@ -1200,7 +1221,7 @@ export default function JournalEntryDialog({
               </Button>
               
               {/* Botones según permisos y estado */}
-              {entryStatus !== 'contabilizado' && permissions.canCreateEntries && (
+              {entryStatus !== 'contabilizado' && permissions.canCreateEntries && !isReadOnly && (
                 <Button 
                   variant="secondary" 
                   onClick={() => saveEntry(false)} 
@@ -1211,7 +1232,7 @@ export default function JournalEntryDialog({
                 </Button>
               )}
               
-              {entryStatus !== 'contabilizado' && permissions.canPostEntries && (
+              {entryStatus !== 'contabilizado' && permissions.canPostEntries && !isReadOnly && (
                 <Button 
                   onClick={() => saveEntry(true)} 
                   disabled={loading || !isBalanced()}
@@ -1219,6 +1240,13 @@ export default function JournalEntryDialog({
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Contabilizar
                 </Button>
+              )}
+
+              {isReadOnly && (
+                <Badge variant="secondary" className="px-3 py-2">
+                  <Lock className="mr-2 h-4 w-4" />
+                  Período cerrado - Solo lectura
+                </Badge>
               )}
             </div>
           </div>
