@@ -4,10 +4,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, CheckCircle2, Calendar, Lock, LockOpen } from "lucide-react";
+import { Plus, Edit, CheckCircle2, Calendar, Lock, LockOpen, PlayCircle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import PeriodDialog from "@/components/periodos/PeriodDialog";
+import { PeriodClosingWizard } from "@/components/periodos/PeriodClosingWizard";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 interface EnterprisePeriodsProps {
@@ -21,6 +22,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [closingWizardPeriod, setClosingWizardPeriod] = useState<any>(null);
 
   useEffect(() => {
     fetchPeriods();
@@ -275,9 +277,11 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleClosePeriod(period.id, period)}
+                        onClick={() => setClosingWizardPeriod(period)}
+                        title="Iniciar asistente de cierre"
                       >
-                        <Lock className="h-4 w-4" />
+                        <PlayCircle className="h-4 w-4 mr-1" />
+                        Cerrar
                       </Button>
                     ) : (
                       <Button
@@ -304,6 +308,19 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
           fetchPeriods();
           setDialogOpen(false);
           setSelectedPeriod(null);
+        }}
+      />
+
+      <PeriodClosingWizard
+        open={!!closingWizardPeriod}
+        period={closingWizardPeriod}
+        enterpriseId={enterpriseId}
+        onOpenChange={(open) => {
+          if (!open) setClosingWizardPeriod(null);
+        }}
+        onSuccess={() => {
+          fetchPeriods();
+          setClosingWizardPeriod(null);
         }}
       />
     </div>
