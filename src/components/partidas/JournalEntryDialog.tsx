@@ -125,6 +125,10 @@ export default function JournalEntryDialog({
     updatedAt: string | null;
   } | null>(null);
 
+  // Estado y ref para el encabezado sticky
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [showStickyHeader, setShowStickyHeader] = useState(false);
+
   const { toast } = useToast();
   const permissions = useUserPermissions();
 
@@ -168,8 +172,26 @@ export default function JournalEntryDialog({
         loadInitialData();
         resetForm();
       }
+      // Reset sticky header state when dialog opens
+      setShowStickyHeader(false);
     }
   }, [open, entryToEdit]);
+
+  // Observer para detectar cuando el encabezado sale de la vista
+  useEffect(() => {
+    if (!open || !headerRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Mostrar sticky header cuando el original NO es visible
+        setShowStickyHeader(!entry.isIntersecting);
+      },
+      { threshold: 0, rootMargin: '-10px 0px 0px 0px' }
+    );
+    
+    observer.observe(headerRef.current);
+    return () => observer.disconnect();
+  }, [open, isLoadingEntry]);
 
   // Función para propagar la descripción del encabezado a líneas vacías (llamada al perder el foco)
   const propagateDescriptionToLines = useCallback(() => {
@@ -860,8 +882,35 @@ export default function JournalEntryDialog({
           </div>
         ) : (
         <div className="space-y-6">
+          {/* Encabezado Sticky Compacto */}
+          {showStickyHeader && (
+            <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b shadow-sm py-2 px-4 -mx-6 -mt-2">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant="outline" className="font-mono text-xs">
+                  {nextEntryNumber || 'Nueva'}
+                </Badge>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground">
+                  {entryDate ? new Date(entryDate + 'T00:00:00').toLocaleDateString('es-GT') : 'Sin fecha'}
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <Badge variant="secondary" className="text-xs capitalize">
+                  {entryType || 'Sin tipo'}
+                </Badge>
+                {headerDescription && (
+                  <>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="truncate max-w-[300px] text-muted-foreground" title={headerDescription}>
+                      {headerDescription}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Encabezado */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div ref={headerRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <Label>Número de Partida</Label>
               <Input value={nextEntryNumber} disabled />
