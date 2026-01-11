@@ -956,8 +956,8 @@ export default function JournalEntryDialog({
                     <TableHead className="w-[250px]">Descripción</TableHead>
                     <TableHead className="w-[150px]">Ref. Bancaria</TableHead>
                     <TableHead className="w-[120px]">Centro Costo</TableHead>
-                    <TableHead className="w-[120px]">Debe</TableHead>
-                    <TableHead className="w-[120px]">Haber</TableHead>
+                    <TableHead className="w-[150px]">Debe</TableHead>
+                    <TableHead className="w-[150px]">Haber</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
