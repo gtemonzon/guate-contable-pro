@@ -153,13 +153,13 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      // Get all accounts for this enterprise
+      // Get all accounts for this enterprise (income and expense types)
+      // Use lowercase variants as account_type may be stored in different cases
       const { data: accounts, error: accountsError } = await supabase
         .from('tab_accounts')
-        .select('id, account_code, account_name, account_type')
+        .select('id, account_code, account_name, account_type, allows_movement')
         .eq('enterprise_id', enterpriseId)
-        .eq('is_active', true)
-        .in('account_type', ['Ingreso', 'Gasto']);
+        .eq('is_active', true);
       
       if (accountsError) throw accountsError;
       
@@ -197,7 +197,12 @@ export function PeriodClosingWizard({
       
       accounts?.forEach(account => {
         const balance = balanceMap.get(account.id) || 0;
-        if (Math.abs(balance) > 0.01) { // Only accounts with balance
+        const accountTypeLower = account.account_type?.toLowerCase() || '';
+        const isIncomeOrExpense = accountTypeLower === 'ingreso' || accountTypeLower === 'gasto' || accountTypeLower === 'costo';
+        const isDetailAccount = account.allows_movement === true;
+        
+        // Only include detail accounts with movements that are income/expense/cost type
+        if (Math.abs(balance) > 0.01 && isIncomeOrExpense && isDetailAccount) {
           const accBalance: AccountBalance = {
             account_id: account.id,
             account_code: account.account_code,
@@ -206,9 +211,9 @@ export function PeriodClosingWizard({
             balance: balance
           };
           
-          if (account.account_type === 'Ingreso') {
+          if (accountTypeLower === 'ingreso') {
             incomes.push(accBalance);
-          } else if (account.account_type === 'Gasto') {
+          } else if (accountTypeLower === 'gasto' || accountTypeLower === 'costo') {
             expenses.push(accBalance);
           }
         }
@@ -399,15 +404,16 @@ export function PeriodClosingWizard({
       
       accounts?.forEach(account => {
         const balance = balanceMap.get(account.id) || 0;
+        const accountTypeLower = account.account_type?.toLowerCase() || '';
         
-        switch (account.account_type) {
-          case 'Activo':
+        switch (accountTypeLower) {
+          case 'activo':
             assets += balance;
             break;
-          case 'Pasivo':
+          case 'pasivo':
             liabilities += Math.abs(balance);
             break;
-          case 'Capital':
+          case 'capital':
             equity += Math.abs(balance);
             break;
         }
