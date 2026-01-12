@@ -272,13 +272,14 @@ export default function SaldosMensuales() {
         accountsToQuery = allAccounts.filter(a => accountIdsToInclude.has(a.id));
       }
 
-      // Fetch movements within selected months
+      // Fetch movements within selected months (excluding opening entries)
       const entries = await fetchAllRecords<any>(
         supabase
           .from("tab_journal_entries")
           .select(`
             id,
             entry_date,
+            entry_type,
             tab_journal_entry_details (
               account_id,
               debit_amount,
@@ -288,19 +289,47 @@ export default function SaldosMensuales() {
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .eq("accounting_period_id", periodId)
           .eq("is_posted", true)
+          .neq("entry_type", "apertura")
           .gte("entry_date", dateRange.startDate)
           .lte("entry_date", dateRange.endDate)
       );
 
-      // Fetch previous balance (before startDate) if not January
+      // Fetch previous balance entries:
+      // 1. All entries before startDate (if not January)
+      // 2. Opening entries ("apertura") always count as initial balance
       let prevEntries: any[] = [];
+      
+      // Always fetch opening entries as they're part of initial balance
+      const openingEntries = await fetchAllRecords<any>(
+        supabase
+          .from("tab_journal_entries")
+          .select(`
+            id,
+            entry_date,
+            entry_type,
+            tab_journal_entry_details (
+              account_id,
+              debit_amount,
+              credit_amount
+            )
+          `)
+          .eq("enterprise_id", parseInt(currentEnterpriseId))
+          .eq("accounting_period_id", periodId)
+          .eq("is_posted", true)
+          .eq("entry_type", "apertura")
+      );
+      
+      prevEntries = [...openingEntries];
+      
+      // Also fetch non-opening entries before the selected start date
       if (dateRange.initialBalanceEndDate) {
-        prevEntries = await fetchAllRecords<any>(
+        const priorEntries = await fetchAllRecords<any>(
           supabase
             .from("tab_journal_entries")
             .select(`
               id,
               entry_date,
+              entry_type,
               tab_journal_entry_details (
                 account_id,
                 debit_amount,
@@ -310,9 +339,11 @@ export default function SaldosMensuales() {
             .eq("enterprise_id", parseInt(currentEnterpriseId))
             .eq("accounting_period_id", periodId)
             .eq("is_posted", true)
+            .neq("entry_type", "apertura")
             .gte("entry_date", selectedPeriodData!.start_date)
             .lte("entry_date", dateRange.initialBalanceEndDate)
         );
+        prevEntries = [...prevEntries, ...priorEntries];
       }
 
       // Calculate previous balances by detail account
