@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,8 +89,6 @@ function extractDataFromText(text: string): ExtractedData {
   // Normalize text: replace multiple spaces/newlines with single space for easier matching
   const normalizedText = text.replace(/\s+/g, " ");
   
-  console.log("Extracting data from text (first 1000 chars):", text.substring(0, 1000));
-  
   // Extract Form Number (prefer extracting between headings to avoid the "4 de 4" artifact)
   const formBlock = extractBetween(
     text,
@@ -101,7 +100,6 @@ function extractDataFromText(text: string): ExtractedData {
     if (digits.length >= 7) {
       result.formNumber = digits;
       result.fieldsFound++;
-      console.log("Found formNumber (block):", result.formNumber);
     }
   }
 
@@ -122,7 +120,6 @@ function extractDataFromText(text: string): ExtractedData {
         if (digits.length >= 7) {
           result.formNumber = digits;
           result.fieldsFound++;
-          console.log("Found formNumber (regex):", result.formNumber);
           break;
         }
       }
@@ -150,7 +147,6 @@ function extractDataFromText(text: string): ExtractedData {
 
     if (result.accessCode && result.accessCode.length === 9) {
       result.fieldsFound++;
-      console.log("Found accessCode (block):", result.accessCode);
     } else {
       result.accessCode = undefined;
     }
@@ -172,7 +168,6 @@ function extractDataFromText(text: string): ExtractedData {
         if (digitsRaw.length >= 9) {
           result.accessCode = digitsRaw.slice(-9);
           result.fieldsFound++;
-          console.log("Found accessCode (regex):", result.accessCode);
           break;
         }
       }
@@ -194,7 +189,6 @@ function extractDataFromText(text: string): ExtractedData {
     if (match) {
       result.taxType = match[0].trim().toUpperCase();
       result.fieldsFound++;
-      console.log("Found taxType:", result.taxType);
       break;
     }
   }
@@ -226,12 +220,10 @@ function extractDataFromText(text: string): ExtractedData {
       if (!isNaN(numeric) && numeric >= 1 && numeric <= 12) {
         result.periodMonth = numeric;
         result.fieldsFound++;
-        console.log("Found periodMonth (direct pattern):", result.periodMonth);
         break;
       } else if (MONTH_MAP[raw]) {
         result.periodMonth = MONTH_MAP[raw];
         result.fieldsFound++;
-        console.log("Found periodMonth (direct pattern):", result.periodMonth);
         break;
       }
     }
@@ -245,7 +237,6 @@ function extractDataFromText(text: string): ExtractedData {
       if (year >= 2000 && year <= 2100) {
         result.periodYear = year;
         result.fieldsFound++;
-        console.log("Found periodYear (direct pattern):", result.periodYear);
         break;
       }
     }
@@ -259,7 +250,6 @@ function extractDataFromText(text: string): ExtractedData {
       /RENTA\s+IMPONIBLE|DETERMINACI[ÓO]N|RETENCIONES|QU[ÉE]\s+RETENCIONES|VALID(?:E|ACI[ÓO]N)|FECHA\s+DE\s+PRESENTACI[ÓO]N|TOTAL\s+A\s+PAGAR|Ingresos\s+por\s+venta/i
     );
     const periodText = (periodBlock || "").toUpperCase();
-    console.log("Period block extracted:", periodText.substring(0, 200));
 
     // Quarter (Trimestral)
     if (!result.periodMonth) {
@@ -269,8 +259,6 @@ function extractDataFromText(text: string): ExtractedData {
         result.periodType = "trimestral";
         result.periodMonth = (q - 1) * 3 + 1; // store starting month of quarter
         result.fieldsFound++;
-        console.log("Found periodType:", result.periodType);
-        console.log("Found periodQuarter:", q, "(periodMonth:", result.periodMonth, ")");
       }
     }
 
@@ -294,14 +282,12 @@ function extractDataFromText(text: string): ExtractedData {
         if (!isNaN(numeric) && numeric >= 1 && numeric <= 12) {
           result.periodMonth = numeric;
           result.fieldsFound++;
-          console.log("Found periodMonth (period block):", result.periodMonth);
           break;
         }
 
         if (MONTH_MAP[raw]) {
           result.periodMonth = MONTH_MAP[raw];
           result.fieldsFound++;
-          console.log("Found periodMonth (period block):", result.periodMonth);
           break;
         }
       }
@@ -322,7 +308,6 @@ function extractDataFromText(text: string): ExtractedData {
         if (year >= 2000 && year <= 2100) {
           result.periodYear = year;
           result.fieldsFound++;
-          console.log("Found periodYear (period block):", result.periodYear);
           break;
         }
       }
@@ -349,7 +334,6 @@ function extractDataFromText(text: string): ExtractedData {
             contextAfter.includes("2025") || contextAfter.includes("2023")) {
           result.periodMonth = MONTH_MAP[monthName];
           result.fieldsFound++;
-          console.log("Found periodMonth (context search):", result.periodMonth);
           break;
         }
       }
@@ -372,7 +356,6 @@ function extractDataFromText(text: string): ExtractedData {
           if (yearMatch) {
             result.periodYear = parseInt(yearMatch[1]);
             result.fieldsFound++;
-            console.log("Found periodYear (near month):", result.periodYear);
           }
         }
       }
@@ -387,7 +370,6 @@ function extractDataFromText(text: string): ExtractedData {
       if (year >= 2010 && year <= 2100) {
         result.periodYear = year;
         result.fieldsFound++;
-        console.log("Found periodYear (normalized text):", result.periodYear);
       }
     }
   }
@@ -402,7 +384,6 @@ function extractDataFromText(text: string): ExtractedData {
       if (yearMatch) {
         result.periodYear = parseInt(yearMatch[1]);
         result.fieldsFound++;
-        console.log("Found periodYear (period context):", result.periodYear);
       }
     }
   }
@@ -415,7 +396,6 @@ function extractDataFromText(text: string): ExtractedData {
       if (year >= 2010 && year <= 2099) {
         result.periodYear = year;
         result.fieldsFound++;
-        console.log("Found periodYear (fallback 2010+):", result.periodYear);
         break;
       }
     }
@@ -425,7 +405,6 @@ function extractDataFromText(text: string): ExtractedData {
   if (result.periodMonth && !result.periodType) {
     result.periodType = "mensual";
     result.fieldsFound++;
-    console.log("Found periodType (from month):", result.periodType);
   }
 
   // If we only have a year without month and periodType, check text for hints
@@ -438,7 +417,6 @@ function extractDataFromText(text: string): ExtractedData {
       result.periodType = "anual";
     }
     result.fieldsFound++;
-    console.log("Found periodType (text hint):", result.periodType);
   }
 
   // Last fallback: infer periodType from tax type keywords
@@ -448,7 +426,6 @@ function extractDataFromText(text: string): ExtractedData {
     else if (/MENSUAL/i.test(result.taxType)) result.periodType = "mensual";
     if (result.periodType) {
       result.fieldsFound++;
-      console.log("Found periodType (from taxType):", result.periodType);
     }
   }
 
@@ -466,7 +443,6 @@ function extractDataFromText(text: string): ExtractedData {
       if (parsed) {
         result.paymentDate = parsed;
         result.fieldsFound++;
-        console.log("Found paymentDate:", result.paymentDate);
         break;
       }
     }
@@ -480,7 +456,6 @@ function extractDataFromText(text: string): ExtractedData {
     if (amount !== null) {
       result.amountPaid = amount;
       result.fieldsFound++;
-      console.log("Found amountPaid (heading style):", result.amountPaid);
     }
   }
   
@@ -499,14 +474,12 @@ function extractDataFromText(text: string): ExtractedData {
         if (amount !== null) {
           result.amountPaid = amount;
           result.fieldsFound++;
-          console.log("Found amountPaid (inline):", result.amountPaid);
           break;
         }
       }
     }
   }
 
-  console.log("Total fields found:", result.fieldsFound);
   return result;
 }
 
@@ -517,6 +490,31 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: "No autorizado", fieldsFound: 0 }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "Token inválido o expirado", fieldsFound: 0 }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { pdfText } = await req.json();
 
     if (!pdfText) {
@@ -525,8 +523,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log("Received PDF text, length:", pdfText.length);
 
     // Extract data using regex patterns
     const extractedData = extractDataFromText(pdfText);
