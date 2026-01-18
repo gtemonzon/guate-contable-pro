@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -27,11 +27,20 @@ import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
+type TaxForm = Database['public']['Tables']['tab_tax_forms']['Row'];
 
 interface EnterpriseCardProps {
   enterprise: Enterprise;
   onEdit: (enterprise: Enterprise) => void;
   onDelete?: () => void;
+}
+
+interface LastTaxFormInfo {
+  tax_type: string | null;
+  period_month: number | null;
+  period_year: number | null;
+  created_at: string | null;
+  uploaded_by_name: string | null;
 }
 
 const TAX_REGIME_LABELS: Record<string, string> = {
@@ -41,6 +50,11 @@ const TAX_REGIME_LABELS: Record<string, string> = {
   exenta_ong: "Exenta ONG",
 };
 
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
 export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardProps) {
   const { toast } = useToast();
   const [isSelected, setIsSelected] = useState(false);
@@ -48,6 +62,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
   const [documentsCount, setDocumentsCount] = useState(0);
   const [activePeriod, setActivePeriod] = useState<any>(null);
   const [activeTaxes, setActiveTaxes] = useState<string[]>([]);
+  const [lastTaxForm, setLastTaxForm] = useState<LastTaxFormInfo | null>(null);
 
   useEffect(() => {
     const checkSelection = () => {
@@ -87,11 +102,20 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
+    // Listen for tax form changes
+    const handleTaxFormsChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.enterpriseId === enterprise.id) {
+        fetchLastTaxForm();
+      }
+    };
+
     window.addEventListener("storage", handleEnterpriseChange);
     window.addEventListener("enterpriseChanged", handleEnterpriseChange);
     window.addEventListener("periodChanged", handlePeriodChange);
     window.addEventListener("documentsChanged", handleDocumentsChange);
     window.addEventListener("taxesChanged", handleTaxesChange);
+    window.addEventListener("taxFormsChanged", handleTaxFormsChange);
 
     return () => {
       window.removeEventListener("storage", handleEnterpriseChange);
@@ -99,6 +123,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       window.removeEventListener("periodChanged", handlePeriodChange);
       window.removeEventListener("documentsChanged", handleDocumentsChange);
       window.removeEventListener("taxesChanged", handleTaxesChange);
+      window.removeEventListener("taxFormsChanged", handleTaxFormsChange);
     };
   }, [enterprise.id]);
 
@@ -132,9 +157,54 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     }
   };
 
+  const fetchLastTaxForm = async () => {
+    try {
+      // Get the last uploaded tax form for this enterprise
+      const { data: taxForm, error } = await supabase
+        .from('tab_tax_forms')
+        .select('tax_type, period_month, period_year, created_at, created_by')
+        .eq('enterprise_id', enterprise.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (taxForm) {
+        // Get the user name if created_by exists
+        let uploadedByName = "Usuario desconocido";
+        if (taxForm.created_by) {
+          const { data: userData } = await supabase
+            .from('tab_users')
+            .select('full_name')
+            .eq('id', taxForm.created_by)
+            .maybeSingle();
+          
+          if (userData?.full_name) {
+            uploadedByName = userData.full_name;
+          }
+        }
+
+        setLastTaxForm({
+          tax_type: taxForm.tax_type,
+          period_month: taxForm.period_month,
+          period_year: taxForm.period_year,
+          created_at: taxForm.created_at,
+          uploaded_by_name: uploadedByName,
+        });
+      } else {
+        setLastTaxForm(null);
+      }
+    } catch (error) {
+      console.error('Error fetching last tax form:', error);
+    }
+  };
+
   useEffect(() => {
     fetchDocumentsCount();
     fetchActiveTaxes();
+    fetchLastTaxForm();
   }, [enterprise.id]);
 
   const fetchActivePeriod = async () => {
@@ -259,6 +329,15 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     }
   };
 
+  const formatLastTaxFormDate = (dateString: string | null) => {
+    if (!dateString) return "";
+    try {
+      return format(new Date(dateString), "dd/MM/yyyy HH:mm", { locale: es });
+    } catch {
+      return "";
+    }
+  };
+
   return (
     <Card className={`hover:shadow-lg transition-shadow ${isSelected ? "ring-2 ring-primary" : ""}`}>
       <CardHeader className="pb-3">
@@ -338,6 +417,31 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
             </div>
           )}
         </div>
+
+        {/* Last Tax Form Section */}
+        {lastTaxForm && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 text-sm pt-2 border-t cursor-default">
+                  <ClipboardList className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground">Último formulario:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {lastTaxForm.tax_type || 'N/A'}
+                  </Badge>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <div className="text-sm space-y-1">
+                  <p><strong>Impuesto:</strong> {lastTaxForm.tax_type || 'N/A'}</p>
+                  <p><strong>Período:</strong> {lastTaxForm.period_month ? MONTH_NAMES[lastTaxForm.period_month - 1] : 'N/A'} {lastTaxForm.period_year || ''}</p>
+                  <p><strong>Subido:</strong> {formatLastTaxFormDate(lastTaxForm.created_at)}</p>
+                  <p><strong>Por:</strong> {lastTaxForm.uploaded_by_name}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
         {(enterprise.email || enterprise.phone || enterprise.address) && (
           <div className="space-y-2 pt-2 border-t">
