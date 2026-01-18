@@ -5,12 +5,13 @@ import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
+import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import {
   Table,
   TableBody,
@@ -49,6 +50,7 @@ export default function ReportePartidas() {
   const [entryDetails, setEntryDetails] = useState<Record<number, JournalEntryDetail[]>>({});
   const [includeDetails, setIncludeDetails] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -164,24 +166,21 @@ export default function ReportePartidas() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExport = (options: FolioExportOptions) => {
     let data: any[] = [];
     
     if (includeDetails) {
-      // Export with details
       entries.forEach(e => {
-        // Add entry header
         data.push([
           e.entry_number,
           new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
           e.entry_type,
           e.description,
-          e.total_debit.toFixed(2),
-          e.total_credit.toFixed(2),
+          options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
+          options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
           e.is_posted ? 'Contabilizado' : 'Borrador',
         ]);
         
-        // Add details if available
         if (entryDetails[e.id]) {
           entryDetails[e.id].forEach(detail => {
             data.push([
@@ -189,22 +188,21 @@ export default function ReportePartidas() {
               `  ${detail.account_code} - ${detail.account_name}`,
               '',
               detail.description || '',
-              detail.debit_amount > 0 ? detail.debit_amount.toFixed(2) : '',
-              detail.credit_amount > 0 ? detail.credit_amount.toFixed(2) : '',
+              detail.debit_amount > 0 ? (options.format === 'excel' ? detail.debit_amount.toFixed(2) : formatCurrency(detail.debit_amount)) : '',
+              detail.credit_amount > 0 ? (options.format === 'excel' ? detail.credit_amount.toFixed(2) : formatCurrency(detail.credit_amount)) : '',
               '',
             ]);
           });
         }
       });
     } else {
-      // Export summary only
       data = entries.map(e => [
         e.entry_number,
         new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
         e.entry_type,
         e.description,
-        e.total_debit.toFixed(2),
-        e.total_credit.toFixed(2),
+        options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
+        options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
         e.is_posted ? 'Contabilizado' : 'Borrador',
       ]);
     }
@@ -213,9 +211,9 @@ export default function ReportePartidas() {
     const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
     const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
-    exportToExcel({
-      filename: `Partidas_${dateFrom}_${dateTo}`,
-      title: `Reporte de Partidas${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+    const exportOptions = {
+      filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+      title: `Libro Diario${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
       enterpriseName,
       headers,
       data,
@@ -224,79 +222,23 @@ export default function ReportePartidas() {
         { label: "Total Haber", value: formatCurrency(totalCredit) },
         { label: "Cantidad de Partidas", value: entries.length.toString() },
       ],
-    });
+    };
 
-    toast({
-      title: "Exportado",
-      description: "El reporte se ha exportado a Excel correctamente",
-    });
-  };
-
-  const handleExportPDF = () => {
-    let data: any[] = [];
-    
-    if (includeDetails) {
-      // Export with details
-      entries.forEach(e => {
-        // Add entry header
-        data.push([
-          e.entry_number,
-          new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-          e.entry_type,
-          e.description,
-          formatCurrency(e.total_debit),
-          formatCurrency(e.total_credit),
-          e.is_posted ? 'Contabilizado' : 'Borrador',
-        ]);
-        
-        // Add details if available
-        if (entryDetails[e.id]) {
-          entryDetails[e.id].forEach(detail => {
-            data.push([
-              '',
-              `  ${detail.account_code} - ${detail.account_name}`,
-              '',
-              detail.description || '',
-              detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '',
-              detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '',
-              '',
-            ]);
-          });
-        }
-      });
+    if (options.format === 'excel') {
+      exportToExcel(exportOptions);
     } else {
-      // Export summary only
-      data = entries.map(e => [
-        e.entry_number,
-        new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-        e.entry_type,
-        e.description,
-        formatCurrency(e.total_debit),
-        formatCurrency(e.total_credit),
-        e.is_posted ? 'Contabilizado' : 'Borrador',
-      ]);
+      exportToPDF({
+        ...exportOptions,
+        folioOptions: {
+          includeFolio: options.includeFolio,
+          startingFolio: options.startingFolio,
+        },
+      });
     }
 
-    const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
-    const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
-
-    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
-    exportToPDF({
-      filename: `Partidas_${dateFrom}_${dateTo}`,
-      title: `Reporte de Partidas${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
-      enterpriseName,
-      headers,
-      data,
-      totals: [
-        { label: "Total Debe", value: formatCurrency(totalDebit) },
-        { label: "Total Haber", value: formatCurrency(totalCredit) },
-        { label: "Cantidad de Partidas", value: entries.length.toString() },
-      ],
-    });
-
     toast({
       title: "Exportado",
-      description: "El reporte se ha exportado a PDF correctamente",
+      description: `El reporte se ha exportado a ${options.format.toUpperCase()} correctamente`,
     });
   };
 
@@ -345,18 +287,21 @@ export default function ReportePartidas() {
         </div>
 
         {entries.length > 0 && (
-          <div className="flex items-end gap-2">
-            <Button variant="outline" onClick={handleExportExcel} className="flex-1">
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Excel
-            </Button>
-            <Button variant="outline" onClick={handleExportPDF} className="flex-1">
-              <FileText className="h-4 w-4 mr-2" />
-              PDF
+          <div className="flex items-end">
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="w-full">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar
             </Button>
           </div>
         )}
       </div>
+
+      <FolioExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExport}
+        title="Exportar Libro Diario"
+      />
 
       {entries.length > 0 && (
         <div className="space-y-4">
