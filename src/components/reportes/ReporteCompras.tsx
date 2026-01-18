@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
+import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import {
   Table,
   TableBody,
@@ -54,6 +55,7 @@ export default function ReporteCompras() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const monthNames = [
@@ -248,7 +250,7 @@ export default function ReporteCompras() {
     return statistics;
   };
 
-  const handleExportExcel = () => {
+  const handleExport = (options: FolioExportOptions) => {
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Proveedor", "Base", "IVA", "Total"];
     const data = purchases.map(p => {
       const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
@@ -260,15 +262,21 @@ export default function ReporteCompras() {
         p.fel_document_type,
         p.supplier_nit,
         p.supplier_name,
-        (p.base_amount * multiplier).toFixed(2),
-        (p.vat_amount * multiplier).toFixed(2),
-        (p.total_amount * multiplier).toFixed(2),
+        options.format === 'excel' 
+          ? (p.base_amount * multiplier).toFixed(2) 
+          : `Q ${(p.base_amount * multiplier).toFixed(2)}`,
+        options.format === 'excel' 
+          ? (p.vat_amount * multiplier).toFixed(2) 
+          : `Q ${(p.vat_amount * multiplier).toFixed(2)}`,
+        options.format === 'excel' 
+          ? (p.total_amount * multiplier).toFixed(2) 
+          : `Q ${(p.total_amount * multiplier).toFixed(2)}`,
       ];
     });
 
-    exportToExcel({
+    const exportOptions = {
       filename: `Compras_${monthNames[selectedMonth - 1]}_${selectedYear}`,
-      title: `Reporte de Compras - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+      title: `Libro de Compras - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       enterpriseName,
       headers,
       data,
@@ -279,50 +287,23 @@ export default function ReporteCompras() {
         { label: "Total documentos", value: `${calculatedTotals.documentCount}` },
       ],
       statistics: getStatistics(),
-    });
+    };
+
+    if (options.format === 'excel') {
+      exportToExcel(exportOptions);
+    } else {
+      exportToPDF({
+        ...exportOptions,
+        folioOptions: {
+          includeFolio: options.includeFolio,
+          startingFolio: options.startingFolio,
+        },
+      });
+    }
 
     toast({
       title: "Exportado",
-      description: "El reporte se ha exportado a Excel correctamente",
-    });
-  };
-
-  const handleExportPDF = () => {
-    const headers = ["Fecha", "Serie", "Número", "Tipo", "NIT", "Proveedor", "Base", "IVA", "Total"];
-    const data = purchases.map(p => {
-      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-      const multiplier = docType?.affects_total ?? 1;
-      return [
-        new Date(p.invoice_date + 'T00:00:00').toLocaleDateString('es-GT'),
-        p.invoice_series || '',
-        p.invoice_number,
-        p.fel_document_type,
-        p.supplier_nit,
-        p.supplier_name,
-        `Q ${(p.base_amount * multiplier).toFixed(2)}`,
-        `Q ${(p.vat_amount * multiplier).toFixed(2)}`,
-        `Q ${(p.total_amount * multiplier).toFixed(2)}`,
-      ];
-    });
-
-    exportToPDF({
-      filename: `Compras_${monthNames[selectedMonth - 1]}_${selectedYear}`,
-      title: `Reporte de Compras - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-      enterpriseName,
-      headers,
-      data,
-      totals: [
-        { label: "Total Base", value: `Q ${formatCurrency(calculatedTotals.totalBase)}` },
-        { label: "Total IVA", value: `Q ${formatCurrency(calculatedTotals.totalVAT)}` },
-        { label: "Total con IVA", value: `Q ${formatCurrency(calculatedTotals.totalAmount)}` },
-        { label: "Total documentos", value: `${calculatedTotals.documentCount}` },
-      ],
-      statistics: getStatistics(),
-    });
-
-    toast({
-      title: "Exportado",
-      description: "El reporte se ha exportado a PDF correctamente",
+      description: `El reporte se ha exportado a ${options.format.toUpperCase()} correctamente`,
     });
   };
 
@@ -365,18 +346,21 @@ export default function ReporteCompras() {
         </div>
 
         {purchases.length > 0 && (
-          <div className="flex items-end gap-2">
-            <Button variant="outline" onClick={handleExportExcel} className="flex-1">
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Excel
-            </Button>
-            <Button variant="outline" onClick={handleExportPDF} className="flex-1">
-              <FileText className="h-4 w-4 mr-2" />
-              PDF
+          <div className="flex items-end">
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="w-full">
+              <Download className="h-4 w-4 mr-2" />
+              Exportar
             </Button>
           </div>
         )}
       </div>
+
+      <FolioExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExport}
+        title="Exportar Libro de Compras"
+      />
 
       {purchases.length > 0 && (
         <div className="space-y-4">

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { FileDown, FileSpreadsheet, Loader2, Check, ChevronsUpDown } from "lucide-react";
+import { Download, Loader2, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import {
   Table,
   TableBody,
@@ -54,6 +55,7 @@ export default function ReporteLibroMayor() {
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -311,7 +313,7 @@ export default function ReporteLibroMayor() {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExport = (options: FolioExportOptions) => {
     if (ledgerEntries.length === 0) return;
 
     const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
@@ -334,8 +336,8 @@ export default function ReporteLibroMayor() {
     const previousBalance = ledgerEntries[0]?.previous_balance || 0;
     const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
 
-    exportToExcel({
-      filename: `libro-mayor-${startDate}-${endDate}`,
+    const exportOptions = {
+      filename: `Libro_Mayor_${startDate}_${endDate}`,
       title: `Libro Mayor - ${accountsLabel}`,
       enterpriseName: enterpriseName,
       headers,
@@ -346,44 +348,23 @@ export default function ReporteLibroMayor() {
         { label: "Total Haber", value: formatCurrency(totalCredit) },
         { label: "Saldo Final", value: formatCurrency(Math.abs(finalBalance)) },
       ],
-    });
-  };
+    };
 
-  const handleExportPDF = () => {
-    if (ledgerEntries.length === 0) return;
+    if (options.format === 'excel') {
+      exportToExcel(exportOptions);
+    } else {
+      exportToPDF({
+        ...exportOptions,
+        folioOptions: {
+          includeFolio: options.includeFolio,
+          startingFolio: options.startingFolio,
+        },
+      });
+    }
 
-    const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
-    const accountsLabel = selectedAccounts.length === accounts.length 
-      ? "Todas las cuentas"
-      : selectedAccountsInfo.map(a => `${a.account_code} ${a.account_name}`).join(", ");
-
-    const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
-    const data = ledgerEntries.map(entry => [
-      entry.entry_date,
-      entry.entry_number,
-      entry.description,
-      entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
-      entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
-      formatCurrency(Math.abs(entry.balance)),
-    ]);
-
-    const totalDebit = ledgerEntries.reduce((sum, entry) => sum + entry.debit_amount, 0);
-    const totalCredit = ledgerEntries.reduce((sum, entry) => sum + entry.credit_amount, 0);
-    const previousBalance = ledgerEntries[0]?.previous_balance || 0;
-    const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
-
-    exportToPDF({
-      filename: `libro-mayor-${startDate}-${endDate}`,
-      title: `Libro Mayor - ${accountsLabel}`,
-      enterpriseName: enterpriseName,
-      headers,
-      data,
-      totals: [
-        { label: "Saldo Anterior", value: formatCurrency(Math.abs(previousBalance)) },
-        { label: "Total Debe", value: formatCurrency(totalDebit) },
-        { label: "Total Haber", value: formatCurrency(totalCredit) },
-        { label: "Saldo Final", value: formatCurrency(Math.abs(finalBalance)) },
-      ],
+    toast({
+      title: "Exportado",
+      description: `El reporte se ha exportado a ${options.format.toUpperCase()} correctamente`,
     });
   };
 
@@ -490,18 +471,19 @@ export default function ReporteLibroMayor() {
         </Button>
         
         {reportGenerated && ledgerEntries.length > 0 && (
-          <>
-            <Button variant="outline" onClick={handleExportExcel}>
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Excel
-            </Button>
-            <Button variant="outline" onClick={handleExportPDF}>
-              <FileDown className="mr-2 h-4 w-4" />
-              PDF
-            </Button>
-          </>
+          <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
+            <Download className="mr-2 h-4 w-4" />
+            Exportar
+          </Button>
         )}
       </div>
+
+      <FolioExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExport}
+        title="Exportar Libro Mayor"
+      />
 
       {reportGenerated && ledgerEntries.length > 0 && (
         <div className="space-y-4">
