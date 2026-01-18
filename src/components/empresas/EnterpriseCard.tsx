@@ -27,7 +27,6 @@ import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
-type TaxForm = Database['public']['Tables']['tab_tax_forms']['Row'];
 
 interface EnterpriseCardProps {
   enterprise: Enterprise;
@@ -70,15 +69,12 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       setIsSelected(currentEnterpriseId === enterprise.id.toString());
     };
 
-    // Check on mount
     checkSelection();
 
-    // Listen for enterprise selection changes
     const handleEnterpriseChange = () => {
       checkSelection();
     };
 
-    // Listen for period changes
     const handlePeriodChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.enterpriseId === enterprise.id) {
@@ -86,7 +82,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
-    // Listen for document changes
     const handleDocumentsChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.enterpriseId === enterprise.id) {
@@ -94,7 +89,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
-    // Listen for tax configuration changes
     const handleTaxesChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.enterpriseId === enterprise.id) {
@@ -102,7 +96,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
     };
 
-    // Listen for tax form changes
     const handleTaxFormsChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.enterpriseId === enterprise.id) {
@@ -159,7 +152,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
 
   const fetchLastTaxForm = async () => {
     try {
-      // Get the last uploaded tax form for this enterprise
       const { data: taxForm, error } = await supabase
         .from('tab_tax_forms')
         .select('tax_type, period_month, period_year, created_at, created_by')
@@ -172,7 +164,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       if (error) throw error;
 
       if (taxForm) {
-        // Get the user name if created_by exists
         let uploadedByName = "Usuario desconocido";
         if (taxForm.created_by) {
           const { data: userData } = await supabase
@@ -246,7 +237,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
     localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
     setIsSelected(true);
     
-    // Guardar última empresa seleccionada en la base de datos
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase
@@ -255,11 +245,9 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
         .eq('id', user.id);
     }
     
-    // Cargar período activo de la empresa (si existe)
     const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterprise.id}`);
     
     if (!savedPeriodId) {
-      // Buscar período abierto más reciente
       const { data } = await supabase
         .from('tab_accounting_periods')
         .select('*')
@@ -289,7 +277,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       });
     }
     
-    // Trigger events for other components to react
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("enterpriseChanged", {
       detail: { enterpriseId: enterprise.id }
@@ -305,7 +292,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
 
       if (error) throw error;
 
-      // If the deleted enterprise was selected, clear the selection
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
       if (currentEnterpriseId === enterprise.id.toString()) {
         localStorage.removeItem("currentEnterpriseId");
@@ -418,7 +404,6 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
           )}
         </div>
 
-        {/* Last Tax Form Section */}
         {lastTaxForm && (
           <TooltipProvider>
             <Tooltip>
