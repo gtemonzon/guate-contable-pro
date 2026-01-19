@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import {
@@ -75,12 +76,13 @@ interface ValidPurchase {
   operation_type_id?: number | null;
 }
 
-interface DuplicateRecord {
+interface PurchaseDuplicateRecord {
   id: number;
   invoice_series: string;
   invoice_number: string;
   supplier_nit: string;
   supplier_name: string;
+  fel_document_type: string;
   total_amount: number;
   invoice_date: string;
 }
@@ -88,7 +90,7 @@ interface DuplicateRecord {
 interface ValidationResult {
   validRecords: ValidPurchase[];
   duplicateRecords: ValidPurchase[];
-  existingDuplicates: DuplicateRecord[];
+  existingDuplicates: PurchaseDuplicateRecord[];
   errors: ValidationError[];
   skippedAnuladas: number;
   periodSummary: { period: string; count: number }[];
@@ -545,7 +547,7 @@ export function ImportPurchasesDialog({
       }
 
       const duplicateRecords: ValidPurchase[] = [];
-      const existingDuplicates: DuplicateRecord[] = [];
+      const existingDuplicates: PurchaseDuplicateRecord[] = [];
       const validRecords: ValidPurchase[] = [];
 
       for (const [bookId, records] of recordsByBook) {
@@ -557,17 +559,21 @@ export function ImportPurchasesDialog({
           invoice_number: r.invoice_number,
         }));
 
-        // Query existing records for this book
-        const { data: existingRecords } = await supabase
-          .from("tab_purchase_ledger")
-          .select("id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type")
-          .eq("purchase_book_id", bookId)
-          .eq("enterprise_id", enterpriseId);
+        // Query existing records for this book (paginate to avoid missing duplicates >1000)
+        const existingRecords = await fetchAllRecords<PurchaseDuplicateRecord>(
+          supabase
+            .from("tab_purchase_ledger")
+            .select(
+              "id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
+            )
+            .eq("purchase_book_id", bookId)
+            .eq("enterprise_id", enterpriseId)
+        );
 
         if (existingRecords && existingRecords.length > 0) {
           // Create a set of existing keys for fast lookup
           const existingKeys = new Set(
-            existingRecords.map(r => 
+            existingRecords.map((r: any) => 
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -577,7 +583,7 @@ export function ImportPurchasesDialog({
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
               // Find the existing record to show details
-              const existing = existingRecords.find(r => 
+              const existing = existingRecords.find((r: any) => 
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&
@@ -753,19 +759,23 @@ export function ImportPurchasesDialog({
       }
       
       const duplicateRecords: ValidPurchase[] = [];
-      const existingDuplicates: DuplicateRecord[] = [];
+      const existingDuplicates: PurchaseDuplicateRecord[] = [];
       const validRecords: ValidPurchase[] = [];
       
       for (const [bookId, records] of recordsByBook) {
-        const { data: existingRecords } = await supabase
-          .from("tab_purchase_ledger")
-          .select("id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type")
-          .eq("purchase_book_id", bookId)
-          .eq("enterprise_id", enterpriseId);
+        const existingRecords = await fetchAllRecords<PurchaseDuplicateRecord>(
+          supabase
+            .from("tab_purchase_ledger")
+            .select(
+              "id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
+            )
+            .eq("purchase_book_id", bookId)
+            .eq("enterprise_id", enterpriseId)
+        );
         
         if (existingRecords && existingRecords.length > 0) {
           const existingKeys = new Set(
-            existingRecords.map(r => 
+            existingRecords.map((r: any) => 
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -774,12 +784,12 @@ export function ImportPurchasesDialog({
             const key = `${record.supplier_nit}|${record.fel_document_type}|${record.invoice_series || ''}|${record.invoice_number}`;
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
-              const existing = existingRecords.find(r => 
-                r.supplier_nit === record.supplier_nit &&
-                r.fel_document_type === record.fel_document_type &&
-                (r.invoice_series || '') === (record.invoice_series || '') &&
-                r.invoice_number === record.invoice_number
-              );
+            const existing = existingRecords.find((r: any) => 
+              r.supplier_nit === record.supplier_nit &&
+              r.fel_document_type === record.fel_document_type &&
+              (r.invoice_series || '') === (record.invoice_series || '') &&
+              r.invoice_number === record.invoice_number
+            );
               if (existing) {
                 existingDuplicates.push(existing);
               }
