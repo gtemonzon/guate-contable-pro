@@ -3,6 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import * as pdfjsLib from "pdfjs-dist";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -36,6 +37,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface ImportPurchasesDialogProps {
   open: boolean;
@@ -167,6 +171,64 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
+// Extract text from PDF file
+async function extractTextFromPdf(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  
+  let fullText = "";
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => item.str)
+      .join(" ");
+    fullText += pageText + "\n";
+  }
+  
+  return fullText;
+}
+
+// Parse PDF using edge function
+async function parsePdfFile(file: File, enterpriseNit?: string): Promise<{
+  rows: Array<{
+    invoice_date: string;
+    invoice_series: string;
+    invoice_number: string;
+    fel_document_type: string;
+    supplier_nit: string;
+    supplier_name: string;
+    total_amount: number;
+    vat_amount: number;
+    base_amount: number;
+    is_anulado: boolean;
+  }>;
+  errors: string[];
+  receiverNit?: string;
+}> {
+  // Extract text from PDF client-side
+  const pdfText = await extractTextFromPdf(file);
+  
+  // Get auth session for the edge function call
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error("No hay sesión activa");
+  }
+  
+  // Call edge function to parse the text
+  const { data, error } = await supabase.functions.invoke("parse-purchases-pdf", {
+    body: { pdfText, enterpriseNit },
+  });
+  
+  if (error) {
+    throw new Error(error.message || "Error al procesar el PDF");
+  }
+  
+  return data;
+}
+
 export function ImportPurchasesDialog({
   open,
   onOpenChange,
@@ -191,7 +253,13 @@ export function ImportPurchasesDialog({
   const [overwriteDuplicates, setOverwriteDuplicates] = useState(false);
 
   const { isDragging, dragProps } = useFileDrop({
-    accept: [".csv", ".xls", ".xlsx", "text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    accept: [
+      ".csv", ".xls", ".xlsx", ".pdf",
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/pdf"
+    ],
     onFile: (file) => handleValidate(file),
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
     disabled: dialogState !== "initial",
@@ -260,6 +328,14 @@ export function ImportPurchasesDialog({
     setDialogState("validating");
 
     try {
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      
+      // Handle PDF files differently
+      if (extension === "pdf") {
+        await handleValidatePdf(file);
+        return;
+      }
+      
       const rows = await parseFile(file);
       
       if (rows.length < 2) {
@@ -546,6 +622,201 @@ export function ImportPurchasesDialog({
     }
   };
 
+  // Handle PDF file validation
+  const handleValidatePdf = async (file: File) => {
+    try {
+      // Parse PDF using edge function
+      const pdfResult = await parsePdfFile(file, enterpriseNit);
+      
+      if (pdfResult.errors && pdfResult.errors.length > 0) {
+        // Check for critical errors
+        const criticalErrors = pdfResult.errors.filter(e => 
+          e.includes("no coincide") || e.includes("No se pudieron extraer")
+        );
+        
+        if (criticalErrors.length > 0 && pdfResult.rows.length === 0) {
+          throw new Error(criticalErrors.join(". "));
+        }
+      }
+      
+      if (pdfResult.rows.length === 0) {
+        throw new Error("No se encontraron registros en el PDF");
+      }
+      
+      // Filter out anuladas and build records by period
+      const recordsByPeriod = new Map<string, { month: number; year: number; records: any[] }>();
+      const errors: ValidationError[] = [];
+      let skippedAnuladas = 0;
+      
+      for (let i = 0; i < pdfResult.rows.length; i++) {
+        const row = pdfResult.rows[i];
+        
+        if (row.is_anulado) {
+          skippedAnuladas++;
+          continue;
+        }
+        
+        if (!row.invoice_date) {
+          errors.push({
+            row: i + 1,
+            field: "Fecha",
+            value: "(vacío)",
+            message: "Fecha inválida"
+          });
+          continue;
+        }
+        
+        if (!row.invoice_number) {
+          errors.push({
+            row: i + 1,
+            field: "Número",
+            value: "(vacío)",
+            message: "Número de factura requerido"
+          });
+          continue;
+        }
+        
+        if (row.total_amount <= 0) {
+          errors.push({
+            row: i + 1,
+            field: "Total",
+            value: String(row.total_amount),
+            message: "Total debe ser mayor a cero"
+          });
+          continue;
+        }
+        
+        const [yearStr, monthStr] = row.invoice_date.split("-");
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
+        
+        if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+          errors.push({
+            row: i + 1,
+            field: "Fecha",
+            value: row.invoice_date,
+            message: "Mes o año inválido"
+          });
+          continue;
+        }
+        
+        const periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        
+        if (!recordsByPeriod.has(periodKey)) {
+          recordsByPeriod.set(periodKey, { month, year, records: [] });
+        }
+        
+        recordsByPeriod.get(periodKey)!.records.push({
+          invoice_series: row.invoice_series,
+          invoice_number: row.invoice_number,
+          invoice_date: row.invoice_date,
+          fel_document_type: row.fel_document_type,
+          supplier_nit: row.supplier_nit,
+          supplier_name: row.supplier_name,
+          base_amount: row.base_amount,
+          vat_amount: row.vat_amount,
+          net_amount: row.base_amount,
+          total_amount: row.total_amount,
+        });
+      }
+      
+      // Build valid records with purchase book IDs
+      const allRecords: ValidPurchase[] = [];
+      const periodSummary: { period: string; count: number }[] = [];
+      const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      
+      for (const [, periodData] of recordsByPeriod) {
+        const { month, year, records } = periodData;
+        const book = await findOrCreatePurchaseBook(enterpriseId!, month, year);
+        
+        for (const record of records) {
+          allRecords.push({
+            enterprise_id: enterpriseId!,
+            purchase_book_id: book.id,
+            ...record
+          });
+        }
+        
+        periodSummary.push({
+          period: `${monthNames[month - 1]} ${year}`,
+          count: records.length
+        });
+      }
+      
+      // Check for duplicates (same logic as CSV/XLS)
+      const recordsByBook = new Map<number, ValidPurchase[]>();
+      for (const record of allRecords) {
+        if (!recordsByBook.has(record.purchase_book_id)) {
+          recordsByBook.set(record.purchase_book_id, []);
+        }
+        recordsByBook.get(record.purchase_book_id)!.push(record);
+      }
+      
+      const duplicateRecords: ValidPurchase[] = [];
+      const existingDuplicates: DuplicateRecord[] = [];
+      const validRecords: ValidPurchase[] = [];
+      
+      for (const [bookId, records] of recordsByBook) {
+        const { data: existingRecords } = await supabase
+          .from("tab_purchase_ledger")
+          .select("id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type")
+          .eq("purchase_book_id", bookId)
+          .eq("enterprise_id", enterpriseId);
+        
+        if (existingRecords && existingRecords.length > 0) {
+          const existingKeys = new Set(
+            existingRecords.map(r => 
+              `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
+            )
+          );
+          
+          for (const record of records) {
+            const key = `${record.supplier_nit}|${record.fel_document_type}|${record.invoice_series || ''}|${record.invoice_number}`;
+            if (existingKeys.has(key)) {
+              duplicateRecords.push(record);
+              const existing = existingRecords.find(r => 
+                r.supplier_nit === record.supplier_nit &&
+                r.fel_document_type === record.fel_document_type &&
+                (r.invoice_series || '') === (record.invoice_series || '') &&
+                r.invoice_number === record.invoice_number
+              );
+              if (existing) {
+                existingDuplicates.push(existing);
+              }
+            } else {
+              validRecords.push(record);
+            }
+          }
+        } else {
+          validRecords.push(...records);
+        }
+      }
+      
+      setValidationResult({
+        validRecords,
+        duplicateRecords,
+        existingDuplicates,
+        errors,
+        skippedAnuladas,
+        periodSummary
+      });
+      
+      if (expenseAccounts.length > 0 || operationTypes.length > 0) {
+        setDialogState("options");
+      } else {
+        setDialogState("summary");
+      }
+      
+    } catch (error: any) {
+      toast({
+        title: "Error al procesar PDF",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
+      resetDialog();
+    }
+  };
+
   const handleProceedToSummary = () => {
     if (validationResult && applyBulkOptions) {
       // Apply selected account and operation type to all records (both valid and duplicates)
@@ -650,7 +921,7 @@ export function ImportPurchasesDialog({
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
-            {dialogState === "initial" && "Carga un archivo CSV o Excel exportado de SAT Guatemala."}
+            {dialogState === "initial" && "Carga un archivo CSV, Excel o PDF exportado de SAT Guatemala."}
             {dialogState === "validating" && `Validando ${fileName}...`}
             {dialogState === "options" && "Opciones de importación"}
             {dialogState === "summary" && `Resultado de validación: ${fileName}`}
@@ -676,13 +947,19 @@ export function ImportPurchasesDialog({
                   !isDragging && "border-border"
                 )}
               >
-                <Upload className={cn("h-12 w-12 mx-auto mb-4", isDragging ? "text-primary" : "text-muted-foreground")} />
-                <p className="text-sm text-muted-foreground mb-4">
-                  {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV o Excel, o haz clic para seleccionar"}
+                <div className="flex justify-center gap-3 mb-4">
+                  <Upload className={cn("h-10 w-10", isDragging ? "text-primary" : "text-muted-foreground")} />
+                  <FileText className={cn("h-10 w-10", isDragging ? "text-primary" : "text-muted-foreground")} />
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {isDragging ? "Suelta el archivo aquí" : "Arrastra un archivo CSV, Excel o PDF"}
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Formatos soportados: .csv, .xls, .xlsx, .pdf
                 </p>
                 <input
                   type="file"
-                  accept=".csv,.xls,.xlsx"
+                  accept=".csv,.xls,.xlsx,.pdf"
                   onChange={handleFileUpload}
                   className="hidden"
                   id="file-upload-purchases"
@@ -707,6 +984,9 @@ export function ImportPurchasesDialog({
                   <li><strong>IVA (monto de este impuesto):</strong> Monto del IVA</li>
                   <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/Si/No)</li>
                 </ul>
+                <p className="text-xs text-primary mt-2 font-medium">
+                  💡 También puedes importar directamente el PDF de "Mis Documentos &gt; Recibidos" de la Agencia Virtual SAT.
+                </p>
               </div>
             </div>
           )}
