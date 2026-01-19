@@ -80,6 +80,7 @@ type ValidPurchaseWithSourceRow = ValidPurchase & { __sourceRow: number };
 
 interface PurchaseDuplicateRecord {
   id: number;
+  purchase_book_id: number;
   invoice_series: string;
   invoice_number: string;
   supplier_nit: string;
@@ -90,8 +91,8 @@ interface PurchaseDuplicateRecord {
 }
 
 interface ValidationResult {
-  validRecords: ValidPurchase[];
-  duplicateRecords: ValidPurchase[];
+  validRecords: ValidPurchaseWithSourceRow[];
+  duplicateRecords: ValidPurchaseWithSourceRow[];
   existingDuplicates: PurchaseDuplicateRecord[];
   errors: ValidationError[];
   skippedAnuladas: number;
@@ -511,6 +512,7 @@ export function ImportPurchasesDialog({
         }
 
         recordsByPeriod.get(periodKey)!.records.push({
+          __sourceRow: rowNum,
           invoice_series: serie,
           invoice_number: numero,
           invoice_date: fecha,
@@ -525,7 +527,7 @@ export function ImportPurchasesDialog({
       }
 
       // Now create purchase books and build valid records
-      const allRecords: ValidPurchase[] = [];
+      const allRecords: ValidPurchaseWithSourceRow[] = [];
       const periodSummary: { period: string; count: number }[] = [];
       const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -551,7 +553,7 @@ export function ImportPurchasesDialog({
 
       // Check for duplicates in the database
       // Group records by purchase_book_id for efficient querying
-      const recordsByBook = new Map<number, ValidPurchase[]>();
+      const recordsByBook = new Map<number, ValidPurchaseWithSourceRow[]>();
       for (const record of allRecords) {
         if (!recordsByBook.has(record.purchase_book_id)) {
           recordsByBook.set(record.purchase_book_id, []);
@@ -559,25 +561,17 @@ export function ImportPurchasesDialog({
         recordsByBook.get(record.purchase_book_id)!.push(record);
       }
 
-      const duplicateRecords: ValidPurchase[] = [];
+      const duplicateRecords: ValidPurchaseWithSourceRow[] = [];
       const existingDuplicates: PurchaseDuplicateRecord[] = [];
-      const validRecords: ValidPurchase[] = [];
+      const validRecords: ValidPurchaseWithSourceRow[] = [];
 
       for (const [bookId, records] of recordsByBook) {
-        // Build keys to check
-        const keys = records.map(r => ({
-          supplier_nit: r.supplier_nit,
-          fel_document_type: r.fel_document_type,
-          invoice_series: r.invoice_series || '',
-          invoice_number: r.invoice_number,
-        }));
-
         // Query existing records for this book (paginate to avoid missing duplicates >1000)
         const existingRecords = await fetchAllRecords<PurchaseDuplicateRecord>(
           supabase
             .from("tab_purchase_ledger")
             .select(
-              "id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
+              "id, purchase_book_id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
             )
             .eq("purchase_book_id", bookId)
             .eq("enterprise_id", enterpriseId)
@@ -586,17 +580,27 @@ export function ImportPurchasesDialog({
         if (existingRecords && existingRecords.length > 0) {
           // Create a set of existing keys for fast lookup
           const existingKeys = new Set(
-            existingRecords.map((r: any) => 
+            existingRecords.map((r: any) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
 
+          const fileKeys = new Set<string>();
+
           for (const record of records) {
             const key = `${record.supplier_nit}|${record.fel_document_type}|${record.invoice_series || ''}|${record.invoice_number}`;
+
+            // Duplicado dentro del mismo archivo (evita violación de unique al insertar)
+            if (fileKeys.has(key)) {
+              duplicateRecords.push(record);
+              continue;
+            }
+            fileKeys.add(key);
+
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
               // Find the existing record to show details
-              const existing = existingRecords.find((r: any) => 
+              const existing = existingRecords.find((r: any) =>
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&
@@ -727,6 +731,7 @@ export function ImportPurchasesDialog({
         }
         
         recordsByPeriod.get(periodKey)!.records.push({
+          __sourceRow: i + 1,
           invoice_series: row.invoice_series,
           invoice_number: row.invoice_number,
           invoice_date: row.invoice_date,
@@ -741,7 +746,7 @@ export function ImportPurchasesDialog({
       }
       
       // Build valid records with purchase book IDs
-      const allRecords: ValidPurchase[] = [];
+      const allRecords: ValidPurchaseWithSourceRow[] = [];
       const periodSummary: { period: string; count: number }[] = [];
       const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
       
@@ -764,7 +769,7 @@ export function ImportPurchasesDialog({
       }
       
       // Check for duplicates (same logic as CSV/XLS)
-      const recordsByBook = new Map<number, ValidPurchase[]>();
+      const recordsByBook = new Map<number, ValidPurchaseWithSourceRow[]>();
       for (const record of allRecords) {
         if (!recordsByBook.has(record.purchase_book_id)) {
           recordsByBook.set(record.purchase_book_id, []);
@@ -772,16 +777,16 @@ export function ImportPurchasesDialog({
         recordsByBook.get(record.purchase_book_id)!.push(record);
       }
       
-      const duplicateRecords: ValidPurchase[] = [];
+      const duplicateRecords: ValidPurchaseWithSourceRow[] = [];
       const existingDuplicates: PurchaseDuplicateRecord[] = [];
-      const validRecords: ValidPurchase[] = [];
+      const validRecords: ValidPurchaseWithSourceRow[] = [];
       
       for (const [bookId, records] of recordsByBook) {
         const existingRecords = await fetchAllRecords<PurchaseDuplicateRecord>(
           supabase
             .from("tab_purchase_ledger")
             .select(
-              "id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
+              "id, purchase_book_id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
             )
             .eq("purchase_book_id", bookId)
             .eq("enterprise_id", enterpriseId)
@@ -789,21 +794,30 @@ export function ImportPurchasesDialog({
         
         if (existingRecords && existingRecords.length > 0) {
           const existingKeys = new Set(
-            existingRecords.map((r: any) => 
+            existingRecords.map((r: any) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
-          
+
+          const fileKeys = new Set<string>();
+
           for (const record of records) {
             const key = `${record.supplier_nit}|${record.fel_document_type}|${record.invoice_series || ''}|${record.invoice_number}`;
+
+            if (fileKeys.has(key)) {
+              duplicateRecords.push(record);
+              continue;
+            }
+            fileKeys.add(key);
+
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
-            const existing = existingRecords.find((r: any) => 
-              r.supplier_nit === record.supplier_nit &&
-              r.fel_document_type === record.fel_document_type &&
-              (r.invoice_series || '') === (record.invoice_series || '') &&
-              r.invoice_number === record.invoice_number
-            );
+              const existing = existingRecords.find((r: any) =>
+                r.supplier_nit === record.supplier_nit &&
+                r.fel_document_type === record.fel_document_type &&
+                (r.invoice_series || '') === (record.invoice_series || '') &&
+                r.invoice_number === record.invoice_number
+              );
               if (existing) {
                 existingDuplicates.push(existing);
               }
@@ -868,10 +882,17 @@ export function ImportPurchasesDialog({
 
   const handleImport = async () => {
     if (!validationResult) return;
-    
+
     const recordsToInsert = validationResult.validRecords;
     const recordsToUpsert = overwriteDuplicates ? validationResult.duplicateRecords : [];
-    
+
+    // Map de duplicados existentes por llave (para borrar por id cuando sea posible)
+    const existingByKey = new Map<string, number>();
+    for (const ex of validationResult.existingDuplicates) {
+      const key = `${ex.supplier_nit}|${ex.fel_document_type}|${ex.invoice_series || ''}|${ex.invoice_number}|${ex.purchase_book_id}`;
+      existingByKey.set(key, ex.id);
+    }
+
     const totalRecords = recordsToInsert.length + recordsToUpsert.length;
     if (totalRecords === 0) return;
 
@@ -883,9 +904,11 @@ export function ImportPurchasesDialog({
 
       // Insert new records
       if (recordsToInsert.length > 0) {
+        const payload = recordsToInsert.map(({ __sourceRow, ...rest }) => rest);
+
         const { error: insertError } = await supabase
           .from("tab_purchase_ledger")
-          .insert(recordsToInsert);
+          .insert(payload);
 
         if (insertError) throw insertError;
         insertedCount = recordsToInsert.length;
@@ -893,26 +916,34 @@ export function ImportPurchasesDialog({
 
       // Upsert duplicate records if user chose to overwrite
       if (recordsToUpsert.length > 0) {
-        // For each duplicate, we need to delete the existing record and insert the new one
-        // since upsert requires the primary key, we'll use delete + insert
         for (const record of recordsToUpsert) {
-          // Delete existing
-          const { error: deleteError } = await supabase
-            .from("tab_purchase_ledger")
-            .delete()
-            .eq("enterprise_id", record.enterprise_id)
-            .eq("purchase_book_id", record.purchase_book_id)
-            .eq("supplier_nit", record.supplier_nit)
-            .eq("fel_document_type", record.fel_document_type)
-            .eq("invoice_series", record.invoice_series || '')
-            .eq("invoice_number", record.invoice_number);
+          const { __sourceRow, ...payload } = record;
 
+          // Prefer delete by id (more reliable) if we can map it
+          const keyWithBook = `${payload.supplier_nit}|${payload.fel_document_type}|${payload.invoice_series || ''}|${payload.invoice_number}|${payload.purchase_book_id}`;
+          const existingId = existingByKey.get(keyWithBook);
+
+          let deleteQuery = supabase.from("tab_purchase_ledger").delete();
+
+          if (existingId) {
+            deleteQuery = deleteQuery.eq("id", existingId);
+          } else {
+            // fallback: delete by composite key
+            deleteQuery = deleteQuery
+              .eq("enterprise_id", payload.enterprise_id)
+              .eq("purchase_book_id", payload.purchase_book_id)
+              .eq("supplier_nit", payload.supplier_nit)
+              .eq("fel_document_type", payload.fel_document_type)
+              .eq("invoice_series", payload.invoice_series || "")
+              .eq("invoice_number", payload.invoice_number);
+          }
+
+          const { error: deleteError } = await deleteQuery;
           if (deleteError) throw deleteError;
 
-          // Insert new
           const { error: insertError } = await supabase
             .from("tab_purchase_ledger")
-            .insert(record);
+            .insert(payload);
 
           if (insertError) throw insertError;
           updatedCount++;
