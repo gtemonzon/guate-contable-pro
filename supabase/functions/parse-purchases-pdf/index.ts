@@ -166,163 +166,113 @@ function extractNitFromPdf(text: string): string | null {
   return null;
 }
 
-// Parse "Libro de Compras" format - table based
+// Parse "Libro de Compras" format - SAT report table flattened into text
 function parseLibroComprasFormat(text: string): ParsedPurchaseRow[] {
   const rows: ParsedPurchaseRow[] = [];
-  
-  // Split by lines - the text from PDF often has table rows as lines
-  const lines = text.split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
-  
-  console.log(`Libro de Compras: Processing ${lines.length} lines`);
-  
-  // Look for table rows with pattern: number | date | doctype | series | docnum | status | nit | name | amounts...
-  // The format from the parsed PDF is: | No. | Fecha | Tipo | Serie | No. Doc | Estado | NIT | Nombre | Compras | Servicios | Importaciones | Exentas | IVA | Total |
-  
+
+  // The client-side PDF text extraction often flattens the table into a single long line.
+  // Normalize whitespace (including NBSP variants) and force a line break before each row
+  // using a safer delimiter: start-of-text OR a non-digit char before the row number.
+  const normalized = text
+    .replace(/\r/g, "")
+    .replace(/[\s\u00A0\u202F]+/g, " ")
+    .replace(/(^|[^\d])(\d{1,3})\s+(\d{1,2}\/\d{1,2}\/\d{4})/g, "$1\n$2 $3")
+    .trim();
+
+  const lines = normalized
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  console.log(`Libro de Compras: Processing ${lines.length} normalized lines`);
+
   for (const line of lines) {
-    // Skip header rows and summary rows
-    if (line.includes("No.") && line.includes("Fecha") && line.includes("Tipo")) continue;
-    if (line.includes("---")) continue;
-    if (line.toLowerCase().includes("total") && !line.match(/\|\s*\d+\s*\|/)) continue;
-    if (line.toLowerCase().includes("folio")) continue;
-    
-    // Try to parse as table row with pipe separators
-    if (line.includes("|")) {
-      const cells = line.split("|").map(c => c.trim()).filter(c => c.length > 0);
-      
-      if (cells.length >= 8) {
-        // Expected: [rowNum, fecha, tipo, serie, numDoc, estado, nit, nombre, ...montos]
-        const rowNum = cells[0];
-        const fecha = cells[1];
-        const tipo = cells[2];
-        const serie = cells[3];
-        const numDoc = cells[4];
-        const estado = cells[5];
-        const nit = cells[6];
-        const nombre = cells[7];
-        
-        // Skip if not a data row (first cell should be a number)
-        if (!/^\d+$/.test(rowNum)) continue;
-        
-        // Parse date
-        const parsedDate = parseDateFlexible(fecha);
-        if (!parsedDate) continue;
-        
-        // Get total (last amount column)
-        let total = 0;
-        let ivaCredit = 0;
-        
-        // Find amount columns - they contain Q values or numeric with decimals
-        for (let i = cells.length - 1; i >= 8; i--) {
-          const cellValue = cells[i];
-          if (cellValue.match(/Q?[\d,]+\.\d{2}/)) {
-            if (total === 0) {
-              total = parseNumber(cellValue);
-            } else if (ivaCredit === 0) {
-              ivaCredit = parseNumber(cellValue);
-            }
-          }
-        }
-        
-        // If we have IVA as second-to-last, use it; otherwise calculate
-        let vatAmount: number;
-        let baseAmount: number;
-        
-        if (ivaCredit > 0 && total > ivaCredit) {
-          vatAmount = ivaCredit;
-          baseAmount = Math.round((total - vatAmount) * 100) / 100;
-        } else {
-          const calculated = calculateVATFromTotal(total, tipo);
-          vatAmount = calculated.vatAmount;
-          baseAmount = calculated.baseAmount;
-        }
-        
-        // Check if anulado
-        const isAnulado = estado.toLowerCase().includes("anulado") || 
-                          estado.toLowerCase() === "s" ||
-                          line.toLowerCase().includes("anulado");
-        
-        rows.push({
-          invoice_date: parsedDate,
-          invoice_series: serie || "",
-          invoice_number: numDoc,
-          fel_document_type: tipo.toUpperCase(),
-          supplier_nit: nit.replace(/-/g, ""),
-          supplier_name: nombre,
-          total_amount: total,
-          vat_amount: vatAmount,
-          base_amount: baseAmount,
-          is_anulado: isAnulado,
-        });
+    // Skip headers / totals
+    const lower = line.toLowerCase();
+    if (lower.includes("precio neto") && lower.includes("no.") && lower.includes("fecha")) continue;
+    if (lower.startsWith("libro de compras")) continue;
+    if (lower.startsWith("total compras")) continue;
+    if (lower.startsWith("total valor")) continue;
+    if (lower.startsWith("nit:")) continue;
+    if (lower.startsWith("periodo:") || lower.startsWith("período:")) continue;
+    if (lower.startsWith("folio")) continue;
+
+    // Row should start with: <no> <fecha>
+    const startMatch = line.match(/^(\d{1,3})\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+/);
+    if (!startMatch) continue;
+
+    const rowNum = startMatch[1];
+    const fecha = startMatch[2];
+
+    const parsedDate = parseDateFlexible(fecha);
+    if (!parsedDate) continue;
+
+    // Extract amounts (Qxx.xx). In the report, the last is Total and the penultimate is IVA Crédito.
+    const amountMatches = line.match(/Q\s*[\d,]+\.\d{2}/g) ?? [];
+    const numericAmounts = amountMatches.map((a) => parseNumber(a));
+    const total = numericAmounts.length > 0 ? numericAmounts[numericAmounts.length - 1] : 0;
+    const ivaCredit = numericAmounts.length > 1 ? numericAmounts[numericAmounts.length - 2] : 0;
+
+    if (total <= 0) continue;
+
+    // After the date we expect: Tipo Serie NoDoc Estado NIT Nombre ... amounts
+    // We'll parse tokens up to NIT, then capture name until first 'Q'.
+    const afterDate = line.replace(/^\d{1,3}\s+\d{1,2}\/\d{1,2}\/\d{4}\s+/, "");
+
+    const tokens = afterDate.split(/\s+/);
+    if (tokens.length < 6) continue;
+
+    const tipo = (tokens[0] || "FACT").toUpperCase();
+    const serie = tokens[1] || "";
+    const numDoc = tokens[2] || "";
+    const estado = tokens[3] || "";
+    const nit = (tokens[4] || "").replace(/-/g, "");
+
+    // Name: substring between NIT and first amount token (Q...)
+    let supplierName = "";
+    const firstAmountIdx = line.indexOf("Q");
+    if (firstAmountIdx !== -1 && nit) {
+      const nitPos = line.indexOf(nit);
+      if (nitPos !== -1) {
+        supplierName = line
+          .slice(nitPos + nit.length, firstAmountIdx)
+          .replace(/\s+/g, " ")
+          .trim();
       }
-    } else {
-      // Try to parse as space/tab separated row
-      const dateMatch = line.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
-      if (!dateMatch) continue;
-      
-      const parsedDate = parseDateFlexible(dateMatch[1]);
-      if (!parsedDate) continue;
-      
-      // Extract document type
-      const docTypeMatch = line.match(/\b(FACT|FCAM|NCRE|NDEB|FESP|FPEQ|NABN|RDON|RECI)\b/i);
-      const docType = docTypeMatch ? docTypeMatch[1].toUpperCase() : "FACT";
-      
-      // Extract NIT (6-10 digits)
-      const nitMatch = line.match(/\b(\d{6,10})\b/g);
-      const supplierNit = nitMatch && nitMatch.length > 0 ? nitMatch[0] : "";
-      
-      // Extract amounts
-      const amounts = line.match(/Q?([\d,]+\.\d{2})/g) || [];
-      const numericAmounts = amounts.map(a => parseNumber(a));
-      
-      if (numericAmounts.length === 0) continue;
-      
-      const total = numericAmounts[numericAmounts.length - 1];
-      const vatFromPdf = numericAmounts.length >= 2 ? numericAmounts[numericAmounts.length - 2] : 0;
-      
-      let vatAmount: number;
-      let baseAmount: number;
-      
-      if (vatFromPdf > 0 && vatFromPdf < total) {
-        vatAmount = vatFromPdf;
-        baseAmount = Math.round((total - vatAmount) * 100) / 100;
-      } else {
-        const calculated = calculateVATFromTotal(total, docType);
-        vatAmount = calculated.vatAmount;
-        baseAmount = calculated.baseAmount;
-      }
-      
-      // Extract invoice number (alphanumeric after series or before amounts)
-      const invoiceNumMatch = line.match(/([A-F0-9]{8})\s+(\d{9,12})/i);
-      const invoiceSeries = invoiceNumMatch ? invoiceNumMatch[1] : "";
-      const invoiceNumber = invoiceNumMatch ? invoiceNumMatch[2] : "";
-      
-      if (!invoiceNumber || total === 0) continue;
-      
-      // Extract name (longest text segment)
-      let supplierName = "";
-      const afterNit = supplierNit ? line.split(supplierNit)[1] : "";
-      const nameMatch = afterNit.match(/^\s*([A-ZÁÉÍÓÚÑ][A-Za-záéíóúñÁÉÍÓÚÑ\s.,&'-]{10,80})/);
-      if (nameMatch) {
-        supplierName = nameMatch[1].trim();
-      }
-      
-      const isAnulado = /\b(anulado|anulada)\b/i.test(line);
-      
-      rows.push({
-        invoice_date: parsedDate,
-        invoice_series: invoiceSeries,
-        invoice_number: invoiceNumber,
-        fel_document_type: docType,
-        supplier_nit: supplierNit,
-        supplier_name: supplierName,
-        total_amount: total,
-        vat_amount: vatAmount,
-        base_amount: baseAmount,
-        is_anulado: isAnulado,
-      });
     }
+
+    // Determine VAT/base.
+    let vatAmount: number;
+    let baseAmount: number;
+
+    if (ivaCredit > 0 && ivaCredit < total) {
+      vatAmount = ivaCredit;
+      baseAmount = Math.round((total - vatAmount) * 100) / 100;
+    } else {
+      const calculated = calculateVATFromTotal(total, tipo);
+      vatAmount = calculated.vatAmount;
+      baseAmount = calculated.baseAmount;
+    }
+
+    const isAnulado = estado.toLowerCase().includes("anulado") || /\b(anulado|anulada)\b/i.test(line);
+
+    // Basic sanity: require invoice number
+    if (!numDoc) continue;
+
+    rows.push({
+      invoice_date: parsedDate,
+      invoice_series: serie,
+      invoice_number: numDoc,
+      fel_document_type: tipo,
+      supplier_nit: nit,
+      supplier_name: supplierName,
+      total_amount: total,
+      vat_amount: vatAmount,
+      base_amount: baseAmount,
+      is_anulado: isAnulado,
+    });
   }
-  
+
   return rows;
 }
 
