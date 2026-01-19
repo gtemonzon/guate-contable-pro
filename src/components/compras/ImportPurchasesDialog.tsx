@@ -76,6 +76,8 @@ interface ValidPurchase {
   operation_type_id?: number | null;
 }
 
+type ValidPurchaseWithSourceRow = ValidPurchase & { __sourceRow: number };
+
 interface PurchaseDuplicateRecord {
   id: number;
   invoice_series: string;
@@ -174,26 +176,32 @@ function parseCSVLine(line: string): string[] {
 }
 
 // Extract text from PDF file
-async function extractTextFromPdf(file: File): Promise<string> {
+async function extractTextFromPdf(
+  file: File,
+  onProgress?: (info: { currentPage: number; totalPages: number }) => void
+): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  
+
   let fullText = "";
-  
+
   for (let i = 1; i <= pdf.numPages; i++) {
+    onProgress?.({ currentPage: i, totalPages: pdf.numPages });
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item: any) => item.str)
-      .join(" ");
+    const pageText = textContent.items.map((item: any) => item.str).join(" ");
     fullText += pageText + "\n";
   }
-  
+
   return fullText;
 }
 
-// Parse PDF using edge function
-async function parsePdfFile(file: File, enterpriseNit?: string): Promise<{
+// Parse PDF using backend function
+async function parsePdfFile(
+  file: File,
+  enterpriseNit?: string,
+  onProgress?: (info: { currentPage: number; totalPages: number }) => void
+): Promise<{
   rows: Array<{
     invoice_date: string;
     invoice_series: string;
@@ -209,25 +217,27 @@ async function parsePdfFile(file: File, enterpriseNit?: string): Promise<{
   errors: string[];
   receiverNit?: string;
 }> {
-  // Extract text from PDF client-side
-  const pdfText = await extractTextFromPdf(file);
-  
-  // Get auth session for the edge function call
-  const { data: { session } } = await supabase.auth.getSession();
-  
+  // Extract text from PDF client-side (with progress)
+  const pdfText = await extractTextFromPdf(file, onProgress);
+
+  // Get auth session for the backend function call
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   if (!session) {
     throw new Error("No hay sesión activa");
   }
-  
-  // Call edge function to parse the text
+
+  // Call backend function to parse the text
   const { data, error } = await supabase.functions.invoke("parse-purchases-pdf", {
     body: { pdfText, enterpriseNit },
   });
-  
+
   if (error) {
     throw new Error(error.message || "Error al procesar el PDF");
   }
-  
+
   return data;
 }
 
@@ -245,6 +255,8 @@ export function ImportPurchasesDialog({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState<string>("");
+
+  const [pdfProgress, setPdfProgress] = useState<{ currentPage: number; totalPages: number } | null>(null);
   
   // Options for bulk assignment
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
@@ -271,6 +283,7 @@ export function ImportPurchasesDialog({
     setDialogState("initial");
     setValidationResult(null);
     setFileName("");
+    setPdfProgress(null);
     setApplyBulkOptions(false);
     setSelectedExpenseAccount(null);
     setSelectedOperationType(null);
@@ -631,8 +644,9 @@ export function ImportPurchasesDialog({
   // Handle PDF file validation
   const handleValidatePdf = async (file: File) => {
     try {
-      // Parse PDF using edge function
-      const pdfResult = await parsePdfFile(file, enterpriseNit);
+      setPdfProgress({ currentPage: 0, totalPages: 0 });
+      // Parse PDF using backend function
+      const pdfResult = await parsePdfFile(file, enterpriseNit, (p) => setPdfProgress(p));
       
       if (pdfResult.errors && pdfResult.errors.length > 0) {
         // Check for critical errors
@@ -816,8 +830,11 @@ export function ImportPurchasesDialog({
       } else {
         setDialogState("summary");
       }
+
+      setPdfProgress(null);
       
     } catch (error: any) {
+      setPdfProgress(null);
       toast({
         title: "Error al procesar PDF",
         description: getSafeErrorMessage(error),
@@ -1007,6 +1024,11 @@ export function ImportPurchasesDialog({
               <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
               <p className="text-lg font-medium">Validando archivo...</p>
               <p className="text-sm text-muted-foreground">Verificando formato y datos</p>
+              {pdfProgress && pdfProgress.totalPages > 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Leyendo páginas: {pdfProgress.currentPage}/{pdfProgress.totalPages}
+                </p>
+              )}
             </div>
           )}
 
