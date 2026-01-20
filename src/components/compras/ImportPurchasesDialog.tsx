@@ -258,6 +258,7 @@ export function ImportPurchasesDialog({
   const [fileName, setFileName] = useState<string>("");
 
   const [pdfProgress, setPdfProgress] = useState<{ currentPage: number; totalPages: number } | null>(null);
+  const [rowProgress, setRowProgress] = useState<{ current: number; total: number; phase: string } | null>(null);
   
   // Options for bulk assignment
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
@@ -285,6 +286,7 @@ export function ImportPurchasesDialog({
     setValidationResult(null);
     setFileName("");
     setPdfProgress(null);
+    setRowProgress(null);
     setApplyBulkOptions(false);
     setSelectedExpenseAccount(null);
     setSelectedOperationType(null);
@@ -649,8 +651,13 @@ export function ImportPurchasesDialog({
   const handleValidatePdf = async (file: File) => {
     try {
       setPdfProgress({ currentPage: 0, totalPages: 0 });
+      setRowProgress(null);
       // Parse PDF using backend function
       const pdfResult = await parsePdfFile(file, enterpriseNit, (p) => setPdfProgress(p));
+      
+      // Clear PDF progress and start row processing
+      setPdfProgress(null);
+      setRowProgress({ current: 0, total: pdfResult.rows.length, phase: "Analizando filas" });
       
       if (pdfResult.errors && pdfResult.errors.length > 0) {
         // Check for critical errors
@@ -674,6 +681,11 @@ export function ImportPurchasesDialog({
       
       for (let i = 0; i < pdfResult.rows.length; i++) {
         const row = pdfResult.rows[i];
+        
+        // Update progress every 10 rows for performance
+        if (i % 10 === 0) {
+          setRowProgress({ current: i + 1, total: pdfResult.rows.length, phase: "Analizando filas" });
+        }
         
         if (row.is_anulado) {
           skippedAnuladas++;
@@ -744,6 +756,9 @@ export function ImportPurchasesDialog({
           total_amount: row.total_amount,
         });
       }
+      
+      // Update progress: checking duplicates
+      setRowProgress({ current: pdfResult.rows.length, total: pdfResult.rows.length, phase: "Verificando duplicados" });
       
       // Build valid records with purchase book IDs
       const allRecords: ValidPurchaseWithSourceRow[] = [];
@@ -846,6 +861,7 @@ export function ImportPurchasesDialog({
       }
 
       setPdfProgress(null);
+      setRowProgress(null);
       
     } catch (error: any) {
       setPdfProgress(null);
@@ -1058,6 +1074,11 @@ export function ImportPurchasesDialog({
               {pdfProgress && pdfProgress.totalPages > 0 && (
                 <p className="text-sm text-muted-foreground mt-2">
                   Leyendo páginas: {pdfProgress.currentPage}/{pdfProgress.totalPages}
+                </p>
+              )}
+              {rowProgress && rowProgress.total > 0 && (
+                <p className="text-sm text-primary mt-2 font-medium">
+                  {rowProgress.phase}: {rowProgress.current}/{rowProgress.total} filas
                 </p>
               )}
             </div>
