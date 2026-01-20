@@ -757,18 +757,21 @@ export function ImportPurchasesDialog({
         });
       }
       
-      // Update progress: checking duplicates
-      setRowProgress({ current: pdfResult.rows.length, total: pdfResult.rows.length, phase: "Verificando duplicados" });
-      
       // Build valid records with purchase book IDs
+      setRowProgress({ current: 0, total: recordsByPeriod.size, phase: "Creando períodos" });
+
       const allRecords: ValidPurchaseWithSourceRow[] = [];
       const periodSummary: { period: string; count: number }[] = [];
       const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-      
+
+      let periodIdx = 0;
       for (const [, periodData] of recordsByPeriod) {
+        periodIdx++;
+        setRowProgress({ current: periodIdx, total: recordsByPeriod.size, phase: "Creando períodos" });
+
         const { month, year, records } = periodData;
         const book = await findOrCreatePurchaseBook(enterpriseId!, month, year);
-        
+
         for (const record of records) {
           allRecords.push({
             enterprise_id: enterpriseId!,
@@ -776,14 +779,14 @@ export function ImportPurchasesDialog({
             ...record
           });
         }
-        
+
         periodSummary.push({
           period: `${monthNames[month - 1]} ${year}`,
           count: records.length
         });
       }
-      
-      // Check for duplicates (same logic as CSV/XLS)
+
+      // Prepare groups by purchase book to check duplicates efficiently
       const recordsByBook = new Map<number, ValidPurchaseWithSourceRow[]>();
       for (const record of allRecords) {
         if (!recordsByBook.has(record.purchase_book_id)) {
@@ -791,12 +794,21 @@ export function ImportPurchasesDialog({
         }
         recordsByBook.get(record.purchase_book_id)!.push(record);
       }
-      
+
+      // Check for duplicates (same logic as CSV/XLS)
+
+      // Check for duplicates (same logic as CSV/XLS)
+      setRowProgress({ current: 0, total: recordsByBook.size, phase: "Consultando registros existentes" });
+
       const duplicateRecords: ValidPurchaseWithSourceRow[] = [];
       const existingDuplicates: PurchaseDuplicateRecord[] = [];
       const validRecords: ValidPurchaseWithSourceRow[] = [];
-      
+
+      let bookIdx = 0;
       for (const [bookId, records] of recordsByBook) {
+        bookIdx++;
+        setRowProgress({ current: bookIdx, total: recordsByBook.size, phase: "Consultando registros existentes" });
+
         const existingRecords = await fetchAllRecords<PurchaseDuplicateRecord>(
           supabase
             .from("tab_purchase_ledger")
@@ -844,7 +856,9 @@ export function ImportPurchasesDialog({
           validRecords.push(...records);
         }
       }
-      
+
+      setRowProgress({ current: 1, total: 1, phase: "Preparando resumen" });
+
       setValidationResult({
         validRecords,
         duplicateRecords,
