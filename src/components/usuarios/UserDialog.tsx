@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -78,6 +78,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [currentUserIsSuperAdmin, setCurrentUserIsSuperAdmin] = useState(false);
   const [currentUserTenantId, setCurrentUserTenantId] = useState<number | null>(null);
+  const [autoAssignedTenantAdminRoles, setAutoAssignedTenantAdminRoles] = useState(false);
   const isEditing = !!user;
 
   const form = useForm<UserFormData>({
@@ -93,11 +94,25 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   });
 
   const isTenantAdmin = form.watch("is_tenant_admin");
+  const selectedTenantId = form.watch("selected_tenant_id");
+
+  const enterprisesTenantId = useMemo(() => {
+    // When editing, default to the user's tenant.
+    const userTenantId = user?.tenant_id ?? null;
+
+    // Global super admin: enterprises should follow the selected tenant (if any).
+    if (currentUserIsSuperAdmin) {
+      return selectedTenantId ?? userTenantId;
+    }
+
+    // Tenant admins: fixed to their own tenant.
+    return currentUserTenantId ?? userTenantId;
+  }, [currentUserIsSuperAdmin, currentUserTenantId, selectedTenantId, user]);
 
   useEffect(() => {
     if (open) {
+      setAutoAssignedTenantAdminRoles(false);
       fetchCurrentUserInfo();
-      fetchEnterprises();
       if (user) {
         form.reset({
           email: user.email,
@@ -121,6 +136,12 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       }
     }
   }, [open, user]);
+
+  // Fetch enterprises according to the effective tenant context
+  useEffect(() => {
+    if (!open) return;
+    fetchEnterprises(enterprisesTenantId);
+  }, [open, enterprisesTenantId]);
 
   // Fetch tenants when tenant admin toggle is activated
   useEffect(() => {
@@ -169,13 +190,19 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     }
   };
 
-  const fetchEnterprises = async () => {
+  const fetchEnterprises = async (tenantId: number | null) => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("tab_enterprises")
         .select("id, business_name")
         .eq("is_active", true)
         .order("business_name");
+
+      if (tenantId) {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setEnterprises(data || []);
@@ -185,6 +212,19 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       });
     }
   };
+
+  // If user is marked as Tenant Admin, auto-assign enterprise_admin on all enterprises in that tenant.
+  useEffect(() => {
+    if (!open) return;
+    if (!isTenantAdmin) return;
+    if (autoAssignedTenantAdminRoles) return;
+    if (enterprises.length === 0) return;
+
+    setEnterpriseRoles(
+      enterprises.map((e) => ({ enterprise_id: e.id, role: "enterprise_admin" }))
+    );
+    setAutoAssignedTenantAdminRoles(true);
+  }, [open, isTenantAdmin, enterprises, autoAssignedTenantAdminRoles]);
 
   const fetchUserRoles = async (userId: string) => {
     try {

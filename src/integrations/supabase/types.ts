@@ -1930,6 +1930,14 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      can_manage_user_enterprise_link: {
+        Args: {
+          actor_user_id: string
+          target_enterprise_id: number
+          target_user_id: string
+        }
+        Returns: boolean
+      }
       can_post_entries: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
