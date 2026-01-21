@@ -142,7 +142,8 @@ export function EnterpriseDialog({
         return;
       }
 
-      const dataToSave: Database['public']['Tables']['tab_enterprises']['Insert'] = {
+      // For updates, we need to include tenant_id from the existing enterprise
+      const dataToSave: Partial<Database['public']['Tables']['tab_enterprises']['Insert']> = {
         nit: values.nit,
         business_name: values.business_name,
         tax_regime: values.tax_regime,

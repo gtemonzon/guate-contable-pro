@@ -18,10 +18,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { useActivityTracker } from "@/hooks/useActivityTracker";
+import { TenantSelector } from "@/components/tenants/TenantSelector";
+import { useTenant } from "@/contexts/TenantContext";
 
 const MainLayout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { currentTenant } = useTenant();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,14 +167,17 @@ const MainLayout = () => {
             <div className="flex items-center gap-2 text-lg font-semibold">
               <img src="/favicon.png" alt="Logo" className="h-6 w-6" />
               <span className="hidden sm:inline truncate max-w-md">
-                {currentEnterprise 
-                  ? `Sistema Contable - ${currentEnterprise}`
-                  : "Sistema Contable"
+                {currentTenant 
+                  ? `${currentTenant.tenant_name}${currentEnterprise ? ` - ${currentEnterprise}` : ""}`
+                  : currentEnterprise 
+                    ? `Sistema Contable - ${currentEnterprise}`
+                    : "Sistema Contable"
                 }
               </span>
             </div>
 
             <div className="ml-auto flex items-center gap-4">
+              <TenantSelector />
               <NotificationCenter enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
 
               <DropdownMenu>
