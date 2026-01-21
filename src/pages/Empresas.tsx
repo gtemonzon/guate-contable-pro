@@ -4,16 +4,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Building2, Users, Calendar } from "lucide-react";
+import { Plus, Search, Building2 } from "lucide-react";
 import { EnterpriseDialog } from "@/components/empresas/EnterpriseDialog";
 import { EnterpriseCard } from "@/components/empresas/EnterpriseCard";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { useTenant } from "@/contexts/TenantContext";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
 const Empresas = () => {
   const { toast } = useToast();
+  const { currentTenant, isSuperAdmin } = useTenant();
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -23,10 +25,18 @@ const Empresas = () => {
   const fetchEnterprises = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      let query = supabase
         .from('tab_enterprises')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Si es super admin y hay un tenant seleccionado, filtrar por ese tenant
+      if (isSuperAdmin && currentTenant?.id) {
+        query = query.eq('tenant_id', currentTenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setEnterprises(data || []);
@@ -43,7 +53,7 @@ const Empresas = () => {
 
   useEffect(() => {
     fetchEnterprises();
-  }, []);
+  }, [currentTenant?.id]);
 
   const handleEdit = (enterprise: Enterprise) => {
     setSelectedEnterprise(enterprise);
@@ -155,6 +165,7 @@ const Empresas = () => {
         onOpenChange={setDialogOpen}
         enterprise={selectedEnterprise}
         onSuccess={handleDialogClose}
+        defaultTenantId={currentTenant?.id}
       />
     </div>
   );

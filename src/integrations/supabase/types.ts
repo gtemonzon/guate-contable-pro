@@ -1934,20 +1934,36 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
-      create_enterprise_with_user_link: {
-        Args: {
-          _address?: string
-          _base_currency_code: string
-          _business_name: string
-          _email?: string
-          _is_active: boolean
-          _nit: string
-          _phone?: string
-          _tax_regime: string
-          _trade_name?: string
-        }
-        Returns: Json
-      }
+      create_enterprise_with_user_link:
+        | {
+            Args: {
+              _address?: string
+              _base_currency_code?: string
+              _business_name: string
+              _email?: string
+              _is_active?: boolean
+              _nit: string
+              _phone?: string
+              _tax_regime: string
+              _tenant_id?: number
+              _trade_name?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _address?: string
+              _base_currency_code: string
+              _business_name: string
+              _email?: string
+              _is_active: boolean
+              _nit: string
+              _phone?: string
+              _tax_regime: string
+              _trade_name?: string
+            }
+            Returns: Json
+          }
       get_user_role: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
