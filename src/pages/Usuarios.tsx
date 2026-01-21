@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Loader2, Search, UserPlus } from "lucide-react";
 import UserCard from "@/components/usuarios/UserCard";
 import UserDialog from "@/components/usuarios/UserDialog";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface User {
   id: string;
@@ -17,6 +18,7 @@ interface User {
   created_at: string;
   last_activity_at: string | null;
   current_enterprise_name: string | null;
+  tenant_id: number;
   enterprises?: Array<{
     enterprise_id: number;
     role: string;
@@ -28,6 +30,7 @@ interface User {
 }
 
 const Usuarios = () => {
+  const { currentTenant, isSuperAdmin, isTenantAdmin } = useTenant();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,8 +40,14 @@ const Usuarios = () => {
 
   useEffect(() => {
     fetchCurrentUser();
-    fetchUsers();
   }, []);
+
+  // Refetch users when tenant changes
+  useEffect(() => {
+    if (currentTenant?.id) {
+      fetchUsers();
+    }
+  }, [currentTenant?.id]);
 
   // Suscripción a cambios en tiempo real para actualizar semáforos
   useEffect(() => {
@@ -89,7 +98,8 @@ const Usuarios = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      let query = supabase
         .from("tab_users")
         .select(`
           *,
@@ -104,6 +114,13 @@ const Usuarios = () => {
         `)
         .eq("is_system_user", false)
         .order("created_at", { ascending: false });
+
+      // Filter by tenant - super admin global uses selected tenant, tenant admin uses their own
+      if (currentTenant?.id) {
+        query = query.eq("tenant_id", currentTenant.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setUsers(data || []);
@@ -140,7 +157,7 @@ const Usuarios = () => {
     );
   });
 
-  const isAdmin = currentUser?.is_super_admin;
+  const isAdmin = currentUser?.is_super_admin || isTenantAdmin;
 
   if (loading) {
     return (
