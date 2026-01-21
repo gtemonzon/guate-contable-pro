@@ -63,6 +63,7 @@ interface EnterpriseDialogProps {
   onOpenChange: (open: boolean) => void;
   enterprise: Enterprise | null;
   onSuccess: () => void;
+  defaultTenantId?: number;
 }
 
 export function EnterpriseDialog({
@@ -70,6 +71,7 @@ export function EnterpriseDialog({
   onOpenChange,
   enterprise,
   onSuccess,
+  defaultTenantId,
 }: EnterpriseDialogProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("general");
@@ -169,18 +171,26 @@ export function EnterpriseDialog({
         });
       } else {
         // Use database function to create enterprise and link user atomically
+        // Build RPC parameters - only include tenant_id if provided (for super admins)
+        const rpcParams: any = {
+          _nit: values.nit,
+          _business_name: values.business_name,
+          _tax_regime: values.tax_regime,
+          _base_currency_code: values.base_currency_code,
+          _is_active: values.is_active,
+          _trade_name: values.trade_name || null,
+          _address: values.address || null,
+          _phone: values.phone || null,
+          _email: values.email || null,
+        };
+
+        // Add tenant_id if defaultTenantId is provided (super admin creating for specific tenant)
+        if (defaultTenantId) {
+          rpcParams._tenant_id = defaultTenantId;
+        }
+
         const { data: enterpriseData, error: enterpriseError } = await supabase
-          .rpc('create_enterprise_with_user_link', {
-            _nit: values.nit,
-            _business_name: values.business_name,
-            _tax_regime: values.tax_regime,
-            _base_currency_code: values.base_currency_code,
-            _is_active: values.is_active,
-            _trade_name: values.trade_name || null,
-            _address: values.address || null,
-            _phone: values.phone || null,
-            _email: values.email || null,
-          });
+          .rpc('create_enterprise_with_user_link', rpcParams);
 
         if (enterpriseError) {
           console.error("Enterprise creation error:", enterpriseError);
