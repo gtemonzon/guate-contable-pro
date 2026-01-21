@@ -664,6 +664,7 @@ export type Database = {
           nit: string
           phone: string | null
           tax_regime: string
+          tenant_id: number
           trade_name: string | null
         }
         Insert: {
@@ -678,6 +679,7 @@ export type Database = {
           nit: string
           phone?: string | null
           tax_regime: string
+          tenant_id: number
           trade_name?: string | null
         }
         Update: {
@@ -692,9 +694,18 @@ export type Database = {
           nit?: string
           phone?: string | null
           tax_regime?: string
+          tenant_id?: number
           trade_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tab_enterprises_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_exchange_rates: {
         Row: {
@@ -1718,6 +1729,63 @@ export type Database = {
           },
         ]
       }
+      tab_tenants: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string | null
+          id: number
+          is_active: boolean | null
+          logo_url: string | null
+          max_enterprises: number | null
+          max_users: number | null
+          plan_expires_at: string | null
+          plan_type: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          subdomain: string | null
+          tenant_code: string
+          tenant_name: string
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: number
+          is_active?: boolean | null
+          logo_url?: string | null
+          max_enterprises?: number | null
+          max_users?: number | null
+          plan_expires_at?: string | null
+          plan_type?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          subdomain?: string | null
+          tenant_code: string
+          tenant_name: string
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          id?: number
+          is_active?: boolean | null
+          logo_url?: string | null
+          max_enterprises?: number | null
+          max_users?: number | null
+          plan_expires_at?: string | null
+          plan_type?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          subdomain?: string | null
+          tenant_code?: string
+          tenant_name?: string
+        }
+        Relationships: []
+      }
       tab_user_enterprises: {
         Row: {
           created_at: string | null
@@ -1767,8 +1835,10 @@ export type Database = {
           is_active: boolean | null
           is_super_admin: boolean | null
           is_system_user: boolean | null
+          is_tenant_admin: boolean | null
           last_activity_at: string | null
           last_enterprise_id: number | null
+          tenant_id: number
         }
         Insert: {
           created_at?: string | null
@@ -1779,8 +1849,10 @@ export type Database = {
           is_active?: boolean | null
           is_super_admin?: boolean | null
           is_system_user?: boolean | null
+          is_tenant_admin?: boolean | null
           last_activity_at?: string | null
           last_enterprise_id?: number | null
+          tenant_id: number
         }
         Update: {
           created_at?: string | null
@@ -1791,8 +1863,10 @@ export type Database = {
           is_active?: boolean | null
           is_super_admin?: boolean | null
           is_system_user?: boolean | null
+          is_tenant_admin?: boolean | null
           last_activity_at?: string | null
           last_enterprise_id?: number | null
+          tenant_id?: number
         }
         Relationships: [
           {
@@ -1800,6 +1874,13 @@ export type Database = {
             columns: ["last_enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -1841,6 +1922,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_tenant: {
+        Args: { check_tenant_id: number; user_uuid: string }
+        Returns: boolean
+      }
       can_approve_entries: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
@@ -1867,6 +1952,7 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_user_tenant_id: { Args: { user_uuid: string }; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1883,6 +1969,10 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_tenant_admin_for: {
+        Args: { check_tenant_id: number; user_uuid: string }
+        Returns: boolean
+      }
       validate_invoice_date: {
         Args: { book_month: number; book_year: number; invoice_date: string }
         Returns: boolean
