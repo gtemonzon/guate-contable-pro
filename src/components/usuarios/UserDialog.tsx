@@ -21,11 +21,18 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Building2, Shield } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleSelector, RoleBadge } from "./RoleSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,7 +42,8 @@ const userFormSchema = z.object({
   full_name: z.string().min(3, "El nombre debe tener al menos 3 caracteres"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional().or(z.literal("")),
   is_active: z.boolean(),
-  is_admin: z.boolean(),
+  is_tenant_admin: z.boolean(),
+  selected_tenant_id: z.number().nullable(),
 });
 
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -43,6 +51,12 @@ type UserFormData = z.infer<typeof userFormSchema>;
 interface Enterprise {
   id: number;
   business_name: string;
+}
+
+interface Tenant {
+  id: number;
+  tenant_code: string;
+  tenant_name: string;
 }
 
 interface EnterpriseRole {
@@ -61,6 +75,9 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [enterpriseRoles, setEnterpriseRoles] = useState<EnterpriseRole[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [currentUserIsSuperAdmin, setCurrentUserIsSuperAdmin] = useState(false);
+  const [currentUserTenantId, setCurrentUserTenantId] = useState<number | null>(null);
   const isEditing = !!user;
 
   const form = useForm<UserFormData>({
@@ -70,12 +87,16 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       full_name: "",
       password: "",
       is_active: true,
-      is_admin: false,
+      is_tenant_admin: false,
+      selected_tenant_id: null,
     },
   });
 
+  const isTenantAdmin = form.watch("is_tenant_admin");
+
   useEffect(() => {
     if (open) {
+      fetchCurrentUserInfo();
       fetchEnterprises();
       if (user) {
         form.reset({
@@ -83,7 +104,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           full_name: user.full_name,
           password: "",
           is_active: user.is_active,
-          is_admin: user.is_super_admin,
+          is_tenant_admin: user.is_tenant_admin || false,
+          selected_tenant_id: user.tenant_id || null,
         });
         fetchUserRoles(user.id);
       } else {
@@ -92,12 +114,60 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           full_name: "",
           password: "",
           is_active: true,
-          is_admin: false,
+          is_tenant_admin: false,
+          selected_tenant_id: null,
         });
         setEnterpriseRoles([]);
       }
     }
   }, [open, user]);
+
+  // Fetch tenants when tenant admin toggle is activated
+  useEffect(() => {
+    if (isTenantAdmin && currentUserIsSuperAdmin && tenants.length === 0) {
+      fetchTenants();
+    }
+  }, [isTenantAdmin, currentUserIsSuperAdmin]);
+
+  const fetchCurrentUserInfo = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data, error } = await supabase
+          .from("tab_users")
+          .select("is_super_admin, tenant_id")
+          .eq("id", authUser.id)
+          .single();
+
+        if (!error && data) {
+          setCurrentUserIsSuperAdmin(data.is_super_admin || false);
+          setCurrentUserTenantId(data.tenant_id);
+          
+          // If not super admin, set the default tenant_id to current user's tenant
+          if (!data.is_super_admin && !user) {
+            form.setValue("selected_tenant_id", data.tenant_id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching current user info:", error);
+    }
+  };
+
+  const fetchTenants = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_tenants")
+        .select("id, tenant_code, tenant_name")
+        .eq("is_active", true)
+        .order("tenant_name");
+
+      if (error) throw error;
+      setTenants(data || []);
+    } catch (error: any) {
+      console.error("Error fetching tenants:", error);
+    }
+  };
 
   const fetchEnterprises = async () => {
     try {
@@ -191,6 +261,16 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
   const onSubmit = async (data: UserFormData) => {
     console.log("Formulario enviado:", data, "Roles por empresa:", enterpriseRoles);
+    
+    // Validate tenant selection for tenant admins
+    if (data.is_tenant_admin && !data.selected_tenant_id && currentUserIsSuperAdmin) {
+      toast.error("Debe seleccionar un tenant para el administrador");
+      return;
+    }
+
+    // For non-super admins creating tenant admins, use their own tenant
+    const finalTenantId = data.selected_tenant_id || currentUserTenantId;
+
     try {
       setLoading(true);
 
@@ -205,7 +285,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           .update({
             full_name: data.full_name,
             is_active: data.is_active,
-            is_super_admin: data.is_admin,
+            is_tenant_admin: data.is_tenant_admin,
+            tenant_id: finalTenantId,
           })
           .eq("id", user.id);
 
@@ -284,12 +365,13 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
         // Wait a bit for the trigger to complete
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Update user info including admin status
+        // Update user info including tenant admin status
         const { error: userError } = await supabase
           .from("tab_users")
           .update({
             is_active: data.is_active,
-            is_super_admin: data.is_admin,
+            is_tenant_admin: data.is_tenant_admin,
+            tenant_id: finalTenantId,
           })
           .eq("id", authData.user.id);
 
@@ -417,15 +499,16 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
                 <FormField
                   control={form.control}
-                  name="is_admin"
+                  name="is_tenant_admin"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                       <div className="space-y-0.5">
-                        <FormLabel className="text-base">
-                          Super Administrador
+                        <FormLabel className="text-base flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Administrador de Oficina
                         </FormLabel>
                         <FormDescription>
-                          Acceso total a todas las empresas y funciones del sistema
+                          Acceso total a todas las empresas y usuarios dentro de su oficina contable
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -437,6 +520,59 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                     </FormItem>
                   )}
                 />
+
+                {/* Tenant selector - only visible for super admins when tenant admin is enabled */}
+                {isTenantAdmin && currentUserIsSuperAdmin && (
+                  <FormField
+                    control={form.control}
+                    name="selected_tenant_id"
+                    render={({ field }) => (
+                      <FormItem className="rounded-lg border p-4 bg-muted/30">
+                        <FormLabel className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          Oficina Contable (Tenant)
+                        </FormLabel>
+                        <FormDescription className="mb-2">
+                          Selecciona la oficina contable que administrará este usuario
+                        </FormDescription>
+                        <Select
+                          value={field.value?.toString() || ""}
+                          onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar oficina contable..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {tenants.map((tenant) => (
+                              <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                                <div className="flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                                  <span>{tenant.tenant_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    ({tenant.tenant_code})
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {/* Info message for non-super admins creating tenant admins */}
+                {isTenantAdmin && !currentUserIsSuperAdmin && (
+                  <div className="rounded-lg border p-4 bg-muted/30">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Este administrador tendrá acceso a tu oficina contable actual
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
