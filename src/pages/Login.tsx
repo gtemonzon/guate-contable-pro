@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,11 +199,8 @@ const Login = () => {
                 )}
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm">
-              <span className="text-muted-foreground">¿No tienes cuenta? </span>
-              <Link to="/register" className="text-primary hover:underline">
-                Regístrate aquí
-              </Link>
+            <div className="mt-4 text-center text-sm text-muted-foreground">
+              Contacta a tu administrador para obtener acceso al sistema.
             </div>
             <div className="mt-2 text-center text-sm">
               <button
