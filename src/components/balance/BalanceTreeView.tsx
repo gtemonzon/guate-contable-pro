@@ -42,7 +42,7 @@ function TreeNode({ account, children, level, allAccounts, onViewDetails }: Tree
       >
         <button
           onClick={() => hasChildren && setIsExpanded(!isExpanded)}
-          className="flex items-center justify-center w-6 h-6"
+          className="flex items-center justify-center w-6 h-6 shrink-0"
         >
           {hasChildren ? (
             isExpanded ? (
@@ -55,44 +55,44 @@ function TreeNode({ account, children, level, allAccounts, onViewDetails }: Tree
           )}
         </button>
 
-        <div className="flex-1 grid grid-cols-12 gap-4 items-center">
-          <div className="col-span-2">
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <div className="w-24 shrink-0">
             <span className="font-mono text-sm text-muted-foreground">
               {account.account_code}
             </span>
           </div>
           
-          <div className="col-span-4">
-            <span className={`font-medium ${hasChildren ? 'font-semibold' : ''}`}>
+          <div className="flex-1 min-w-0">
+            <span className={`font-medium truncate block ${hasChildren ? 'font-semibold' : ''}`}>
               {account.account_name}
             </span>
           </div>
 
-          <div className="col-span-1 text-right">
+          <div className="w-28 shrink-0 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.previous_balance < 0 ? 'text-red-600' : ''}`}>
               {account.previous_balance !== 0 ? formatCurrency(Math.abs(account.previous_balance)) : "-"}
             </span>
           </div>
 
-          <div className="col-span-1 text-right">
+          <div className="w-28 shrink-0 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
               {account.debit > 0 ? formatCurrency(account.debit) : "-"}
             </span>
           </div>
 
-          <div className="col-span-1 text-right">
+          <div className="w-28 shrink-0 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''}`}>
               {account.credit > 0 ? formatCurrency(account.credit) : "-"}
             </span>
           </div>
 
-          <div className="col-span-2 text-right">
+          <div className="w-32 shrink-0 text-right">
             <span className={`font-mono text-sm ${hasChildren ? 'font-semibold' : ''} ${account.balance < 0 ? 'text-red-600' : ''}`}>
               {account.balance !== 0 ? formatCurrency(Math.abs(account.balance)) : "-"}
             </span>
           </div>
 
-          <div className="col-span-1 text-center">
+          <div className="w-10 shrink-0 flex justify-center">
             <Button
               variant="ghost"
               size="icon"
@@ -147,20 +147,25 @@ export function BalanceTreeView({ accounts, onViewDetails }: BalanceTreeViewProp
   };
 
   return (
-    <div className="space-y-0">
-      {/* Header */}
-      <div className="grid grid-cols-12 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
-        <div className="col-span-2 pl-8">Código</div>
-        <div className="col-span-4">Nombre de Cuenta</div>
-        <div className="col-span-1 text-right">Saldo Ant.</div>
-        <div className="col-span-1 text-right">Debe</div>
-        <div className="col-span-1 text-right">Haber</div>
-        <div className="col-span-2 text-right">Saldo</div>
-        <div className="col-span-1 text-center">Acciones</div>
+    <div className="overflow-x-auto">
+      <div className="min-w-[800px] space-y-0">
+        {/* Header */}
+        <div className="flex items-center gap-2 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
+          <div className="w-6 shrink-0" /> {/* Spacer for expand icon */}
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <div className="w-24 shrink-0 pl-2">Código</div>
+            <div className="flex-1 min-w-0">Nombre de Cuenta</div>
+            <div className="w-28 shrink-0 text-right">Saldo Ant.</div>
+            <div className="w-28 shrink-0 text-right">Debe</div>
+            <div className="w-28 shrink-0 text-right">Haber</div>
+            <div className="w-32 shrink-0 text-right">Saldo</div>
+            <div className="w-10 shrink-0 text-center">Acc.</div>
+          </div>
+        </div>
+        
+        {/* Tree */}
+        {renderTree(null, 0)}
       </div>
-      
-      {/* Tree */}
-      {renderTree(null, 0)}
     </div>
   );
 }
