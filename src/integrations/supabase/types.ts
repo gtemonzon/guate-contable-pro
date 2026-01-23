@@ -1972,6 +1972,10 @@ export type Database = {
             }
             Returns: Json
           }
+      get_enterprise_tenant_id: {
+        Args: { _enterprise_id: number }
+        Returns: number
+      }
       get_user_role: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -2000,6 +2004,10 @@ export type Database = {
       }
       is_tenant_admin_for_bypass: {
         Args: { check_tenant_id: number; user_uuid: string }
+        Returns: boolean
+      }
+      user_is_linked_to_enterprise: {
+        Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
       validate_invoice_date: {
