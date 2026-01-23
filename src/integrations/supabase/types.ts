@@ -1993,7 +1993,12 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_super_admin_bypass: { Args: { _user_id: string }; Returns: boolean }
       is_tenant_admin_for: {
+        Args: { check_tenant_id: number; user_uuid: string }
+        Returns: boolean
+      }
+      is_tenant_admin_for_bypass: {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean
       }
