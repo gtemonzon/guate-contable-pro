@@ -323,7 +323,7 @@ export default function Partidas() {
                 const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
                 
                 return (
-                  <Card key={entry.id} className="hover:bg-[hsl(var(--table-row-hover))] transition-colors">
+                  <Card key={entry.id} className="border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary transition-colors">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1">

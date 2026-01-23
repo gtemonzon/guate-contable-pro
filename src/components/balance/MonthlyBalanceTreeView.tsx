@@ -59,7 +59,7 @@ function TreeNode({ account, children, level, allAccounts, onViewDetails }: Tree
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-2 px-3 hover:bg-[hsl(var(--table-row-hover))] rounded-lg transition-colors border-b"
+        className="flex items-center gap-2 py-2 px-3 border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary rounded-r-lg transition-colors border-b"
         style={{ paddingLeft }}
       >
         <button
