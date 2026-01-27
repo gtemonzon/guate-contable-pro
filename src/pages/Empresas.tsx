@@ -4,14 +4,18 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Building2 } from "lucide-react";
+import { Plus, Search, Building2, LayoutGrid, TableIcon } from "lucide-react";
 import { EnterpriseDialog } from "@/components/empresas/EnterpriseDialog";
 import { EnterpriseCard } from "@/components/empresas/EnterpriseCard";
+import { EnterprisesTable } from "@/components/empresas/EnterprisesTable";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useTenant } from "@/contexts/TenantContext";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
+
+type ViewMode = "cards" | "table";
 
 const Empresas = () => {
   const { toast } = useToast();
@@ -21,6 +25,9 @@ const Empresas = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEnterprise, setSelectedEnterprise] = useState<Enterprise | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
+  });
 
   const fetchEnterprises = async () => {
     try {
@@ -31,7 +38,6 @@ const Empresas = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Si es super admin y hay un tenant seleccionado, filtrar por ese tenant
       if (isSuperAdmin && currentTenant?.id) {
         query = query.eq('tenant_id', currentTenant.id);
       }
@@ -55,6 +61,10 @@ const Empresas = () => {
     fetchEnterprises();
   }, [currentTenant?.id]);
 
+  useEffect(() => {
+    localStorage.setItem("empresasViewMode", viewMode);
+  }, [viewMode]);
+
   const handleEdit = (enterprise: Enterprise) => {
     setSelectedEnterprise(enterprise);
     setDialogOpen(true);
@@ -71,7 +81,6 @@ const Empresas = () => {
     fetchEnterprises();
   };
 
-  // Auto-select first enterprise if none is selected
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!currentEnterpriseId && enterprises.length > 0) {
@@ -115,10 +124,26 @@ const Empresas = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Buscar Empresas</CardTitle>
-          <CardDescription>
-            Filtra por nombre, razón social o NIT
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Buscar Empresas</CardTitle>
+              <CardDescription>
+                Filtra por nombre, razón social o NIT
+              </CardDescription>
+            </div>
+            <ToggleGroup 
+              type="single" 
+              value={viewMode} 
+              onValueChange={(value) => value && setViewMode(value as ViewMode)}
+            >
+              <ToggleGroupItem value="cards" aria-label="Vista de tarjetas">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="table" aria-label="Vista de tabla">
+                <TableIcon className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative">
@@ -147,7 +172,7 @@ const Empresas = () => {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredEnterprises.map((enterprise) => (
             <EnterpriseCard
@@ -158,6 +183,12 @@ const Empresas = () => {
             />
           ))}
         </div>
+      ) : (
+        <EnterprisesTable
+          enterprises={filteredEnterprises}
+          onEdit={handleEdit}
+          onDelete={fetchEnterprises}
+        />
       )}
 
       <EnterpriseDialog
