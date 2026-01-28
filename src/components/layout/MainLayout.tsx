@@ -168,25 +168,27 @@ const MainLayout = () => {
           <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
             <SidebarTrigger />
             
-            <div className="flex items-center gap-2 text-lg font-semibold">
+            <div className="flex items-center gap-2">
               {currentTenant?.logo_url ? (
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-10 w-10">
                   <AvatarImage src={currentTenant.logo_url} alt={currentTenant.tenant_name} className="object-contain" />
                   <AvatarFallback className="text-xs">
                     {currentTenant.tenant_name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
               ) : (
-                <img src="/favicon.png" alt="Logo" className="h-6 w-6" />
+                <img src="/favicon.png" alt="Logo" className="h-8 w-8" />
               )}
-              <span className="hidden sm:inline truncate max-w-md">
-                {currentTenant 
-                  ? `${currentTenant.tenant_name}${currentEnterprise ? ` - ${currentEnterprise}` : ""}`
-                  : currentEnterprise 
-                    ? `Sistema Contable - ${currentEnterprise}`
-                    : "Sistema Contable"
-                }
-              </span>
+              <div className="hidden sm:flex flex-col">
+                <span className="text-sm font-semibold leading-tight">
+                  {currentTenant?.tenant_name || "Sistema Contable"}
+                </span>
+                {currentEnterprise && (
+                  <span className="text-xs text-muted-foreground leading-tight">
+                    {currentEnterprise}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="ml-auto flex items-center gap-4">
