@@ -13,13 +13,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { useActivityTracker } from "@/hooks/useActivityTracker";
 import { TenantSelector } from "@/components/tenants/TenantSelector";
 import { useTenant } from "@/contexts/TenantContext";
+import { useTenantFavicon } from "@/hooks/useTenantFavicon";
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -60,6 +61,9 @@ const MainLayout = () => {
 
   // Activity tracking
   useActivityTracker({ userId: user?.id, enterpriseName: currentEnterprise });
+
+  // Dynamic favicon based on tenant logo
+  useTenantFavicon(currentTenant?.logo_url);
 
   // Fetch and listen for current enterprise changes
   useEffect(() => {
@@ -165,7 +169,16 @@ const MainLayout = () => {
             <SidebarTrigger />
             
             <div className="flex items-center gap-2 text-lg font-semibold">
-              <img src="/favicon.png" alt="Logo" className="h-6 w-6" />
+              {currentTenant?.logo_url ? (
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={currentTenant.logo_url} alt={currentTenant.tenant_name} className="object-contain" />
+                  <AvatarFallback className="text-xs">
+                    {currentTenant.tenant_name.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <img src="/favicon.png" alt="Logo" className="h-6 w-6" />
+              )}
               <span className="hidden sm:inline truncate max-w-md">
                 {currentTenant 
                   ? `${currentTenant.tenant_name}${currentEnterprise ? ` - ${currentEnterprise}` : ""}`

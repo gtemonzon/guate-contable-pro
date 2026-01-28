@@ -199,12 +199,20 @@ const Tenants = () => {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-10 w-10 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: tenant.primary_color }}
-                    >
-                      <Building2 className="h-5 w-5 text-white" />
-                    </div>
+                    {tenant.logo_url ? (
+                      <img
+                        src={tenant.logo_url}
+                        alt={tenant.tenant_name}
+                        className="h-10 w-10 rounded-lg object-contain"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: tenant.primary_color }}
+                      >
+                        <Building2 className="h-5 w-5 text-white" />
+                      </div>
+                    )}
                     <div>
                       <CardTitle className="text-lg">
                         {tenant.tenant_name}
