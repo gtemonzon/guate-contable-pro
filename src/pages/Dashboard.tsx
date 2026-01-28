@@ -51,6 +51,14 @@ const YEAR_COLORS = [
   "hsl(30, 80%, 55%)",        // Naranja
 ];
 
+interface ActivePeriod {
+  id: number;
+  year: number;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
 const Dashboard = () => {
   const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
   const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
@@ -64,6 +72,7 @@ const Dashboard = () => {
   const [activeYear, setActiveYear] = useState<number>(new Date().getFullYear());
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedChartYears, setSelectedChartYears] = useState<number[]>([new Date().getFullYear()]);
+  const [activePeriod, setActivePeriod] = useState<ActivePeriod | null>(null);
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -189,7 +198,72 @@ const Dashboard = () => {
     return ingresos - gastos;
   };
 
-  // Cargar KPIs
+  // Obtener período contable activo
+  useEffect(() => {
+    const fetchActivePeriod = async () => {
+      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (!currentEnterpriseId) {
+        setActivePeriod(null);
+        return;
+      }
+
+      try {
+        const enterpriseId = parseInt(currentEnterpriseId);
+        const activePeriodId = localStorage.getItem(`currentPeriodId_${enterpriseId}`);
+
+        let query = supabase
+          .from("tab_accounting_periods")
+          .select("id, year, start_date, end_date, status")
+          .eq("enterprise_id", enterpriseId)
+          .eq("status", "abierto");
+
+        if (activePeriodId) {
+          // Buscar el período específico guardado
+          const { data: specificPeriod } = await supabase
+            .from("tab_accounting_periods")
+            .select("id, year, start_date, end_date, status")
+            .eq("id", parseInt(activePeriodId))
+            .single();
+
+          if (specificPeriod) {
+            setActivePeriod(specificPeriod);
+            return;
+          }
+        }
+
+        // Fallback: buscar el período abierto más reciente (is_default_period o el más reciente)
+        const { data: periods } = await query
+          .order("is_default_period", { ascending: false })
+          .order("start_date", { ascending: false })
+          .limit(1);
+
+        if (periods && periods.length > 0) {
+          setActivePeriod(periods[0]);
+        } else {
+          setActivePeriod(null);
+        }
+      } catch (error) {
+        console.error("Error fetching active period:", error);
+        setActivePeriod(null);
+      }
+    };
+
+    fetchActivePeriod();
+
+    // Escuchar cambios en el período o empresa
+    const handleChange = () => fetchActivePeriod();
+    window.addEventListener("periodChanged", handleChange);
+    window.addEventListener("enterpriseChanged", handleChange);
+    window.addEventListener("storage", handleChange);
+
+    return () => {
+      window.removeEventListener("periodChanged", handleChange);
+      window.removeEventListener("enterpriseChanged", handleChange);
+      window.removeEventListener("storage", handleChange);
+    };
+  }, []);
+
+  // Cargar KPIs basados en el período activo
   useEffect(() => {
     const fetchKPIs = async () => {
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -198,25 +272,68 @@ const Dashboard = () => {
         return;
       }
 
+      // Esperar a que se cargue el período activo
+      if (activePeriod === null && localStorage.getItem(`currentPeriodId_${currentEnterpriseId}`)) {
+        return; // Aún cargando el período
+      }
+
       try {
         const enterpriseId = parseInt(currentEnterpriseId);
-        const today = new Date();
-        const currentMonth = today.getMonth();
-        const currentYear = today.getFullYear();
         
-        // Fechas del mes actual
-        const currentMonthStart = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
-        const currentMonthEnd = today.toISOString().split('T')[0];
-        
-        // Fechas del mes anterior
-        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-        const prevMonthStart = new Date(prevYear, prevMonth, 1).toISOString().split('T')[0];
-        const prevMonthEnd = new Date(prevYear, prevMonth + 1, 0).toISOString().split('T')[0];
+        let periodEndDate: string;
+        let periodStartDate: string;
+        let prevPeriodEndDate: string;
+        let prevPeriodStartDate: string;
+
+        if (activePeriod) {
+          // Usar las fechas del período contable activo
+          periodEndDate = activePeriod.end_date;
+          periodStartDate = activePeriod.start_date;
+          
+          // Calcular período anterior (mismo rango pero un año antes para comparación anual)
+          // O buscar el período anterior si existe
+          const startDateObj = new Date(activePeriod.start_date);
+          const endDateObj = new Date(activePeriod.end_date);
+          
+          // Obtener período anterior de la misma empresa
+          const { data: prevPeriods } = await supabase
+            .from("tab_accounting_periods")
+            .select("start_date, end_date")
+            .eq("enterprise_id", enterpriseId)
+            .lt("end_date", activePeriod.start_date)
+            .order("end_date", { ascending: false })
+            .limit(1);
+
+          if (prevPeriods && prevPeriods.length > 0) {
+            prevPeriodStartDate = prevPeriods[0].start_date;
+            prevPeriodEndDate = prevPeriods[0].end_date;
+          } else {
+            // No hay período anterior, usar un año antes
+            const prevStart = new Date(startDateObj);
+            prevStart.setFullYear(prevStart.getFullYear() - 1);
+            const prevEnd = new Date(endDateObj);
+            prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+            prevPeriodStartDate = prevStart.toISOString().split('T')[0];
+            prevPeriodEndDate = prevEnd.toISOString().split('T')[0];
+          }
+        } else {
+          // Fallback: usar fecha actual del sistema (no hay período activo)
+          const today = new Date();
+          const currentMonth = today.getMonth();
+          const currentYear = today.getFullYear();
+          
+          periodStartDate = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];
+          periodEndDate = today.toISOString().split('T')[0];
+          
+          const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+          const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+          prevPeriodStartDate = new Date(prevYear, prevMonth, 1).toISOString().split('T')[0];
+          prevPeriodEndDate = new Date(prevYear, prevMonth + 1, 0).toISOString().split('T')[0];
+        }
 
         // Calcular saldos actuales
-        const currentBalances = await calculateAccountBalances(enterpriseId, currentMonthEnd);
-        const prevBalances = await calculateAccountBalances(enterpriseId, prevMonthEnd);
+        const currentBalances = await calculateAccountBalances(enterpriseId, periodEndDate);
+        const prevBalances = await calculateAccountBalances(enterpriseId, prevPeriodEndDate);
 
         // Total Activos
         const totalActivos = currentBalances
@@ -236,9 +353,9 @@ const Dashboard = () => {
           .filter(acc => acc.account_type === 'pasivo')
           .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
 
-        // Utilidad del mes actual
-        const utilidadMes = await calculatePeriodProfit(enterpriseId, currentMonthStart, currentMonthEnd);
-        const prevUtilidadMes = await calculatePeriodProfit(enterpriseId, prevMonthStart, prevMonthEnd);
+        // Utilidad del período activo
+        const utilidadMes = await calculatePeriodProfit(enterpriseId, periodStartDate, periodEndDate);
+        const prevUtilidadMes = await calculatePeriodProfit(enterpriseId, prevPeriodStartDate, prevPeriodEndDate);
 
         // Liquidez (Activo Corriente / Pasivo Corriente)
         const activoCorriente = currentBalances
@@ -305,7 +422,7 @@ const Dashboard = () => {
     };
 
     fetchKPIs();
-  }, []);
+  }, [activePeriod]);
 
   // Cargar últimas partidas
   useEffect(() => {
@@ -667,7 +784,7 @@ const Dashboard = () => {
       icon: Scale,
     },
     {
-      title: "Utilidad del Mes",
+      title: "Utilidad del Período",
       value: kpiData ? `Q ${formatNumber(kpiData.utilidadMes.value)}` : "Q 0.00",
       change: kpiData ? formatChange(kpiData.utilidadMes.change) : "N/A",
       trend: kpiData?.utilidadMes?.trend || 'neutral',
@@ -688,13 +805,52 @@ const Dashboard = () => {
 
   const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
 
+  // Formatear fechas del período para mostrar
+  const formatPeriodDisplay = (): string => {
+    if (!activePeriod) return "Sin período activo";
+    
+    const startDate = new Date(activePeriod.start_date);
+    const endDate = new Date(activePeriod.end_date);
+    
+    const formatDate = (date: Date) => {
+      const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      return `${months[date.getMonth()]} ${date.getFullYear()}`;
+    };
+    
+    const startFormatted = formatDate(startDate);
+    const endFormatted = formatDate(endDate);
+    
+    if (startFormatted === endFormatted) {
+      return startFormatted;
+    }
+    return `${startFormatted} - ${endFormatted}`;
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Resumen general de tu información contable
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Resumen general de tu información contable
+          </p>
+        </div>
+        
+        {/* Indicador del período activo */}
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
+          <Calendar className="h-4 w-4 text-primary" />
+          <div className="text-sm">
+            <span className="text-muted-foreground">Período: </span>
+            <span className="font-semibold text-primary">
+              {activePeriod ? `${activePeriod.year}` : "Sin período"}
+            </span>
+            {activePeriod && (
+              <span className="text-xs text-muted-foreground ml-2">
+                ({formatPeriodDisplay()})
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Alerts Section */}
@@ -724,7 +880,7 @@ const Dashboard = () => {
                     kpi.trend === "down" ? "text-destructive" : 
                     "text-muted-foreground"
                   }`}>
-                    {kpi.change} vs mes anterior
+                    {kpi.change} vs período anterior
                   </p>
                 </>
               )}
