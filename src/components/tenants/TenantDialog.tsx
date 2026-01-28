@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,7 +31,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, X, ImageIcon } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Tenant {
   id: number;
@@ -79,6 +80,10 @@ export function TenantDialog({
   onClose,
 }: TenantDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!tenant;
 
   const form = useForm<FormValues>({
@@ -113,6 +118,8 @@ export function TenantDialog({
         plan_type: tenant.plan_type as "basic" | "professional" | "enterprise",
         is_active: tenant.is_active,
       });
+      setLogoUrl(tenant.logo_url);
+      setLogoPreview(tenant.logo_url);
     } else {
       form.reset({
         tenant_code: "",
@@ -127,8 +134,74 @@ export function TenantDialog({
         plan_type: "basic",
         is_active: true,
       });
+      setLogoUrl(null);
+      setLogoPreview(null);
     }
   }, [tenant, form]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error("Solo se permiten archivos de imagen");
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("El archivo es muy grande", {
+        description: "El tamaño máximo es 2MB",
+      });
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload file
+    try {
+      setUploading(true);
+      const tenantCode = form.getValues("tenant_code") || "new";
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${tenantCode.toLowerCase()}-${Date.now()}.${fileExt}`;
+      const filePath = `logos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('tenant-logos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data } = supabase.storage
+        .from('tenant-logos')
+        .getPublicUrl(filePath);
+
+      setLogoUrl(data.publicUrl);
+      toast.success("Logo subido correctamente");
+    } catch (error: any) {
+      toast.error("Error al subir el logo", {
+        description: error.message,
+      });
+      setLogoPreview(logoUrl); // Revert preview
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoUrl(null);
+    setLogoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -146,6 +219,7 @@ export function TenantDialog({
         max_users: values.max_users,
         plan_type: values.plan_type,
         is_active: values.is_active,
+        logo_url: logoUrl,
       };
 
       if (isEditing) {
@@ -253,6 +327,62 @@ export function TenantDialog({
                 </FormItem>
               )}
             />
+
+            {/* Logo Upload Section */}
+            <div className="space-y-2">
+              <FormLabel>Logo</FormLabel>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16 rounded-lg">
+                  {logoPreview ? (
+                    <AvatarImage src={logoPreview} alt="Logo preview" className="object-cover" />
+                  ) : (
+                    <AvatarFallback className="rounded-lg bg-muted">
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex flex-col gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="mr-2 h-4 w-4" />
+                      )}
+                      {logoPreview ? "Cambiar" : "Subir"}
+                    </Button>
+                    {logoPreview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveLogo}
+                        disabled={uploading}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Quitar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG o SVG. Máximo 2MB.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <FormField
               control={form.control}
