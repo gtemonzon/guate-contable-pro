@@ -335,48 +335,59 @@ const Dashboard = () => {
         const currentBalances = await calculateAccountBalances(enterpriseId, periodEndDate);
         const prevBalances = await calculateAccountBalances(enterpriseId, prevPeriodEndDate);
 
-        // Total Activos
+        // Total Activos - Sumar saldos respetando el signo (la depreciación acumulada es acreedora y debe restarse)
         const totalActivos = currentBalances
           .filter(acc => acc.account_type === 'activo')
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => {
+            // Las cuentas de activo con balance_type acreedor (como depreciación) tienen saldo negativo que debe restarse
+            // acc.balance ya está calculado correctamente según balance_type
+            return sum + acc.balance;
+          }, 0);
         
         const prevTotalActivos = prevBalances
           .filter(acc => acc.account_type === 'activo')
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
 
-        // Total Pasivos
+        // Total Pasivos - Sumar los saldos sin Math.abs ya que están calculados correctamente
         const totalPasivos = currentBalances
           .filter(acc => acc.account_type === 'pasivo')
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
         
         const prevTotalPasivos = prevBalances
           .filter(acc => acc.account_type === 'pasivo')
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
 
         // Utilidad del período activo
         const utilidadMes = await calculatePeriodProfit(enterpriseId, periodStartDate, periodEndDate);
         const prevUtilidadMes = await calculatePeriodProfit(enterpriseId, prevPeriodStartDate, prevPeriodEndDate);
 
         // Liquidez (Activo Corriente / Pasivo Corriente)
+        // Para activo corriente, sumar respetando el signo (aunque normalmente son deudores)
         const activoCorriente = currentBalances
           .filter(acc => acc.account_code.startsWith('1.1') || acc.account_code.startsWith('1-1') || acc.account_code.startsWith('11'))
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
         
         const pasivoCorriente = currentBalances
           .filter(acc => acc.account_code.startsWith('2.1') || acc.account_code.startsWith('2-1') || acc.account_code.startsWith('21'))
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
         
-        const liquidez = pasivoCorriente > 0 ? activoCorriente / pasivoCorriente : 0;
+        // Si no hay pasivo corriente pero hay activo, la liquidez es muy alta (usamos -1 como indicador especial)
+        // Si ambos son 0, liquidez es 0
+        const liquidez = pasivoCorriente > 0 
+          ? activoCorriente / pasivoCorriente 
+          : (activoCorriente > 0 ? -1 : 0); // -1 indica "sin pasivo corriente pero con activo"
 
         const prevActivoCorriente = prevBalances
           .filter(acc => acc.account_code.startsWith('1.1') || acc.account_code.startsWith('1-1') || acc.account_code.startsWith('11'))
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
         
         const prevPasivoCorriente = prevBalances
           .filter(acc => acc.account_code.startsWith('2.1') || acc.account_code.startsWith('2-1') || acc.account_code.startsWith('21'))
-          .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+          .reduce((sum, acc) => sum + acc.balance, 0);
         
-        const prevLiquidez = prevPasivoCorriente > 0 ? prevActivoCorriente / prevPasivoCorriente : 0;
+        const prevLiquidez = prevPasivoCorriente > 0 
+          ? prevActivoCorriente / prevPasivoCorriente 
+          : (prevActivoCorriente > 0 ? -1 : 0);
 
         // Calcular cambios porcentuales
         const calculateChange = (current: number, previous: number): number | null => {
@@ -792,8 +803,17 @@ const Dashboard = () => {
     },
     {
       title: "Liquidez",
-      value: kpiData ? kpiData.liquidez.value.toFixed(2) : "0.00",
-      change: kpiData ? formatChange(kpiData.liquidez.change, false) : "N/A",
+      // Si liquidez es -1, significa que hay activo circulante pero no hay pasivo corriente (muy buena situación)
+      value: kpiData 
+        ? (kpiData.liquidez.value === -1 
+            ? "∞" // Sin pasivo corriente pero con activo
+            : kpiData.liquidez.value.toFixed(2))
+        : "0.00",
+      change: kpiData 
+        ? (kpiData.liquidez.value === -1 
+            ? "Sin pasivo corriente" 
+            : formatChange(kpiData.liquidez.change, false)) 
+        : "N/A",
       trend: kpiData?.liquidez?.trend || 'neutral',
       icon: Wallet,
     },
