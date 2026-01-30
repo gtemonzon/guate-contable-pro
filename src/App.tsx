@@ -27,6 +27,7 @@ import Ayuda from "./pages/Ayuda";
 import Notificaciones from "./pages/Notificaciones";
 import Propuesta from "./pages/Propuesta";
 import Tenants from "./pages/Tenants";
+import Bitacora from "./pages/Bitacora";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/mayor" element={<MayorGeneral />} />
               <Route path="/reportes" element={<Reportes />} />
               <Route path="/configuracion" element={<Configuracion />} />
+              <Route path="/bitacora" element={<Bitacora />} />
               <Route path="/importar" element={<div>Importación (próximamente)</div>} />
               <Route path="/notificaciones" element={<Notificaciones />} />
               <Route path="/ayuda" element={<Ayuda />} />

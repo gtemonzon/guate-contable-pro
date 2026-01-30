@@ -25,7 +25,7 @@ import { useTenantFavicon } from "@/hooks/useTenantFavicon";
 const MainLayout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { currentTenant } = useTenant();
+  const { currentTenant, isTenantActive, isSuperAdmin } = useTenant();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,34 @@ const MainLayout = () => {
 
   // Dynamic favicon based on tenant logo
   useTenantFavicon(currentTenant?.logo_url);
+
+  // Verificación periódica del estado del Tenant
+  useEffect(() => {
+    // Super admins no son afectados por la desactivación del tenant
+    if (isSuperAdmin || !currentTenant) return;
+
+    const checkTenantStatus = async () => {
+      const { data } = await supabase
+        .from("tab_tenants")
+        .select("is_active")
+        .eq("id", currentTenant.id)
+        .single();
+
+      if (data && !data.is_active) {
+        await supabase.auth.signOut();
+        toast({
+          variant: "destructive",
+          title: "Sesión terminada",
+          description: "Tu oficina contable ha sido desactivada. Contacta al administrador del sistema.",
+        });
+        navigate("/login");
+      }
+    };
+
+    // Verificar cada minuto
+    const interval = setInterval(checkTenantStatus, 60000);
+    return () => clearInterval(interval);
+  }, [currentTenant, isSuperAdmin, navigate, toast]);
 
   // Fetch and listen for current enterprise changes
   useEffect(() => {
