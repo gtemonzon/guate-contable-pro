@@ -517,10 +517,20 @@ serve(async (req) => {
 
     const { pdfText } = await req.json();
 
-    if (!pdfText) {
+    if (!pdfText || typeof pdfText !== "string") {
       return new Response(
         JSON.stringify({ error: "No se proporcionó texto del PDF", fieldsFound: 0 }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Input validation: limit text size to prevent DoS attacks (max 5MB)
+    const MAX_PDF_TEXT_SIZE = 5 * 1024 * 1024; // 5MB
+    if (pdfText.length > MAX_PDF_TEXT_SIZE) {
+      console.warn(`PDF text exceeds size limit: ${pdfText.length} bytes`);
+      return new Response(
+        JSON.stringify({ error: "El texto del PDF excede el tamaño máximo permitido (5MB)", fieldsFound: 0 }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

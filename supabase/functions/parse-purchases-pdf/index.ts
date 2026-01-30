@@ -474,6 +474,16 @@ Deno.serve(async (req) => {
       );
     }
     
+    // Input validation: limit text size to prevent DoS attacks (max 5MB)
+    const MAX_PDF_TEXT_SIZE = 5 * 1024 * 1024; // 5MB
+    if (pdfText.length > MAX_PDF_TEXT_SIZE) {
+      console.warn(`PDF text exceeds size limit: ${pdfText.length} bytes`);
+      return new Response(
+        JSON.stringify({ error: "El texto del PDF excede el tamaño máximo permitido (5MB)" }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     console.log(`Parsing PDF text (${pdfText.length} chars) for enterprise NIT: ${enterpriseNit}`);
     
     // Parse the PDF text
