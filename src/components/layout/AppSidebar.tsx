@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -56,6 +56,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
       { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers" },
       { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
+      { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
       { title: "Ayuda", url: "/ayuda", icon: HelpCircle },
     ],

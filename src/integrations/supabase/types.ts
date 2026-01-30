@@ -79,6 +79,8 @@ export type Database = {
           allows_movement: boolean | null
           balance_type: string | null
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           enterprise_id: number | null
           id: number
           is_active: boolean | null
@@ -94,6 +96,8 @@ export type Database = {
           allows_movement?: boolean | null
           balance_type?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           id?: number
           is_active?: boolean | null
@@ -109,6 +113,8 @@ export type Database = {
           allows_movement?: boolean | null
           balance_type?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           id?: number
           is_active?: boolean | null
@@ -986,6 +992,8 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           currency_id: number | null
+          deleted_at: string | null
+          deleted_by: string | null
           description: string
           document_reference: string | null
           enterprise_id: number | null
@@ -1011,6 +1019,8 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           currency_id?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description: string
           document_reference?: string | null
           enterprise_id?: number | null
@@ -1036,6 +1046,8 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           currency_id?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string
           document_reference?: string | null
           enterprise_id?: number | null
@@ -1101,6 +1113,7 @@ export type Database = {
           cost_center: string | null
           credit_amount: number | null
           debit_amount: number | null
+          deleted_at: string | null
           description: string | null
           id: number
           journal_entry_id: number | null
@@ -1112,6 +1125,7 @@ export type Database = {
           cost_center?: string | null
           credit_amount?: number | null
           debit_amount?: number | null
+          deleted_at?: string | null
           description?: string | null
           id?: number
           journal_entry_id?: number | null
@@ -1123,6 +1137,7 @@ export type Database = {
           cost_center?: string | null
           credit_amount?: number | null
           debit_amount?: number | null
+          deleted_at?: string | null
           description?: string | null
           id?: number
           journal_entry_id?: number | null
@@ -1319,6 +1334,8 @@ export type Database = {
           batch_reference: string | null
           created_at: string | null
           currency_id: number | null
+          deleted_at: string | null
+          deleted_by: string | null
           enterprise_id: number | null
           exchange_rate: number | null
           expense_account_id: number | null
@@ -1345,6 +1362,8 @@ export type Database = {
           batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           exchange_rate?: number | null
           expense_account_id?: number | null
@@ -1371,6 +1390,8 @@ export type Database = {
           batch_reference?: string | null
           created_at?: string | null
           currency_id?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           exchange_rate?: number | null
           expense_account_id?: number | null
@@ -1495,6 +1516,8 @@ export type Database = {
           currency_id: number | null
           customer_name: string
           customer_nit: string
+          deleted_at: string | null
+          deleted_by: string | null
           enterprise_id: number | null
           establishment_code: string | null
           establishment_name: string | null
@@ -1521,6 +1544,8 @@ export type Database = {
           currency_id?: number | null
           customer_name: string
           customer_nit: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           establishment_code?: string | null
           establishment_name?: string | null
@@ -1547,6 +1572,8 @@ export type Database = {
           currency_id?: number | null
           customer_name?: string
           customer_nit?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           enterprise_id?: number | null
           establishment_code?: string | null
           establishment_name?: string | null
@@ -1789,6 +1816,7 @@ export type Database = {
       tab_user_enterprises: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
           enterprise_id: number | null
           id: number
           role: string
@@ -1796,6 +1824,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
           enterprise_id?: number | null
           id?: number
           role: string
@@ -1803,6 +1832,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
           enterprise_id?: number | null
           id?: number
           role?: string
@@ -1998,6 +2028,7 @@ export type Database = {
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin_bypass: { Args: { _user_id: string }; Returns: boolean }
+      is_tenant_active: { Args: { tenant_id_param: number }; Returns: boolean }
       is_tenant_admin_for: {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean

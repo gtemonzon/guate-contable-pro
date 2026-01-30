@@ -285,9 +285,10 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
 
   const handleDeleteEnterprise = async () => {
     try {
+      // Soft-delete: marcar como inactivo en lugar de eliminar
       const { error } = await supabase
         .from("tab_enterprises")
-        .delete()
+        .update({ is_active: false })
         .eq("id", enterprise.id);
 
       if (error) throw error;
@@ -299,15 +300,15 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       }
 
       toast({
-        title: "Empresa eliminada",
-        description: `${enterprise.business_name} ha sido eliminada exitosamente`,
+        title: "Empresa desactivada",
+        description: `${enterprise.business_name} ha sido desactivada exitosamente`,
       });
 
       onDelete?.();
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Error al eliminar",
+        title: "Error al desactivar",
         description: getSafeErrorMessage(error),
       });
     } finally {
@@ -496,16 +497,17 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar empresa?</AlertDialogTitle>
+            <AlertDialogTitle>¿Desactivar empresa?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la empresa{" "}
-              <strong>{enterprise.business_name}</strong> y todos sus datos asociados.
+              Esta acción desactivará la empresa{" "}
+              <strong>{enterprise.business_name}</strong>. Los datos no se eliminarán 
+              y podrán ser reactivados por un administrador.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteEnterprise}>
-              Eliminar
+              Desactivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

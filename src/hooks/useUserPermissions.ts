@@ -31,6 +31,7 @@ export interface UserPermissions {
   // Estados
   isLoading: boolean;
   isSuperAdmin: boolean;
+  isTenantAdmin: boolean;
 }
 
 const ROLE_DISPLAY_NAMES: Record<string, string> = {
@@ -132,6 +133,7 @@ const defaultPermissions: UserPermissions = {
   canExportReports: false,
   isLoading: true,
   isSuperAdmin: false,
+  isTenantAdmin: false,
 };
 
 export function useUserPermissions(): UserPermissions {
@@ -145,10 +147,10 @@ export function useUserPermissions(): UserPermissions {
         return;
       }
 
-      // Obtener información del usuario (incluyendo is_super_admin)
+      // Obtener información del usuario (incluyendo is_super_admin e is_tenant_admin)
       const { data: userData, error: userError } = await supabase
         .from("tab_users")
-        .select("is_super_admin")
+        .select("is_super_admin, is_tenant_admin")
         .eq("id", user.id)
         .single();
 
@@ -157,6 +159,7 @@ export function useUserPermissions(): UserPermissions {
       }
 
       const isSuperAdmin = userData?.is_super_admin || false;
+      const isTenantAdmin = userData?.is_tenant_admin || false;
 
       // Si es super admin, tiene todos los permisos
       if (isSuperAdmin) {
@@ -179,6 +182,7 @@ export function useUserPermissions(): UserPermissions {
           canExportReports: true,
           isLoading: false,
           isSuperAdmin: true,
+          isTenantAdmin: true, // Super admin también es tenant admin
         });
         return;
       }
@@ -187,10 +191,11 @@ export function useUserPermissions(): UserPermissions {
       const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
       
       if (!currentEnterpriseId) {
-        // Sin empresa seleccionada, usar permisos mínimos
+        // Sin empresa seleccionada, usar permisos mínimos pero mantener isTenantAdmin
         setPermissions({
           ...defaultPermissions,
           isLoading: false,
+          isTenantAdmin,
         });
         return;
       }
@@ -211,13 +216,14 @@ export function useUserPermissions(): UserPermissions {
       const roleDisplayName = role ? (ROLE_DISPLAY_NAMES[role] || role) : '';
 
       if (!role) {
-        // Sin rol asignado - permisos mínimos
+        // Sin rol asignado - permisos mínimos pero mantener isTenantAdmin
         setPermissions({
           ...defaultPermissions,
           role: null,
           roleDisplayName: 'Sin rol asignado',
           canViewReports: true,
           isLoading: false,
+          isTenantAdmin,
         });
         return;
       }
@@ -261,6 +267,7 @@ export function useUserPermissions(): UserPermissions {
         canExportReports: hasCustomPermissions ? (dbPermissions['export_reports'] ?? true) : getDefaultPermission(role, 'export_reports'),
         isLoading: false,
         isSuperAdmin: false,
+        isTenantAdmin,
       };
 
       setPermissions(newPermissions);

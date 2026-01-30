@@ -32,10 +32,10 @@ const Login = () => {
 
       if (error) throw error;
 
-      // Verificar si el usuario está activo y obtener última empresa
+      // Verificar si el usuario está activo y obtener última empresa y tenant
       const { data: userData, error: userError } = await supabase
         .from("tab_users")
-        .select("is_active, last_enterprise_id")
+        .select("is_active, last_enterprise_id, tenant_id")
         .eq("id", data.user.id)
         .single();
 
@@ -44,6 +44,24 @@ const Login = () => {
       if (!userData.is_active) {
         await supabase.auth.signOut();
         throw new Error("Tu cuenta está inactiva. Contacta al administrador.");
+      }
+
+      // Verificar si el Tenant está activo
+      if (userData.tenant_id) {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from("tab_tenants")
+          .select("is_active, tenant_name")
+          .eq("id", userData.tenant_id)
+          .single();
+
+        if (tenantError) throw tenantError;
+
+        if (!tenantData.is_active) {
+          await supabase.auth.signOut();
+          throw new Error(
+            `La oficina contable "${tenantData.tenant_name}" está inactiva. Contacta al administrador del sistema.`
+          );
+        }
       }
 
       // Obtener empresas asignadas al usuario

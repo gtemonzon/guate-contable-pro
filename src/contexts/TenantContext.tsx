@@ -23,6 +23,7 @@ interface TenantContextType {
   isLoading: boolean;
   isSuperAdmin: boolean;
   isTenantAdmin: boolean;
+  isTenantActive: boolean;
   switchTenant: (tenantId: number) => Promise<void>;
   refreshTenants: () => Promise<void>;
 }
@@ -35,6 +36,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isTenantAdmin, setIsTenantAdmin] = useState(false);
+  const [isTenantActive, setIsTenantActive] = useState(true);
 
   const fetchTenantData = async () => {
     try {
@@ -94,6 +96,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           console.error("Error fetching tenant:", tenantError);
         } else {
           setCurrentTenant(tenantData);
+          setIsTenantActive(tenantData?.is_active ?? false);
         }
       }
     } catch (error) {
@@ -165,6 +168,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         isLoading,
         isSuperAdmin,
         isTenantAdmin,
+        isTenantActive,
         switchTenant,
         refreshTenants,
       }}
