@@ -728,11 +728,11 @@ export default function LibrosFiscales() {
     return () => window.clearTimeout(t);
   }, [pendingFocusTab, purchases.length, sales.length]);
 
-  // Keyboard shortcut: Ctrl+Shift+N -> new invoice on current tab
+  // Keyboard shortcut: Ctrl+Alt+N -> new invoice on current tab
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Shift+N
-      if (!e.ctrlKey || !e.shiftKey) return;
+      // Ctrl+Alt+N
+      if (!e.ctrlKey || !e.altKey) return;
       if (e.key.toLowerCase() !== "n") return;
       e.preventDefault();
       if (activeTab === "compras") addNewPurchase();
@@ -1173,7 +1173,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Shift+N</p>
+                        <p>Ctrl+Alt+N</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1251,7 +1251,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Shift+N</p>
+                        <p>Ctrl+Alt+N</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
