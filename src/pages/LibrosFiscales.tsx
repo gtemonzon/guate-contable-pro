@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PurchaseCard } from "@/components/compras/PurchaseCard";
-import { SalesCard } from "@/components/ventas/SalesCard";
+import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
+import { SalesCard, type SalesCardRef } from "@/components/ventas/SalesCard";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { InvoiceSearchDialog } from "@/components/search/InvoiceSearchDialog";
@@ -111,6 +111,13 @@ export default function LibrosFiscales() {
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
   const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
+
+  // Inline-edit state + focus management
+  const [editingPurchaseIndex, setEditingPurchaseIndex] = useState<number | null>(null);
+  const [editingSaleIndex, setEditingSaleIndex] = useState<number | null>(null);
+  const [pendingFocusTab, setPendingFocusTab] = useState<null | "compras" | "ventas">(null);
+  const purchaseEditRef = useRef<PurchaseCardRef>(null);
+  const saleEditRef = useRef<SalesCardRef>(null);
   
   const { toast } = useToast();
 
@@ -656,7 +663,7 @@ export default function LibrosFiscales() {
     }
   };
 
-  const addNewPurchase = () => {
+  const addNewPurchase = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
@@ -677,10 +684,12 @@ export default function LibrosFiscales() {
       journal_entry_id: null,
       isNew: true,
     };
-    setPurchases([newEntry, ...purchases]);
-  };
+    setPurchases((prev) => [newEntry, ...prev]);
+    setEditingPurchaseIndex(0);
+    setPendingFocusTab("compras");
+  }, [selectedYear, selectedMonth, felDocTypes, lastExpenseAccountId, lastBankAccountId]);
 
-  const addNewSale = () => {
+  const addNewSale = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
@@ -699,8 +708,37 @@ export default function LibrosFiscales() {
       journal_entry_id: null,
       isNew: true,
     };
-    setSales([newEntry, ...sales]);
-  };
+    setSales((prev) => [newEntry, ...prev]);
+    setEditingSaleIndex(0);
+    setPendingFocusTab("ventas");
+  }, [selectedYear, selectedMonth, felDocTypes, lastIncomeAccountId]);
+
+  // Focus the edited/new row once it exists in the DOM
+  useEffect(() => {
+    if (!pendingFocusTab) return;
+    const t = window.setTimeout(() => {
+      if (pendingFocusTab === "compras") {
+        purchaseEditRef.current?.focusDateField();
+      } else {
+        saleEditRef.current?.focusDateField();
+      }
+      setPendingFocusTab(null);
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [pendingFocusTab, purchases.length, sales.length]);
+
+  // Keyboard shortcut: Alt+N -> new invoice on current tab
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      if (e.key.toLowerCase() !== "n") return;
+      e.preventDefault();
+      if (activeTab === "compras") addNewPurchase();
+      else addNewSale();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeTab, addNewPurchase, addNewSale]);
 
   const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: any) => {
     const updated = [...purchases];
@@ -1078,7 +1116,16 @@ export default function LibrosFiscales() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "compras" | "ventas")}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            const tab = v as "compras" | "ventas";
+            setActiveTab(tab);
+            // reset edit state when switching tabs
+            setEditingPurchaseIndex(null);
+            setEditingSaleIndex(null);
+          }}
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="compras">Libro de Compras</TabsTrigger>
             <TabsTrigger value="ventas">Libro de Ventas</TabsTrigger>
@@ -1235,6 +1282,7 @@ export default function LibrosFiscales() {
                   {purchases.map((purchase, index) => (
                     <PurchaseCard
                       key={purchase.id || `new-${index}`}
+                      ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
                       purchase={purchase}
                       index={index}
                       felDocTypes={felDocTypes}
@@ -1245,6 +1293,12 @@ export default function LibrosFiscales() {
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
                       isHighlighted={highlightedInvoiceId === purchase.id}
+                      isEditing={editingPurchaseIndex === index}
+                      onStartEdit={(idx) => {
+                        setEditingPurchaseIndex(idx);
+                        setPendingFocusTab("compras");
+                      }}
+                      onCancelEdit={() => setEditingPurchaseIndex(null)}
                     />
                   ))}
                 </div>
@@ -1259,6 +1313,7 @@ export default function LibrosFiscales() {
                   {sales.map((sale, index) => (
                     <SalesCard
                       key={sale.id || `new-${index}`}
+                      ref={editingSaleIndex === index ? saleEditRef : undefined}
                       sale={sale}
                       index={index}
                       felDocTypes={felDocTypes}
@@ -1269,6 +1324,12 @@ export default function LibrosFiscales() {
                       onDelete={deleteSaleRow}
                       onToggleAnnulled={toggleSaleAnnulled}
                       isHighlighted={highlightedInvoiceId === sale.id}
+                      isEditing={editingSaleIndex === index}
+                      onStartEdit={(idx) => {
+                        setEditingSaleIndex(idx);
+                        setPendingFocusTab("ventas");
+                      }}
+                      onCancelEdit={() => setEditingSaleIndex(null)}
                     />
                   ))}
                 </div>
