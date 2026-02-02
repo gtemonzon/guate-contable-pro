@@ -80,6 +80,7 @@ export default function LibroVentas() {
   
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
   const [focusNewRow, setFocusNewRow] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   const newCardRef = useRef<SalesCardRef>(null);
 
@@ -1173,7 +1174,7 @@ export default function LibroVentas() {
               }
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {filteredSales.map((sale, index) => {
                 // Get the real index in the sales array for update/delete operations
                 const realIndex = sales.findIndex(s => s === sale);
@@ -1188,9 +1189,20 @@ export default function LibroVentas() {
                     operationTypes={operationTypes}
                     incomeAccounts={incomeAccounts}
                     onUpdate={updateRow}
-                    onSave={saveRow}
+                    onSave={(idx) => {
+                      saveRow(idx);
+                      // Clear isNew flag after save
+                      if (sales[idx].isNew) {
+                        const updated = [...sales];
+                        updated[idx] = { ...updated[idx], isNew: false };
+                        setSales(updated);
+                      }
+                    }}
                     onDelete={deleteRow}
                     onToggleAnnulled={toggleAnnulled}
+                    isEditing={editingIndex === realIndex}
+                    onStartEdit={(idx) => setEditingIndex(idx)}
+                    onCancelEdit={() => setEditingIndex(null)}
                   />
                 );
               })}
