@@ -976,7 +976,7 @@ export default function JournalEntryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleCloseAttempt}>
-      <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[98vw] max-w-[1400px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{entryToEdit ? 'Editar' : 'Nueva'} Partida Contable</DialogTitle>
         </DialogHeader>
@@ -1137,17 +1137,17 @@ export default function JournalEntryDialog({
               </div>
             </div>
 
-            <div className="border rounded-lg overflow-x-auto">
+            <div className="border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[280px]">Cuenta</TableHead>
-                    <TableHead className="min-w-[200px]">Descripción</TableHead>
-                    <TableHead className="min-w-[120px]">Ref. Bancaria</TableHead>
-                    <TableHead className="min-w-[100px]">Centro Costo</TableHead>
-                    <TableHead className="min-w-[120px] text-right">Debe</TableHead>
-                    <TableHead className="min-w-[120px] text-right">Haber</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[22%]">Cuenta</TableHead>
+                    <TableHead className="w-[30%]">Descripción</TableHead>
+                    <TableHead className="w-[10%]">Ref. Bancaria</TableHead>
+                    <TableHead className="w-[10%]">Centro Costo</TableHead>
+                    <TableHead className="w-[12%] text-right">Debe</TableHead>
+                    <TableHead className="w-[12%] text-right">Haber</TableHead>
+                    <TableHead className="w-[4%]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
