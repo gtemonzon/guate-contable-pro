@@ -829,8 +829,9 @@ const Dashboard = () => {
   const formatPeriodDisplay = (): string => {
     if (!activePeriod) return "Sin período activo";
     
-    const startDate = new Date(activePeriod.start_date);
-    const endDate = new Date(activePeriod.end_date);
+    // Agregar T00:00:00 para evitar desfase de zona horaria
+    const startDate = new Date(activePeriod.start_date + "T00:00:00");
+    const endDate = new Date(activePeriod.end_date + "T00:00:00");
     
     const formatDate = (date: Date) => {
       const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
