@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Settings } from "lucide-react";
+import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -363,7 +363,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                             className="h-8 w-8"
                             onClick={() => onOpenWizard(enterprise)}
                           >
-                            <Settings className="h-4 w-4" />
+                            <Wand2 className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>Asistente de configuración</TooltipContent>
