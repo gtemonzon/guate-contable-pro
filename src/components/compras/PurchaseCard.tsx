@@ -82,12 +82,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       setTimeout(() => {
         if (dateInputRef.current) {
           dateInputRef.current.focus();
-          // Try to open date picker
-          try {
-            dateInputRef.current.showPicker?.();
-          } catch (e) {
-            // showPicker might not be supported in all browsers
-          }
         }
       }, 150);
     }
@@ -184,11 +178,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     if (isNewRecord && dateInputRef.current) {
       setTimeout(() => {
         dateInputRef.current?.focus();
-        try {
-          dateInputRef.current?.showPicker?.();
-        } catch (e) {
-          // Ignore
-        }
       }, 100);
     }
   }, [isNewRecord]);
