@@ -321,14 +321,14 @@ export function InvoiceSearchDialog({
             <div>
               <Label htmlFor="search-bank-account">Cuenta Bancaria</Label>
               <Select 
-                value={searchBankAccountId} 
-                onValueChange={setSearchBankAccountId}
+                value={searchBankAccountId || "all"} 
+                onValueChange={(val) => setSearchBankAccountId(val === "all" ? "" : val)}
               >
                 <SelectTrigger id="search-bank-account">
                   <SelectValue placeholder="Todas las cuentas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas las cuentas</SelectItem>
+                  <SelectItem value="all">Todas las cuentas</SelectItem>
                   {bankAccounts.map((acc) => (
                     <SelectItem key={acc.id} value={acc.id.toString()}>
                       {acc.bank_name} - {acc.account_number}
