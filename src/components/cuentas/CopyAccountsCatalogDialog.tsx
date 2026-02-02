@@ -76,6 +76,17 @@ export function CopyAccountsCatalogDialog({
   const fetchEnterprises = async () => {
     setLoadingEnterprises(true);
     try {
+      // Primero obtener el tenant_id de la empresa actual
+      const { data: currentEnterprise, error: ceError } = await supabase
+        .from('tab_enterprises')
+        .select('tenant_id')
+        .eq('id', currentEnterpriseId)
+        .single();
+
+      if (ceError) throw ceError;
+
+      const currentTenantId = currentEnterprise?.tenant_id;
+
       // Obtener las empresas del usuario excluyendo la actual
       const { data: userEnterprises, error: ueError } = await supabase
         .from('tab_user_enterprises')
@@ -92,11 +103,18 @@ export function CopyAccountsCatalogDialog({
         return;
       }
 
-      const { data, error } = await supabase
+      // Filtrar por el mismo tenant de la empresa actual
+      let query = supabase
         .from('tab_enterprises')
         .select('*')
         .in('id', enterpriseIds)
         .eq('is_active', true);
+
+      if (currentTenantId) {
+        query = query.eq('tenant_id', currentTenantId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setEnterprises(data || []);
