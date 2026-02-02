@@ -52,6 +52,8 @@ interface PeriodDialogProps {
 const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogProps) => {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [startMonth, setStartMonth] = useState<Date>(new Date());
+  const [endMonth, setEndMonth] = useState<Date>(new Date());
   const isEditing = !!period;
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -65,17 +67,23 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
 
   useEffect(() => {
     if (period) {
+      const startDate = parseISO(period.start_date);
+      const endDate = parseISO(period.end_date);
       form.reset({
-        start_date: parseISO(period.start_date),
-        end_date: parseISO(period.end_date),
+        start_date: startDate,
+        end_date: endDate,
         notes: period.notes || "",
       });
+      setStartMonth(startDate);
+      setEndMonth(endDate);
     } else {
       form.reset({
         start_date: undefined,
         end_date: undefined,
         notes: "",
       });
+      setStartMonth(new Date());
+      setEndMonth(new Date());
     }
   }, [period, form]);
 
@@ -211,7 +219,14 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                            if (date) setStartMonth(date);
+                          }}
+                          month={startMonth}
+                          onMonthChange={setStartMonth}
+                          showYearNavigation
+                          yearRange={{ from: 2015, to: 2035 }}
                           initialFocus
                           className="pointer-events-auto"
                         />
@@ -254,7 +269,14 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                            if (date) setEndMonth(date);
+                          }}
+                          month={endMonth}
+                          onMonthChange={setEndMonth}
+                          showYearNavigation
+                          yearRange={{ from: 2015, to: 2035 }}
                           initialFocus
                           className="pointer-events-auto"
                         />
