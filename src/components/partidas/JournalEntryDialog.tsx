@@ -552,8 +552,11 @@ export default function JournalEntryDialog({
         credit_amount: 0 
       }
     ]);
-    // Activar la nueva línea para edición inmediata
+    // Activar la nueva línea y abrir selector de cuenta
     setActiveLineId(newLineId);
+    setTimeout(() => {
+      setAccountPopoverOpen(prev => ({ ...prev, [newLineId]: true }));
+    }, 50);
   };
 
   // Callback para recibir líneas del modal de compras
@@ -973,7 +976,7 @@ export default function JournalEntryDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleCloseAttempt}>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{entryToEdit ? 'Editar' : 'Nueva'} Partida Contable</DialogTitle>
         </DialogHeader>
@@ -1178,14 +1181,16 @@ export default function JournalEntryDialog({
                                 <Button
                                   variant="outline"
                                   role="combobox"
-                                  className="w-full justify-between font-normal h-9"
+                                  className="w-full justify-between font-normal h-9 max-w-[280px]"
                                 >
-                                  {line.account_id
-                                    ? (() => {
-                                        const acc = accounts.find(a => a.id === line.account_id);
-                                        return acc ? `${acc.account_code} - ${acc.account_name}` : "Seleccionar";
-                                      })()
-                                    : "Seleccionar"}
+                                  <span className="truncate">
+                                    {line.account_id
+                                      ? (() => {
+                                          const acc = accounts.find(a => a.id === line.account_id);
+                                          return acc ? `${acc.account_code} - ${acc.account_name}` : "Seleccionar";
+                                        })()
+                                      : "Seleccionar"}
+                                  </span>
                                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                               </PopoverTrigger>
@@ -1235,7 +1240,7 @@ export default function JournalEntryDialog({
                               </PopoverContent>
                             </Popover>
                           ) : (
-                            <span className="text-sm px-1 truncate block" title={account ? `${account.account_code} - ${account.account_name}` : ''}>
+                            <span className="text-sm px-1 truncate block max-w-[280px]" title={account ? `${account.account_code} - ${account.account_name}` : ''}>
                               {account ? `${account.account_code} - ${account.account_name}` : <span className="text-muted-foreground">Seleccionar</span>}
                             </span>
                           )}
@@ -1247,7 +1252,6 @@ export default function JournalEntryDialog({
                               onChange={(e) => updateLine(line.id, "description", e.target.value)}
                               placeholder="Descripción"
                               className="h-9"
-                              autoFocus={!line.account_id}
                             />
                           ) : (
                             <span className="text-sm px-1 truncate block" title={line.description}>
@@ -1313,6 +1317,21 @@ export default function JournalEntryDialog({
                               onChange={(e) => updateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)}
                               disabled={line.debit_amount > 0}
                               className="h-9 text-right font-mono"
+                              onKeyDown={(e) => {
+                                // Al presionar Tab en el campo Haber, ir a la siguiente línea (campo cuenta)
+                                if (e.key === 'Tab' && !e.shiftKey) {
+                                  const currentIndex = detailLines.findIndex(l => l.id === line.id);
+                                  const nextLine = detailLines[currentIndex + 1];
+                                  if (nextLine) {
+                                    e.preventDefault();
+                                    setActiveLineId(nextLine.id);
+                                    // Abrir el popover de cuenta de la siguiente línea
+                                    setTimeout(() => {
+                                      setAccountPopoverOpen(prev => ({ ...prev, [nextLine.id]: true }));
+                                    }, 50);
+                                  }
+                                }
+                              }}
                             />
                           ) : (
                             <span className={cn(
