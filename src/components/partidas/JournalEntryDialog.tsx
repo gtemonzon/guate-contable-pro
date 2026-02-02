@@ -23,7 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown, XCircle, Clock, ThumbsUp, ThumbsDown, Lock } from "lucide-react";
+import { Plus, Trash2, Save, CheckCircle, Check, ChevronsUpDown, XCircle, Clock, ThumbsUp, ThumbsDown, Lock, ShoppingCart } from "lucide-react";
+import LinkedPurchasesModal from "./LinkedPurchasesModal";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,6 +117,9 @@ export default function JournalEntryDialog({
   
   // Estado actual de la partida
   const [entryStatus, setEntryStatus] = useState<EntryStatus>('borrador');
+
+  // Estado para el modal de compras vinculadas
+  const [showLinkedPurchasesModal, setShowLinkedPurchasesModal] = useState(false);
 
   // Estado para modo solo lectura (período cerrado)
   const [isReadOnly, setIsReadOnly] = useState(false);
@@ -538,6 +542,22 @@ export default function JournalEntryDialog({
         credit_amount: 0 
       }
     ]);
+  };
+
+  // Callback para recibir líneas del modal de compras
+  const handlePurchasesPosted = (newLines: DetailLine[]) => {
+    // Filtrar líneas vacías existentes y agregar las nuevas
+    const nonEmptyLines = detailLines.filter(line => 
+      line.account_id !== null || line.debit_amount > 0 || line.credit_amount > 0
+    );
+    
+    // Si no hay líneas no vacías, reemplazar todo con las nuevas
+    if (nonEmptyLines.length === 0) {
+      setDetailLines(newLines);
+    } else {
+      // Agregar las nuevas líneas a las existentes
+      setDetailLines([...nonEmptyLines, ...newLines]);
+    }
   };
 
   const removeLine = (id: string) => {
@@ -1012,10 +1032,25 @@ export default function JournalEntryDialog({
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
-              <Button onClick={addLine} variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Línea
-              </Button>
+              <div className="flex gap-2">
+                {/* Botón para agregar desde compras - solo visible cuando no está contabilizado */}
+                {entryStatus !== 'contabilizado' && !isReadOnly && (
+                  <Button 
+                    onClick={() => setShowLinkedPurchasesModal(true)} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={!entryDate}
+                    title={!entryDate ? "Primero ingrese la fecha de la partida" : "Agregar facturas de compra"}
+                  >
+                    <ShoppingCart className="mr-2 h-4 w-4" />
+                    Agregar desde Compras
+                  </Button>
+                )}
+                <Button onClick={addLine} variant="outline" size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar Línea
+                </Button>
+              </div>
             </div>
 
             <div className="border rounded-lg overflow-x-auto">
@@ -1278,6 +1313,16 @@ export default function JournalEntryDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Modal de compras vinculadas */}
+    <LinkedPurchasesModal
+      open={showLinkedPurchasesModal}
+      onOpenChange={setShowLinkedPurchasesModal}
+      entryDate={entryDate}
+      documentReference={documentReference}
+      enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+      onPurchasesPosted={handlePurchasesPosted}
+    />
     </>
   );
 }
