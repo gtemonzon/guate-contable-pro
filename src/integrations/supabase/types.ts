@@ -989,6 +989,9 @@ export type Database = {
       tab_journal_entries: {
         Row: {
           accounting_period_id: number | null
+          bank_account_id: number | null
+          bank_reference: string | null
+          beneficiary_name: string | null
           created_at: string | null
           created_by: string | null
           currency_id: number | null
@@ -1016,6 +1019,9 @@ export type Database = {
         }
         Insert: {
           accounting_period_id?: number | null
+          bank_account_id?: number | null
+          bank_reference?: string | null
+          beneficiary_name?: string | null
           created_at?: string | null
           created_by?: string | null
           currency_id?: number | null
@@ -1043,6 +1049,9 @@ export type Database = {
         }
         Update: {
           accounting_period_id?: number | null
+          bank_account_id?: number | null
+          bank_reference?: string | null
+          beneficiary_name?: string | null
           created_at?: string | null
           created_by?: string | null
           currency_id?: number | null
@@ -1074,6 +1083,13 @@ export type Database = {
             columns: ["accounting_period_id"]
             isOneToOne: false
             referencedRelation: "tab_accounting_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entries_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
             referencedColumns: ["id"]
           },
           {

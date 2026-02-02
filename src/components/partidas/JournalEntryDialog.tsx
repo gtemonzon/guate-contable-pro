@@ -43,6 +43,7 @@ interface Account {
   account_name: string;
   requires_cost_center: boolean;
   balance_type: string;
+  is_bank_account?: boolean;
 }
 
 interface Period {
@@ -57,7 +58,6 @@ interface DetailLine {
   id: string;
   account_id: number | null;
   description: string;
-  bank_reference: string;
   cost_center: string;
   debit_amount: number;
   credit_amount: number;
@@ -100,10 +100,15 @@ export default function JournalEntryDialog({
   const [documentReference, setDocumentReference] = useState("");
   const [headerDescription, setHeaderDescription] = useState("");
   
+  // Campos bancarios del encabezado
+  const [bankAccountId, setBankAccountId] = useState<number | null>(null);
+  const [bankReference, setBankReference] = useState("");
+  const [beneficiaryName, setBeneficiaryName] = useState("");
+  
   // Líneas de detalle
   const [detailLines, setDetailLines] = useState<DetailLine[]>([
-    { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
-    { id: crypto.randomUUID(), account_id: null, description: "", bank_reference: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
+    { id: crypto.randomUUID(), account_id: null, description: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
+    { id: crypto.randomUUID(), account_id: null, description: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
   ]);
   
   // Estado para búsqueda de cuentas por línea
@@ -167,6 +172,9 @@ export default function JournalEntryDialog({
     setPeriodId(null);
     setDocumentReference("");
     setHeaderDescription("");
+    setBankAccountId(null);
+    setBankReference("");
+    setBeneficiaryName("");
     setDetailLines([]);
     setAuditInfo(null);
     setEntryStatus('borrador');
@@ -228,6 +236,44 @@ export default function JournalEntryDialog({
     regenerateNumber();
   }, [open, entryToEdit, entryType, entryDate]);
 
+  // Sugerir siguiente número de documento bancario cuando se selecciona un banco
+  useEffect(() => {
+    if (!open || !bankAccountId || bankReference) return;
+    
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+
+    const suggestBankReference = async () => {
+      try {
+        // Buscar el último número de documento usado para esta cuenta bancaria
+        const { data: lastEntry } = await supabase
+          .from("tab_journal_entries")
+          .select("bank_reference")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("bank_account_id", bankAccountId)
+          .not("bank_reference", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastEntry?.bank_reference) {
+          // Intentar extraer el número del último documento y sugerir el siguiente
+          const match = lastEntry.bank_reference.match(/(\d+)$/);
+          if (match) {
+            const lastNum = parseInt(match[1]);
+            const prefix = lastEntry.bank_reference.replace(/\d+$/, '');
+            const nextNum = lastNum + 1;
+            setBankReference(`${prefix}${nextNum}`);
+          }
+        }
+      } catch (error) {
+        console.error("Error suggesting bank reference:", error);
+      }
+    };
+
+    suggestBankReference();
+  }, [open, bankAccountId]);
+
   // Función para propagar la descripción del encabezado a líneas vacías (llamada al perder el foco)
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
@@ -252,10 +298,10 @@ export default function JournalEntryDialog({
     }
 
     try {
-      // Cargar cuentas que permiten movimiento
+      // Cargar cuentas que permiten movimiento (incluyendo bancos)
       const { data: accountsData, error: accountsError } = await supabase
         .from("tab_accounts")
-        .select("id, account_code, account_name, requires_cost_center, balance_type")
+        .select("id, account_code, account_name, requires_cost_center, balance_type, is_bank_account")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("allows_movement", true)
         .eq("is_active", true)
@@ -333,7 +379,6 @@ export default function JournalEntryDialog({
         detailLines: state.detailLines.map((l) => ({
           account_id: l.account_id,
           description: l.description,
-          bank_reference: l.bank_reference,
           cost_center: l.cost_center,
           debit_amount: Number(l.debit_amount || 0),
           credit_amount: Number(l.credit_amount || 0),
@@ -350,7 +395,6 @@ export default function JournalEntryDialog({
         id: crypto.randomUUID(),
         account_id: null,
         description: "",
-        bank_reference: "",
         cost_center: "",
         debit_amount: 0,
         credit_amount: 0,
@@ -359,7 +403,6 @@ export default function JournalEntryDialog({
         id: crypto.randomUUID(),
         account_id: null,
         description: "",
-        bank_reference: "",
         cost_center: "",
         debit_amount: 0,
         credit_amount: 0,
@@ -381,6 +424,9 @@ export default function JournalEntryDialog({
     setPeriodId(null);
     setDocumentReference("");
     setHeaderDescription("");
+    setBankAccountId(null);
+    setBankReference("");
+    setBeneficiaryName("");
     setDetailLines(freshLines);
     setShowCloseConfirm(false);
     setShowRejectDialog(false);
@@ -506,11 +552,15 @@ export default function JournalEntryDialog({
         id: crypto.randomUUID(),
         account_id: d.account_id,
         description: d.description || "",
-        bank_reference: d.bank_reference || "",
         cost_center: d.cost_center || "",
         debit_amount: d.debit_amount,
         credit_amount: d.credit_amount,
       }));
+
+      // Cargar campos bancarios del encabezado
+      setBankAccountId(entry.bank_account_id || null);
+      setBankReference(entry.bank_reference || "");
+      setBeneficiaryName(entry.beneficiary_name || "");
 
       // Guardar snapshot inicial (editar / borrador)
       initialSnapshotRef.current = serializeForDirtyCheck({
@@ -541,7 +591,6 @@ export default function JournalEntryDialog({
         id: newLineId, 
         account_id: null, 
         description: headerDescription, 
-        bank_reference: "", 
         cost_center: "", 
         debit_amount: 0, 
         credit_amount: 0 
@@ -599,7 +648,6 @@ export default function JournalEntryDialog({
           id: newLineId,
           account_id: null,
           description: headerDescription,
-          bank_reference: "",
           cost_center: "",
           debit_amount: 0,
           credit_amount: 0
@@ -799,6 +847,9 @@ export default function JournalEntryDialog({
           accounting_period_id: periodId,
           document_reference: documentReference || null,
           description: headerDescription,
+          bank_account_id: bankAccountId || null,
+          bank_reference: bankReference || null,
+          beneficiary_name: beneficiaryName || null,
           total_debit: getTotalDebit(),
           total_credit: getTotalCredit(),
           is_posted: post,
@@ -825,7 +876,6 @@ export default function JournalEntryDialog({
           line_number: index + 1,
           account_id: line.account_id,
           description: line.description || headerDescription,
-          bank_reference: line.bank_reference || null,
           cost_center: line.cost_center || null,
           debit_amount: line.debit_amount,
           credit_amount: line.credit_amount,
@@ -878,6 +928,9 @@ export default function JournalEntryDialog({
           accounting_period_id: periodId,
           document_reference: documentReference || null,
           description: headerDescription,
+          bank_account_id: bankAccountId || null,
+          bank_reference: bankReference || null,
+          beneficiary_name: beneficiaryName || null,
           total_debit: getTotalDebit(),
           total_credit: getTotalCredit(),
           is_posted: post,
@@ -896,7 +949,6 @@ export default function JournalEntryDialog({
           line_number: index + 1,
           account_id: line.account_id,
           description: line.description || headerDescription,
-          bank_reference: line.bank_reference || null,
           cost_center: line.cost_center || null,
           debit_amount: line.debit_amount,
           credit_amount: line.credit_amount,
@@ -1066,6 +1118,62 @@ export default function JournalEntryDialog({
             </div>
           </div>
 
+          {/* Datos Bancarios - Sección condicional */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border border-dashed">
+            <div>
+              <Label htmlFor="bankAccount">Cuenta Bancaria</Label>
+              <Select 
+                value={bankAccountId?.toString() || ""} 
+                onValueChange={(v) => {
+                  setBankAccountId(v ? parseInt(v) : null);
+                  // Si se deselecciona el banco, limpiar los campos relacionados
+                  if (!v) {
+                    setBankReference("");
+                    setBeneficiaryName("");
+                  }
+                }}
+              >
+                <SelectTrigger id="bankAccount">
+                  <SelectValue placeholder="Seleccionar banco (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin cuenta bancaria</SelectItem>
+                  {accounts
+                    .filter(acc => acc.is_bank_account)
+                    .map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id.toString()}>
+                        {acc.account_code} - {acc.account_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {bankAccountId && (
+              <>
+                <div>
+                  <Label htmlFor="bankRef">Número de Documento</Label>
+                  <Input
+                    id="bankRef"
+                    placeholder="# cheque, transferencia, etc."
+                    value={bankReference}
+                    onChange={(e) => setBankReference(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="beneficiary">Beneficiario</Label>
+                  <Input
+                    id="beneficiary"
+                    placeholder="Nombre del beneficiario"
+                    value={beneficiaryName}
+                    onChange={(e) => setBeneficiaryName(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Líneas de Detalle */}
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1095,10 +1203,9 @@ export default function JournalEntryDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[22%]">Cuenta</TableHead>
-                    <TableHead className="w-[30%]">Descripción</TableHead>
-                    <TableHead className="w-[10%]">Ref. Bancaria</TableHead>
-                    <TableHead className="w-[10%]">Centro Costo</TableHead>
+                    <TableHead className="w-[25%]">Cuenta</TableHead>
+                    <TableHead className="w-[35%]">Descripción</TableHead>
+                    <TableHead className="w-[12%]">Centro Costo</TableHead>
                     <TableHead className="w-[12%] text-right">Debe</TableHead>
                     <TableHead className="w-[12%] text-right">Haber</TableHead>
                     <TableHead className="w-[4%]"></TableHead>
@@ -1210,20 +1317,6 @@ export default function JournalEntryDialog({
                           ) : (
                             <span className="text-sm px-1 truncate block" title={line.description}>
                               {line.description || <span className="text-muted-foreground">-</span>}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-1">
-                          {isActive ? (
-                            <Input
-                              value={line.bank_reference}
-                              onChange={(e) => updateLine(line.id, "bank_reference", e.target.value)}
-                              placeholder="# cheque, etc."
-                              className="h-9"
-                            />
-                          ) : (
-                            <span className="text-sm px-1">
-                              {line.bank_reference || <span className="text-muted-foreground">-</span>}
                             </span>
                           )}
                         </TableCell>
