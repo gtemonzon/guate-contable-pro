@@ -830,22 +830,70 @@ export default function JournalEntryDialog({
           description: `Partida ${nextEntryNumber} actualizada exitosamente`,
         });
       } else {
-        // Verificar si el número de partida ya existe
+        // Verificar si el número de partida ya existe y obtener uno nuevo si es necesario
+        let finalEntryNumber = nextEntryNumber;
         const { data: existingEntry } = await supabase
           .from("tab_journal_entries")
           .select("id")
           .eq("enterprise_id", parseInt(enterpriseId))
-          .eq("entry_number", nextEntryNumber)
+          .eq("entry_number", finalEntryNumber)
           .maybeSingle();
 
         if (existingEntry) {
+          // El número está duplicado - buscar el siguiente disponible
           toast({
-            title: "Número de partida duplicado",
-            description: `Ya existe una partida con el número ${nextEntryNumber}. Por favor, use un número diferente.`,
-            variant: "destructive",
+            title: "Número duplicado detectado",
+            description: "Buscando el siguiente número disponible...",
           });
-          setLoading(false);
-          return;
+          
+          // Obtener todos los números PD-* existentes para encontrar el siguiente disponible
+          const { data: pdEntries } = await supabase
+            .from("tab_journal_entries")
+            .select("entry_number")
+            .eq("enterprise_id", parseInt(enterpriseId))
+            .ilike("entry_number", "PD-%");
+
+          const maxPdNumber = (pdEntries || []).reduce((max, row) => {
+            const match = String(row.entry_number || "").match(/^PD-(\d+)/i);
+            const n = match ? Number(match[1]) : NaN;
+            return Number.isFinite(n) ? Math.max(max, n) : max;
+          }, 0);
+
+          let candidate = maxPdNumber + 1;
+          let found = false;
+          
+          // Buscar un número que no exista
+          for (let i = 0; i < 50; i++) {
+            const candidateStr = `PD-${String(candidate).padStart(6, "0")}`;
+            const { data: exists } = await supabase
+              .from("tab_journal_entries")
+              .select("id")
+              .eq("enterprise_id", parseInt(enterpriseId))
+              .eq("entry_number", candidateStr)
+              .maybeSingle();
+
+            if (!exists) {
+              finalEntryNumber = candidateStr;
+              setNextEntryNumber(candidateStr);
+              found = true;
+              toast({
+                title: "Número actualizado",
+                description: `Se asignó el número ${candidateStr}`,
+              });
+              break;
+            }
+            candidate++;
+          }
+
+          if (!found) {
+            toast({
+              title: "Error al generar número",
+              description: "No se pudo encontrar un número disponible. Intente nuevamente.",
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
         }
 
         // Insertar nueva partida
@@ -853,7 +901,7 @@ export default function JournalEntryDialog({
         .from("tab_journal_entries")
         .insert({
           enterprise_id: parseInt(enterpriseId),
-          entry_number: nextEntryNumber,
+          entry_number: finalEntryNumber,
           entry_date: entryDate,
           entry_type: entryType,
           accounting_period_id: periodId,
@@ -891,7 +939,7 @@ export default function JournalEntryDialog({
 
         toast({
           title: post ? "Partida contabilizada" : "Borrador guardado",
-          description: `Partida ${nextEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente`,
+          description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente`,
         });
       }
 
@@ -923,29 +971,48 @@ export default function JournalEntryDialog({
           </div>
         ) : (
         <div className="space-y-6">
-          {/* Encabezado Sticky Compacto */}
+          {/* Encabezado Sticky Compacto con Totales */}
           {showStickyHeader && (
             <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b shadow-sm py-2 px-4 -mx-6 -mt-2">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Badge variant="outline" className="font-mono text-xs">
-                  {nextEntryNumber || 'Nueva'}
-                </Badge>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-muted-foreground">
-                  {entryDate ? new Date(entryDate + 'T00:00:00').toLocaleDateString('es-GT') : 'Sin fecha'}
-                </span>
-                <span className="text-muted-foreground">•</span>
-                <Badge variant="secondary" className="text-xs capitalize">
-                  {entryType || 'Sin tipo'}
-                </Badge>
-                {headerDescription && (
-                  <>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="truncate max-w-[300px] text-muted-foreground" title={headerDescription}>
-                      {headerDescription}
-                    </span>
-                  </>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {nextEntryNumber || 'Nueva'}
+                  </Badge>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-muted-foreground">
+                    {entryDate ? new Date(entryDate + 'T00:00:00').toLocaleDateString('es-GT') : 'Sin fecha'}
+                  </span>
+                  <span className="text-muted-foreground">•</span>
+                  <Badge variant="secondary" className="text-xs capitalize">
+                    {entryType || 'Sin tipo'}
+                  </Badge>
+                  {headerDescription && (
+                    <>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="truncate max-w-[200px] text-muted-foreground" title={headerDescription}>
+                        {headerDescription}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-sm font-medium">
+                  <span>
+                    Debe: <span className="font-mono">Q{formatCurrency(getTotalDebit())}</span>
+                  </span>
+                  <span>
+                    Haber: <span className="font-mono">Q{formatCurrency(getTotalCredit())}</span>
+                  </span>
+                  {isBalanced() && getTotalDebit() > 0 ? (
+                    <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50 dark:bg-green-950/20">
+                      ✓ Balanceada
+                    </Badge>
+                  ) : getTotalDebit() > 0 ? (
+                    <Badge variant="destructive" className="text-xs">
+                      Dif: Q{formatCurrency(Math.abs(getTotalDebit() - getTotalCredit()))}
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
             </div>
           )}
