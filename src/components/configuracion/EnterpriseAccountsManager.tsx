@@ -60,6 +60,7 @@ export function EnterpriseAccountsManager() {
           .select('id, account_code, account_name, account_type')
           .eq('enterprise_id', currentEnterpriseId)
           .eq('is_active', true)
+          .eq('allows_movement', true)
           .order('account_code');
 
         if (error) throw error;
