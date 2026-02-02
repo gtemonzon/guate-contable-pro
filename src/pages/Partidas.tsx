@@ -31,6 +31,14 @@ interface JournalEntry {
   rejection_reason: string | null;
   created_at: string;
   enterprise_id?: number;
+  accounting_period_id?: number | null;
+}
+
+interface AccountingPeriod {
+  id: number;
+  start_date: string;
+  end_date: string;
+  status: string;
 }
 
 const STATUS_CONFIG: Record<EntryStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; className?: string }> = {
@@ -74,6 +82,7 @@ export default function Partidas() {
   const [viewingEntryId, setViewingEntryId] = useState<number | null>(null);
   const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
+  const [openPeriods, setOpenPeriods] = useState<AccountingPeriod[]>([]);
   
   // Filtros
   const [filterNumber, setFilterNumber] = useState("");
@@ -96,6 +105,7 @@ export default function Partidas() {
     
     if (enterpriseId) {
       fetchEntries(enterpriseId);
+      fetchOpenPeriods(enterpriseId);
     } else {
       setLoading(false);
       toast({
@@ -110,9 +120,11 @@ export default function Partidas() {
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchEntries(newEnterpriseId);
+        fetchOpenPeriods(newEnterpriseId);
       } else {
         setEntries([]);
         setFilteredEntries([]);
+        setOpenPeriods([]);
       }
     };
 
@@ -158,6 +170,37 @@ export default function Partidas() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchOpenPeriods = async (enterpriseId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_accounting_periods")
+        .select("id, start_date, end_date, status")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("status", "abierto");
+
+      if (error) throw error;
+      setOpenPeriods(data || []);
+    } catch (error) {
+      console.error("Error fetching open periods:", error);
+      setOpenPeriods([]);
+    }
+  };
+
+  // Helper to check if an entry is in an open period
+  const isEntryInOpenPeriod = (entry: JournalEntry): boolean => {
+    // If entry has accounting_period_id, check if that period is in openPeriods
+    if (entry.accounting_period_id) {
+      return openPeriods.some(p => p.id === entry.accounting_period_id);
+    }
+    // Otherwise check by date range
+    const entryDate = new Date(entry.entry_date);
+    return openPeriods.some(period => {
+      const start = new Date(period.start_date);
+      const end = new Date(period.end_date);
+      return entryDate >= start && entryDate <= end;
+    });
   };
 
   const applyFilters = () => {
@@ -432,7 +475,7 @@ export default function Partidas() {
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 px-3 gap-1.5"
-                                    disabled={entry.status === 'contabilizado'}
+                                    disabled={!isEntryInOpenPeriod(entry)}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setEditingEntry(entry);
@@ -444,7 +487,7 @@ export default function Partidas() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
-                                  <p>{entry.status === 'contabilizado' ? 'No se puede editar una partida contabilizada' : 'Editar partida'}</p>
+                                  <p>{!isEntryInOpenPeriod(entry) ? 'El período contable está cerrado' : 'Editar partida'}</p>
                                 </TooltipContent>
                               </Tooltip>
                               
