@@ -267,7 +267,7 @@ export function InvoiceSearchDialog({
                 id="search-nit"
                 placeholder="NIT..."
                 value={searchNit}
-                onChange={(e) => setSearchNit(e.target.value)}
+                onChange={(e) => setSearchNit(e.target.value.replace(/-/g, ""))}
                 onKeyDown={handleKeyDown}
               />
             </div>

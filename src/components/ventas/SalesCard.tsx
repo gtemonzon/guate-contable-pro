@@ -374,7 +374,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={sale.customer_nit}
-                onChange={(e) => handleFieldChange("customer_nit", e.target.value)}
+                onChange={(e) => handleFieldChange("customer_nit", e.target.value.replace(/-/g, ""))}
                 onBlur={(e) => searchCustomerByNit(e.target.value)}
                 placeholder="123456789"
                 className="h-8"
