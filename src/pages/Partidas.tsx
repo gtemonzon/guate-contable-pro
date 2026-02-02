@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, Ban, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -74,6 +75,11 @@ export default function Partidas() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterYear, setFilterYear] = useState<string | null>(null);
   const [filterMonths, setFilterMonths] = useState<number[]>([]);
+  
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [hoveredEntryId, setHoveredEntryId] = useState<number | null>(null);
 
   const { toast } = useToast();
   const permissions = useUserPermissions();
@@ -115,6 +121,7 @@ export default function Partidas() {
 
   useEffect(() => {
     applyFilters();
+    setCurrentPage(1); // Reset to first page when filters change
   }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths]);
 
   const fetchEntries = async (enterpriseId: string) => {
@@ -190,6 +197,21 @@ export default function Partidas() {
 
   // Contador de partidas pendientes de revisión
   const pendingReviewCount = entries.filter(e => e.status === 'pendiente_revision').length;
+
+  // Paginación
+  const totalPages = Math.ceil(filteredEntries.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedEntries = filteredEntries.slice(startIndex, endIndex);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(Math.max(1, Math.min(newPage, totalPages)));
+  };
+
+  const handlePageSizeChange = (newSize: string) => {
+    setPageSize(parseInt(newSize));
+    setCurrentPage(1);
+  };
 
   if (!currentEnterpriseId) {
     return (
@@ -293,13 +315,29 @@ export default function Partidas() {
             </div>
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <Button variant="outline" onClick={clearFilters}>
               Limpiar Filtros
             </Button>
-            <span className="text-sm text-muted-foreground">
-              {filteredEntries.length} de {entries.length} partidas
-            </span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="pageSize" className="text-sm whitespace-nowrap">Mostrar:</Label>
+                <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                  <SelectTrigger id="pageSize" className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -317,61 +355,185 @@ export default function Partidas() {
               No hay partidas registradas
             </p>
           ) : (
-            <div className="space-y-2">
-              {filteredEntries.map((entry) => {
-                const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
-                
-                return (
-                  <Card key={entry.id} className="border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary transition-colors">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          <FileText className="h-8 w-8 text-muted-foreground" />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-semibold">{entry.entry_number}</h3>
-                              <Badge 
-                                variant={statusConfig.variant}
-                                className={cn("flex items-center gap-1", statusConfig.className)}
-                              >
-                                {statusConfig.icon}
-                                {statusConfig.label}
-                              </Badge>
-                              <Badge variant="outline">{entry.entry_type}</Badge>
+            <>
+              <TooltipProvider delayDuration={100}>
+                <div className="space-y-2">
+                  {paginatedEntries.map((entry) => {
+                    const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
+                    const isHovered = hoveredEntryId === entry.id;
+                    
+                    return (
+                      <Card 
+                        key={entry.id} 
+                        className="border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary transition-colors relative"
+                        onMouseEnter={() => setHoveredEntryId(entry.id)}
+                        onMouseLeave={() => setHoveredEntryId(null)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1">
+                              <FileText className="h-8 w-8 text-muted-foreground" />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="font-semibold">{entry.entry_number}</h3>
+                                  <Badge 
+                                    variant={statusConfig.variant}
+                                    className={cn("flex items-center gap-1", statusConfig.className)}
+                                  >
+                                    {statusConfig.icon}
+                                    {statusConfig.label}
+                                  </Badge>
+                                  <Badge variant="outline">{entry.entry_type}</Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {entry.description}
+                                </p>
+                                {entry.status === 'rechazado' && entry.rejection_reason && (
+                                  <p className="text-sm text-destructive mt-1">
+                                    <span className="font-medium">Motivo de rechazo:</span> {entry.rejection_reason}
+                                  </p>
+                                )}
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
+                                  Debe: Q{entry.total_debit.toFixed(2)} • 
+                                  Haber: Q{entry.total_credit.toFixed(2)}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {entry.description}
-                            </p>
-                            {entry.status === 'rechazado' && entry.rejection_reason && (
-                              <p className="text-sm text-destructive mt-1">
-                                <span className="font-medium">Motivo de rechazo:</span> {entry.rejection_reason}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
-                              Debe: Q{entry.total_debit.toFixed(2)} • 
-                              Haber: Q{entry.total_credit.toFixed(2)}
-                            </p>
+                            
+                            {/* Hover Actions Menu */}
+                            <div className={cn(
+                              "flex items-center gap-1 transition-opacity",
+                              isHovered ? "opacity-100" : "opacity-0"
+                            )}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingEntry(entry);
+                                      setShowDialog(true);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>Ver</p>
+                                </TooltipContent>
+                              </Tooltip>
+                              
+                              {entry.status !== 'contabilizado' && permissions.canCreateEntries && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingEntry(entry);
+                                        setShowDialog(true);
+                                      }}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p>Editar</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              
+                              {entry.status !== 'contabilizado' && permissions.canApproveEntries && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toast({
+                                          title: "Funcionalidad próximamente",
+                                          description: "La anulación de partidas estará disponible pronto",
+                                        });
+                                      }}
+                                    >
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p>Anular</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingEntry(entry);
-                            setShowDialog(true);
-                          }}
-                          title={entry.status === 'contabilizado' ? "Ver partida contabilizada" : "Editar partida"}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </TooltipProvider>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {startIndex + 1} - {Math.min(endIndex, filteredEntries.length)} de {filteredEntries.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Anterior
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            className="w-8 h-8 p-0"
+                            onClick={() => handlePageChange(pageNum)}
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
