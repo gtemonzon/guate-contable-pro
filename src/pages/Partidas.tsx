@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, Ban, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
+import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
+import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -29,6 +30,7 @@ interface JournalEntry {
   status: EntryStatus;
   rejection_reason: string | null;
   created_at: string;
+  enterprise_id?: number;
 }
 
 const STATUS_CONFIG: Record<EntryStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; className?: string }> = {
@@ -65,8 +67,12 @@ export default function Partidas() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showVoidDialog, setShowVoidDialog] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+  const [viewingEntryId, setViewingEntryId] = useState<number | null>(null);
+  const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   
   // Filtros
@@ -248,7 +254,7 @@ export default function Partidas() {
             )}
             
             {permissions.canCreateEntries && (
-              <Button onClick={() => setShowDialog(true)}>
+              <Button onClick={() => setShowEditDialog(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Nueva Partida
               </Button>
@@ -407,8 +413,8 @@ export default function Partidas() {
                                     className="h-8 px-3 gap-1.5"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setEditingEntry(entry);
-                                      setShowDialog(true);
+                                      setViewingEntryId(entry.id);
+                                      setShowViewDialog(true);
                                     }}
                                   >
                                     <Eye className="h-4 w-4" />
@@ -430,7 +436,7 @@ export default function Partidas() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setEditingEntry(entry);
-                                      setShowDialog(true);
+                                      setShowEditDialog(true);
                                     }}
                                   >
                                     <Edit className="h-4 w-4" />
@@ -447,22 +453,22 @@ export default function Partidas() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 px-3 gap-1.5 text-destructive hover:text-destructive"
-                                    disabled={entry.status === 'contabilizado'}
+                                    className="h-8 px-3 gap-1.5 text-amber-600 hover:text-amber-700"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      toast({
-                                        title: "Funcionalidad próximamente",
-                                        description: "La anulación de partidas estará disponible pronto",
+                                      setVoidingEntry({
+                                        ...entry,
+                                        enterprise_id: currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined
                                       });
+                                      setShowVoidDialog(true);
                                     }}
                                   >
-                                    <Ban className="h-4 w-4" />
+                                    <RotateCcw className="h-4 w-4" />
                                     <span className="text-xs">Anular</span>
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
-                                  <p>{entry.status === 'contabilizado' ? 'No se puede anular una partida contabilizada' : 'Anular partida'}</p>
+                                  <p>Crear partida de reversión</p>
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -534,9 +540,9 @@ export default function Partidas() {
       </div>
 
       <JournalEntryDialog
-        open={showDialog}
+        open={showEditDialog}
         onOpenChange={(open) => {
-          setShowDialog(open);
+          setShowEditDialog(open);
           if (!open) setEditingEntry(null);
         }}
         onSuccess={() => {
@@ -546,6 +552,26 @@ export default function Partidas() {
           setEditingEntry(null);
         }}
         entryToEdit={editingEntry}
+      />
+
+      <JournalEntryViewDialog
+        open={showViewDialog}
+        onOpenChange={setShowViewDialog}
+        entryId={viewingEntryId}
+      />
+
+      <VoidEntryDialog
+        open={showVoidDialog}
+        onOpenChange={(open) => {
+          setShowVoidDialog(open);
+          if (!open) setVoidingEntry(null);
+        }}
+        entry={voidingEntry}
+        onSuccess={() => {
+          if (currentEnterpriseId) {
+            fetchEntries(currentEnterpriseId);
+          }
+        }}
       />
     </div>
   );
