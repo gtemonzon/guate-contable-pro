@@ -30,6 +30,7 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "create_entries", name: "Crear Partidas", category: "Partidas Contables", description: "Crear nuevas partidas contables" },
   { key: "approve_entries", name: "Aprobar Partidas", category: "Partidas Contables", description: "Aprobar partidas pendientes" },
   { key: "post_entries", name: "Contabilizar Partidas", category: "Partidas Contables", description: "Mayorizan y contabilizar partidas" },
+  { key: "void_entries", name: "Anular Partidas", category: "Partidas Contables", description: "Generar reversiones contables de partidas" },
   
   // Compras y Ventas
   { key: "import_data", name: "Importar Datos", category: "Compras y Ventas", description: "Importar compras, ventas y otros datos" },
