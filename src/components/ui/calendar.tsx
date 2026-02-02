@@ -83,7 +83,7 @@ function Calendar({
         IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
         Caption: showYearNavigation ? ({ displayMonth }) => {
           return (
-            <div className="flex items-center justify-center gap-1 pt-1">
+            <div className="flex items-center justify-center gap-1 pt-1 relative z-50">
               <Select
                 value={displayMonth.getMonth().toString()}
                 onValueChange={(value) => {
@@ -95,7 +95,11 @@ function Calendar({
                 <SelectTrigger className="h-7 w-[110px] text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="pointer-events-auto">
+                <SelectContent 
+                  className="pointer-events-auto z-[100]"
+                  position="popper"
+                  sideOffset={4}
+                >
                   {months.map((month, index) => (
                     <SelectItem key={month} value={index.toString()} className="text-xs">
                       {month}
@@ -114,7 +118,11 @@ function Calendar({
                 <SelectTrigger className="h-7 w-[75px] text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="pointer-events-auto max-h-[200px]">
+                <SelectContent 
+                  className="pointer-events-auto z-[100] max-h-[200px] overflow-y-auto"
+                  position="popper"
+                  sideOffset={4}
+                >
                   {years.map((year) => (
                     <SelectItem key={year} value={year.toString()} className="text-xs">
                       {year}
