@@ -396,15 +396,15 @@ export default function Partidas() {
                             
                             {/* Hover Actions Menu */}
                             <div className={cn(
-                              "flex items-center gap-1 transition-all duration-150",
-                              isHovered ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+                              "flex items-center gap-2 transition-all duration-150",
+                              isHovered ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"
                             )}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
+                                    size="sm"
+                                    className="h-8 px-3 gap-1.5"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setEditingEntry(entry);
@@ -412,58 +412,59 @@ export default function Partidas() {
                                     }}
                                   >
                                     <Eye className="h-4 w-4" />
+                                    <span className="text-xs">Ver</span>
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent side="top">
-                                  <p>Ver</p>
+                                  <p>Ver detalles de la partida</p>
                                 </TooltipContent>
                               </Tooltip>
                               
-                              {entry.status !== 'contabilizado' && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingEntry(entry);
-                                        setShowDialog(true);
-                                      }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">
-                                    <p>Editar</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-3 gap-1.5"
+                                    disabled={entry.status === 'contabilizado'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingEntry(entry);
+                                      setShowDialog(true);
+                                    }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                    <span className="text-xs">Editar</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>{entry.status === 'contabilizado' ? 'No se puede editar una partida contabilizada' : 'Editar partida'}</p>
+                                </TooltipContent>
+                              </Tooltip>
                               
-                              {entry.status !== 'contabilizado' && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toast({
-                                          title: "Funcionalidad próximamente",
-                                          description: "La anulación de partidas estará disponible pronto",
-                                        });
-                                      }}
-                                    >
-                                      <Ban className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">
-                                    <p>Anular</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-3 gap-1.5 text-destructive hover:text-destructive"
+                                    disabled={entry.status === 'contabilizado'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toast({
+                                        title: "Funcionalidad próximamente",
+                                        description: "La anulación de partidas estará disponible pronto",
+                                      });
+                                    }}
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                    <span className="text-xs">Anular</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>{entry.status === 'contabilizado' ? 'No se puede anular una partida contabilizada' : 'Anular partida'}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
                         </CardContent>
