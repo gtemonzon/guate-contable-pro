@@ -1123,11 +1123,12 @@ export default function JournalEntryDialog({
             <div>
               <Label htmlFor="bankAccount">Cuenta Bancaria</Label>
               <Select 
-                value={bankAccountId?.toString() || ""} 
+                value={bankAccountId?.toString() || "none"} 
                 onValueChange={(v) => {
-                  setBankAccountId(v ? parseInt(v) : null);
+                  const newValue = v === "none" ? null : parseInt(v);
+                  setBankAccountId(newValue);
                   // Si se deselecciona el banco, limpiar los campos relacionados
-                  if (!v) {
+                  if (!newValue) {
                     setBankReference("");
                     setBeneficiaryName("");
                   }
@@ -1137,7 +1138,7 @@ export default function JournalEntryDialog({
                   <SelectValue placeholder="Seleccionar banco (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin cuenta bancaria</SelectItem>
+                  <SelectItem value="none">Sin cuenta bancaria</SelectItem>
                   {accounts
                     .filter(acc => acc.is_bank_account)
                     .map((acc) => (
