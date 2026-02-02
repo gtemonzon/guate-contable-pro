@@ -347,7 +347,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={purchase.supplier_nit}
-                onChange={(e) => handleFieldChange("supplier_nit", e.target.value)}
+                onChange={(e) => handleFieldChange("supplier_nit", e.target.value.replace(/-/g, ""))}
                 onBlur={(e) => searchSupplierByNit(e.target.value)}
                 placeholder="123456789"
                 className="h-8"
