@@ -64,6 +64,7 @@ interface EnterpriseDialogProps {
   enterprise: Enterprise | null;
   onSuccess: () => void;
   defaultTenantId?: number;
+  defaultTab?: string;
 }
 
 export function EnterpriseDialog({
@@ -72,9 +73,10 @@ export function EnterpriseDialog({
   enterprise,
   onSuccess,
   defaultTenantId,
+  defaultTab,
 }: EnterpriseDialogProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState(defaultTab || "general");
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -89,6 +91,13 @@ export function EnterpriseDialog({
       is_active: true,
     },
   });
+
+  // Update active tab when defaultTab changes
+  useEffect(() => {
+    if (defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab]);
 
   useEffect(() => {
     if (enterprise) {

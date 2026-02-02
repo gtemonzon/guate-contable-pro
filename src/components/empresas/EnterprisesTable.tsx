@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
+import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,9 +36,10 @@ interface EnterprisesTableProps {
   enterprises: Enterprise[];
   onEdit: (enterprise: Enterprise) => void;
   onDelete: () => void;
+  onOpenWizard?: (enterprise: Enterprise) => void;
 }
 
-export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesTableProps) => {
+export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -351,6 +352,23 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
                       </TooltipTrigger>
                       <TooltipContent>Editar</TooltipContent>
                     </Tooltip>
+
+                    {/* Botón Configuración Wizard */}
+                    {onOpenWizard && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => onOpenWizard(enterprise)}
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Asistente de configuración</TooltipContent>
+                      </Tooltip>
+                    )}
 
                     {/* Botón Reactivar (solo si está inactiva) */}
                     {isInactive && (

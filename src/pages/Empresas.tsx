@@ -8,6 +8,7 @@ import { Plus, Search, Building2, LayoutGrid, TableIcon } from "lucide-react";
 import { EnterpriseDialog } from "@/components/empresas/EnterpriseDialog";
 import { EnterpriseCard } from "@/components/empresas/EnterpriseCard";
 import { EnterprisesTable } from "@/components/empresas/EnterprisesTable";
+import { EnterpriseSetupWizard } from "@/components/empresas/EnterpriseSetupWizard";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -25,6 +26,9 @@ const Empresas = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEnterprise, setSelectedEnterprise] = useState<Enterprise | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEnterprise, setWizardEnterprise] = useState<Enterprise | null>(null);
+  const [dialogDefaultTab, setDialogDefaultTab] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
   });
@@ -67,18 +71,34 @@ const Empresas = () => {
 
   const handleEdit = (enterprise: Enterprise) => {
     setSelectedEnterprise(enterprise);
+    setDialogDefaultTab(undefined);
     setDialogOpen(true);
   };
 
   const handleCreate = () => {
     setSelectedEnterprise(null);
+    setDialogDefaultTab(undefined);
     setDialogOpen(true);
   };
 
   const handleDialogClose = () => {
     setDialogOpen(false);
     setSelectedEnterprise(null);
+    setDialogDefaultTab(undefined);
     fetchEnterprises();
+  };
+
+  const handleOpenWizard = (enterprise: Enterprise) => {
+    setWizardEnterprise(enterprise);
+    setWizardOpen(true);
+  };
+
+  const handleWizardOpenDialog = (tab: string) => {
+    if (wizardEnterprise) {
+      setSelectedEnterprise(wizardEnterprise);
+      setDialogDefaultTab(tab);
+      setDialogOpen(true);
+    }
   };
 
   useEffect(() => {
@@ -180,6 +200,7 @@ const Empresas = () => {
               enterprise={enterprise}
               onEdit={handleEdit}
               onDelete={fetchEnterprises}
+              onOpenWizard={handleOpenWizard}
             />
           ))}
         </div>
@@ -188,6 +209,7 @@ const Empresas = () => {
           enterprises={filteredEnterprises}
           onEdit={handleEdit}
           onDelete={fetchEnterprises}
+          onOpenWizard={handleOpenWizard}
         />
       )}
 
@@ -197,6 +219,14 @@ const Empresas = () => {
         enterprise={selectedEnterprise}
         onSuccess={handleDialogClose}
         defaultTenantId={currentTenant?.id}
+        defaultTab={dialogDefaultTab}
+      />
+
+      <EnterpriseSetupWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        enterprise={wizardEnterprise}
+        onOpenEnterpriseDialog={handleWizardOpenDialog}
       />
     </div>
   );

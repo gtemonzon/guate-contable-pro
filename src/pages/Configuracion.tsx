@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationTypesManager } from "@/components/configuracion/OperationTypesManager";
@@ -12,6 +13,9 @@ import { TaxDueDateConfig } from "@/components/configuracion/TaxDueDateConfig";
 import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
 
 export default function Configuracion() {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') || 'enterprise-accounts';
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
@@ -21,7 +25,7 @@ export default function Configuracion() {
         </p>
       </div>
 
-      <Tabs defaultValue="enterprise-accounts" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="enterprise-accounts">Cuentas Contables</TabsTrigger>
           <TabsTrigger value="financial-statements">Estados Financieros</TabsTrigger>

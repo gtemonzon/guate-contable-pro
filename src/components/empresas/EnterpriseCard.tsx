@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,7 @@ interface EnterpriseCardProps {
   enterprise: Enterprise;
   onEdit: (enterprise: Enterprise) => void;
   onDelete?: () => void;
+  onOpenWizard?: (enterprise: Enterprise) => void;
 }
 
 interface LastTaxFormInfo {
@@ -54,7 +55,7 @@ const MONTH_NAMES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardProps) {
+export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: EnterpriseCardProps) {
   const { toast } = useToast();
   const [isSelected, setIsSelected] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -478,6 +479,15 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete }: EnterpriseCardP
           >
             <Edit className="h-4 w-4" />
           </Button>
+          {onOpenWizard && (
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => onOpenWizard(enterprise)}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="icon"
