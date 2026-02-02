@@ -163,13 +163,13 @@ export function PermissionsMatrix() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden max-h-[60vh] overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                 <TableRow className="bg-muted/50">
-                  <TableHead className="w-[250px]">Permiso</TableHead>
+                  <TableHead className="w-[250px] bg-muted/50">Permiso</TableHead>
                   {AVAILABLE_ROLES_CONFIG.map((role) => (
-                    <TableHead key={role.value} className="text-center w-[120px]">
+                    <TableHead key={role.value} className="text-center w-[120px] bg-muted/50">
                       <Badge className={cn("font-normal", role.color)}>
                         {role.label.split(' ')[0]}
                       </Badge>
