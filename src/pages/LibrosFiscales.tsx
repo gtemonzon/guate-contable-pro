@@ -119,6 +119,16 @@ export default function LibrosFiscales() {
   const [pendingFocusTab, setPendingFocusTab] = useState<null | "compras" | "ventas">(null);
   const purchaseEditRef = useRef<PurchaseCardRef>(null);
   const saleEditRef = useRef<SalesCardRef>(null);
+
+  // Keep latest arrays available to async callbacks (prevents stale-closure on first auto-save)
+  const purchasesRef = useRef<PurchaseEntry[]>([]);
+  const salesRef = useRef<SaleEntry[]>([]);
+  useEffect(() => {
+    purchasesRef.current = purchases;
+  }, [purchases]);
+  useEffect(() => {
+    salesRef.current = sales;
+  }, [sales]);
   
   const { toast } = useToast();
 
@@ -743,40 +753,47 @@ export default function LibrosFiscales() {
   }, [activeTab, addNewPurchase, addNewSale]);
 
   const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: any) => {
-    const updated = [...purchases];
-    updated[index] = { ...updated[index], [field]: value };
+    setPurchases((prev) => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+      updated[index] = { ...updated[index], [field]: value };
 
-    if (field === "total_amount" || field === "fel_document_type") {
-      const { base, vat } = calculateVAT(
-        field === "total_amount" ? parseFloat(value) || 0 : updated[index].total_amount,
-        field === "fel_document_type" ? value : updated[index].fel_document_type
-      );
-      updated[index].base_amount = base;
-      updated[index].vat_amount = vat;
-    }
+      if (field === "total_amount" || field === "fel_document_type") {
+        const currentTotal = Number(updated[index].total_amount) || 0;
+        const nextTotal = field === "total_amount" ? parseFloat(value) || 0 : currentTotal;
+        const nextDoc = field === "fel_document_type" ? value : updated[index].fel_document_type;
+        const { base, vat } = calculateVAT(nextTotal, nextDoc);
+        updated[index].base_amount = base;
+        updated[index].vat_amount = vat;
+      }
 
-    setPurchases(updated);
+      return updated;
+    });
   };
 
   const updateSaleRow = (index: number, field: keyof SaleEntry, value: any) => {
-    const updated = [...sales];
-    updated[index] = { ...updated[index], [field]: value };
+    setSales((prev) => {
+      const updated = [...prev];
+      if (!updated[index]) return prev;
+      updated[index] = { ...updated[index], [field]: value };
 
-    if (field === "total_amount" || field === "fel_document_type") {
-      const { base, vat } = calculateVAT(
-        field === "total_amount" ? parseFloat(value) || 0 : updated[index].total_amount,
-        field === "fel_document_type" ? value : updated[index].fel_document_type
-      );
-      updated[index].net_amount = base;
-      updated[index].vat_amount = vat;
-    }
+      if (field === "total_amount" || field === "fel_document_type") {
+        const currentTotal = Number(updated[index].total_amount) || 0;
+        const nextTotal = field === "total_amount" ? parseFloat(value) || 0 : currentTotal;
+        const nextDoc = field === "fel_document_type" ? value : updated[index].fel_document_type;
+        const { base, vat } = calculateVAT(nextTotal, nextDoc);
+        updated[index].net_amount = base;
+        updated[index].vat_amount = vat;
+      }
 
-    setSales(updated);
+      return updated;
+    });
   };
 
   const savePurchaseRow = async (index: number) => {
-    const entry = purchases[index];
+    const entry = purchasesRef.current[index];
     if (!currentBookId || !currentEnterpriseId) return;
+    if (!entry) return;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
@@ -818,9 +835,12 @@ export default function LibrosFiscales() {
 
         if (error) throw error;
 
-        const updated = [...purchases];
-        updated[index] = { ...data, isNew: false };
-        setPurchases(updated);
+        setPurchases((prev) => {
+          const updated = [...prev];
+          if (!updated[index]) return prev;
+          updated[index] = { ...data, isNew: false };
+          return updated;
+        });
 
         // Guardar última cuenta usada
         if (entry.expense_account_id) {
@@ -873,8 +893,9 @@ export default function LibrosFiscales() {
   };
 
   const saveSaleRow = async (index: number) => {
-    const entry = sales[index];
+    const entry = salesRef.current[index];
     if (!currentEnterpriseId) return;
+    if (!entry) return;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicateSale(entry, entry.id);
@@ -913,9 +934,12 @@ export default function LibrosFiscales() {
 
         if (error) throw error;
 
-        const updated = [...sales];
-        updated[index] = { ...data, isNew: false };
-        setSales(updated);
+        setSales((prev) => {
+          const updated = [...prev];
+          if (!updated[index]) return prev;
+          updated[index] = { ...data, isNew: false };
+          return updated;
+        });
 
         // Guardar última cuenta usada
         if (entry.income_account_id) {
