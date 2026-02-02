@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import { SalesCard, type SalesCardRef } from "@/components/ventas/SalesCard";
@@ -727,10 +728,11 @@ export default function LibrosFiscales() {
     return () => window.clearTimeout(t);
   }, [pendingFocusTab, purchases.length, sales.length]);
 
-  // Keyboard shortcut: Alt+N -> new invoice on current tab
+  // Keyboard shortcut: Ctrl+Shift+N -> new invoice on current tab
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!e.altKey) return;
+      // Ctrl+Shift+N
+      if (!e.ctrlKey || !e.shiftKey) return;
       if (e.key.toLowerCase() !== "n") return;
       e.preventDefault();
       if (activeTab === "compras") addNewPurchase();
@@ -1162,10 +1164,19 @@ export default function LibrosFiscales() {
                     <FileText className="h-4 w-4 mr-2" />
                     Generar Póliza
                   </Button>
-                  <Button size="sm" onClick={addNewPurchase}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nueva Factura
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" onClick={addNewPurchase}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Nueva Factura
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Ctrl+Shift+N</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
               
@@ -1231,10 +1242,19 @@ export default function LibrosFiscales() {
                     <FileText className="h-4 w-4 mr-2" />
                     Generar Póliza
                   </Button>
-                  <Button size="sm" onClick={addNewSale}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nueva Factura
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" onClick={addNewSale}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Nueva Factura
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Ctrl+Shift+N</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
               
