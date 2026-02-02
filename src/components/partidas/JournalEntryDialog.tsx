@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { getNextEntryNumber, findNextAvailableNumber } from "@/utils/journalEntryNumbering";
 import { Badge } from "@/components/ui/badge";
 
 type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
@@ -208,6 +209,25 @@ export default function JournalEntryDialog({
     return () => observer.disconnect();
   }, [open, isLoadingEntry]);
 
+  // Regenerar número de partida cuando cambia el tipo o la fecha (solo para nuevas partidas)
+  useEffect(() => {
+    if (!open || entryToEdit || !entryDate || !entryType) return;
+    
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+
+    const regenerateNumber = async () => {
+      try {
+        const newNumber = await getNextEntryNumber(enterpriseId, entryType, entryDate);
+        setNextEntryNumber(newNumber);
+      } catch (error) {
+        console.error("Error regenerating entry number:", error);
+      }
+    };
+
+    regenerateNumber();
+  }, [open, entryToEdit, entryType, entryDate]);
+
   // Función para propagar la descripción del encabezado a líneas vacías (llamada al perder el foco)
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
@@ -267,47 +287,9 @@ export default function JournalEntryDialog({
         }
       }
 
-      // Obtener siguiente número de partida (solo PD-*) y evitar duplicados
-      const { data: pdEntries, error: pdError } = await supabase
-        .from("tab_journal_entries")
-        .select("entry_number")
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .ilike("entry_number", "PD-%")
-        .order("id", { ascending: false })
-        .limit(300);
-
-      if (pdError) throw pdError;
-
-      const maxPdNumber = (pdEntries || []).reduce((max, row) => {
-        const match = String(row.entry_number || "").match(/^PD-(\d+)/i);
-        const n = match ? Number(match[1]) : NaN;
-        return Number.isFinite(n) ? Math.max(max, n) : max;
-      }, 0);
-
-      let candidate = maxPdNumber > 0 ? maxPdNumber + 1 : 1;
-      let found = false;
-      // Evitar sugerir un número ya tomado (por si hay huecos/duplicados)
-      for (let i = 0; i < 50; i++) {
-        const candidateStr = `PD-${String(candidate).padStart(6, "0")}`;
-        const { data: existing } = await supabase
-          .from("tab_journal_entries")
-          .select("id")
-          .eq("enterprise_id", parseInt(enterpriseId))
-          .eq("entry_number", candidateStr)
-          .maybeSingle();
-
-        if (!existing) {
-          setNextEntryNumber(candidateStr);
-          found = true;
-          break;
-        }
-        candidate++;
-      }
-
-      if (!found) {
-        // Fallback (muy improbable): sugerir el siguiente correlativo
-        setNextEntryNumber(`PD-${String(candidate).padStart(6, "0")}`);
-      }
+      // Obtener siguiente número de partida usando el nuevo formato PREFIJO-YYYY-###
+      const nextNumber = await getNextEntryNumber(enterpriseId, entryType, entryDate);
+      setNextEntryNumber(nextNumber);
     } catch (error: any) {
       toast({
         title: "Error al cargar datos",
@@ -863,54 +845,13 @@ export default function JournalEntryDialog({
             description: "Buscando el siguiente número disponible...",
           });
           
-          // Obtener todos los números PD-* existentes para encontrar el siguiente disponible
-          const { data: pdEntries } = await supabase
-            .from("tab_journal_entries")
-            .select("entry_number")
-            .eq("enterprise_id", parseInt(enterpriseId))
-            .ilike("entry_number", "PD-%");
-
-          const maxPdNumber = (pdEntries || []).reduce((max, row) => {
-            const match = String(row.entry_number || "").match(/^PD-(\d+)/i);
-            const n = match ? Number(match[1]) : NaN;
-            return Number.isFinite(n) ? Math.max(max, n) : max;
-          }, 0);
-
-          let candidate = maxPdNumber + 1;
-          let found = false;
-          
-          // Buscar un número que no exista
-          for (let i = 0; i < 50; i++) {
-            const candidateStr = `PD-${String(candidate).padStart(6, "0")}`;
-            const { data: exists } = await supabase
-              .from("tab_journal_entries")
-              .select("id")
-              .eq("enterprise_id", parseInt(enterpriseId))
-              .eq("entry_number", candidateStr)
-              .maybeSingle();
-
-            if (!exists) {
-              finalEntryNumber = candidateStr;
-              setNextEntryNumber(candidateStr);
-              found = true;
-              toast({
-                title: "Número actualizado",
-                description: `Se asignó el número ${candidateStr}`,
-              });
-              break;
-            }
-            candidate++;
-          }
-
-          if (!found) {
-            toast({
-              title: "Error al generar número",
-              description: "No se pudo encontrar un número disponible. Intente nuevamente.",
-              variant: "destructive",
-            });
-            setLoading(false);
-            return;
-          }
+          // Usar la función de utilidad para encontrar el siguiente número
+          finalEntryNumber = await findNextAvailableNumber(enterpriseId, nextEntryNumber, entryType, entryDate);
+          setNextEntryNumber(finalEntryNumber);
+          toast({
+            title: "Número actualizado",
+            description: `Se asignó el número ${finalEntryNumber}`,
+          });
         }
 
         // Insertar nueva partida
