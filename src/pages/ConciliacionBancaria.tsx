@@ -26,6 +26,8 @@ type JournalMovement = {
   is_reconciled: boolean;
   reconciliation_id: number | null;
   journal_entry_id: number;
+  bank_reference: string | null;
+  beneficiary_name: string | null;
 };
 
 const ConciliacionBancaria = () => {
@@ -117,7 +119,9 @@ const ConciliacionBancaria = () => {
             entry_number,
             entry_date,
             is_posted,
-            enterprise_id
+            enterprise_id,
+            bank_reference,
+            beneficiary_name
           )
         `)
         .eq('account_id', parseInt(selectedAccount))
@@ -139,7 +143,9 @@ const ConciliacionBancaria = () => {
             entry_number,
             entry_date,
             is_posted,
-            enterprise_id
+            enterprise_id,
+            bank_reference,
+            beneficiary_name
           )
         `)
         .eq('account_id', parseInt(selectedAccount))
@@ -185,7 +191,9 @@ const ConciliacionBancaria = () => {
           entry_number: m.tab_journal_entries.entry_number,
           is_reconciled: reconcilationInfo.is_reconciled,
           reconciliation_id: reconcilationInfo.reconciliation_id,
-          journal_entry_id: m.id
+          journal_entry_id: m.id,
+          bank_reference: m.tab_journal_entries.bank_reference || null,
+          beneficiary_name: m.tab_journal_entries.beneficiary_name || null,
         };
       };
 
@@ -558,6 +566,8 @@ const ConciliacionBancaria = () => {
                         </TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Descripción</TableHead>
+                        <TableHead>Ref. Bancaria</TableHead>
+                        <TableHead>Beneficiario</TableHead>
                         <TableHead>Tipo</TableHead>
                         <TableHead className="text-right">Monto</TableHead>
                       </TableRow>
@@ -576,6 +586,12 @@ const ConciliacionBancaria = () => {
                             <div className="text-xs text-muted-foreground">{movement.entry_number}</div>
                           </TableCell>
                           <TableCell>{movement.description}</TableCell>
+                          <TableCell className="text-sm">
+                            {movement.bank_reference || <span className="text-muted-foreground">-</span>}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {movement.beneficiary_name || <span className="text-muted-foreground">-</span>}
+                          </TableCell>
                           <TableCell>
                             <span className={`text-sm ${movement.debit_amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {movement.debit_amount > 0 ? 'Depósito' : 'Retiro'}
