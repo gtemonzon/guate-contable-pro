@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -150,23 +151,53 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
     window.dispatchEvent(new CustomEvent('enterpriseChanged'));
   };
 
-  const handleDelete = async (enterpriseId: number) => {
+  const handleDeactivate = async (enterprise: Enterprise) => {
     try {
+      // Soft-delete: marcar como inactivo
       const { error } = await supabase
         .from('tab_enterprises')
-        .delete()
-        .eq('id', enterpriseId);
+        .update({ is_active: false })
+        .eq('id', enterprise.id);
 
       if (error) throw error;
 
-      if (activeEnterpriseId === enterpriseId) {
+      if (activeEnterpriseId === enterprise.id) {
         localStorage.removeItem("currentEnterpriseId");
         setActiveEnterpriseId(null);
       }
 
       toast({
-        title: "Empresa eliminada",
-        description: "La empresa ha sido eliminada correctamente",
+        title: "Empresa desactivada",
+        description: `${enterprise.business_name} ha sido desactivada`,
+      });
+
+      onDelete();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al desactivar",
+        description: getSafeErrorMessage(error),
+      });
+    }
+  };
+
+  const handlePermanentDelete = async (enterprise: Enterprise) => {
+    try {
+      const { error } = await supabase
+        .from('tab_enterprises')
+        .delete()
+        .eq('id', enterprise.id);
+
+      if (error) throw error;
+
+      if (activeEnterpriseId === enterprise.id) {
+        localStorage.removeItem("currentEnterpriseId");
+        setActiveEnterpriseId(null);
+      }
+
+      toast({
+        title: "Empresa eliminada permanentemente",
+        description: `${enterprise.business_name} ha sido eliminada`,
       });
 
       onDelete();
@@ -174,6 +205,30 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
       toast({
         variant: "destructive",
         title: "Error al eliminar",
+        description: getSafeErrorMessage(error),
+      });
+    }
+  };
+
+  const handleReactivate = async (enterprise: Enterprise) => {
+    try {
+      const { error } = await supabase
+        .from('tab_enterprises')
+        .update({ is_active: true })
+        .eq('id', enterprise.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Empresa reactivada",
+        description: `${enterprise.business_name} está activa nuevamente`,
+      });
+
+      onDelete(); // Refresh list
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al reactivar",
         description: getSafeErrorMessage(error),
       });
     }
@@ -234,20 +289,26 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
         </TableHeader>
         <TableBody>
           {sortedEnterprises.map((enterprise) => {
-            const isActive = activeEnterpriseId === enterprise.id;
+            const isSelected = activeEnterpriseId === enterprise.id;
+            const isInactive = !enterprise.is_active;
             return (
               <TableRow 
                 key={enterprise.id}
-                className={isActive ? "bg-primary/10 border-l-primary" : ""}
+                className={`${isSelected ? "bg-primary/10 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
               >
                 <TableCell className="font-mono">{enterprise.nit}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{enterprise.business_name}</span>
-                    {isActive && (
+                    {isSelected && (
                       <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                        Activa
+                        Seleccionada
                       </span>
+                    )}
+                    {isInactive && (
+                      <Badge variant="secondary" className="text-xs bg-destructive/10 text-destructive">
+                        Inactiva
+                      </Badge>
                     )}
                   </div>
                   {enterprise.trade_name && (
@@ -258,23 +319,25 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
                 <TableCell>{activePeriods[enterprise.id] || "-"}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {/* Botón Seleccionar */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          variant={isActive ? "default" : "ghost"}
+                          variant={isSelected ? "default" : "ghost"}
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleSelect(enterprise)}
-                          disabled={isActive}
+                          disabled={isSelected || isInactive}
                         >
                           <Check className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {isActive ? "Empresa activa" : "Seleccionar"}
+                        {isSelected ? "Empresa seleccionada" : isInactive ? "Empresa inactiva" : "Seleccionar"}
                       </TooltipContent>
                     </Tooltip>
 
+                    {/* Botón Editar */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -289,6 +352,24 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
                       <TooltipContent>Editar</TooltipContent>
                     </Tooltip>
 
+                    {/* Botón Reactivar (solo si está inactiva) */}
+                    {isInactive && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700"
+                            onClick={() => handleReactivate(enterprise)}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reactivar empresa</TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {/* Botón Desactivar/Eliminar */}
                     <AlertDialog>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -302,23 +383,27 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete }: EnterprisesT
                             </Button>
                           </AlertDialogTrigger>
                         </TooltipTrigger>
-                        <TooltipContent>Eliminar</TooltipContent>
+                        <TooltipContent>{isInactive ? "Eliminar permanentemente" : "Desactivar"}</TooltipContent>
                       </Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar empresa?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            {isInactive ? "¿Eliminar empresa permanentemente?" : "¿Desactivar empresa?"}
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            Esta acción no se puede deshacer. Se eliminará permanentemente
-                            la empresa "{enterprise.business_name}" y todos sus datos asociados.
+                            {isInactive 
+                              ? `Esta acción eliminará permanentemente "${enterprise.business_name}" y todos sus datos. Esta acción NO se puede deshacer.`
+                              : `La empresa "${enterprise.business_name}" será marcada como inactiva. Podrás reactivarla después si lo necesitas.`
+                            }
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleDelete(enterprise.id)}
+                            onClick={() => isInactive ? handlePermanentDelete(enterprise) : handleDeactivate(enterprise)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            Eliminar
+                            {isInactive ? "Eliminar permanentemente" : "Desactivar"}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
