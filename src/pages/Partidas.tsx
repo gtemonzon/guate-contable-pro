@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
+import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
@@ -71,8 +72,8 @@ export default function Partidas() {
   const [filterNumber, setFilterNumber] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterYear, setFilterYear] = useState<string | null>(null);
+  const [filterMonths, setFilterMonths] = useState<number[]>([]);
 
   const { toast } = useToast();
   const permissions = useUserPermissions();
@@ -114,7 +115,7 @@ export default function Partidas() {
 
   useEffect(() => {
     applyFilters();
-  }, [entries, filterNumber, filterType, filterStatus, filterDateFrom, filterDateTo]);
+  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths]);
 
   const fetchEntries = async (enterpriseId: string) => {
     try {
@@ -163,12 +164,17 @@ export default function Partidas() {
       filtered = filtered.filter(e => e.status === filterStatus);
     }
 
-    if (filterDateFrom) {
-      filtered = filtered.filter(e => e.entry_date >= filterDateFrom);
+    // Filtro por año
+    if (filterYear) {
+      filtered = filtered.filter(e => e.entry_date.startsWith(filterYear));
     }
 
-    if (filterDateTo) {
-      filtered = filtered.filter(e => e.entry_date <= filterDateTo);
+    // Filtro por meses (dentro del año seleccionado)
+    if (filterYear && filterMonths.length > 0) {
+      filtered = filtered.filter(e => {
+        const month = parseInt(e.entry_date.substring(5, 7));
+        return filterMonths.includes(month);
+      });
     }
 
     setFilteredEntries(filtered);
@@ -178,8 +184,8 @@ export default function Partidas() {
     setFilterNumber("");
     setFilterType("all");
     setFilterStatus("all");
-    setFilterDateFrom("");
-    setFilterDateTo("");
+    setFilterYear(null);
+    setFilterMonths([]);
   };
 
   // Contador de partidas pendientes de revisión
@@ -231,8 +237,18 @@ export default function Partidas() {
         <CardHeader>
           <CardTitle className="text-lg">Filtros</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <CardContent className="space-y-4">
+          {/* Selector de Año/Mes */}
+          <YearMonthFilter
+            entries={entries}
+            selectedYear={filterYear}
+            selectedMonths={filterMonths}
+            onYearChange={setFilterYear}
+            onMonthsChange={setFilterMonths}
+          />
+
+          {/* Otros filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
             <div>
               <Label htmlFor="filterNumber">Número</Label>
               <Input
@@ -275,32 +291,15 @@ export default function Partidas() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div>
-              <Label htmlFor="filterDateFrom">Desde</Label>
-              <Input
-                id="filterDateFrom"
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="filterDateTo">Hasta</Label>
-              <Input
-                id="filterDateTo"
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-              />
-            </div>
           </div>
           
-          <div className="mt-4">
+          <div className="flex items-center justify-between">
             <Button variant="outline" onClick={clearFilters}>
               Limpiar Filtros
             </Button>
+            <span className="text-sm text-muted-foreground">
+              {filteredEntries.length} de {entries.length} partidas
+            </span>
           </div>
         </CardContent>
       </Card>
