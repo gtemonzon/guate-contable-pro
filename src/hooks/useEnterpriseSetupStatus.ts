@@ -76,7 +76,7 @@ export function useEnterpriseSetupStatus(enterpriseId: number | null) {
             label: "Período Contable",
             description: "Crear y activar un período contable",
             isCompleted: hasPeriod,
-            dialogTab: "periodos",
+            dialogTab: "periods",
           },
           {
             id: "catalogo",
