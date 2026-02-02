@@ -257,7 +257,7 @@ export function JournalEntryPrefixesManager() {
                 maxLength={10}
               />
               <p className="text-xs text-muted-foreground">
-                Máximo 10 caracteres. El número de partida se generará como: {formData.prefix || "PREF"}-2025-01
+                Máximo 10 caracteres. El número de partida se generará como: {formData.prefix || "PREF"}-2025-001
               </p>
             </div>
 
