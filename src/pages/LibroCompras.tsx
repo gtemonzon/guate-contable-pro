@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Loader2, AlertCircle, RefreshCw } from "lucide-react";
-import { PurchaseCard } from "@/components/compras/PurchaseCard";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus } from "lucide-react";
+import { PurchaseCard, PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -83,6 +84,9 @@ export default function LibroCompras() {
   
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
   const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
+  const [focusNewRow, setFocusNewRow] = useState(false);
+  
+  const newCardRef = useRef<PurchaseCardRef>(null);
 
   const { toast } = useToast();
 
@@ -380,7 +384,7 @@ export default function LibroCompras() {
       .eq("id", journalEntryId);
   };
 
-  const addNewRow = () => {
+  const addNewRow = useCallback(() => {
     // Copiar fecha de la última entrada o usar el último día del mes seleccionado
     let defaultDate = new Date().toISOString().split('T')[0];
     if (purchases.length > 0) {
@@ -408,8 +412,32 @@ export default function LibroCompras() {
       journal_entry_id: null,
       isNew: true,
     };
-    setPurchases([...purchases, newEntry]);
-  };
+    setPurchases(prev => [...prev, newEntry]);
+    setFocusNewRow(true);
+  }, [purchases, selectedMonth, selectedYear, felDocTypes, lastExpenseAccountId, lastBankAccountId]);
+
+  // Focus new row after render
+  useEffect(() => {
+    if (focusNewRow && purchases.length > 0) {
+      setTimeout(() => {
+        newCardRef.current?.focusDateField();
+        setFocusNewRow(false);
+      }, 100);
+    }
+  }, [focusNewRow, purchases.length]);
+
+  // Keyboard shortcut: Alt+N para nueva factura
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        addNewRow();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addNewRow]);
 
   const updateRow = (index: number, field: keyof PurchaseEntry, value: any) => {
     const updated = [...purchases];
@@ -1103,9 +1131,19 @@ export default function LibroCompras() {
                   </div>
                 </DialogContent>
               </Dialog>
-              <Button onClick={addNewRow} size="sm">
-                Agregar Línea
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={addNewRow} size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nueva Factura
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Alt+N</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </CardHeader>
@@ -1121,6 +1159,7 @@ export default function LibroCompras() {
               {purchases.map((purchase, index) => (
                 <PurchaseCard
                   key={purchase.id || `new-${index}`}
+                  ref={index === purchases.length - 1 ? newCardRef : undefined}
                   purchase={purchase}
                   index={index}
                   felDocTypes={felDocTypes}

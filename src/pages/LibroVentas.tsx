@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Loader2, AlertCircle, RefreshCw } from "lucide-react";
-import { SalesCard } from "@/components/ventas/SalesCard";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus } from "lucide-react";
+import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +79,9 @@ export default function LibroVentas() {
   }>>([]);
   
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
+  const [focusNewRow, setFocusNewRow] = useState(false);
+  
+  const newCardRef = useRef<SalesCardRef>(null);
 
   const { toast } = useToast();
 
@@ -363,7 +367,7 @@ export default function LibroVentas() {
     }
   };
 
-  const addNewRow = () => {
+  const addNewRow = useCallback(() => {
     // Copiar fecha de la última entrada o usar el último día del mes seleccionado
     let defaultDate = new Date().toISOString().split('T')[0];
     if (sales.length > 0) {
@@ -389,8 +393,32 @@ export default function LibroVentas() {
       journal_entry_id: null,
       isNew: true,
     };
-    setSales([...sales, newEntry]);
-  };
+    setSales(prev => [...prev, newEntry]);
+    setFocusNewRow(true);
+  }, [sales, selectedMonth, selectedYear, felDocTypes, lastIncomeAccountId]);
+
+  // Focus new row after render
+  useEffect(() => {
+    if (focusNewRow && sales.length > 0) {
+      setTimeout(() => {
+        newCardRef.current?.focusDateField();
+        setFocusNewRow(false);
+      }, 100);
+    }
+  }, [focusNewRow, sales.length]);
+
+  // Keyboard shortcut: Alt+N para nueva factura
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        addNewRow();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [addNewRow]);
 
   const updateRow = (index: number, field: keyof SaleEntry, value: any) => {
     const updated = [...sales];
@@ -1118,9 +1146,19 @@ export default function LibroVentas() {
                   </div>
                 </DialogContent>
               </Dialog>
-              <Button onClick={addNewRow} size="sm">
-                Agregar Línea
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button onClick={addNewRow} size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nueva Factura
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Alt+N</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </CardHeader>
@@ -1139,9 +1177,11 @@ export default function LibroVentas() {
               {filteredSales.map((sale, index) => {
                 // Get the real index in the sales array for update/delete operations
                 const realIndex = sales.findIndex(s => s === sale);
+                const isLastItem = realIndex === sales.length - 1;
                 return (
                   <SalesCard
                     key={sale.id || `new-${index}`}
+                    ref={isLastItem ? newCardRef : undefined}
                     sale={sale}
                     index={realIndex}
                     felDocTypes={felDocTypes}
