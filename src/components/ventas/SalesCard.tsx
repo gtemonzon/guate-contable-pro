@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban, RotateCcw, Pencil, X } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -128,6 +128,14 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     onUpdate(index, field, value);
   };
 
+  const restoreFocusById = (activeId?: string | null) => {
+    if (!activeId) return;
+    window.setTimeout(() => {
+      const el = document.getElementById(activeId) as HTMLElement | null;
+      if (el && document.contains(el)) el.focus();
+    }, 80);
+  };
+
   // Auto-save with debounce when there are changes
   useEffect(() => {
     if (hasChanges && inEditMode) {
@@ -136,8 +144,11 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
       }
       
       saveTimeoutRef.current = setTimeout(() => {
+        const activeEl = document.activeElement as HTMLElement | null;
+        const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         onSave(index);
         setHasChanges(false);
+        restoreFocusById(activeId);
       }, 2000);
     }
 
@@ -219,8 +230,8 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         ref={cardRef}
         className={cn(
           "hover:bg-muted/50 cursor-pointer transition-colors group",
-          isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30",
-          sale.is_annulled && "opacity-60 bg-red-50 dark:bg-red-950/20"
+          isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
+          sale.is_annulled && "opacity-60 bg-destructive/5"
         )}
         onClick={() => onStartEdit?.(index)}
       >
@@ -260,17 +271,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               {sale.journal_entry_id && (
                 <Badge variant="secondary" className="text-xs">Póliza</Badge>
               )}
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartEdit?.(index);
-                }}
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
             </div>
           </div>
         </CardContent>
@@ -285,8 +285,8 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
       className={cn(
         "shadow-md transition-all ring-2 ring-primary border-primary",
         hasChanges && "ring-amber-400 border-amber-400",
-        isHighlighted && "ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse",
-        sale.is_annulled && "opacity-60 bg-red-50 dark:bg-red-950/20"
+        isHighlighted && "ring-primary border-primary bg-accent/20 animate-pulse",
+        sale.is_annulled && "opacity-60 bg-destructive/5"
       )}
     >
       <CardContent className="p-4">
@@ -310,6 +310,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 <label className="text-xs text-muted-foreground">Fecha</label>
                 <Input
                   ref={dateInputRef}
+                  id={`sale-${index}-invoice_date`}
                   type="date"
                   value={sale.invoice_date}
                   onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -329,6 +330,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
+                id={`sale-${index}-invoice_number`}
                 value={sale.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
                 placeholder="12345"

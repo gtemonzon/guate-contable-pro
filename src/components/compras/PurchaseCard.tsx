@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Pencil, X } from "lucide-react";
+import { Trash2, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
@@ -118,6 +118,14 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     onUpdate(index, field, value);
   };
 
+  const restoreFocusById = (activeId?: string | null) => {
+    if (!activeId) return;
+    window.setTimeout(() => {
+      const el = document.getElementById(activeId) as HTMLElement | null;
+      if (el && document.contains(el)) el.focus();
+    }, 80);
+  };
+
   // Auto-save with debounce when there are changes
   useEffect(() => {
     if (hasChanges && inEditMode) {
@@ -126,8 +134,11 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       }
       
       saveTimeoutRef.current = setTimeout(() => {
+        const activeEl = document.activeElement as HTMLElement | null;
+        const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         onSave(index);
         setHasChanges(false);
+        restoreFocusById(activeId);
       }, 2000);
     }
 
@@ -209,7 +220,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         ref={cardRef}
         className={cn(
           "hover:bg-muted/50 cursor-pointer transition-colors group",
-          isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+          isHighlighted && "ring-2 ring-primary border-primary bg-accent/20"
         )}
         onClick={() => onStartEdit?.(index)}
       >
@@ -248,17 +259,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               {purchase.journal_entry_id && (
                 <Badge variant="secondary" className="text-xs">Póliza</Badge>
               )}
-              <Button 
-                size="sm" 
-                variant="ghost" 
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStartEdit?.(index);
-                }}
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
             </div>
           </div>
         </CardContent>
@@ -273,7 +273,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       className={cn(
         "shadow-md transition-all ring-2 ring-primary border-primary",
         hasChanges && "ring-amber-400 border-amber-400",
-        isHighlighted && "ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse"
+        isHighlighted && "ring-primary border-primary bg-accent/20 animate-pulse"
       )}
     >
       <CardContent className="p-4">
@@ -284,6 +284,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <label className="text-xs text-muted-foreground">Fecha</label>
               <Input
                 ref={dateInputRef}
+                id={`purchase-${index}-invoice_date`}
                 type="date"
                 value={purchase.invoice_date}
                 onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -302,6 +303,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
+                id={`purchase-${index}-invoice_number`}
                 value={purchase.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
                 placeholder="12345"
