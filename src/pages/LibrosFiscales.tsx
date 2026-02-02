@@ -738,12 +738,12 @@ export default function LibrosFiscales() {
     return () => window.clearTimeout(t);
   }, [pendingFocusTab, purchases.length, sales.length]);
 
-  // Keyboard shortcut: Ctrl+Alt+N -> new invoice on current tab
+  // Keyboard shortcut: Ctrl+Alt+Plus (numpad) -> new invoice on current tab
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Alt+N
+      // Ctrl+Alt+Plus (numpad or regular +)
       if (!e.ctrlKey || !e.altKey) return;
-      if (e.key.toLowerCase() !== "n") return;
+      if (e.key !== "+" && e.code !== "NumpadAdd") return;
       e.preventDefault();
       if (activeTab === "compras") addNewPurchase();
       else addNewSale();
@@ -1197,7 +1197,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Alt+N</p>
+                        <p>Ctrl+Alt+Numpad(+)</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1275,7 +1275,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Alt+N</p>
+                        <p>Ctrl+Alt+Numpad(+)</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
