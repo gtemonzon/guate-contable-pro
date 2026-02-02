@@ -3,10 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban, RotateCcw } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -52,18 +52,38 @@ interface SalesCardProps {
   onDelete: (index: number) => void;
   onToggleAnnulled: (index: number) => void;
   isHighlighted?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: (index: number) => void;
+  onCancelEdit?: () => void;
 }
 
 export interface SalesCardRef {
   focusDateField: () => void;
 }
 
-export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete, onToggleAnnulled, isHighlighted }, ref) => {
-  const [isFocused, setIsFocused] = useState(false);
+export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ 
+  sale, 
+  index, 
+  felDocTypes, 
+  operationTypes, 
+  incomeAccounts, 
+  onUpdate, 
+  onSave, 
+  onDelete, 
+  onToggleAnnulled, 
+  isHighlighted,
+  isEditing = false,
+  onStartEdit,
+  onCancelEdit
+}, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isNewRecord = sale.isNew;
+
+  // Auto-enter edit mode for new records
+  const inEditMode = isEditing || isNewRecord;
 
   useImperativeHandle(ref, () => ({
     focusDateField: () => {
@@ -71,9 +91,15 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
         cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       setTimeout(() => {
-        dateInputRef.current?.focus();
-        dateInputRef.current?.showPicker?.();
-      }, 100);
+        if (dateInputRef.current) {
+          dateInputRef.current.focus();
+          try {
+            dateInputRef.current.showPicker?.();
+          } catch (e) {
+            // showPicker might not be supported
+          }
+        }
+      }, 150);
     }
   }));
 
@@ -97,21 +123,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
     }
   };
 
-  // Función para manejar cambios y marcar que hay cambios pendientes
   const handleFieldChange = (field: keyof SaleEntry, value: any) => {
     setHasChanges(true);
     onUpdate(index, field, value);
   };
 
-  // Auto-guardar con debounce cuando hay cambios
+  // Auto-save with debounce when there are changes
   useEffect(() => {
-    if (hasChanges) {
-      // Limpiar timeout anterior
+    if (hasChanges && inEditMode) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       
-      // Guardar después de 2 segundos de inactividad
       saveTimeoutRef.current = setTimeout(() => {
         onSave(index);
         setHasChanges(false);
@@ -123,9 +146,9 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, sale]);
+  }, [hasChanges, sale, inEditMode]);
 
-  // Guardar al desmontar si hay cambios pendientes
+  // Save on unmount if there are pending changes
   useEffect(() => {
     return () => {
       if (hasChanges) {
@@ -141,32 +164,133 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
     }
   }, [isHighlighted]);
 
+  // Focus date field when entering edit mode for new records
+  useEffect(() => {
+    if (isNewRecord && dateInputRef.current) {
+      setTimeout(() => {
+        dateInputRef.current?.focus();
+        try {
+          dateInputRef.current?.showPicker?.();
+        } catch (e) {
+          // Ignore
+        }
+      }, 100);
+    }
+  }, [isNewRecord]);
+
+  const handleSaveClick = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    onSave(index);
+    setHasChanges(false);
+    onCancelEdit?.();
+  };
+
+  const handleCancelClick = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setHasChanges(false);
+    onCancelEdit?.();
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr + "T00:00:00");
+    return date.toLocaleDateString("es-GT", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const getOperationTypeName = (id: number | null) => {
+    if (!id) return "-";
+    return operationTypes.find(t => t.id === id)?.code || "-";
+  };
+
+  const getAccountName = (id: number | null, accounts: { id: number; account_code: string; account_name: string }[]) => {
+    if (!id) return "-";
+    const acc = accounts.find(a => a.id === id);
+    return acc ? `${acc.account_code}` : "-";
+  };
+
+  // READ-ONLY MODE: Show plain text
+  if (!inEditMode) {
+    return (
+      <Card 
+        ref={cardRef}
+        className={cn(
+          "hover:bg-muted/50 cursor-pointer transition-colors group",
+          isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30",
+          sale.is_annulled && "opacity-60 bg-red-50 dark:bg-red-950/20"
+        )}
+        onClick={() => onStartEdit?.(index)}
+      >
+        <CardContent className="p-3">
+          <div className="grid grid-cols-12 gap-2 items-center text-sm">
+            <div className="col-span-1 text-muted-foreground flex items-center gap-1">
+              {sale.is_annulled && <Ban className="h-3 w-3 text-destructive" />}
+              {formatDate(sale.invoice_date)}
+            </div>
+            <div className="col-span-1 font-mono">
+              {sale.invoice_series || "-"}-{sale.invoice_number}
+            </div>
+            <div className="col-span-1 text-center">
+              <Badge variant="outline" className="text-xs">
+                {sale.fel_document_type}
+              </Badge>
+            </div>
+            <div className="col-span-1 font-mono text-xs">
+              {sale.customer_nit}
+            </div>
+            <div className="col-span-3 truncate" title={sale.customer_name}>
+              {sale.customer_name || <span className="text-muted-foreground">Sin cliente</span>}
+            </div>
+            <div className="col-span-1 text-right font-mono">
+              {formatCurrency(sale.total_amount)}
+            </div>
+            <div className="col-span-1 text-right font-mono text-muted-foreground">
+              {formatCurrency(sale.vat_amount)}
+            </div>
+            <div className="col-span-1 text-center">
+              {getOperationTypeName(sale.operation_type_id)}
+            </div>
+            <div className="col-span-1 text-xs truncate" title={getAccountName(sale.income_account_id, incomeAccounts)}>
+              {getAccountName(sale.income_account_id, incomeAccounts)}
+            </div>
+            <div className="col-span-1 flex items-center justify-end gap-1">
+              {sale.journal_entry_id && (
+                <Badge variant="secondary" className="text-xs">Póliza</Badge>
+              )}
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartEdit?.(index);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // EDIT MODE: Show inputs
   return (
     <Card 
       ref={cardRef}
       className={cn(
-        "hover:shadow-md transition-all",
-        isFocused && "ring-2 ring-green-500 border-green-500",
-        hasChanges && "ring-1 ring-amber-400",
-        isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse",
+        "shadow-md transition-all ring-2 ring-primary border-primary",
+        hasChanges && "ring-amber-400 border-amber-400",
+        isHighlighted && "ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse",
         sale.is_annulled && "opacity-60 bg-red-50 dark:bg-red-950/20"
       )}
     >
       <CardContent className="p-4">
-        <div 
-          className="space-y-3"
-          onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
-            // Solo quitar el foco visual, no guardar automáticamente aquí
-            const relatedTarget = e.relatedTarget as Node | null;
-            const isInsideCard = cardRef.current?.contains(relatedTarget);
-            const isInsidePortal = relatedTarget && document.querySelector('[data-radix-popper-content-wrapper]')?.contains(relatedTarget);
-            
-            if (!isInsideCard && !isInsidePortal) {
-              setIsFocused(false);
-            }
-          }}
-        >
+        <div className="space-y-3">
           {/* Primera fila: Fecha, info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2 flex items-end gap-1">
@@ -309,7 +433,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-5">
+            <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Cuenta</label>
               <AccountCombobox
                 accounts={incomeAccounts}
@@ -319,7 +443,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
                 className="w-full"
               />
             </div>
-            <div className="col-span-1 flex items-end gap-1">
+            <div className="col-span-2 flex items-end gap-1">
               <TooltipProvider>
                 <AlertDialog>
                   <Tooltip>
@@ -365,18 +489,30 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index
               <Button 
                 size="sm" 
                 variant={hasChanges ? "default" : "outline"} 
-                onClick={() => {
-                  onSave(index);
-                  setHasChanges(false);
-                  if (saveTimeoutRef.current) {
-                    clearTimeout(saveTimeoutRef.current);
-                  }
-                }} 
+                onClick={handleSaveClick}
                 className="h-8 w-8 p-0"
+                title="Guardar"
               >
                 <Save className="h-3 w-3" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8 w-8 p-0">
+              {!isNewRecord && (
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={handleCancelClick}
+                  className="h-8 w-8 p-0"
+                  title="Cancelar"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={() => onDelete(index)} 
+                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                title="Eliminar"
+              >
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>

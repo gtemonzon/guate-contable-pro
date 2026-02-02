@@ -3,11 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save } from "lucide-react";
+import { Trash2, Save, Pencil, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { formatCurrency } from "@/lib/utils";
 
 interface PurchaseEntry {
   id?: number;
@@ -39,28 +40,56 @@ interface PurchaseCardProps {
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
   isHighlighted?: boolean;
+  isEditing?: boolean;
+  onStartEdit?: (index: number) => void;
+  onCancelEdit?: () => void;
 }
 
 export interface PurchaseCardRef {
   focusDateField: () => void;
 }
 
-export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete, isHighlighted }, ref) => {
-  const [isFocused, setIsFocused] = useState(false);
+export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ 
+  purchase, 
+  index, 
+  felDocTypes, 
+  operationTypes, 
+  expenseAccounts, 
+  bankAccounts, 
+  onUpdate, 
+  onSave, 
+  onDelete, 
+  isHighlighted,
+  isEditing = false,
+  onStartEdit,
+  onCancelEdit
+}, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isNewRecord = purchase.isNew;
+
+  // Auto-enter edit mode for new records
+  const inEditMode = isEditing || isNewRecord;
 
   useImperativeHandle(ref, () => ({
     focusDateField: () => {
       if (cardRef.current) {
         cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+      // Use a slightly longer timeout to ensure the card is rendered and scrolled
       setTimeout(() => {
-        dateInputRef.current?.focus();
-        dateInputRef.current?.showPicker?.();
-      }, 100);
+        if (dateInputRef.current) {
+          dateInputRef.current.focus();
+          // Try to open date picker
+          try {
+            dateInputRef.current.showPicker?.();
+          } catch (e) {
+            // showPicker might not be supported in all browsers
+          }
+        }
+      }, 150);
     }
   }));
 
@@ -84,21 +113,18 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ pu
     }
   };
 
-  // Función para manejar cambios y marcar que hay cambios pendientes
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
     onUpdate(index, field, value);
   };
 
-  // Auto-guardar con debounce cuando hay cambios
+  // Auto-save with debounce when there are changes
   useEffect(() => {
-    if (hasChanges) {
-      // Limpiar timeout anterior
+    if (hasChanges && inEditMode) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       
-      // Guardar después de 2 segundos de inactividad
       saveTimeoutRef.current = setTimeout(() => {
         onSave(index);
         setHasChanges(false);
@@ -110,9 +136,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ pu
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, purchase]);
+  }, [hasChanges, purchase, inEditMode]);
 
-  // Guardar al desmontar si hay cambios pendientes
+  // Save on unmount if there are pending changes
   useEffect(() => {
     return () => {
       if (hasChanges) {
@@ -128,31 +154,130 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ pu
     }
   }, [isHighlighted]);
 
+  // Focus date field when entering edit mode for new records
+  useEffect(() => {
+    if (isNewRecord && dateInputRef.current) {
+      setTimeout(() => {
+        dateInputRef.current?.focus();
+        try {
+          dateInputRef.current?.showPicker?.();
+        } catch (e) {
+          // Ignore
+        }
+      }, 100);
+    }
+  }, [isNewRecord]);
+
+  const handleSaveClick = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    onSave(index);
+    setHasChanges(false);
+    onCancelEdit?.();
+  };
+
+  const handleCancelClick = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setHasChanges(false);
+    onCancelEdit?.();
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr + "T00:00:00");
+    return date.toLocaleDateString("es-GT", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const getOperationTypeName = (id: number | null) => {
+    if (!id) return "-";
+    return operationTypes.find(t => t.id === id)?.code || "-";
+  };
+
+  const getAccountName = (id: number | null, accounts: { id: number; account_code: string; account_name: string }[]) => {
+    if (!id) return "-";
+    const acc = accounts.find(a => a.id === id);
+    return acc ? `${acc.account_code}` : "-";
+  };
+
+  // READ-ONLY MODE: Show plain text
+  if (!inEditMode) {
+    return (
+      <Card 
+        ref={cardRef}
+        className={cn(
+          "hover:bg-muted/50 cursor-pointer transition-colors group",
+          isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+        )}
+        onClick={() => onStartEdit?.(index)}
+      >
+        <CardContent className="p-3">
+          <div className="grid grid-cols-12 gap-2 items-center text-sm">
+            <div className="col-span-1 text-muted-foreground">
+              {formatDate(purchase.invoice_date)}
+            </div>
+            <div className="col-span-1 font-mono">
+              {purchase.invoice_series || "-"}-{purchase.invoice_number}
+            </div>
+            <div className="col-span-1 text-center">
+              <Badge variant="outline" className="text-xs">
+                {purchase.fel_document_type}
+              </Badge>
+            </div>
+            <div className="col-span-1 font-mono text-xs">
+              {purchase.supplier_nit}
+            </div>
+            <div className="col-span-3 truncate" title={purchase.supplier_name}>
+              {purchase.supplier_name || <span className="text-muted-foreground">Sin proveedor</span>}
+            </div>
+            <div className="col-span-1 text-right font-mono">
+              {formatCurrency(purchase.total_amount)}
+            </div>
+            <div className="col-span-1 text-right font-mono text-muted-foreground">
+              {formatCurrency(purchase.vat_amount)}
+            </div>
+            <div className="col-span-1 text-center">
+              {getOperationTypeName(purchase.operation_type_id)}
+            </div>
+            <div className="col-span-1 text-xs truncate" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
+              {getAccountName(purchase.expense_account_id, expenseAccounts)}
+            </div>
+            <div className="col-span-1 flex items-center justify-end gap-1">
+              {purchase.journal_entry_id && (
+                <Badge variant="secondary" className="text-xs">Póliza</Badge>
+              )}
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartEdit?.(index);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // EDIT MODE: Show inputs
   return (
     <Card 
       ref={cardRef}
       className={cn(
-        "hover:shadow-md transition-all",
-        isFocused && "ring-2 ring-green-500 border-green-500",
-        hasChanges && "ring-1 ring-amber-400",
-        isHighlighted && "ring-2 ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse"
+        "shadow-md transition-all ring-2 ring-primary border-primary",
+        hasChanges && "ring-amber-400 border-amber-400",
+        isHighlighted && "ring-blue-500 border-blue-500 bg-blue-50 dark:bg-blue-950/30 animate-pulse"
       )}
     >
       <CardContent className="p-4">
-        <div 
-          className="space-y-3"
-          onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
-            // Solo quitar el foco visual, no guardar automáticamente aquí
-            const relatedTarget = e.relatedTarget as Node | null;
-            const isInsideCard = cardRef.current?.contains(relatedTarget);
-            const isInsidePortal = relatedTarget && document.querySelector('[data-radix-popper-content-wrapper]')?.contains(relatedTarget);
-            
-            if (!isInsideCard && !isInsidePortal) {
-              setIsFocused(false);
-            }
-          }}
-        >
+        <div className="space-y-3">
           {/* Primera fila: Fecha, info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
@@ -285,18 +410,30 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ pu
               <Button 
                 size="sm" 
                 variant={hasChanges ? "default" : "outline"} 
-                onClick={() => {
-                  onSave(index);
-                  setHasChanges(false);
-                  if (saveTimeoutRef.current) {
-                    clearTimeout(saveTimeoutRef.current);
-                  }
-                }} 
+                onClick={handleSaveClick}
                 className="h-8 w-8 p-0"
+                title="Guardar"
               >
                 <Save className="h-3 w-3" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => onDelete(index)} className="h-8 w-8 p-0">
+              {!isNewRecord && (
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={handleCancelClick}
+                  className="h-8 w-8 p-0"
+                  title="Cancelar"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={() => onDelete(index)} 
+                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                title="Eliminar"
+              >
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>

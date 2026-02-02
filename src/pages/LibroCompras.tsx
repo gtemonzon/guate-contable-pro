@@ -85,6 +85,7 @@ export default function LibroCompras() {
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
   const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
   const [focusNewRow, setFocusNewRow] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   const newCardRef = useRef<PurchaseCardRef>(null);
 
@@ -1155,7 +1156,7 @@ export default function LibroCompras() {
               No hay facturas. Haz clic en "Agregar Línea" para comenzar.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {purchases.map((purchase, index) => (
                 <PurchaseCard
                   key={purchase.id || `new-${index}`}
@@ -1167,8 +1168,19 @@ export default function LibroCompras() {
                   expenseAccounts={expenseAccounts}
                   bankAccounts={bankAccounts}
                   onUpdate={updateRow}
-                  onSave={saveRow}
+                  onSave={(idx) => {
+                    saveRow(idx);
+                    // Clear isNew flag after save
+                    if (purchases[idx].isNew) {
+                      const updated = [...purchases];
+                      updated[idx] = { ...updated[idx], isNew: false };
+                      setPurchases(updated);
+                    }
+                  }}
                   onDelete={deleteRow}
+                  isEditing={editingIndex === index}
+                  onStartEdit={(idx) => setEditingIndex(idx)}
+                  onCancelEdit={() => setEditingIndex(null)}
                 />
               ))}
             </div>
