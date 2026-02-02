@@ -228,39 +228,37 @@ export default function Partidas() {
   }
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Partidas Contables</h1>
-          <p className="text-muted-foreground">Gestiona el libro diario de la empresa</p>
+    <div className="flex flex-col h-full">
+      {/* Sticky Header with Filters */}
+      <div className="sticky top-0 z-20 bg-background pt-6 pb-4 px-8 border-b shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-3xl font-bold">Partidas Contables</h1>
+            <p className="text-muted-foreground">Gestiona el libro diario de la empresa</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {/* Indicador de partidas pendientes */}
+            {permissions.canApproveEntries && pendingReviewCount > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  {pendingReviewCount} partida{pendingReviewCount > 1 ? 's' : ''} pendiente{pendingReviewCount > 1 ? 's' : ''} de revisión
+                </span>
+              </div>
+            )}
+            
+            {permissions.canCreateEntries && (
+              <Button onClick={() => setShowDialog(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva Partida
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          {/* Indicador de partidas pendientes */}
-          {permissions.canApproveEntries && pendingReviewCount > 0 && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                {pendingReviewCount} partida{pendingReviewCount > 1 ? 's' : ''} pendiente{pendingReviewCount > 1 ? 's' : ''} de revisión
-              </span>
-            </div>
-          )}
-          
-          {permissions.canCreateEntries && (
-            <Button onClick={() => setShowDialog(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nueva Partida
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Selector de Año/Mes */}
+        {/* Compact Filter Bar */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Year/Month Quick Filter */}
           <YearMonthFilter
             entries={entries}
             selectedYear={filterYear}
@@ -268,86 +266,81 @@ export default function Partidas() {
             onYearChange={setFilterYear}
             onMonthsChange={setFilterMonths}
           />
-
-          {/* Otros filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
-            <div>
-              <Label htmlFor="filterNumber">Número</Label>
-              <Input
-                id="filterNumber"
-                placeholder="Buscar por número..."
-                value={filterNumber}
-                onChange={(e) => setFilterNumber(e.target.value)}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="filterType">Tipo</Label>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger id="filterType">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="apertura">Apertura</SelectItem>
-                  <SelectItem value="diario">Diario</SelectItem>
-                  <SelectItem value="ajuste">Ajuste</SelectItem>
-                  <SelectItem value="cierre">Cierre</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="filterStatus">Estado</Label>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger id="filterStatus">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="borrador">Borrador</SelectItem>
-                  <SelectItem value="pendiente_revision">Pendiente Revisión</SelectItem>
-                  <SelectItem value="aprobado">Aprobado</SelectItem>
-                  <SelectItem value="contabilizado">Contabilizado</SelectItem>
-                  <SelectItem value="rechazado">Rechazado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
           
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <Button variant="outline" onClick={clearFilters}>
-              Limpiar Filtros
-            </Button>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="pageSize" className="text-sm whitespace-nowrap">Mostrar:</Label>
-                <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
-                  <SelectTrigger id="pageSize" className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          <div className="h-6 w-px bg-border" />
+          
+          {/* Status Filter */}
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[160px] h-9">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="borrador">Borrador</SelectItem>
+              <SelectItem value="pendiente_revision">Pendiente Revisión</SelectItem>
+              <SelectItem value="aprobado">Aprobado</SelectItem>
+              <SelectItem value="contabilizado">Contabilizado</SelectItem>
+              <SelectItem value="rechazado">Rechazado</SelectItem>
+            </SelectContent>
+          </Select>
 
-      {/* Lista de Partidas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Partidas Registradas</CardTitle>
-        </CardHeader>
-        <CardContent>
+          {/* Type Filter */}
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="w-[130px] h-9">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos tipos</SelectItem>
+              <SelectItem value="apertura">Apertura</SelectItem>
+              <SelectItem value="diario">Diario</SelectItem>
+              <SelectItem value="ajuste">Ajuste</SelectItem>
+              <SelectItem value="cierre">Cierre</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Number Search */}
+          <Input
+            placeholder="Buscar número..."
+            value={filterNumber}
+            onChange={(e) => setFilterNumber(e.target.value)}
+            className="w-[160px] h-9"
+          />
+
+          {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+              Limpiar
+            </Button>
+          )}
+
+          <div className="flex-1" />
+          
+          {/* Page Size & Count */}
+          <div className="flex items-center gap-2">
+            <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="w-[70px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-auto px-8 py-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Partidas Registradas</CardTitle>
+          </CardHeader>
+          <CardContent>
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
           ) : filteredEntries.length === 0 ? (
@@ -403,8 +396,8 @@ export default function Partidas() {
                             
                             {/* Hover Actions Menu */}
                             <div className={cn(
-                              "flex items-center gap-1 transition-opacity",
-                              isHovered ? "opacity-100" : "opacity-0"
+                              "flex items-center gap-1 transition-all duration-150",
+                              isHovered ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
                             )}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -426,7 +419,7 @@ export default function Partidas() {
                                 </TooltipContent>
                               </Tooltip>
                               
-                              {entry.status !== 'contabilizado' && permissions.canCreateEntries && (
+                              {entry.status !== 'contabilizado' && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
@@ -448,7 +441,7 @@ export default function Partidas() {
                                 </Tooltip>
                               )}
                               
-                              {entry.status !== 'contabilizado' && permissions.canApproveEntries && (
+                              {entry.status !== 'contabilizado' && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
@@ -537,6 +530,7 @@ export default function Partidas() {
           )}
         </CardContent>
       </Card>
+      </div>
 
       <JournalEntryDialog
         open={showDialog}
