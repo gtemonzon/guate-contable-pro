@@ -6,10 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, ArrowRight, ShoppingCart, DollarSign, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, ArrowRight, ShoppingCart, DollarSign, Loader2, CreditCard } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
+
+interface BankAccount {
+  id: number;
+  bank_name: string;
+  account_number: string;
+}
 
 interface InvoiceResult {
   id: number;
@@ -22,6 +29,8 @@ interface InvoiceResult {
   total_amount: number;
   month: number;
   year: number;
+  batch_reference?: string | null;
+  bank_account_name?: string | null;
 }
 
 interface InvoiceSearchDialogProps {
@@ -41,6 +50,9 @@ export function InvoiceSearchDialog({
   const [searchName, setSearchName] = useState("");
   const [searchDate, setSearchDate] = useState("");
   const [searchInvoiceNumber, setSearchInvoiceNumber] = useState("");
+  const [searchPaymentRef, setSearchPaymentRef] = useState("");
+  const [searchBankAccountId, setSearchBankAccountId] = useState<string>("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [results, setResults] = useState<InvoiceResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -51,19 +63,43 @@ export function InvoiceSearchDialog({
   ];
 
   useEffect(() => {
+    if (isOpen && enterpriseId) {
+      loadBankAccounts();
+    }
+  }, [isOpen, enterpriseId]);
+
+  useEffect(() => {
     if (!isOpen) {
       // Reset state when dialog closes
       setSearchNit("");
       setSearchName("");
       setSearchDate("");
       setSearchInvoiceNumber("");
+      setSearchPaymentRef("");
+      setSearchBankAccountId("");
       setResults([]);
       setHasSearched(false);
     }
   }, [isOpen]);
 
+  const loadBankAccounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_bank_accounts")
+        .select("id, bank_name, account_number")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("is_active", true)
+        .order("bank_name");
+
+      if (error) throw error;
+      setBankAccounts(data || []);
+    } catch (error) {
+      console.error("Error loading bank accounts:", error);
+    }
+  };
+
   const handleSearch = async () => {
-    if (!searchNit && !searchName && !searchDate && !searchInvoiceNumber) {
+    if (!searchNit && !searchName && !searchDate && !searchInvoiceNumber && !searchPaymentRef && !searchBankAccountId) {
       return;
     }
 
@@ -77,8 +113,20 @@ export function InvoiceSearchDialog({
       // Search in purchases
       let purchaseQuery = supabase
         .from("tab_purchase_ledger")
-        .select("id, invoice_series, invoice_number, invoice_date, supplier_nit, supplier_name, total_amount")
-        .eq("enterprise_id", parseInt(enterpriseId));
+        .select(`
+          id, 
+          invoice_series, 
+          invoice_number, 
+          invoice_date, 
+          supplier_nit, 
+          supplier_name, 
+          total_amount,
+          batch_reference,
+          bank_account_id,
+          bank_account:tab_accounts!tab_purchase_ledger_bank_account_id_fkey(account_name)
+        `)
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .is("deleted_at", null);
 
       if (searchNit) {
         purchaseQuery = purchaseQuery.ilike("supplier_nit", `%${searchNit}%`);
@@ -92,10 +140,16 @@ export function InvoiceSearchDialog({
       if (searchInvoiceNumber) {
         purchaseQuery = purchaseQuery.ilike("invoice_number", `%${searchInvoiceNumber}%`);
       }
+      if (searchPaymentRef) {
+        purchaseQuery = purchaseQuery.ilike("batch_reference", `%${searchPaymentRef}%`);
+      }
+      if (searchBankAccountId) {
+        purchaseQuery = purchaseQuery.eq("bank_account_id", parseInt(searchBankAccountId));
+      }
 
       const { data: purchases, error: purchaseError } = await purchaseQuery
         .order("invoice_date", { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (purchaseError) throw purchaseError;
 
@@ -112,49 +166,55 @@ export function InvoiceSearchDialog({
           total_amount: p.total_amount,
           month: date.getMonth() + 1,
           year: date.getFullYear(),
+          batch_reference: p.batch_reference,
+          bank_account_name: (p.bank_account as any)?.account_name || null,
         });
       });
 
-      // Search in sales
-      let salesQuery = supabase
-        .from("tab_sales_ledger")
-        .select("id, invoice_series, invoice_number, invoice_date, customer_nit, customer_name, total_amount")
-        .eq("enterprise_id", parseInt(enterpriseId));
+      // Only search in sales if not searching by payment reference or bank account
+      // (sales ledger doesn't have these fields)
+      if (!searchPaymentRef && !searchBankAccountId) {
+        let salesQuery = supabase
+          .from("tab_sales_ledger")
+          .select("id, invoice_series, invoice_number, invoice_date, customer_nit, customer_name, total_amount")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .is("deleted_at", null);
 
-      if (searchNit) {
-        salesQuery = salesQuery.ilike("customer_nit", `%${searchNit}%`);
-      }
-      if (searchName) {
-        salesQuery = salesQuery.ilike("customer_name", `%${searchName}%`);
-      }
-      if (searchDate) {
-        salesQuery = salesQuery.eq("invoice_date", searchDate);
-      }
-      if (searchInvoiceNumber) {
-        salesQuery = salesQuery.ilike("invoice_number", `%${searchInvoiceNumber}%`);
-      }
+        if (searchNit) {
+          salesQuery = salesQuery.ilike("customer_nit", `%${searchNit}%`);
+        }
+        if (searchName) {
+          salesQuery = salesQuery.ilike("customer_name", `%${searchName}%`);
+        }
+        if (searchDate) {
+          salesQuery = salesQuery.eq("invoice_date", searchDate);
+        }
+        if (searchInvoiceNumber) {
+          salesQuery = salesQuery.ilike("invoice_number", `%${searchInvoiceNumber}%`);
+        }
 
-      const { data: sales, error: salesError } = await salesQuery
-        .order("invoice_date", { ascending: false })
-        .limit(50);
+        const { data: sales, error: salesError } = await salesQuery
+          .order("invoice_date", { ascending: false })
+          .limit(50);
 
-      if (salesError) throw salesError;
+        if (salesError) throw salesError;
 
-      sales?.forEach(s => {
-        const date = parseISO(s.invoice_date);
-        salesResults.push({
-          id: s.id,
-          type: "venta",
-          invoice_series: s.invoice_series,
-          invoice_number: s.invoice_number,
-          invoice_date: s.invoice_date,
-          nit: s.customer_nit,
-          name: s.customer_name,
-          total_amount: s.total_amount,
-          month: date.getMonth() + 1,
-          year: date.getFullYear(),
+        sales?.forEach(s => {
+          const date = parseISO(s.invoice_date);
+          salesResults.push({
+            id: s.id,
+            type: "venta",
+            invoice_series: s.invoice_series,
+            invoice_number: s.invoice_number,
+            invoice_date: s.invoice_date,
+            nit: s.customer_nit,
+            name: s.customer_name,
+            total_amount: s.total_amount,
+            month: date.getMonth() + 1,
+            year: date.getFullYear(),
+          });
         });
-      });
+      }
 
       // Combine and sort by date
       const allResults = [...purchaseResults, ...salesResults].sort(
@@ -185,9 +245,12 @@ export function InvoiceSearchDialog({
     onClose();
   };
 
+  // Check if payment ref search is active to show related columns
+  const showPaymentColumns = searchPaymentRef || searchBankAccountId || results.some(r => r.batch_reference);
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
@@ -196,7 +259,7 @@ export function InvoiceSearchDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Search Fields */}
+          {/* Search Fields - Row 1 */}
           <div className="grid grid-cols-4 gap-3">
             <div>
               <Label htmlFor="search-nit">NIT</Label>
@@ -240,6 +303,48 @@ export function InvoiceSearchDialog({
             </div>
           </div>
 
+          {/* Search Fields - Row 2 (Payment Reference) */}
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <Label htmlFor="search-payment-ref" className="flex items-center gap-1">
+                <CreditCard className="h-3 w-3" />
+                Ref. Pago
+              </Label>
+              <Input
+                id="search-payment-ref"
+                placeholder="No. cheque, transferencia..."
+                value={searchPaymentRef}
+                onChange={(e) => setSearchPaymentRef(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            <div>
+              <Label htmlFor="search-bank-account">Cuenta Bancaria</Label>
+              <Select 
+                value={searchBankAccountId} 
+                onValueChange={setSearchBankAccountId}
+              >
+                <SelectTrigger id="search-bank-account">
+                  <SelectValue placeholder="Todas las cuentas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todas las cuentas</SelectItem>
+                  {bankAccounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id.toString()}>
+                      {acc.bank_name} - {acc.account_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 flex items-end">
+              <p className="text-xs text-muted-foreground">
+                {(searchPaymentRef || searchBankAccountId) && 
+                  "Nota: Al buscar por Ref. Pago o Cuenta Bancaria, solo se muestran compras (ventas no tienen estos campos)"}
+              </p>
+            </div>
+          </div>
+
           <div className="flex justify-between items-center">
             <Button onClick={handleSearch} disabled={loading}>
               {loading ? (
@@ -267,6 +372,9 @@ export function InvoiceSearchDialog({
                   <TableHead>NIT</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  {showPaymentColumns && (
+                    <TableHead>Ref. Pago</TableHead>
+                  )}
                   <TableHead>Período</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -274,14 +382,14 @@ export function InvoiceSearchDialog({
               <TableBody>
                 {results.length === 0 && hasSearched && !loading && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={showPaymentColumns ? 9 : 8} className="text-center text-muted-foreground py-8">
                       No se encontraron facturas
                     </TableCell>
                   </TableRow>
                 )}
                 {!hasSearched && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={showPaymentColumns ? 9 : 8} className="text-center text-muted-foreground py-8">
                       Ingrese criterios de búsqueda y presione Buscar
                     </TableCell>
                   </TableRow>
@@ -308,12 +416,23 @@ export function InvoiceSearchDialog({
                       {format(parseISO(invoice.invoice_date), "dd/MM/yyyy")}
                     </TableCell>
                     <TableCell className="font-mono">{invoice.nit}</TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={invoice.name}>
+                    <TableCell className="max-w-[180px] truncate" title={invoice.name}>
                       {invoice.name}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      Q {formatCurrency(invoice.total_amount)}
+                      {formatCurrency(invoice.total_amount)}
                     </TableCell>
+                    {showPaymentColumns && (
+                      <TableCell>
+                        {invoice.batch_reference ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {invoice.batch_reference}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Badge variant="outline">
                         {monthNames[invoice.month - 1]} {invoice.year}
