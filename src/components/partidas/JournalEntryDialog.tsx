@@ -108,6 +108,9 @@ export default function JournalEntryDialog({
   // Estado para búsqueda de cuentas por línea
   const [accountSearch, setAccountSearch] = useState<Record<string, string>>({});
   
+  // Estado para controlar apertura del popover de cuenta por línea
+  const [accountPopoverOpen, setAccountPopoverOpen] = useState<Record<string, boolean>>({});
+  
   // Estado para el diálogo de confirmación al cerrar
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   
@@ -587,12 +590,12 @@ export default function JournalEntryDialog({
         line.id === id ? { ...line, [field]: value } : line
       );
       
-      // Auto-agregar nueva línea si se ingresó un monto en la última línea
+      // Auto-agregar nueva línea si se ingresó un monto en la última línea (sin cambiar la línea activa)
       const lineIndex = updatedLines.findIndex(l => l.id === id);
       const isLastLine = lineIndex === updatedLines.length - 1;
       
       if (isLastLine && (field === "debit_amount" || field === "credit_amount") && value > 0) {
-        // Agregar nueva línea
+        // Agregar nueva línea pero mantener el foco en la línea actual
         const newLineId = crypto.randomUUID();
         updatedLines.push({
           id: newLineId,
@@ -603,8 +606,7 @@ export default function JournalEntryDialog({
           debit_amount: 0,
           credit_amount: 0
         });
-        // Activar la nueva línea para edición inmediata
-        setTimeout(() => setActiveLineId(newLineId), 0);
+        // NO activar la nueva línea automáticamente - el usuario navega cuando quiera
       }
       
       return updatedLines;
@@ -1136,12 +1138,12 @@ export default function JournalEntryDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[200px]">Cuenta</TableHead>
-                    <TableHead className="w-[250px]">Descripción</TableHead>
-                    <TableHead className="w-[150px]">Ref. Bancaria</TableHead>
-                    <TableHead className="w-[120px]">Centro Costo</TableHead>
-                    <TableHead className="w-[150px]">Debe</TableHead>
-                    <TableHead className="w-[150px]">Haber</TableHead>
+                    <TableHead className="min-w-[280px]">Cuenta</TableHead>
+                    <TableHead className="min-w-[200px]">Descripción</TableHead>
+                    <TableHead className="min-w-[120px]">Ref. Bancaria</TableHead>
+                    <TableHead className="min-w-[100px]">Centro Costo</TableHead>
+                    <TableHead className="min-w-[120px] text-right">Debe</TableHead>
+                    <TableHead className="min-w-[120px] text-right">Haber</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1163,11 +1165,15 @@ export default function JournalEntryDialog({
                       >
                          <TableCell className="py-1">
                           {isActive ? (
-                            <Popover onOpenChange={(open) => {
-                              if (!open) {
-                                setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
-                              }
-                            }}>
+                            <Popover 
+                              open={accountPopoverOpen[line.id] || false}
+                              onOpenChange={(open) => {
+                                setAccountPopoverOpen(prev => ({ ...prev, [line.id]: open }));
+                                if (!open) {
+                                  setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
+                                }
+                              }}
+                            >
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="outline"
@@ -1209,6 +1215,8 @@ export default function JournalEntryDialog({
                                               onSelect={() => {
                                                 updateLine(line.id, "account_id" as keyof DetailLine, acc.id as any);
                                                 setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
+                                                // Cerrar el popover automáticamente al seleccionar
+                                                setAccountPopoverOpen(prev => ({ ...prev, [line.id]: false }));
                                               }}
                                             >
                                               <Check
