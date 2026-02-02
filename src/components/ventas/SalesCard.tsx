@@ -93,11 +93,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
       setTimeout(() => {
         if (dateInputRef.current) {
           dateInputRef.current.focus();
-          try {
-            dateInputRef.current.showPicker?.();
-          } catch (e) {
-            // showPicker might not be supported
-          }
         }
       }, 150);
     }
@@ -194,11 +189,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     if (isNewRecord && dateInputRef.current) {
       setTimeout(() => {
         dateInputRef.current?.focus();
-        try {
-          dateInputRef.current?.showPicker?.();
-        } catch (e) {
-          // Ignore
-        }
       }, 100);
     }
   }, [isNewRecord]);
