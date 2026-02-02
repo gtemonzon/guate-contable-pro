@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,11 +54,28 @@ interface SalesCardProps {
   isHighlighted?: boolean;
 }
 
-export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete, onToggleAnnulled, isHighlighted }: SalesCardProps) {
+export interface SalesCardRef {
+  focusDateField: () => void;
+}
+
+export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ sale, index, felDocTypes, operationTypes, incomeAccounts, onUpdate, onSave, onDelete, onToggleAnnulled, isHighlighted }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusDateField: () => {
+      if (cardRef.current) {
+        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setTimeout(() => {
+        dateInputRef.current?.focus();
+        dateInputRef.current?.showPicker?.();
+      }, 100);
+    }
+  }));
 
   const searchCustomerByNit = async (nit: string) => {
     if (!nit || nit.length < 3) return;
@@ -168,6 +185,7 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
               <div className="flex-1">
                 <label className="text-xs text-muted-foreground">Fecha</label>
                 <Input
+                  ref={dateInputRef}
                   type="date"
                   value={sale.invoice_date}
                   onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -373,4 +391,6 @@ export function SalesCard({ sale, index, felDocTypes, operationTypes, incomeAcco
       </CardContent>
     </Card>
   );
-}
+});
+
+SalesCard.displayName = "SalesCard";

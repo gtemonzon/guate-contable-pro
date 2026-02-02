@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,11 +41,28 @@ interface PurchaseCardProps {
   isHighlighted?: boolean;
 }
 
-export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete, isHighlighted }: PurchaseCardProps) {
+export interface PurchaseCardRef {
+  focusDateField: () => void;
+}
+
+export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ purchase, index, felDocTypes, operationTypes, expenseAccounts, bankAccounts, onUpdate, onSave, onDelete, isHighlighted }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusDateField: () => {
+      if (cardRef.current) {
+        cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setTimeout(() => {
+        dateInputRef.current?.focus();
+        dateInputRef.current?.showPicker?.();
+      }, 100);
+    }
+  }));
 
   const searchSupplierByNit = async (nit: string) => {
     if (!nit || nit.length < 3) return;
@@ -141,6 +158,7 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Fecha</label>
               <Input
+                ref={dateInputRef}
                 type="date"
                 value={purchase.invoice_date}
                 onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -309,4 +327,6 @@ export function PurchaseCard({ purchase, index, felDocTypes, operationTypes, exp
       </CardContent>
     </Card>
   );
-}
+});
+
+PurchaseCard.displayName = "PurchaseCard";
