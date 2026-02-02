@@ -134,11 +134,25 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       }
       
       saveTimeoutRef.current = setTimeout(() => {
+        // Capture focus BEFORE any state changes
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
+        
+        // Perform save
         onSave(index);
         setHasChanges(false);
-        restoreFocusById(activeId);
+        
+        // Restore focus after a small delay to allow React to settle
+        if (activeId) {
+          window.requestAnimationFrame(() => {
+            window.setTimeout(() => {
+              const el = document.getElementById(activeId);
+              if (el && document.contains(el)) {
+                el.focus();
+              }
+            }, 50);
+          });
+        }
       }, 2000);
     }
 
@@ -147,7 +161,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, purchase, inEditMode]);
+  }, [hasChanges, inEditMode]);
 
   // Save on unmount if there are pending changes
   useEffect(() => {
