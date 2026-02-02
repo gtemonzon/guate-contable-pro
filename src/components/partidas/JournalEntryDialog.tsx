@@ -275,10 +275,23 @@ export default function JournalEntryDialog({
       if (periodsError) throw periodsError;
       setPeriods(periodsData || []);
 
-      // Auto-seleccionar período si hay uno que contenga la fecha actual
+      // Obtener la fecha de la última partida creada para usarla como predeterminada
+      const { data: lastEntry } = await supabase
+        .from("tab_journal_entries")
+        .select("entry_date")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const defaultDate = lastEntry?.entry_date || new Date().toISOString().split('T')[0];
+      setEntryDate(defaultDate);
+
+      // Auto-seleccionar período si hay uno que contenga la fecha predeterminada
       if (periodsData && periodsData.length > 0) {
         const currentPeriod = periodsData.find(p => 
-          entryDate >= p.start_date && entryDate <= p.end_date
+          defaultDate >= p.start_date && defaultDate <= p.end_date
         );
         if (currentPeriod) {
           setPeriodId(currentPeriod.id);
