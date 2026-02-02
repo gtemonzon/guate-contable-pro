@@ -308,6 +308,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
+                id={`purchase-${index}-invoice_series`}
                 value={purchase.invoice_series}
                 onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
                 placeholder="A"
