@@ -23,6 +23,7 @@ import {
 
 interface SaleEntry {
   id?: number;
+  client_id?: string;
   invoice_series: string;
   invoice_number: string;
   invoice_date: string;
@@ -44,11 +45,12 @@ interface SaleEntry {
 interface SalesCardProps {
   sale: SaleEntry;
   index: number;
+  rowId: string;
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   incomeAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
-  onSave: (index: number) => void;
+  onSave: (rowId: string) => void;
   onDelete: (index: number) => void;
   onToggleAnnulled: (index: number) => void;
   isHighlighted?: boolean;
@@ -64,6 +66,7 @@ export interface SalesCardRef {
 export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ 
   sale, 
   index, 
+  rowId,
   felDocTypes, 
   operationTypes, 
   incomeAccounts, 
@@ -144,7 +147,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         
         // Perform save
-        onSave(index);
+        onSave(rowId);
         setHasChanges(false);
         
         // Restore focus after a small delay to allow React to settle
@@ -172,7 +175,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   useEffect(() => {
     return () => {
       if (hasChanges) {
-        onSave(index);
+        onSave(rowId);
       }
     };
   }, []);
@@ -197,7 +200,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    onSave(index);
+    onSave(rowId);
     setHasChanges(false);
     onCancelEdit?.();
   };
@@ -314,7 +317,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 <label className="text-xs text-muted-foreground">Fecha</label>
                 <Input
                   ref={dateInputRef}
-                  id={`sale-${index}-invoice_date`}
+                  id={`sale-${rowId}-invoice_date`}
                   type="date"
                   value={sale.invoice_date}
                   onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -325,7 +328,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
-                id={`sale-${index}-invoice_series`}
+                id={`sale-${rowId}-invoice_series`}
                 value={sale.invoice_series}
                 onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
                 placeholder="A"
@@ -335,7 +338,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
-                id={`sale-${index}-invoice_number`}
+                id={`sale-${rowId}-invoice_number`}
                 value={sale.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
                 placeholder="12345"
