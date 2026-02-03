@@ -683,7 +683,10 @@ export default function LibrosFiscales() {
     }
   };
 
-  const addNewPurchase = useCallback(() => {
+  // Guard ref to prevent multiple rapid shortcut presses
+  const isCreatingNewRef = useRef(false);
+
+  const createPurchaseEntry = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
@@ -704,12 +707,16 @@ export default function LibrosFiscales() {
       journal_entry_id: null,
       isNew: true,
     };
-    setPurchases((prev) => [newEntry, ...prev]);
+    setPurchases((prev) => {
+      const updated = [newEntry, ...prev];
+      purchasesRef.current = updated;
+      return updated;
+    });
     setEditingPurchaseIndex(0);
     setPendingFocusTab("compras");
   }, [selectedYear, selectedMonth, felDocTypes, lastExpenseAccountId, lastBankAccountId]);
 
-  const addNewSale = useCallback(() => {
+  const createSaleEntry = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
@@ -729,10 +736,50 @@ export default function LibrosFiscales() {
       journal_entry_id: null,
       isNew: true,
     };
-    setSales((prev) => [newEntry, ...prev]);
+    setSales((prev) => {
+      const updated = [newEntry, ...prev];
+      salesRef.current = updated;
+      return updated;
+    });
     setEditingSaleIndex(0);
     setPendingFocusTab("ventas");
   }, [selectedYear, selectedMonth, felDocTypes, lastIncomeAccountId]);
+
+  // Save current record first, then create new one
+  const addNewPurchase = useCallback(async () => {
+    if (isCreatingNewRef.current) return;
+    isCreatingNewRef.current = true;
+
+    try {
+      // If there's a record being edited, save it first
+      if (editingPurchaseIndex !== null && purchasesRef.current[editingPurchaseIndex]) {
+        await savePurchaseRow(editingPurchaseIndex);
+      }
+      // Now create the new entry
+      createPurchaseEntry();
+    } finally {
+      isCreatingNewRef.current = false;
+    }
+  }, [editingPurchaseIndex, createPurchaseEntry]);
+
+  const addNewSale = useCallback(async () => {
+    if (isCreatingNewRef.current) return;
+    isCreatingNewRef.current = true;
+
+    try {
+      // If there's a record being edited, save it first
+      if (editingSaleIndex !== null && salesRef.current[editingSaleIndex]) {
+        const entry = salesRef.current[editingSaleIndex];
+        if (entry.client_id) {
+          await saveSaleRow(entry.client_id);
+        }
+      }
+      // Now create the new entry
+      createSaleEntry();
+    } finally {
+      isCreatingNewRef.current = false;
+    }
+  }, [editingSaleIndex, createSaleEntry]);
 
   // Focus the edited/new row once it exists in the DOM
   useEffect(() => {
@@ -749,6 +796,7 @@ export default function LibrosFiscales() {
   }, [pendingFocusTab, purchases.length, sales.length]);
 
   // Keyboard shortcut: Ctrl+Alt+Plus (numpad) -> new invoice on current tab
+  // Now saves current record BEFORE creating new one
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Alt+Plus (numpad or regular +)
