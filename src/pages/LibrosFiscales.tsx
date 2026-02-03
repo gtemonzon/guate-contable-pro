@@ -777,6 +777,8 @@ export default function LibrosFiscales() {
         updated[index].vat_amount = vat;
       }
 
+      // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
+      purchasesRef.current = updated;
       return updated;
     });
   };
@@ -796,6 +798,8 @@ export default function LibrosFiscales() {
         updated[index].vat_amount = vat;
       }
 
+      // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
+      salesRef.current = updated;
       return updated;
     });
   };
@@ -968,9 +972,55 @@ export default function LibrosFiscales() {
           localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
         }
       } else if (entry.id) {
+        // DB-first merge guard:
+        // Prevent stale UI state (e.g., during tab/month changes or rapid shortcuts)
+        // from overwriting already-saved data with empty strings/nulls/zeros.
+        const { data: fresh, error: freshError } = await supabase
+          .from("tab_sales_ledger")
+          .select(
+            "invoice_series, invoice_number, invoice_date, fel_document_type, customer_nit, customer_name, total_amount, vat_amount, net_amount, income_account_id, operation_type_id"
+          )
+          .eq("id", entry.id)
+          .maybeSingle();
+
+        if (freshError) throw freshError;
+
+        const safeUpdate = {
+          ...entryData,
+          // strings
+          invoice_series: (entryData.invoice_series && String(entryData.invoice_series).trim() !== "")
+            ? entryData.invoice_series
+            : (fresh?.invoice_series ?? entryData.invoice_series),
+          invoice_number: (entryData.invoice_number && String(entryData.invoice_number).trim() !== "")
+            ? entryData.invoice_number
+            : (fresh?.invoice_number ?? entryData.invoice_number),
+          customer_nit: (entryData.customer_nit && String(entryData.customer_nit).trim() !== "")
+            ? entryData.customer_nit
+            : (fresh?.customer_nit ?? entryData.customer_nit),
+          customer_name: (entryData.customer_name && String(entryData.customer_name).trim() !== "")
+            ? entryData.customer_name
+            : (fresh?.customer_name ?? entryData.customer_name),
+          // nullable ids
+          operation_type_id: entryData.operation_type_id ?? (fresh?.operation_type_id ?? null),
+          income_account_id: entryData.income_account_id ?? (fresh?.income_account_id ?? null),
+          // amounts: if UI is 0 but DB already has a value, keep DB
+          total_amount:
+            Number(entryData.total_amount) === 0 && Number(fresh?.total_amount ?? 0) !== 0
+              ? Number(fresh?.total_amount)
+              : entryData.total_amount,
+          vat_amount:
+            Number(entryData.vat_amount) === 0 && Number(fresh?.vat_amount ?? 0) !== 0
+              ? Number(fresh?.vat_amount)
+              : entryData.vat_amount,
+          net_amount:
+            Number(entryData.net_amount) === 0 && Number(fresh?.net_amount ?? 0) !== 0
+              ? Number(fresh?.net_amount)
+              : entryData.net_amount,
+        };
+
         const { error } = await supabase
           .from("tab_sales_ledger")
-          .update(entryData)
+          .update(safeUpdate)
           .eq("id", entry.id);
 
         if (error) throw error;
