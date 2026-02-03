@@ -456,10 +456,34 @@ export default function LibroVentas() {
   const saveRow = async (index: number) => {
     const entry = sales[index];
     if (!currentEnterpriseId) return;
+    if (!entry) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
+
+      // Database-first guard: evitar que un estado local desactualizado borre campos críticos
+      // (p.ej. operation_type_id) cuando en la BD ya existe un valor.
+      let safeOperationTypeId = entry.operation_type_id;
+      if (entry.id && (safeOperationTypeId === null || safeOperationTypeId === undefined)) {
+        const { data: fresh, error: freshError } = await supabase
+          .from("tab_sales_ledger")
+          .select("operation_type_id")
+          .eq("id", entry.id)
+          .maybeSingle();
+
+        if (!freshError && fresh?.operation_type_id) {
+          safeOperationTypeId = fresh.operation_type_id;
+          // Sincronizar UI con el valor autoritativo
+          setSales((prev) => {
+            const next = [...prev];
+            if (next[index]?.id === entry.id) {
+              next[index] = { ...next[index], operation_type_id: safeOperationTypeId };
+            }
+            return next;
+          });
+        }
+      }
 
       // Buscar período contable que contenga la fecha de la factura
       console.log("Buscando período para fecha:", entry.invoice_date, "empresa:", currentEnterpriseId);
@@ -497,7 +521,7 @@ export default function LibroVentas() {
         vat_amount: entry.vat_amount,
         net_amount: entry.net_amount,
         income_account_id: entry.income_account_id,
-        operation_type_id: entry.operation_type_id,
+        operation_type_id: safeOperationTypeId ?? null,
       };
       
       // Guardar última cuenta usada
@@ -1189,15 +1213,7 @@ export default function LibroVentas() {
                     operationTypes={operationTypes}
                     incomeAccounts={incomeAccounts}
                     onUpdate={updateRow}
-                    onSave={(idx) => {
-                      saveRow(idx);
-                      // Clear isNew flag after save
-                      if (sales[idx].isNew) {
-                        const updated = [...sales];
-                        updated[idx] = { ...updated[idx], isNew: false };
-                        setSales(updated);
-                      }
-                    }}
+                    onSave={saveRow}
                     onDelete={deleteRow}
                     onToggleAnnulled={toggleAnnulled}
                     isEditing={editingIndex === realIndex}
