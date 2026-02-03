@@ -14,6 +14,7 @@ import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SaveStatusIndicator, SaveStatus } from "@/components/ui/save-status-indicator";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,8 @@ export default function LibroVentas() {
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
   const [focusNewRow, setFocusNewRow] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const newCardRef = useRef<SalesCardRef>(null);
   const salesRef = useRef<SaleEntry[]>([]);
@@ -469,6 +472,12 @@ export default function LibroVentas() {
     if (!currentEnterpriseId) return;
     if (!entry) return;
 
+    // Mostrar indicador de guardando
+    setSaveStatus("saving");
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
@@ -561,11 +570,6 @@ export default function LibroVentas() {
           next[idx] = { ...data, client_id: rowId, isNew: false };
           return next;
         });
-
-        toast({
-          title: "Factura guardada",
-          description: "La factura se guardó correctamente",
-        });
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_sales_ledger")
@@ -576,14 +580,16 @@ export default function LibroVentas() {
           console.error("Error detallado al actualizar:", error);
           throw error;
         }
-
-        toast({
-          title: "Factura actualizada",
-          description: "Los cambios se guardaron correctamente",
-        });
       }
+
+      // Mostrar indicador de guardado exitoso
+      setSaveStatus("saved");
+      saveStatusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 3000);
     } catch (error: any) {
       console.error("Error completo:", error);
+      setSaveStatus("idle");
       let errorMessage = getSafeErrorMessage(error);
       
       // Mensajes más específicos según el error
@@ -994,7 +1000,10 @@ export default function LibroVentas() {
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold">Libro de Ventas</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Libro de Ventas</h1>
+            <SaveStatusIndicator status={saveStatus} />
+          </div>
           <p className="text-muted-foreground">Registro mensual de facturas de venta</p>
           
           <div className="mt-4 space-y-3 text-sm">
