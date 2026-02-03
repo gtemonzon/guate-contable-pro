@@ -32,6 +32,7 @@ interface FELDocumentType {
 
 interface SaleEntry {
   id?: number;
+  client_id: string;
   invoice_series: string;
   invoice_number: string;
   invoice_date: string;
@@ -83,8 +84,13 @@ export default function LibroVentas() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   
   const newCardRef = useRef<SalesCardRef>(null);
+  const salesRef = useRef<SaleEntry[]>([]);
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    salesRef.current = sales;
+  }, [sales]);
 
   // Get unique establishments from sales data
   const establishments = useMemo(() => {
@@ -353,7 +359,10 @@ export default function LibroVentas() {
           .order("invoice_date", { ascending: true })
           .order("invoice_number", { ascending: true })
       );
-      setSales(data || []);
+      setSales((data || []).map((row: any) => ({
+        ...row,
+        client_id: `db-${row.id}`,
+      })));
 
       // Verificar si ya existe póliza consolidada para este mes
       await checkExistingJournalEntry(enterpriseId, month, year);
@@ -380,6 +389,7 @@ export default function LibroVentas() {
     }
 
     const newEntry: SaleEntry = {
+      client_id: `tmp-${crypto.randomUUID()}`,
       invoice_series: "",
       invoice_number: "",
       invoice_date: defaultDate,
@@ -453,8 +463,9 @@ export default function LibroVentas() {
     setSales(updated);
   };
 
-  const saveRow = async (index: number) => {
-    const entry = sales[index];
+  const saveRow = async (rowId: string) => {
+    const index = salesRef.current.findIndex((s) => s.client_id === rowId);
+    const entry = index >= 0 ? salesRef.current[index] : undefined;
     if (!currentEnterpriseId) return;
     if (!entry) return;
 
@@ -477,8 +488,9 @@ export default function LibroVentas() {
           // Sincronizar UI con el valor autoritativo
           setSales((prev) => {
             const next = [...prev];
-            if (next[index]?.id === entry.id) {
-              next[index] = { ...next[index], operation_type_id: safeOperationTypeId };
+            const idx = next.findIndex((s) => s.client_id === rowId);
+            if (idx >= 0 && next[idx]?.id === entry.id) {
+              next[idx] = { ...next[idx], operation_type_id: safeOperationTypeId };
             }
             return next;
           });
@@ -542,9 +554,13 @@ export default function LibroVentas() {
           throw error;
         }
 
-        const updated = [...sales];
-        updated[index] = { ...data, isNew: false };
-        setSales(updated);
+        setSales((prev) => {
+          const next = [...prev];
+          const idx = next.findIndex((s) => s.client_id === rowId);
+          if (idx < 0) return prev;
+          next[idx] = { ...data, client_id: rowId, isNew: false };
+          return next;
+        });
 
         toast({
           title: "Factura guardada",
@@ -1205,10 +1221,11 @@ export default function LibroVentas() {
                 const isLastItem = realIndex === sales.length - 1;
                 return (
                   <SalesCard
-                    key={sale.id || `new-${index}`}
+                    key={sale.client_id}
                     ref={isLastItem ? newCardRef : undefined}
                     sale={sale}
                     index={realIndex}
+                    rowId={sale.client_id}
                     felDocTypes={felDocTypes}
                     operationTypes={operationTypes}
                     incomeAccounts={incomeAccounts}

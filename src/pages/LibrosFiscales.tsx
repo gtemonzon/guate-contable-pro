@@ -49,6 +49,7 @@ interface PurchaseEntry {
 
 interface SaleEntry {
   id?: number;
+  client_id: string;
   invoice_series: string;
   invoice_number: string;
   invoice_date: string;
@@ -523,7 +524,10 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      setSales(data || []);
+      setSales((data || []).map((row: any) => ({
+        ...row,
+        client_id: `db-${row.id}`,
+      })));
 
       // Verificar pólizas existentes para ventas y compras
       await checkExistingJournalEntries(enterpriseId, month, year);
@@ -705,6 +709,7 @@ export default function LibrosFiscales() {
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const newEntry: SaleEntry = {
+      client_id: `tmp-${crypto.randomUUID()}`,
       invoice_series: "",
       invoice_number: "",
       invoice_date: defaultDate,
@@ -892,8 +897,9 @@ export default function LibrosFiscales() {
     }
   };
 
-  const saveSaleRow = async (index: number) => {
-    const entry = salesRef.current[index];
+  const saveSaleRow = async (rowId: string) => {
+    const index = salesRef.current.findIndex((s) => s.client_id === rowId);
+    const entry = index >= 0 ? salesRef.current[index] : undefined;
     if (!currentEnterpriseId) return;
     if (!entry) return;
 
@@ -936,8 +942,9 @@ export default function LibrosFiscales() {
 
         setSales((prev) => {
           const updated = [...prev];
-          if (!updated[index]) return prev;
-          updated[index] = { ...data, isNew: false };
+          const idx = updated.findIndex((s) => s.client_id === rowId);
+          if (idx < 0) return prev;
+          updated[idx] = { ...data, client_id: rowId, isNew: false };
           return updated;
         });
 
@@ -1356,10 +1363,11 @@ export default function LibrosFiscales() {
                 <div className="space-y-2">
                   {sales.map((sale, index) => (
                     <SalesCard
-                      key={sale.id || `new-${index}`}
+                      key={sale.client_id}
                       ref={editingSaleIndex === index ? saleEditRef : undefined}
                       sale={sale}
                       index={index}
+                      rowId={sale.client_id}
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       incomeAccounts={incomeAccounts}
