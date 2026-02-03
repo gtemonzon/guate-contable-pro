@@ -15,6 +15,7 @@ import { SalesCard, type SalesCardRef } from "@/components/ventas/SalesCard";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { InvoiceSearchDialog } from "@/components/search/InvoiceSearchDialog";
+import { SaveStatusIndicator, type SaveStatus } from "@/components/ui/save-status-indicator";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
@@ -130,6 +131,10 @@ export default function LibrosFiscales() {
   useEffect(() => {
     salesRef.current = sales;
   }, [sales]);
+
+  // Save status indicator state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
 
@@ -811,6 +816,12 @@ export default function LibrosFiscales() {
       return;
     }
 
+    // Start save indicator
+    setSaveStatus("saving");
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
+    }
+
     try {
       const entryData = {
         purchase_book_id: currentBookId,
@@ -856,11 +867,6 @@ export default function LibrosFiscales() {
           setLastBankAccountId(entry.bank_account_id);
           localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
         }
-
-        toast({
-          title: "Factura guardada",
-          description: "La factura de compra se guardó correctamente",
-        });
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_purchase_ledger")
@@ -878,13 +884,15 @@ export default function LibrosFiscales() {
           setLastBankAccountId(entry.bank_account_id);
           localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
         }
-
-        toast({
-          title: "Factura actualizada",
-          description: "Los cambios se guardaron correctamente",
-        });
       }
+
+      // Show saved indicator and auto-hide after 3 seconds
+      setSaveStatus("saved");
+      saveStatusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 3000);
     } catch (error: any) {
+      setSaveStatus("idle");
       const errorMessage = error.message?.includes("unique_purchase_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
         : getSafeErrorMessage(error);
@@ -912,6 +920,12 @@ export default function LibrosFiscales() {
         variant: "destructive",
       });
       return;
+    }
+
+    // Start save indicator
+    setSaveStatus("saving");
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
     }
 
     try {
@@ -953,11 +967,6 @@ export default function LibrosFiscales() {
           setLastIncomeAccountId(entry.income_account_id);
           localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
         }
-
-        toast({
-          title: "Factura guardada",
-          description: "La factura de venta se guardó correctamente",
-        });
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_sales_ledger")
@@ -971,13 +980,15 @@ export default function LibrosFiscales() {
           setLastIncomeAccountId(entry.income_account_id);
           localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
         }
-
-        toast({
-          title: "Factura actualizada",
-          description: "Los cambios se guardaron correctamente",
-        });
       }
+
+      // Show saved indicator and auto-hide after 3 seconds
+      setSaveStatus("saved");
+      saveStatusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 3000);
     } catch (error: any) {
+      setSaveStatus("idle");
       const errorMessage = error.message?.includes("unique_sales_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
         : getSafeErrorMessage(error);
@@ -1107,7 +1118,10 @@ export default function LibrosFiscales() {
       <div className="sticky top-0 z-10 bg-background pb-4 space-y-4">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
+              <SaveStatusIndicator status={saveStatus} />
+            </div>
             <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
           </div>
           <div className="flex gap-4 items-end">
