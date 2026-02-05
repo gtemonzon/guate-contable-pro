@@ -1255,7 +1255,7 @@ const Ayuda = () => {
   const whatsappMessage = encodeURIComponent(
     `Hola!, necesito apoyo con Sistema contable en ${currentTenant?.tenant_name || "mi empresa"}`,
   );
-  const whatsappUrl = `https://api.whatsapp.com/send?phone=${whatsappNumber}?text=${whatsappMessage}`;
+  const whatsappUrl = `https://api.whatsapp.com/send?phone=${whatsappNumber}&text=${whatsappMessage}`;
 
   return (
     <div className="container mx-auto py-6 max-w-5xl">
