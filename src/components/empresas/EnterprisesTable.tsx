@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Wand2 } from "lucide-react";
+import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Wand2, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -41,11 +42,12 @@ interface EnterprisesTableProps {
 
 export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
   const { toast } = useToast();
+  const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
   const [activePeriods, setActivePeriods] = useState<Record<number, string>>({});
-
+  const [exportingId, setExportingId] = useState<number | null>(null);
   useEffect(() => {
     const storedId = localStorage.getItem("currentEnterpriseId");
     if (storedId) {
@@ -369,6 +371,33 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                         <TooltipContent>Asistente de configuración</TooltipContent>
                       </Tooltip>
                     )}
+
+                    {/* Botón Descargar Backup */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={async () => {
+                            setExportingId(enterprise.id);
+                            await exportEnterpriseData({
+                              enterpriseId: enterprise.id,
+                              enterpriseName: enterprise.business_name,
+                            });
+                            setExportingId(null);
+                          }}
+                          disabled={exportingId === enterprise.id}
+                        >
+                          {exportingId === enterprise.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Descargar backup (Excel)</TooltipContent>
+                    </Tooltip>
 
                     {/* Botón Reactivar (solo si está inactiva) */}
                     {isInactive && (

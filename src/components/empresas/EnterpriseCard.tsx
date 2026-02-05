@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList, Wand2 } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList, Wand2, Download, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -57,6 +58,7 @@ const MONTH_NAMES = [
 
 export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: EnterpriseCardProps) {
   const { toast } = useToast();
+  const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
   const [isSelected, setIsSelected] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [documentsCount, setDocumentsCount] = useState(0);
@@ -488,6 +490,22 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
               <Wand2 className="h-4 w-4" />
             </Button>
           )}
+          <Button 
+            variant="outline" 
+            size="icon"
+            onClick={() => exportEnterpriseData({
+              enterpriseId: enterprise.id,
+              enterpriseName: enterprise.business_name,
+            })}
+            disabled={isExporting}
+            title="Descargar backup (Excel)"
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </Button>
           <Button 
             variant="outline" 
             size="icon"
