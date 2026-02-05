@@ -1,17 +1,17 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { 
-  Search, 
-  Home, 
-  Building2, 
-  Users, 
-  Settings, 
-  BookOpen, 
-  FileText, 
-  ShoppingCart, 
-  Receipt, 
-  Calculator, 
-  FileBarChart, 
+import {
+  Search,
+  Home,
+  Building2,
+  Users,
+  Settings,
+  BookOpen,
+  FileText,
+  ShoppingCart,
+  Receipt,
+  Calculator,
+  FileBarChart,
   HelpCircle,
   ChevronRight,
   ExternalLink,
@@ -25,10 +25,10 @@ import {
   Building,
   Keyboard,
   Download,
-  MessageCircle
+  MessageCircle,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
-import jsPDF from 'jspdf';
+import jsPDF from "jspdf";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,26 +72,30 @@ const helpSections: HelpSection[] = [
     steps: [
       {
         title: "Iniciar Sesión",
-        description: "Ingrese su correo electrónico y contraseña en la pantalla de inicio de sesión. Si olvidó su contraseña, use el enlace 'Olvidé mi contraseña' para recuperarla."
+        description:
+          "Ingrese su correo electrónico y contraseña en la pantalla de inicio de sesión. Si olvidó su contraseña, use el enlace 'Olvidé mi contraseña' para recuperarla.",
       },
       {
         title: "Seleccionar Empresa",
-        description: "Al ingresar, vaya a Administración → Empresas y haga clic en 'Seleccionar' en la tarjeta de la empresa con la que desea trabajar. La empresa activa se muestra en la barra superior."
+        description:
+          "Al ingresar, vaya a Administración → Empresas y haga clic en 'Seleccionar' en la tarjeta de la empresa con la que desea trabajar. La empresa activa se muestra en la barra superior.",
       },
       {
         title: "Navegar el Sistema",
-        description: "Use el menú lateral izquierdo para acceder a las diferentes secciones. El menú se puede colapsar haciendo clic en el ícono de hamburguesa."
+        description:
+          "Use el menú lateral izquierdo para acceder a las diferentes secciones. El menú se puede colapsar haciendo clic en el ícono de hamburguesa.",
       },
       {
         title: "Centro de Notificaciones",
-        description: "En la barra superior encontrará el ícono de campana que muestra las notificaciones y alertas pendientes del sistema."
-      }
+        description:
+          "En la barra superior encontrará el ícono de campana que muestra las notificaciones y alertas pendientes del sistema.",
+      },
     ],
     tips: [
       "La empresa activa se guarda automáticamente y persistirá entre sesiones.",
       "El Dashboard muestra un resumen financiero de la empresa seleccionada.",
-      "Las notificaciones incluyen alertas de vencimientos de impuestos, tareas pendientes y recordatorios personalizados."
-    ]
+      "Las notificaciones incluyen alertas de vencimientos de impuestos, tareas pendientes y recordatorios personalizados.",
+    ],
   },
   {
     id: "dashboard",
@@ -102,30 +106,33 @@ const helpSections: HelpSection[] = [
     steps: [
       {
         title: "Indicadores Financieros (KPIs)",
-        description: "Visualice Total Activos, Total Pasivos, Utilidad del Mes y Liquidez. Cada tarjeta muestra el porcentaje de cambio respecto al mes anterior."
+        description:
+          "Visualice Total Activos, Total Pasivos, Utilidad del Mes y Liquidez. Cada tarjeta muestra el porcentaje de cambio respecto al mes anterior.",
       },
       {
         title: "Gráficas Anuales",
-        description: "Dos gráficas de líneas muestran las tendencias de Ventas y Compras mensuales del año en curso."
+        description: "Dos gráficas de líneas muestran las tendencias de Ventas y Compras mensuales del año en curso.",
       },
       {
         title: "Resumen Mensual",
-        description: "Tarjetas con el total de compras y ventas del mes actual, incluyendo el número de documentos procesados."
+        description:
+          "Tarjetas con el total de compras y ventas del mes actual, incluyendo el número de documentos procesados.",
       },
       {
         title: "Últimas Partidas",
-        description: "Lista de las partidas contables más recientes registradas en el sistema."
+        description: "Lista de las partidas contables más recientes registradas en el sistema.",
       },
       {
         title: "Alertas del Dashboard",
-        description: "Se muestran alertas importantes como vencimientos próximos de impuestos, períodos sin cerrar y tareas pendientes."
-      }
+        description:
+          "Se muestran alertas importantes como vencimientos próximos de impuestos, períodos sin cerrar y tareas pendientes.",
+      },
     ],
     tips: [
       "Los datos del Dashboard se actualizan automáticamente al seleccionar una empresa diferente.",
       "Haga clic en las gráficas para ver el detalle de cada mes.",
-      "Las alertas en rojo indican vencimientos inmediatos que requieren atención urgente."
-    ]
+      "Las alertas en rojo indican vencimientos inmediatos que requieren atención urgente.",
+    ],
   },
   {
     id: "atajos",
@@ -136,26 +143,30 @@ const helpSections: HelpSection[] = [
     steps: [
       {
         title: "Nuevo Registro en Libros Fiscales",
-        description: "Presione Ctrl+Alt++ (tecla más del teclado numérico) para crear rápidamente un nuevo registro de compra o venta sin usar el mouse."
+        description:
+          "Presione Ctrl+Alt++ (tecla más del teclado numérico) para crear rápidamente un nuevo registro de compra o venta sin usar el mouse.",
       },
       {
         title: "Guardado Automático",
-        description: "Los cambios en los libros fiscales se guardan automáticamente cada 3 segundos. No es necesario presionar un botón de guardar."
+        description:
+          "Los cambios en los libros fiscales se guardan automáticamente cada 3 segundos. No es necesario presionar un botón de guardar.",
       },
       {
         title: "Navegación Rápida",
-        description: "Use Tab para moverse entre campos y Enter para confirmar selecciones en los selectores desplegables."
+        description:
+          "Use Tab para moverse entre campos y Enter para confirmar selecciones en los selectores desplegables.",
       },
       {
         title: "Búsqueda Global",
-        description: "En cualquier lista o catálogo, use Ctrl+F o el campo de búsqueda para filtrar rápidamente los registros."
-      }
+        description:
+          "En cualquier lista o catálogo, use Ctrl+F o el campo de búsqueda para filtrar rápidamente los registros.",
+      },
     ],
     tips: [
       "Al usar Ctrl+Alt++ el sistema guarda automáticamente el registro actual antes de crear uno nuevo.",
       "Los campos se validan en tiempo real para evitar errores de captura.",
-      "En el selector de cuentas, escriba el código o nombre para filtrar rápidamente."
-    ]
+      "En el selector de cuentas, escriba el código o nombre para filtrar rápidamente.",
+    ],
   },
   {
     id: "administracion",
@@ -171,30 +182,35 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Usuarios",
-            description: "La lista muestra todos los usuarios registrados con su nombre, correo, rol, última actividad y estado (activo/inactivo)."
+            description:
+              "La lista muestra todos los usuarios registrados con su nombre, correo, rol, última actividad y estado (activo/inactivo).",
           },
           {
             title: "Indicador de Actividad",
-            description: "Cada usuario muestra un indicador de actividad: verde (activo recientemente), amarillo (inactivo por horas) o gris (inactivo por días)."
+            description:
+              "Cada usuario muestra un indicador de actividad: verde (activo recientemente), amarillo (inactivo por horas) o gris (inactivo por días).",
           },
           {
             title: "Crear Usuario",
-            description: "Haga clic en 'Nuevo Usuario', complete el formulario con nombre, correo y contraseña, y asigne el rol correspondiente."
+            description:
+              "Haga clic en 'Nuevo Usuario', complete el formulario con nombre, correo y contraseña, y asigne el rol correspondiente.",
           },
           {
             title: "Roles de Usuario",
-            description: "Asigne roles: Super Admin, Admin Tenant, Admin Empresa, Contador Senior, Contador Junior o Auxiliar. Cada rol tiene permisos específicos."
+            description:
+              "Asigne roles: Super Admin, Admin Tenant, Admin Empresa, Contador Senior, Contador Junior o Auxiliar. Cada rol tiene permisos específicos.",
           },
           {
             title: "Asignar Empresas",
-            description: "Vincule al usuario con las empresas a las que tendrá acceso. Un usuario puede tener acceso a múltiples empresas."
-          }
+            description:
+              "Vincule al usuario con las empresas a las que tendrá acceso. Un usuario puede tener acceso a múltiples empresas.",
+          },
         ],
         tips: [
           "Los usuarios inactivos no pueden iniciar sesión en el sistema.",
           "El rol determina qué secciones y acciones puede realizar el usuario.",
-          "Use la matriz de permisos en Configuración para personalizar los accesos por rol."
-        ]
+          "Use la matriz de permisos en Configuración para personalizar los accesos por rol.",
+        ],
       },
       {
         id: "empresas",
@@ -204,43 +220,49 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Empresas",
-            description: "Se muestran todas las empresas en formato de tarjetas o tabla con información clave: NIT, régimen fiscal, períodos activos y documentos."
+            description:
+              "Se muestran todas las empresas en formato de tarjetas o tabla con información clave: NIT, régimen fiscal, períodos activos y documentos.",
           },
           {
             title: "Crear Nueva Empresa",
-            description: "Haga clic en 'Nueva Empresa' y complete: NIT, Razón Social, Nombre Comercial, Régimen Fiscal (General/Pequeño Contribuyente), dirección, teléfono y correo."
+            description:
+              "Haga clic en 'Nueva Empresa' y complete: NIT, Razón Social, Nombre Comercial, Régimen Fiscal (General/Pequeño Contribuyente), dirección, teléfono y correo.",
           },
           {
             title: "Asistente de Configuración",
-            description: "El sistema incluye un asistente que guía paso a paso la configuración inicial: catálogo de cuentas, cuentas especiales, formularios de impuestos y más."
+            description:
+              "El sistema incluye un asistente que guía paso a paso la configuración inicial: catálogo de cuentas, cuentas especiales, formularios de impuestos y más.",
           },
           {
             title: "Seleccionar Empresa Activa",
-            description: "Haga clic en 'Seleccionar' en la tarjeta de la empresa. Esta será la empresa con la que trabajará en todas las demás secciones."
+            description:
+              "Haga clic en 'Seleccionar' en la tarjeta de la empresa. Esta será la empresa con la que trabajará en todas las demás secciones.",
           },
           {
             title: "Períodos Contables",
-            description: "Dentro de cada empresa, en la pestaña 'Períodos Contables', puede crear y gestionar los períodos fiscales (usualmente anuales)."
+            description:
+              "Dentro de cada empresa, en la pestaña 'Períodos Contables', puede crear y gestionar los períodos fiscales (usualmente anuales).",
           },
           {
             title: "Impuestos Configurados",
-            description: "La pestaña 'Impuestos' muestra qué formularios SAT están habilitados para esta empresa."
+            description: "La pestaña 'Impuestos' muestra qué formularios SAT están habilitados para esta empresa.",
           },
           {
             title: "Documentos de Empresa",
-            description: "En la pestaña 'Documentos', suba archivos importantes como patentes, RTU, escrituras, etc."
+            description: "En la pestaña 'Documentos', suba archivos importantes como patentes, RTU, escrituras, etc.",
           },
           {
             title: "Descargar Backup",
-            description: "Use el botón de descarga para exportar toda la información de la empresa en un archivo Excel con múltiples hojas (una por tabla)."
-          }
+            description:
+              "Use el botón de descarga para exportar toda la información de la empresa en un archivo Excel con múltiples hojas (una por tabla).",
+          },
         ],
         tips: [
           "El régimen fiscal afecta el cálculo de impuestos en las declaraciones.",
           "Mantenga los períodos contables actualizados para el correcto registro de transacciones.",
           "El backup incluye: cuentas, partidas, compras, ventas, formularios, configuración y más.",
-          "Use el asistente de configuración para empresas nuevas - ahorra tiempo y evita errores."
-        ]
+          "Use el asistente de configuración para empresas nuevas - ahorra tiempo y evita errores.",
+        ],
       },
       {
         id: "bitacora",
@@ -251,30 +273,32 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Registro de Acciones",
-            description: "La bitácora muestra todas las operaciones: quién, qué, cuándo y desde dónde se realizó cada acción."
+            description:
+              "La bitácora muestra todas las operaciones: quién, qué, cuándo y desde dónde se realizó cada acción.",
           },
           {
             title: "Filtrar por Tabla",
-            description: "Filtre por la tabla afectada: Partidas, Compras, Ventas, Cuentas, Usuarios, etc."
+            description: "Filtre por la tabla afectada: Partidas, Compras, Ventas, Cuentas, Usuarios, etc.",
           },
           {
             title: "Filtrar por Acción",
-            description: "Busque por tipo de acción: INSERT (creación), UPDATE (modificación) o DELETE (eliminación)."
+            description: "Busque por tipo de acción: INSERT (creación), UPDATE (modificación) o DELETE (eliminación).",
           },
           {
             title: "Filtrar por Usuario",
-            description: "Vea las acciones de un usuario específico para auditoría de actividad."
+            description: "Vea las acciones de un usuario específico para auditoría de actividad.",
           },
           {
             title: "Ver Detalle de Cambios",
-            description: "Haga clic en 'Ver detalles' para ver los valores anteriores y nuevos de cada campo modificado."
-          }
+            description:
+              "Haga clic en 'Ver detalles' para ver los valores anteriores y nuevos de cada campo modificado.",
+          },
         ],
         tips: [
           "La bitácora es de solo lectura - los registros no pueden ser modificados ni eliminados.",
           "Use los filtros de fecha para acotar la búsqueda a un período específico.",
-          "Los cambios sensibles como modificaciones de permisos quedan registrados automáticamente."
-        ]
+          "Los cambios sensibles como modificaciones de permisos quedan registrados automáticamente.",
+        ],
       },
       {
         id: "configuracion",
@@ -284,50 +308,60 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Cuentas Contables Especiales",
-            description: "Defina las cuentas de IVA (Débito/Crédito), Compras, Ventas, Clientes, Proveedores, Inventario Inicial/Final, Resultado del Período. Estas se usan para generar partidas automáticas."
+            description:
+              "Defina las cuentas de IVA (Débito/Crédito), Compras, Ventas, Clientes, Proveedores, Inventario Inicial/Final, Resultado del Período. Estas se usan para generar partidas automáticas.",
           },
           {
             title: "Estados Financieros",
-            description: "Diseñe el formato del Balance General y Estado de Resultados. Cree secciones (grupos, subtotales, totales) y asigne las cuentas correspondientes."
+            description:
+              "Diseñe el formato del Balance General y Estado de Resultados. Cree secciones (grupos, subtotales, totales) y asigne las cuentas correspondientes.",
           },
           {
             title: "Formularios de Impuestos",
-            description: "Configure qué tipos de formularios SAT aplican a la empresa (IVA General, IVA Pequeño Contribuyente, ISR Trimestral, ISO, etc.)."
+            description:
+              "Configure qué tipos de formularios SAT aplican a la empresa (IVA General, IVA Pequeño Contribuyente, ISR Trimestral, ISO, etc.).",
           },
           {
             title: "Vencimientos de Impuestos",
-            description: "Configure las fechas de vencimiento de cada impuesto: día fijo del mes, día hábil, con o sin considerar feriados."
+            description:
+              "Configure las fechas de vencimiento de cada impuesto: día fijo del mes, día hábil, con o sin considerar feriados.",
           },
           {
             title: "Tipos de Operaciones",
-            description: "Defina los tipos de operación para clasificar compras y ventas (Local, Importación, Exportación, Servicios, etc.)."
+            description:
+              "Defina los tipos de operación para clasificar compras y ventas (Local, Importación, Exportación, Servicios, etc.).",
           },
           {
             title: "Documentos FEL",
-            description: "Configure los tipos de documento electrónico: Factura, Nota de Crédito, Nota de Débito, etc., con su comportamiento (si suma o resta)."
+            description:
+              "Configure los tipos de documento electrónico: Factura, Nota de Crédito, Nota de Débito, etc., con su comportamiento (si suma o resta).",
           },
           {
             title: "Prefijos de Partidas",
-            description: "Configure los prefijos para numerar partidas según su tipo (PD para Diario, PA para Apertura, PC para Cierre, etc.)."
+            description:
+              "Configure los prefijos para numerar partidas según su tipo (PD para Diario, PA para Apertura, PC para Cierre, etc.).",
           },
           {
             title: "Configuración de Alertas",
-            description: "Defina con cuántos días de anticipación se generan alertas de vencimiento y si se envían por correo electrónico."
+            description:
+              "Defina con cuántos días de anticipación se generan alertas de vencimiento y si se envían por correo electrónico.",
           },
           {
             title: "Feriados",
-            description: "Registre los días feriados del país para el cálculo correcto de fechas de vencimiento cuando se consideran días hábiles."
+            description:
+              "Registre los días feriados del país para el cálculo correcto de fechas de vencimiento cuando se consideran días hábiles.",
           },
           {
             title: "Matriz de Permisos",
-            description: "Configure qué acciones puede realizar cada rol en el sistema: ver, crear, editar, eliminar, aprobar, etc."
-          }
+            description:
+              "Configure qué acciones puede realizar cada rol en el sistema: ver, crear, editar, eliminar, aprobar, etc.",
+          },
         ],
         tips: [
           "Configure las cuentas especiales antes de importar compras/ventas para que las partidas automáticas funcionen correctamente.",
           "El diseño de estados financieros permite personalizar la presentación según las necesidades de cada empresa.",
-          "Los feriados afectan el cálculo de vencimientos cuando está habilitada la opción 'Considerar días hábiles'."
-        ]
+          "Los feriados afectan el cálculo de vencimientos cuando está habilitada la opción 'Considerar días hábiles'.",
+        ],
       },
       {
         id: "notificaciones",
@@ -338,32 +372,36 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Centro de Notificaciones",
-            description: "Acceda desde el ícono de campana en la barra superior. Muestra todas las alertas pendientes con su prioridad."
+            description:
+              "Acceda desde el ícono de campana en la barra superior. Muestra todas las alertas pendientes con su prioridad.",
           },
           {
             title: "Tipos de Notificaciones",
-            description: "Vencimientos de impuestos, recordatorios personalizados, alertas del sistema y avisos de tareas pendientes."
+            description:
+              "Vencimientos de impuestos, recordatorios personalizados, alertas del sistema y avisos de tareas pendientes.",
           },
           {
             title: "Crear Recordatorio",
-            description: "Haga clic en 'Nuevo Recordatorio' para crear una alerta personalizada con fecha, título, descripción y prioridad."
+            description:
+              "Haga clic en 'Nuevo Recordatorio' para crear una alerta personalizada con fecha, título, descripción y prioridad.",
           },
           {
             title: "Marcar como Leída",
-            description: "Las notificaciones se pueden marcar como leídas individualmente o todas a la vez."
+            description: "Las notificaciones se pueden marcar como leídas individualmente o todas a la vez.",
           },
           {
             title: "Prioridades",
-            description: "Las notificaciones tienen prioridad: Urgente (rojo), Importante (amarillo) o Informativa (azul)."
-          }
+            description:
+              "Las notificaciones tienen prioridad: Urgente (rojo), Importante (amarillo) o Informativa (azul).",
+          },
         ],
         tips: [
           "Las notificaciones urgentes aparecen destacadas en el Dashboard.",
           "Los recordatorios completados se archivan automáticamente.",
-          "Configure en Configuración → Alertas cuántos días antes se generan los avisos."
-        ]
-      }
-    ]
+          "Configure en Configuración → Alertas cuántos días antes se generan los avisos.",
+        ],
+      },
+    ],
   },
   {
     id: "contabilidad",
@@ -379,38 +417,44 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Catálogo",
-            description: "El catálogo se muestra en formato de árbol jerárquico. Use la barra de búsqueda para filtrar por código o nombre de cuenta."
+            description:
+              "El catálogo se muestra en formato de árbol jerárquico. Use la barra de búsqueda para filtrar por código o nombre de cuenta.",
           },
           {
             title: "Crear Cuenta Manual",
-            description: "Haga clic en 'Nueva Cuenta' e ingrese: Código, Nombre, Tipo (Activo/Pasivo/Capital/Ingreso/Gasto), Tipo de Saldo (Deudor/Acreedor/Indiferente), y si permite movimientos."
+            description:
+              "Haga clic en 'Nueva Cuenta' e ingrese: Código, Nombre, Tipo (Activo/Pasivo/Capital/Ingreso/Gasto), Tipo de Saldo (Deudor/Acreedor/Indiferente), y si permite movimientos.",
           },
           {
             title: "Crear Cuenta Rápida (Atajo)",
-            description: "Junto a cada cuenta hay íconos '+' para crear una cuenta hermana (mismo nivel) o cuenta hija (subnivel). El código se calcula automáticamente."
+            description:
+              "Junto a cada cuenta hay íconos '+' para crear una cuenta hermana (mismo nivel) o cuenta hija (subnivel). El código se calcula automáticamente.",
           },
           {
             title: "Cuenta Bancaria",
-            description: "Marque la casilla 'Es cuenta bancaria' para cuentas de bancos. Estas aparecerán en el módulo de Conciliación Bancaria."
+            description:
+              "Marque la casilla 'Es cuenta bancaria' para cuentas de bancos. Estas aparecerán en el módulo de Conciliación Bancaria.",
           },
           {
             title: "Importar desde CSV",
-            description: "Haga clic en 'Importar' y suba un archivo CSV con las columnas: código, nombre, tipo, nivel. Puede descargar una plantilla de ejemplo."
+            description:
+              "Haga clic en 'Importar' y suba un archivo CSV con las columnas: código, nombre, tipo, nivel. Puede descargar una plantilla de ejemplo.",
           },
           {
             title: "Copiar de Otra Empresa",
-            description: "Use 'Copiar Catálogo' para duplicar todo el plan de cuentas de otra empresa existente."
+            description: "Use 'Copiar Catálogo' para duplicar todo el plan de cuentas de otra empresa existente.",
           },
           {
             title: "Eliminar Cuenta",
-            description: "Solo puede eliminar cuentas que no tengan movimientos registrados. Al eliminar una cuenta padre, se eliminarán también sus subcuentas."
-          }
+            description:
+              "Solo puede eliminar cuentas que no tengan movimientos registrados. Al eliminar una cuenta padre, se eliminarán también sus subcuentas.",
+          },
         ],
         tips: [
           "Las cuentas con 'Permite Movimiento = No' son cuentas de título (agrupación) y no pueden recibir asientos directos.",
           "El Tipo de Saldo 'Indiferente' permite que la cuenta tenga saldo deudor o acreedor sin validación de sobregiro.",
-          "Use el buscador de facturas (ícono de lupa en la barra superior) para encontrar facturas por número o proveedor/cliente."
-        ]
+          "Use el buscador de facturas (ícono de lupa en la barra superior) para encontrar facturas por número o proveedor/cliente.",
+        ],
       },
       {
         id: "partidas",
@@ -420,50 +464,60 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Partidas",
-            description: "Lista todas las partidas con número, fecha, descripción, totales y estado. Use los filtros de mes/año para buscar."
+            description:
+              "Lista todas las partidas con número, fecha, descripción, totales y estado. Use los filtros de mes/año para buscar.",
           },
           {
             title: "Filtrar por Tipo y Estado",
-            description: "Filtre por tipo de partida (Apertura, Diario, Ajuste, Cierre) y por estado (Borrador, Contabilizada, Anulada)."
+            description:
+              "Filtre por tipo de partida (Apertura, Diario, Ajuste, Cierre) y por estado (Borrador, Contabilizada, Anulada).",
           },
           {
             title: "Crear Partida",
-            description: "Haga clic en 'Nueva Partida'. Complete: Fecha, Tipo, Descripción. El número se genera automáticamente según el prefijo configurado."
+            description:
+              "Haga clic en 'Nueva Partida'. Complete: Fecha, Tipo, Descripción. El número se genera automáticamente según el prefijo configurado.",
           },
           {
             title: "Agregar Líneas de Detalle",
-            description: "Para cada línea: seleccione una Cuenta (use el buscador con código o nombre), ingrese Descripción (opcional), monto al Debe o al Haber."
+            description:
+              "Para cada línea: seleccione una Cuenta (use el buscador con código o nombre), ingrese Descripción (opcional), monto al Debe o al Haber.",
           },
           {
             title: "Partidas Bancarias",
-            description: "Para partidas de tipo Cheque o Depósito, seleccione la cuenta bancaria, número de referencia y beneficiario."
+            description:
+              "Para partidas de tipo Cheque o Depósito, seleccione la cuenta bancaria, número de referencia y beneficiario.",
           },
           {
             title: "Validación de Cuadre",
-            description: "La partida debe estar cuadrada (Total Debe = Total Haber) para poder guardarse. El sistema valida en tiempo real."
+            description:
+              "La partida debe estar cuadrada (Total Debe = Total Haber) para poder guardarse. El sistema valida en tiempo real.",
           },
           {
             title: "Validación de Sobregiro",
-            description: "El sistema valida que las cuentas no queden con saldo contrario a su naturaleza (ej: una cuenta de Activo no puede quedar con saldo acreedor)."
+            description:
+              "El sistema valida que las cuentas no queden con saldo contrario a su naturaleza (ej: una cuenta de Activo no puede quedar con saldo acreedor).",
           },
           {
             title: "Contabilizar Partida",
-            description: "Las partidas inician en estado 'Borrador'. Haga clic en 'Contabilizar' para confirmarla. Una vez contabilizada, no se puede editar."
+            description:
+              "Las partidas inician en estado 'Borrador'. Haga clic en 'Contabilizar' para confirmarla. Una vez contabilizada, no se puede editar.",
           },
           {
             title: "Anular Partida",
-            description: "Las partidas contabilizadas pueden anularse. Se solicita un motivo de anulación que queda registrado en la bitácora."
+            description:
+              "Las partidas contabilizadas pueden anularse. Se solicita un motivo de anulación que queda registrado en la bitácora.",
           },
           {
             title: "Ver Compras Vinculadas",
-            description: "Las partidas generadas automáticamente desde los libros fiscales muestran un enlace para ver las facturas incluidas."
-          }
+            description:
+              "Las partidas generadas automáticamente desde los libros fiscales muestran un enlace para ver las facturas incluidas.",
+          },
         ],
         tips: [
           "Puede crear partidas placeholder (vacías) para reservar números correlativos.",
           "Las cuentas con tipo de saldo 'Indiferente' no generan alertas de sobregiro.",
-          "Use Ctrl+F en el buscador de cuentas para filtrar rápidamente."
-        ]
+          "Use Ctrl+F en el buscador de cuentas para filtrar rápidamente.",
+        ],
       },
       {
         id: "libros-fiscales",
@@ -473,59 +527,71 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Mes",
-            description: "Use los selectores de Mes y Año para ver el libro del período deseado. El sistema crea automáticamente el libro si no existe."
+            description:
+              "Use los selectores de Mes y Año para ver el libro del período deseado. El sistema crea automáticamente el libro si no existe.",
           },
           {
             title: "Pestaña Compras",
-            description: "Muestra todas las facturas de compra del mes. Puede ver: fecha, proveedor, NIT, serie/número, tipo documento, tipo operación, montos (neto, IVA, total)."
+            description:
+              "Muestra todas las facturas de compra del mes. Puede ver: fecha, proveedor, NIT, serie/número, tipo documento, tipo operación, montos (neto, IVA, total).",
           },
           {
             title: "Pestaña Ventas",
-            description: "Muestra todas las facturas de venta del mes con: fecha, cliente, NIT, autorización FEL, serie/número, tipo documento, tipo operación, montos."
+            description:
+              "Muestra todas las facturas de venta del mes con: fecha, cliente, NIT, autorización FEL, serie/número, tipo documento, tipo operación, montos.",
           },
           {
             title: "Ingreso Rápido con Atajo",
-            description: "Presione Ctrl+Alt++ para crear un nuevo registro rápidamente. El sistema guarda automáticamente el registro actual antes de crear el nuevo."
+            description:
+              "Presione Ctrl+Alt++ para crear un nuevo registro rápidamente. El sistema guarda automáticamente el registro actual antes de crear el nuevo.",
           },
           {
             title: "Autoguardado Inteligente",
-            description: "Los cambios se guardan automáticamente cada 3 segundos. El indicador de guardado muestra el estado (Guardando.../Guardado)."
+            description:
+              "Los cambios se guardan automáticamente cada 3 segundos. El indicador de guardado muestra el estado (Guardando.../Guardado).",
           },
           {
             title: "Importar desde SAT",
-            description: "Haga clic en 'Importar'. Suba el archivo CSV descargado del portal SAT. El sistema detecta automáticamente si es libro de compras o ventas."
+            description:
+              "Haga clic en 'Importar'. Suba el archivo CSV descargado del portal SAT. El sistema detecta automáticamente si es libro de compras o ventas.",
           },
           {
             title: "Importar desde PDF de Compras",
-            description: "También puede importar el PDF de consulta de compras del SAT. El sistema extrae automáticamente los datos de las facturas."
+            description:
+              "También puede importar el PDF de consulta de compras del SAT. El sistema extrae automáticamente los datos de las facturas.",
           },
           {
             title: "Manejo de Duplicados",
-            description: "Al importar, el sistema detecta facturas duplicadas (mismo proveedor/cliente y número). Puede elegir: Omitir, Reemplazar o Agregar como nuevo."
+            description:
+              "Al importar, el sistema detecta facturas duplicadas (mismo proveedor/cliente y número). Puede elegir: Omitir, Reemplazar o Agregar como nuevo.",
           },
           {
             title: "Tipo de Operación",
-            description: "Asigne el tipo de operación a cada factura (Local, Importación, Exportación, Servicios) para clasificar correctamente en los reportes."
+            description:
+              "Asigne el tipo de operación a cada factura (Local, Importación, Exportación, Servicios) para clasificar correctamente en los reportes.",
           },
           {
             title: "Generar Partida Automática",
-            description: "Haga clic en 'Generar Partida' para crear automáticamente el asiento contable del mes. Requiere tener configuradas las cuentas especiales."
+            description:
+              "Haga clic en 'Generar Partida' para crear automáticamente el asiento contable del mes. Requiere tener configuradas las cuentas especiales.",
           },
           {
             title: "Notas de Crédito",
-            description: "Las Notas de Crédito (NCRE) restan automáticamente de los totales. El sistema usa el campo 'affects_total' del tipo de documento."
+            description:
+              "Las Notas de Crédito (NCRE) restan automáticamente de los totales. El sistema usa el campo 'affects_total' del tipo de documento.",
           },
           {
             title: "Eliminar Registros",
-            description: "Puede eliminar facturas individuales haciendo clic en el ícono de papelera. Los registros eliminados quedan en la bitácora."
-          }
+            description:
+              "Puede eliminar facturas individuales haciendo clic en el ícono de papelera. Los registros eliminados quedan en la bitácora.",
+          },
         ],
         tips: [
           "Los archivos CSV del SAT tienen un formato específico. No modifique el archivo antes de importar.",
           "La partida automática agrupa todas las facturas del mes en un solo asiento.",
           "Puede regenerar la partida si agrega más facturas después.",
-          "Use el atajo Ctrl+Alt++ para ingresar registros más rápidamente - es la forma más eficiente de captura."
-        ]
+          "Use el atajo Ctrl+Alt++ para ingresar registros más rápidamente - es la forma más eficiente de captura.",
+        ],
       },
       {
         id: "conciliacion",
@@ -536,38 +602,44 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Cuenta Bancaria",
-            description: "Elija la cuenta de banco a conciliar del listado de cuentas marcadas como 'cuenta bancaria' en el catálogo."
+            description:
+              "Elija la cuenta de banco a conciliar del listado de cuentas marcadas como 'cuenta bancaria' en el catálogo.",
           },
           {
             title: "Importar Estado de Cuenta",
-            description: "Suba el archivo Excel/CSV del estado de cuenta bancario. Configure el mapeo de columnas (fecha, descripción, débito, crédito, referencia)."
+            description:
+              "Suba el archivo Excel/CSV del estado de cuenta bancario. Configure el mapeo de columnas (fecha, descripción, débito, crédito, referencia).",
           },
           {
             title: "Guardar Plantilla de Mapeo",
-            description: "Guarde el mapeo de columnas como plantilla para futuras importaciones del mismo banco."
+            description: "Guarde el mapeo de columnas como plantilla para futuras importaciones del mismo banco.",
           },
           {
             title: "Ver Movimientos",
-            description: "Los movimientos importados se muestran en una tabla. Cada movimiento puede estar: No conciliado, En proceso o Conciliado."
+            description:
+              "Los movimientos importados se muestran en una tabla. Cada movimiento puede estar: No conciliado, En proceso o Conciliado.",
           },
           {
             title: "Vincular con Partidas",
-            description: "Asocie cada movimiento bancario con la partida contable correspondiente. El sistema sugiere partidas por monto y fecha."
+            description:
+              "Asocie cada movimiento bancario con la partida contable correspondiente. El sistema sugiere partidas por monto y fecha.",
           },
           {
             title: "Marcar como Conciliado",
-            description: "Una vez vinculado correctamente, marque el movimiento como conciliado. Esto actualiza automáticamente el estado en la partida."
+            description:
+              "Una vez vinculado correctamente, marque el movimiento como conciliado. Esto actualiza automáticamente el estado en la partida.",
           },
           {
             title: "Diferencias de Conciliación",
-            description: "El sistema calcula automáticamente las diferencias entre el saldo bancario y el saldo contable."
-          }
+            description:
+              "El sistema calcula automáticamente las diferencias entre el saldo bancario y el saldo contable.",
+          },
         ],
         tips: [
           "Importe el estado de cuenta completo - el sistema detecta duplicados automáticamente.",
           "Use las plantillas de mapeo para ahorrar tiempo en importaciones recurrentes.",
-          "Los movimientos conciliados no pueden ser modificados."
-        ]
+          "Los movimientos conciliados no pueden ser modificados.",
+        ],
       },
       {
         id: "formularios",
@@ -577,34 +649,36 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Ver Formularios",
-            description: "Lista todos los formularios registrados con: número, tipo, período, fecha de pago y monto."
+            description: "Lista todos los formularios registrados con: número, tipo, período, fecha de pago y monto.",
           },
           {
             title: "Filtrar por Tipo y Período",
-            description: "Use los filtros para buscar por tipo de impuesto (IVA, ISR, ISO) o por año/mes del período."
+            description: "Use los filtros para buscar por tipo de impuesto (IVA, ISR, ISO) o por año/mes del período.",
           },
           {
             title: "Agregar Formulario Manual",
-            description: "Haga clic en 'Agregar Formulario'. Ingrese: Número de formulario, Código de acceso, Fecha de pago, Monto pagado, Tipo de impuesto y Período."
+            description:
+              "Haga clic en 'Agregar Formulario'. Ingrese: Número de formulario, Código de acceso, Fecha de pago, Monto pagado, Tipo de impuesto y Período.",
           },
           {
             title: "Importar desde PDF",
-            description: "Suba el PDF de la constancia de pago del SAT. El sistema extrae automáticamente el número, código de acceso, fecha y monto."
+            description:
+              "Suba el PDF de la constancia de pago del SAT. El sistema extrae automáticamente el número, código de acceso, fecha y monto.",
           },
           {
             title: "Subir PDF Respaldo",
-            description: "Adjunte el PDF de la constancia de pago para tenerlo archivado en el sistema."
+            description: "Adjunte el PDF de la constancia de pago para tenerlo archivado en el sistema.",
           },
           {
             title: "Descargar PDF",
-            description: "Haga clic en el ícono de descarga para obtener el PDF guardado de cualquier formulario."
-          }
+            description: "Haga clic en el ícono de descarga para obtener el PDF guardado de cualquier formulario.",
+          },
         ],
         tips: [
           "El código de acceso es el que aparece en la constancia de pago del formulario SAT.",
           "Use la búsqueda para encontrar formularios por número o fecha.",
-          "Los formularios pagados generan notificaciones cuando se acerca el siguiente vencimiento."
-        ]
+          "Los formularios pagados generan notificaciones cuando se acerca el siguiente vencimiento.",
+        ],
       },
       {
         id: "declaracion",
@@ -614,37 +688,42 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Período",
-            description: "Elija el Mes y Año para el cual desea generar la declaración."
+            description: "Elija el Mes y Año para el cual desea generar la declaración.",
           },
           {
             title: "Seleccionar Tipo de Formulario",
-            description: "Elija entre: IVA Régimen General (SAT-2237), IVA Pequeño Contribuyente (SAT-2046), ISR Trimestral (SAT-1311), ISO, etc."
+            description:
+              "Elija entre: IVA Régimen General (SAT-2237), IVA Pequeño Contribuyente (SAT-2046), ISR Trimestral (SAT-1311), ISO, etc.",
           },
           {
             title: "Generar Cálculo",
-            description: "El sistema calcula automáticamente: Débito Fiscal (ventas), Crédito Fiscal (compras), IVA a Pagar o Crédito Remanente."
+            description:
+              "El sistema calcula automáticamente: Débito Fiscal (ventas), Crédito Fiscal (compras), IVA a Pagar o Crédito Remanente.",
           },
           {
             title: "Crédito Remanente",
-            description: "Si hay crédito fiscal a favor, el sistema lo arrastra automáticamente al siguiente período. Puede ajustarlo manualmente si es necesario."
+            description:
+              "Si hay crédito fiscal a favor, el sistema lo arrastra automáticamente al siguiente período. Puede ajustarlo manualmente si es necesario.",
           },
           {
             title: "Vista Previa",
-            description: "Vea un resumen del cálculo con el desglose de ventas por tipo de documento, compras con y sin derecho a crédito, y el impuesto resultante."
+            description:
+              "Vea un resumen del cálculo con el desglose de ventas por tipo de documento, compras con y sin derecho a crédito, y el impuesto resultante.",
           },
           {
             title: "Exportar Anexos",
-            description: "Descargue los anexos de compras y ventas en formato Excel para adjuntar a la declaración o revisar antes de presentar."
-          }
+            description:
+              "Descargue los anexos de compras y ventas en formato Excel para adjuntar a la declaración o revisar antes de presentar.",
+          },
         ],
         tips: [
           "El cálculo usa los datos del libro de compras y ventas del período seleccionado.",
           "Verifique que todas las facturas estén importadas antes de generar la declaración.",
           "El crédito remanente se arrastra automáticamente si lo ingresa.",
-          "Puede generar múltiples veces la declaración si agrega más facturas - el sistema recalcula."
-        ]
-      }
-    ]
+          "Puede generar múltiples veces la declaración si agrega más facturas - el sistema recalcula.",
+        ],
+      },
+    ],
   },
   {
     id: "consultas",
@@ -660,33 +739,36 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Fecha de Corte",
-            description: "Elija la fecha de corte para el balance. Se mostrarán los saldos acumulados hasta esa fecha."
+            description: "Elija la fecha de corte para el balance. Se mostrarán los saldos acumulados hasta esa fecha.",
           },
           {
             title: "Seleccionar Período",
-            description: "Opcionalmente, seleccione un período contable para ver solo los movimientos de ese período."
+            description: "Opcionalmente, seleccione un período contable para ver solo los movimientos de ese período.",
           },
           {
             title: "Ver Balance de Comprobación",
-            description: "Se muestra cada cuenta en formato de árbol con: Saldo Anterior, Débitos del período, Créditos del período, y Saldo Final."
+            description:
+              "Se muestra cada cuenta en formato de árbol con: Saldo Anterior, Débitos del período, Créditos del período, y Saldo Final.",
           },
           {
             title: "Expandir/Contraer Cuentas",
-            description: "Haga clic en las flechas para expandir o contraer las subcuentas. Los totales se calculan automáticamente."
+            description:
+              "Haga clic en las flechas para expandir o contraer las subcuentas. Los totales se calculan automáticamente.",
           },
           {
             title: "Verificar Cuadre",
-            description: "Los totales de Débitos y Créditos deben coincidir. El sistema muestra la diferencia si existe descuadre."
+            description:
+              "Los totales de Débitos y Créditos deben coincidir. El sistema muestra la diferencia si existe descuadre.",
           },
           {
             title: "Exportar a Excel",
-            description: "Descargue el balance de comprobación en formato Excel para análisis o archivo."
-          }
+            description: "Descargue el balance de comprobación en formato Excel para análisis o archivo.",
+          },
         ],
         tips: [
           "Use esta consulta para verificar que la contabilidad está cuadrada antes de generar estados financieros.",
-          "Las cuentas sin movimientos en el período seleccionado se muestran en gris."
-        ]
+          "Las cuentas sin movimientos en el período seleccionado se muestran en gris.",
+        ],
       },
       {
         id: "saldos-mensuales",
@@ -697,25 +779,27 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Año",
-            description: "Elija el año fiscal para ver la evolución mensual de saldos."
+            description: "Elija el año fiscal para ver la evolución mensual de saldos.",
           },
           {
             title: "Ver Tabla de Saldos",
-            description: "Cada fila muestra una cuenta con su saldo al final de cada mes del año (12 columnas de meses)."
+            description:
+              "Cada fila muestra una cuenta con su saldo al final de cada mes del año (12 columnas de meses).",
           },
           {
             title: "Formato de Árbol",
-            description: "Las cuentas se muestran en formato jerárquico. Los totales de cuentas padre incluyen todas las subcuentas."
+            description:
+              "Las cuentas se muestran en formato jerárquico. Los totales de cuentas padre incluyen todas las subcuentas.",
           },
           {
             title: "Análisis de Variaciones",
-            description: "Compare visualmente cómo han cambiado los saldos de mes a mes para identificar tendencias."
-          }
+            description: "Compare visualmente cómo han cambiado los saldos de mes a mes para identificar tendencias.",
+          },
         ],
         tips: [
           "Esta vista es ideal para análisis de tendencias y proyecciones.",
-          "Las celdas vacías indican que la cuenta no tuvo movimientos ese mes."
-        ]
+          "Las celdas vacías indican que la cuenta no tuvo movimientos ese mes.",
+        ],
       },
       {
         id: "mayor",
@@ -725,36 +809,38 @@ const helpSections: HelpSection[] = [
         steps: [
           {
             title: "Seleccionar Cuenta",
-            description: "Use el buscador para encontrar y seleccionar la cuenta que desea consultar. Escriba código o nombre."
+            description:
+              "Use el buscador para encontrar y seleccionar la cuenta que desea consultar. Escriba código o nombre.",
           },
           {
             title: "Seleccionar Rango de Fechas",
-            description: "Defina la fecha inicial y final del período a consultar."
+            description: "Defina la fecha inicial y final del período a consultar.",
           },
           {
             title: "Ver Movimientos",
-            description: "Se muestran todos los asientos que afectaron la cuenta: fecha, número de partida, descripción, débito, crédito y saldo acumulado."
+            description:
+              "Se muestran todos los asientos que afectaron la cuenta: fecha, número de partida, descripción, débito, crédito y saldo acumulado.",
           },
           {
             title: "Saldo Anterior",
-            description: "La primera línea muestra el saldo acumulado antes de la fecha inicial seleccionada."
+            description: "La primera línea muestra el saldo acumulado antes de la fecha inicial seleccionada.",
           },
           {
             title: "Ver Partida Completa",
-            description: "Haga clic en el número de partida para ver el detalle completo del asiento contable."
+            description: "Haga clic en el número de partida para ver el detalle completo del asiento contable.",
           },
           {
             title: "Exportar",
-            description: "Descargue el mayor de la cuenta en formato Excel o PDF."
-          }
+            description: "Descargue el mayor de la cuenta en formato Excel o PDF.",
+          },
         ],
         tips: [
           "El saldo anterior muestra el acumulado antes de la fecha inicial seleccionada.",
           "Puede hacer clic en el número de partida para ver el detalle completo del asiento.",
-          "Use esta consulta para auditar los movimientos de una cuenta específica."
-        ]
-      }
-    ]
+          "Use esta consulta para auditar los movimientos de una cuenta específica.",
+        ],
+      },
+    ],
   },
   {
     id: "reportes",
@@ -765,39 +851,45 @@ const helpSections: HelpSection[] = [
     steps: [
       {
         title: "Reporte de Compras",
-        description: "Exporte el libro de compras de un mes específico a Excel o PDF. Incluye totales y desglose de IVA por tipo de documento."
+        description:
+          "Exporte el libro de compras de un mes específico a Excel o PDF. Incluye totales y desglose de IVA por tipo de documento.",
       },
       {
         title: "Reporte de Ventas",
-        description: "Exporte el libro de ventas de un mes específico a Excel o PDF con todos los detalles fiscales requeridos por la SAT."
+        description:
+          "Exporte el libro de ventas de un mes específico a Excel o PDF con todos los detalles fiscales requeridos por la SAT.",
       },
       {
         title: "Reporte de Partidas",
-        description: "Liste las partidas contables de un período. Puede filtrar por tipo de partida, estado y rango de fechas."
+        description:
+          "Liste las partidas contables de un período. Puede filtrar por tipo de partida, estado y rango de fechas.",
       },
       {
         title: "Libro Mayor",
-        description: "Exporte el mayor general de una o varias cuentas en formato detallado."
+        description: "Exporte el mayor general de una o varias cuentas en formato detallado.",
       },
       {
         title: "Balance General",
-        description: "Genera el Estado de Situación Financiera a una fecha de corte. Usa el formato configurado en Configuración → Estados Financieros."
+        description:
+          "Genera el Estado de Situación Financiera a una fecha de corte. Usa el formato configurado en Configuración → Estados Financieros.",
       },
       {
         title: "Estado de Resultados",
-        description: "Genera el Estado de Pérdidas y Ganancias para un período. Muestra Ingresos, Costos, Gastos y Utilidad/Pérdida Neta."
+        description:
+          "Genera el Estado de Pérdidas y Ganancias para un período. Muestra Ingresos, Costos, Gastos y Utilidad/Pérdida Neta.",
       },
       {
         title: "Exportar Folios",
-        description: "Exporte los folios de compras o ventas en el formato requerido por la SAT para libros autorizados."
-      }
+        description:
+          "Exporte los folios de compras o ventas en el formato requerido por la SAT para libros autorizados.",
+      },
     ],
     tips: [
       "Los reportes de Balance General y Estado de Resultados usan el formato personalizado si está configurado.",
       "Puede exportar a Excel para análisis adicional o a PDF para presentación.",
       "El Balance General calcula automáticamente el Resultado del Período sumando ingresos menos gastos.",
-      "Los reportes fiscales incluyen el número de folio correlativo cuando está configurado."
-    ]
+      "Los reportes fiscales incluyen el número de folio correlativo cuando está configurado.",
+    ],
   },
   {
     id: "backup",
@@ -808,90 +900,109 @@ const helpSections: HelpSection[] = [
     steps: [
       {
         title: "Backup por Empresa",
-        description: "En la sección Empresas, cada tarjeta tiene un botón de descarga (ícono de nube con flecha) para generar el backup."
+        description:
+          "En la sección Empresas, cada tarjeta tiene un botón de descarga (ícono de nube con flecha) para generar el backup.",
       },
       {
         title: "Contenido del Backup",
-        description: "El archivo Excel incluye hojas separadas para: Empresa, Períodos, Cuentas, Partidas, Detalles de Partidas, Compras, Ventas, Formularios, Configuración, Movimientos Bancarios, Permisos, Notificaciones, Alertas, Feriados y Recordatorios."
+        description:
+          "El archivo Excel incluye hojas separadas para: Empresa, Períodos, Cuentas, Partidas, Detalles de Partidas, Compras, Ventas, Formularios, Configuración, Movimientos Bancarios, Permisos, Notificaciones, Alertas, Feriados y Recordatorios.",
       },
       {
         title: "Formato del Archivo",
-        description: "El backup se descarga como archivo .xlsx (Excel). El nombre incluye el nombre de la empresa y la fecha de generación."
+        description:
+          "El backup se descarga como archivo .xlsx (Excel). El nombre incluye el nombre de la empresa y la fecha de generación.",
       },
       {
         title: "Uso del Backup",
-        description: "El archivo puede usarse para: archivo histórico, migración de datos, auditorías externas o análisis en Excel."
-      }
+        description:
+          "El archivo puede usarse para: archivo histórico, migración de datos, auditorías externas o análisis en Excel.",
+      },
     ],
     tips: [
       "Genere backups periódicos (mensual o trimestral) como buena práctica de respaldo.",
       "El backup no incluye archivos adjuntos (PDFs de formularios, documentos de empresa) - solo datos.",
-      "Para empresas con muchos registros, la generación puede tomar algunos segundos."
-    ]
-  }
+      "Para empresas con muchos registros, la generación puede tomar algunos segundos.",
+    ],
+  },
 ];
 
 const faqItems = [
   {
     question: "¿Cómo cambio la empresa activa?",
-    answer: "Vaya a Administración → Empresas y haga clic en el botón 'Seleccionar' de la empresa deseada. La empresa activa se muestra en la parte superior de la pantalla."
+    answer:
+      "Vaya a Administración → Empresas y haga clic en el botón 'Seleccionar' de la empresa deseada. La empresa activa se muestra en la parte superior de la pantalla.",
   },
   {
     question: "¿Por qué no puedo eliminar una cuenta?",
-    answer: "Las cuentas que tienen movimientos (partidas registradas) no pueden eliminarse para mantener la integridad contable. Puede desactivarlas si ya no las necesita."
+    answer:
+      "Las cuentas que tienen movimientos (partidas registradas) no pueden eliminarse para mantener la integridad contable. Puede desactivarlas si ya no las necesita.",
   },
   {
     question: "¿Cómo corrijo una partida contabilizada?",
-    answer: "Las partidas contabilizadas no se pueden editar directamente. Puede anularla (registrando el motivo) y crear una nueva partida correcta, o crear una partida de ajuste."
+    answer:
+      "Las partidas contabilizadas no se pueden editar directamente. Puede anularla (registrando el motivo) y crear una nueva partida correcta, o crear una partida de ajuste.",
   },
   {
     question: "¿Por qué aparece 'Sobregiro detectado' al guardar una partida?",
-    answer: "Esto ocurre cuando el movimiento dejaría una cuenta con saldo contrario a su naturaleza (ej: cuenta de Activo con saldo acreedor). Verifique los montos o use una cuenta con tipo de saldo 'Indiferente'."
+    answer:
+      "Esto ocurre cuando el movimiento dejaría una cuenta con saldo contrario a su naturaleza (ej: cuenta de Activo con saldo acreedor). Verifique los montos o use una cuenta con tipo de saldo 'Indiferente'.",
   },
   {
     question: "¿Cómo importo facturas del SAT?",
-    answer: "Vaya a Contabilidad → Compras y Ventas, seleccione el mes, y haga clic en 'Importar'. Suba el archivo CSV o PDF descargado del portal del SAT sin modificarlo."
+    answer:
+      "Vaya a Contabilidad → Compras y Ventas, seleccione el mes, y haga clic en 'Importar'. Suba el archivo CSV o PDF descargado del portal del SAT sin modificarlo.",
   },
   {
     question: "¿Dónde configuro las cuentas para partidas automáticas?",
-    answer: "En Administración → Configuración → Cuentas Contables. Defina las cuentas de IVA, Compras, Ventas, Clientes y Proveedores que se usarán al generar partidas automáticas."
+    answer:
+      "En Administración → Configuración → Cuentas Contables. Defina las cuentas de IVA, Compras, Ventas, Clientes y Proveedores que se usarán al generar partidas automáticas.",
   },
   {
     question: "¿Cómo personalizo el formato del Balance General?",
-    answer: "Vaya a Administración → Configuración → Estados Financieros. Seleccione 'Balance General', cree las secciones (Activo, Pasivo, Capital) y asigne las cuentas correspondientes a cada sección."
+    answer:
+      "Vaya a Administración → Configuración → Estados Financieros. Seleccione 'Balance General', cree las secciones (Activo, Pasivo, Capital) y asigne las cuentas correspondientes a cada sección.",
   },
   {
     question: "¿Por qué el Balance General no cuadra?",
-    answer: "Verifique que el Resultado del Período (Ingresos - Gastos) esté correctamente calculado. Revise que todas las cuentas estén asignadas en el diseñador de estados financieros y que no haya partidas descuadradas."
+    answer:
+      "Verifique que el Resultado del Período (Ingresos - Gastos) esté correctamente calculado. Revise que todas las cuentas estén asignadas en el diseñador de estados financieros y que no haya partidas descuadradas.",
   },
   {
     question: "¿Cómo uso el atajo Ctrl+Alt++ para ingreso rápido?",
-    answer: "En la pantalla de Compras y Ventas, presione Ctrl+Alt y la tecla + del teclado numérico. El sistema guarda automáticamente el registro actual y crea uno nuevo. Es la forma más rápida de capturar múltiples facturas."
+    answer:
+      "En la pantalla de Compras y Ventas, presione Ctrl+Alt y la tecla + del teclado numérico. El sistema guarda automáticamente el registro actual y crea uno nuevo. Es la forma más rápida de capturar múltiples facturas.",
   },
   {
     question: "¿Por qué algunos datos no se guardan al usar el atajo rápido?",
-    answer: "Asegúrese de esperar al menos 1-2 segundos después de ingresar el último dato antes de presionar Ctrl+Alt++. El sistema ahora guarda automáticamente antes de crear el nuevo registro, pero los campos deben estar completos."
+    answer:
+      "Asegúrese de esperar al menos 1-2 segundos después de ingresar el último dato antes de presionar Ctrl+Alt++. El sistema ahora guarda automáticamente antes de crear el nuevo registro, pero los campos deben estar completos.",
   },
   {
     question: "¿Cómo genero un backup de la empresa?",
-    answer: "En la sección Empresas, haga clic en el ícono de descarga (nube con flecha) en la tarjeta de la empresa. Se descargará un archivo Excel con toda la información organizada en hojas."
+    answer:
+      "En la sección Empresas, haga clic en el ícono de descarga (nube con flecha) en la tarjeta de la empresa. Se descargará un archivo Excel con toda la información organizada en hojas.",
   },
   {
     question: "¿Cómo configuro las alertas de vencimiento de impuestos?",
-    answer: "Vaya a Configuración → Alertas. Defina con cuántos días de anticipación desea recibir notificaciones de vencimiento para cada tipo de impuesto."
+    answer:
+      "Vaya a Configuración → Alertas. Defina con cuántos días de anticipación desea recibir notificaciones de vencimiento para cada tipo de impuesto.",
   },
   {
     question: "¿Qué roles de usuario existen?",
-    answer: "Super Admin (acceso total), Admin Tenant (gestiona su firma contable), Admin Empresa (gestiona una empresa), Contador Senior (operaciones completas), Contador Junior (operaciones limitadas) y Auxiliar (solo consulta)."
+    answer:
+      "Super Admin (acceso total), Admin Tenant (gestiona su firma contable), Admin Empresa (gestiona una empresa), Contador Senior (operaciones completas), Contador Junior (operaciones limitadas) y Auxiliar (solo consulta).",
   },
   {
     question: "¿Cómo busco una factura específica?",
-    answer: "Use el ícono de lupa en la barra superior para abrir el buscador global de facturas. Puede buscar por número de factura, NIT o nombre del proveedor/cliente."
+    answer:
+      "Use el ícono de lupa en la barra superior para abrir el buscador global de facturas. Puede buscar por número de factura, NIT o nombre del proveedor/cliente.",
   },
   {
     question: "¿Puedo importar estados de cuenta bancarios?",
-    answer: "Sí, en el módulo de Conciliación Bancaria puede importar archivos Excel o CSV de estados de cuenta. Configure el mapeo de columnas y guárdelo como plantilla para futuras importaciones."
-  }
+    answer:
+      "Sí, en el módulo de Conciliación Bancaria puede importar archivos Excel o CSV de estados de cuenta. Configure el mapeo de columnas y guárdelo como plantilla para futuras importaciones.",
+  },
 ];
 
 const Ayuda = () => {
@@ -913,7 +1024,7 @@ const Ayuda = () => {
         y = 20;
       }
       doc.setFontSize(fontSize);
-      doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
       const lines = doc.splitTextToSize(text, maxWidth - indent);
       doc.text(lines, margin + indent, y);
       y += lines.length * lineHeight;
@@ -921,8 +1032,8 @@ const Ayuda = () => {
 
     // Title
     doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Centro de Ayuda - Manual de Usuario', margin, y);
+    doc.setFont("helvetica", "bold");
+    doc.text("Centro de Ayuda - Manual de Usuario", margin, y);
     y += 15;
 
     // Sections
@@ -931,7 +1042,7 @@ const Ayuda = () => {
         doc.addPage();
         y = 20;
       }
-      
+
       // Section title
       addText(`■ ${section.title}`, 14, true);
       addText(section.description, 10, false, 4);
@@ -947,7 +1058,7 @@ const Ayuda = () => {
 
       // Tips
       if (section.tips) {
-        addText('Tips:', 10, true, 6);
+        addText("Tips:", 10, true, 6);
         section.tips.forEach((tip) => {
           addText(`• ${tip}`, 9, false, 10);
         });
@@ -962,16 +1073,16 @@ const Ayuda = () => {
           }
           addText(`► ${sub.title}`, 11, true, 6);
           addText(sub.description, 9, false, 10);
-          
+
           if (sub.steps) {
             sub.steps.forEach((step, idx) => {
               addText(`${idx + 1}. ${step.title}`, 9, true, 12);
               addText(step.description, 8, false, 16);
             });
           }
-          
+
           if (sub.tips) {
-            addText('Tips:', 9, true, 12);
+            addText("Tips:", 9, true, 12);
             sub.tips.forEach((tip) => {
               addText(`• ${tip}`, 8, false, 16);
             });
@@ -988,7 +1099,7 @@ const Ayuda = () => {
       y = 20;
     }
     y += 5;
-    addText('PREGUNTAS FRECUENTES', 14, true);
+    addText("PREGUNTAS FRECUENTES", 14, true);
     y += 3;
 
     faqItems.forEach((item, idx) => {
@@ -1001,25 +1112,28 @@ const Ayuda = () => {
       y += 3;
     });
 
-    doc.save('Manual_de_Ayuda.pdf');
+    doc.save("Manual_de_Ayuda.pdf");
   };
 
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) return helpSections;
-    
+
     const query = searchQuery.toLowerCase();
-    return helpSections.filter(section => {
-      const matchesMain = 
+    return helpSections.filter((section) => {
+      const matchesMain =
         section.title.toLowerCase().includes(query) ||
         section.description.toLowerCase().includes(query) ||
-        section.steps?.some(s => s.title.toLowerCase().includes(query) || s.description.toLowerCase().includes(query));
-      
-      const matchesSub = section.subsections?.some(sub =>
-        sub.title.toLowerCase().includes(query) ||
-        sub.description.toLowerCase().includes(query) ||
-        sub.steps?.some(s => s.title.toLowerCase().includes(query) || s.description.toLowerCase().includes(query))
+        section.steps?.some(
+          (s) => s.title.toLowerCase().includes(query) || s.description.toLowerCase().includes(query),
+        );
+
+      const matchesSub = section.subsections?.some(
+        (sub) =>
+          sub.title.toLowerCase().includes(query) ||
+          sub.description.toLowerCase().includes(query) ||
+          sub.steps?.some((s) => s.title.toLowerCase().includes(query) || s.description.toLowerCase().includes(query)),
       );
-      
+
       return matchesMain || matchesSub;
     });
   }, [searchQuery]);
@@ -1027,9 +1141,8 @@ const Ayuda = () => {
   const filteredFaq = useMemo(() => {
     if (!searchQuery.trim()) return faqItems;
     const query = searchQuery.toLowerCase();
-    return faqItems.filter(item =>
-      item.question.toLowerCase().includes(query) ||
-      item.answer.toLowerCase().includes(query)
+    return faqItems.filter(
+      (item) => item.question.toLowerCase().includes(query) || item.answer.toLowerCase().includes(query),
     );
   }, [searchQuery]);
 
@@ -1077,7 +1190,11 @@ const Ayuda = () => {
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 {section.title}
-                {section.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
+                {section.isNew && (
+                  <Badge variant="secondary" className="text-xs">
+                    Nuevo
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription>{section.description}</CardDescription>
             </div>
@@ -1094,7 +1211,7 @@ const Ayuda = () => {
       <CardContent>
         {section.steps && renderSteps(section.steps)}
         {section.tips && renderTips(section.tips)}
-        
+
         {section.subsections && (
           <Accordion type="single" collapsible className="mt-4">
             {section.subsections.map((sub) => (
@@ -1102,7 +1219,11 @@ const Ayuda = () => {
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center gap-2 text-left">
                     <span className="font-medium">{sub.title}</span>
-                    {sub.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
+                    {sub.isNew && (
+                      <Badge variant="secondary" className="text-xs">
+                        Nuevo
+                      </Badge>
+                    )}
                     {sub.route && (
                       <Badge variant="outline" className="text-xs font-normal">
                         {sub.route}
@@ -1131,8 +1252,10 @@ const Ayuda = () => {
   );
 
   const whatsappNumber = "50254135354";
-  const whatsappMessage = encodeURIComponent(`Hola!, necesito apoyo con Sistema contable en ${currentTenant?.tenant_name || "mi empresa"}`);
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+  const whatsappMessage = encodeURIComponent(
+    `Hola!, necesito apoyo con Sistema contable en ${currentTenant?.tenant_name || "mi empresa"}`,
+  );
+  const whatsappUrl = `https://api.whatsapp.com/send/?phone=${whatsappNumber}?text=${whatsappMessage}`;
 
   return (
     <div className="container mx-auto py-6 max-w-5xl">
@@ -1153,7 +1276,8 @@ const Ayuda = () => {
             </Button>
           </div>
           <p className="text-muted-foreground mt-2">
-            Manual de usuario interactivo. Encuentre instrucciones detalladas sobre cómo utilizar cada función del sistema.
+            Manual de usuario interactivo. Encuentre instrucciones detalladas sobre cómo utilizar cada función del
+            sistema.
           </p>
         </div>
 
@@ -1175,13 +1299,17 @@ const Ayuda = () => {
               key={section.id}
               onClick={() => {
                 setExpandedSection(section.id);
-                document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
+                document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" });
               }}
               className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
             >
               <section.icon className="h-5 w-5 text-primary mb-2" />
               <p className="font-medium text-sm">{section.title}</p>
-              {section.isNew && <Badge variant="secondary" className="text-xs mt-1">Nuevo</Badge>}
+              {section.isNew && (
+                <Badge variant="secondary" className="text-xs mt-1">
+                  Nuevo
+                </Badge>
+              )}
             </button>
           ))}
           {/* WhatsApp Support Card */}
@@ -1201,7 +1329,7 @@ const Ayuda = () => {
       {/* Main Content */}
       <div className="space-y-6">
         <h2 className="text-xl font-semibold text-foreground">Guía por Módulos</h2>
-        
+
         {filteredSections.length === 0 ? (
           <Card className="p-8 text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -1221,22 +1349,18 @@ const Ayuda = () => {
 
       {/* FAQ Section */}
       <Separator className="my-8" />
-      
+
       <div className="space-y-6">
         <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
           <AlertCircle className="h-5 w-5 text-primary" />
           Preguntas Frecuentes
         </h2>
-        
+
         <Accordion type="single" collapsible className="space-y-2">
           {filteredFaq.map((item, idx) => (
             <AccordionItem key={idx} value={`faq-${idx}`} className="border rounded-lg px-4">
-              <AccordionTrigger className="hover:no-underline text-left">
-                {item.question}
-              </AccordionTrigger>
-              <AccordionContent className="text-muted-foreground">
-                {item.answer}
-              </AccordionContent>
+              <AccordionTrigger className="hover:no-underline text-left">{item.question}</AccordionTrigger>
+              <AccordionContent className="text-muted-foreground">{item.answer}</AccordionContent>
             </AccordionItem>
           ))}
         </Accordion>
