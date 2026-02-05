@@ -159,38 +159,8 @@ const helpSections: HelpSection[] = [
     id: "administracion",
     title: "Administración",
     icon: Building2,
-    description: "Gestión de tenants, usuarios, empresas y configuración del sistema.",
+    description: "Gestión de usuarios, empresas y configuración del sistema.",
     subsections: [
-      {
-        id: "tenants",
-        title: "Tenants (Firmas Contables)",
-        description: "Gestione las organizaciones o firmas contables del sistema. Solo visible para Super Administradores.",
-        route: "/tenants",
-        isNew: true,
-        steps: [
-          {
-            title: "Ver Tenants",
-            description: "Lista de todas las firmas contables registradas con su código, nombre, plan, límites de usuarios/empresas y estado."
-          },
-          {
-            title: "Crear Nuevo Tenant",
-            description: "Haga clic en 'Nuevo Tenant'. Complete: Código único, Nombre, Plan (básico/profesional/empresarial), límites de usuarios y empresas."
-          },
-          {
-            title: "Personalización",
-            description: "Cada tenant puede tener sus propios colores corporativos (primario/secundario), logo y subdominio personalizado."
-          },
-          {
-            title: "Administradores de Tenant",
-            description: "Asigne usuarios como administradores del tenant. Estos pueden gestionar empresas y usuarios dentro de su organización."
-          }
-        ],
-        tips: [
-          "El código de tenant debe ser único y se usa para identificar la organización.",
-          "Los límites de usuarios y empresas dependen del plan contratado.",
-          "Los administradores de tenant no tienen acceso a otros tenants."
-        ]
-      },
       {
         id: "usuarios",
         title: "Usuarios",
