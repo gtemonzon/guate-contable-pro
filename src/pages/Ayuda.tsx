@@ -24,8 +24,10 @@ import {
   ClipboardList,
   Building,
   Keyboard,
-  Download
+  Download,
+  MessageCircle
 } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from 'jspdf';
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -893,6 +895,7 @@ const faqItems = [
 ];
 
 const Ayuda = () => {
+  const { currentTenant } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
@@ -1127,57 +1130,73 @@ const Ayuda = () => {
     </Card>
   );
 
+  const whatsappNumber = "50254135354";
+  const whatsappMessage = encodeURIComponent(`Hola!, necesito apoyo con Sistema contable en ${currentTenant?.tenant_name || "mi empresa"}`);
+  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
+
   return (
     <div className="container mx-auto py-6 max-w-5xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <HelpCircle className="h-6 w-6 text-primary" />
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 bg-background pb-4 -mx-6 px-6 pt-0 border-b mb-6">
+        {/* Header */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <HelpCircle className="h-6 w-6 text-primary" />
+              </div>
+              <h1 className="text-3xl font-bold text-foreground">Centro de Ayuda</h1>
             </div>
-            <h1 className="text-3xl font-bold text-foreground">Centro de Ayuda</h1>
+            <Button onClick={handleExportPDF} variant="outline">
+              <FileDown className="h-4 w-4 mr-2" />
+              Exportar PDF
+            </Button>
           </div>
-          <Button onClick={handleExportPDF} variant="outline">
-            <FileDown className="h-4 w-4 mr-2" />
-            Exportar PDF
-          </Button>
+          <p className="text-muted-foreground mt-2">
+            Manual de usuario interactivo. Encuentre instrucciones detalladas sobre cómo utilizar cada función del sistema.
+          </p>
         </div>
-        <p className="text-muted-foreground mt-2">
-          Manual de usuario interactivo. Encuentre instrucciones detalladas sobre cómo utilizar cada función del sistema.
-        </p>
-      </div>
 
-      {/* Search */}
-      <div className="relative mb-8">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar en el manual... (ej: partidas, importar, balance, atajo)"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar en el manual... (ej: partidas, importar, balance, atajo)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
 
-      {/* Quick Navigation */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-8">
-        {helpSections.slice(0, 5).map((section) => (
-          <button
-            key={section.id}
-            onClick={() => {
-              setExpandedSection(section.id);
-              document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+        {/* Quick Navigation */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {helpSections.slice(0, 5).map((section) => (
+            <button
+              key={section.id}
+              onClick={() => {
+                setExpandedSection(section.id);
+                document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="p-3 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
+            >
+              <section.icon className="h-5 w-5 text-primary mb-2" />
+              <p className="font-medium text-sm">{section.title}</p>
+              {section.isNew && <Badge variant="secondary" className="text-xs mt-1">Nuevo</Badge>}
+            </button>
+          ))}
+          {/* WhatsApp Support Card */}
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-3 rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors text-left"
           >
-            <section.icon className="h-5 w-5 text-primary mb-2" />
-            <p className="font-medium text-sm">{section.title}</p>
-            {section.isNew && <Badge variant="secondary" className="text-xs mt-1">Nuevo</Badge>}
-          </button>
-        ))}
+            <MessageCircle className="h-5 w-5 text-green-600 dark:text-green-400 mb-2" />
+            <p className="font-medium text-sm text-green-700 dark:text-green-300">Servicio Técnico</p>
+            <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">WhatsApp</p>
+          </a>
+        </div>
       </div>
-
-      <Separator className="mb-8" />
 
       {/* Main Content */}
       <div className="space-y-6">
