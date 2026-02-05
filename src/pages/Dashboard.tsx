@@ -874,9 +874,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Alerts Section */}
-      <DashboardAlerts enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
-
       {/* KPIs Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
@@ -942,37 +939,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Alertas y Notificaciones</CardTitle>
-            <CardDescription>
-              Información importante que requiere tu atención
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning/5 p-3">
-                <Calendar className="h-5 w-5 text-warning mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Período pendiente de cierre</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    El período contable 2024 está pendiente de cierre
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3 rounded-lg border border-success/20 bg-success/5 p-3">
-                <Building2 className="h-5 w-5 text-success mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Sistema configurado</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Tu empresa está lista para comenzar a operar
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <DashboardAlerts enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
       </div>
 
       {/* Latest Books Summary */}
