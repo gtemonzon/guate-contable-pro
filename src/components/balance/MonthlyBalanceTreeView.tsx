@@ -205,8 +205,8 @@ export function MonthlyBalanceTreeView({ accounts, onViewDetails }: MonthlyBalan
 
   return (
     <div className="space-y-0">
-      {/* Header */}
-      <div className="grid grid-cols-12 gap-4 py-3 px-3 bg-muted/50 font-semibold text-sm border-b-2 sticky top-0">
+      {/* Header - sticky with background to cover content below */}
+      <div className="grid grid-cols-12 gap-4 py-3 px-3 bg-muted font-semibold text-sm border-b-2 sticky top-[120px] z-[5]">
         <div className="col-span-1 pl-8">Código</div>
         <div className="col-span-3">Nombre de Cuenta</div>
         <div className="col-span-2 text-right">Saldo Inicial</div>
