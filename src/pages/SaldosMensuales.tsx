@@ -483,23 +483,25 @@ export default function SaldosMensuales() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Saldos Mensuales</h1>
-          <p className="text-muted-foreground">Consulta de saldos por mes</p>
-          
-          {monthlyAccounts.length > 0 && (
-            <div className="mt-4 flex gap-6 text-sm">
-              <div>
-                <span className="text-muted-foreground">Total Debe: </span>
-                <span className="font-semibold">Q {totals.totalDebit}</span>
+      <div className="sticky top-0 z-10 bg-background pb-4 -mx-8 px-8 pt-0 border-b mb-2">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold">Saldos Mensuales</h1>
+            <p className="text-muted-foreground">Consulta de saldos por mes</p>
+            
+            {monthlyAccounts.length > 0 && (
+              <div className="mt-4 flex gap-6 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Total Debe: </span>
+                  <span className="font-semibold">Q {totals.totalDebit}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Haber: </span>
+                  <span className="font-semibold">Q {totals.totalCredit}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Total Haber: </span>
-                <span className="font-semibold">Q {totals.totalCredit}</span>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
