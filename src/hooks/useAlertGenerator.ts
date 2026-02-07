@@ -212,7 +212,7 @@ export function useAlertGenerator() {
           .select('id', { count: 'exact' })
           .eq('enterprise_id', enterpriseId)
           .eq('is_reconciled', false)
-          .lt('transaction_date', thirtyDaysAgo.toISOString().split('T')[0]);
+          .lt('movement_date', thirtyDaysAgo.toISOString().split('T')[0]);
 
         if (movCount && movCount > 0) {
           const existingCheck = await supabase
