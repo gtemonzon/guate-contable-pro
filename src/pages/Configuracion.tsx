@@ -11,6 +11,7 @@ import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix"
 import { AlertConfigManager } from "@/components/configuracion/AlertConfigManager";
 import { TaxDueDateConfig } from "@/components/configuracion/TaxDueDateConfig";
 import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
+import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
@@ -35,6 +36,7 @@ export default function Configuracion() {
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
           <TabsTrigger value="alerts">Alertas</TabsTrigger>
           <TabsTrigger value="due-dates">Fechas Vencimiento</TabsTrigger>
+          <TabsTrigger value="pdf-typography">Tipografía PDFs</TabsTrigger>
           <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
         </TabsList>
 
@@ -99,6 +101,10 @@ export default function Configuracion() {
         <TabsContent value="due-dates" className="mt-6 space-y-6">
           <TaxDueDateConfig />
           <HolidaysManager />
+        </TabsContent>
+
+        <TabsContent value="pdf-typography" className="mt-6">
+          <PdfTypographyManager />
         </TabsContent>
 
         <TabsContent value="permissions" className="mt-6">
