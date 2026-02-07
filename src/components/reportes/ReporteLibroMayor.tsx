@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Download, Loader2, ChevronsUpDown } from "lucide-react";
+import { Download, Loader2, ChevronsUpDown, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
@@ -25,12 +25,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface Account {
   id: number;
   account_code: string;
   account_name: string;
+  balance_type?: string;
 }
 
 interface LedgerEntry {
@@ -42,6 +47,16 @@ interface LedgerEntry {
   credit_amount: number;
   balance: number;
   previous_balance?: number;
+  account_id: number;
+}
+
+interface AccountLedger {
+  account: Account;
+  entries: LedgerEntry[];
+  previousBalance: number;
+  totalDebit: number;
+  totalCredit: number;
+  finalBalance: number;
 }
 
 export default function ReporteLibroMayor() {
@@ -49,13 +64,14 @@ export default function ReporteLibroMayor() {
   const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [accountLedgers, setAccountLedgers] = useState<AccountLedger[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
 
   const { toast } = useToast();
 
@@ -82,7 +98,7 @@ export default function ReporteLibroMayor() {
         fetchEnterpriseName(newEnterpriseId);
       } else {
         setAccounts([]);
-        setLedgerEntries([]);
+        setAccountLedgers([]);
       }
     };
 
@@ -114,7 +130,7 @@ export default function ReporteLibroMayor() {
     try {
       const { data, error } = await supabase
         .from("tab_accounts")
-        .select("id, account_code, account_name")
+        .select("id, account_code, account_name, balance_type")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("is_active", true)
         .order("account_code");
@@ -143,6 +159,26 @@ export default function ReporteLibroMayor() {
       setSelectedAccounts([]);
     } else {
       setSelectedAccounts(accounts.map(a => a.id));
+    }
+  };
+
+  const toggleExpandAccount = (accountId: number) => {
+    setExpandedAccounts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(accountId)) {
+        newSet.delete(accountId);
+      } else {
+        newSet.add(accountId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleExpandAll = () => {
+    if (expandedAccounts.size === accountLedgers.length) {
+      setExpandedAccounts(new Set());
+    } else {
+      setExpandedAccounts(new Set(accountLedgers.map(al => al.account.id)));
     }
   };
 
@@ -186,7 +222,8 @@ export default function ReporteLibroMayor() {
       };
 
       // Obtener todas las cuentas de detalle para las cuentas seleccionadas
-      let accountIdsToQuery: number[] = [];
+      // Mantenemos un mapa de cuenta original -> cuentas de detalle
+      const accountDetailMap: Map<number, number[]> = new Map();
       
       for (const accountId of selectedAccounts) {
         const { data: accountData, error: accountError } = await supabase
@@ -198,15 +235,22 @@ export default function ReporteLibroMayor() {
         if (accountError) throw accountError;
 
         if (accountData.allows_movement) {
-          accountIdsToQuery.push(accountId);
+          accountDetailMap.set(accountId, [accountId]);
         } else {
           const childIds = await getDetailAccountIds(accountId);
-          accountIdsToQuery = [...accountIdsToQuery, ...childIds];
+          if (childIds.length > 0) {
+            accountDetailMap.set(accountId, childIds);
+          }
         }
       }
 
-      if (accountIdsToQuery.length === 0) {
-        setLedgerEntries([]);
+      // Obtener todos los IDs de cuentas de detalle únicos
+      const allDetailAccountIds = Array.from(new Set(
+        Array.from(accountDetailMap.values()).flat()
+      ));
+
+      if (allDetailAccountIds.length === 0) {
+        setAccountLedgers([]);
         toast({
           title: "Sin movimientos",
           description: "Las cuentas seleccionadas no tienen movimientos",
@@ -222,6 +266,7 @@ export default function ReporteLibroMayor() {
           .from("tab_journal_entry_details")
           .select(`
             id,
+            account_id,
             debit_amount,
             credit_amount,
             description,
@@ -235,25 +280,19 @@ export default function ReporteLibroMayor() {
               enterprise_id
             )
           `)
-          .in("account_id", accountIdsToQuery)
+          .in("account_id", allDetailAccountIds)
           .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
           .eq("tab_journal_entries.is_posted", true)
           .gte("tab_journal_entries.entry_date", startDate)
           .lte("tab_journal_entries.entry_date", endDate)
       );
 
-      // Ordenar por fecha
-      const sortedDetails = (details || []).sort((a: any, b: any) => {
-        const dateA = new Date(a.tab_journal_entries.entry_date).getTime();
-        const dateB = new Date(b.tab_journal_entries.entry_date).getTime();
-        return dateA - dateB;
-      });
-
       // Calcular saldo anterior (antes del startDate) con paginación automática
       const previousDetails = await fetchAllRecords<any>(
         supabase
           .from("tab_journal_entry_details")
           .select(`
+            account_id,
             debit_amount,
             credit_amount,
             tab_journal_entries!inner (
@@ -262,45 +301,93 @@ export default function ReporteLibroMayor() {
               enterprise_id
             )
           `)
-          .in("account_id", accountIdsToQuery)
+          .in("account_id", allDetailAccountIds)
           .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
           .eq("tab_journal_entries.is_posted", true)
           .lt("tab_journal_entries.entry_date", startDate)
       );
 
-      // Calcular saldo inicial
-      let previousBalance = 0;
+      // Calcular saldo anterior por cuenta de detalle
+      const previousBalanceByAccount: Record<number, number> = {};
       (previousDetails || []).forEach((detail: any) => {
         const debit = Number(detail.debit_amount) || 0;
         const credit = Number(detail.credit_amount) || 0;
-        previousBalance += debit - credit;
+        if (!previousBalanceByAccount[detail.account_id]) {
+          previousBalanceByAccount[detail.account_id] = 0;
+        }
+        previousBalanceByAccount[detail.account_id] += debit - credit;
       });
 
-      // Calcular balance acumulado comenzando con el saldo anterior
-      let runningBalance = previousBalance;
-      const entries: LedgerEntry[] = sortedDetails.map((detail: any) => {
-        const debit = Number(detail.debit_amount) || 0;
-        const credit = Number(detail.credit_amount) || 0;
-        runningBalance += debit - credit;
+      // Agrupar movimientos por cuenta seleccionada
+      const ledgers: AccountLedger[] = [];
 
-        return {
-          id: detail.id,
-          entry_date: detail.tab_journal_entries.entry_date,
-          entry_number: detail.tab_journal_entries.entry_number,
-          description: detail.description || detail.tab_journal_entries.description,
-          debit_amount: debit,
-          credit_amount: credit,
-          balance: runningBalance,
-          previous_balance: previousBalance,
-        };
-      });
+      for (const [originalAccountId, detailAccountIds] of accountDetailMap) {
+        const accountInfo = accounts.find(a => a.id === originalAccountId);
+        if (!accountInfo) continue;
 
-      setLedgerEntries(entries);
+        // Filtrar detalles que pertenecen a esta cuenta (o sus hijas)
+        const accountDetails = (details || []).filter((d: any) => 
+          detailAccountIds.includes(d.account_id)
+        );
+
+        // Ordenar por fecha
+        const sortedDetails = accountDetails.sort((a: any, b: any) => {
+          const dateA = new Date(a.tab_journal_entries.entry_date).getTime();
+          const dateB = new Date(b.tab_journal_entries.entry_date).getTime();
+          return dateA - dateB;
+        });
+
+        // Calcular saldo anterior para esta cuenta
+        let previousBalance = 0;
+        for (const detailAccountId of detailAccountIds) {
+          previousBalance += previousBalanceByAccount[detailAccountId] || 0;
+        }
+
+        // Calcular balance acumulado comenzando con el saldo anterior
+        let runningBalance = previousBalance;
+        const entries: LedgerEntry[] = sortedDetails.map((detail: any) => {
+          const debit = Number(detail.debit_amount) || 0;
+          const credit = Number(detail.credit_amount) || 0;
+          runningBalance += debit - credit;
+
+          return {
+            id: detail.id,
+            entry_date: detail.tab_journal_entries.entry_date,
+            entry_number: detail.tab_journal_entries.entry_number,
+            description: detail.description || detail.tab_journal_entries.description,
+            debit_amount: debit,
+            credit_amount: credit,
+            balance: runningBalance,
+            previous_balance: previousBalance,
+            account_id: detail.account_id,
+          };
+        });
+
+        const totalDebit = entries.reduce((sum, e) => sum + e.debit_amount, 0);
+        const totalCredit = entries.reduce((sum, e) => sum + e.credit_amount, 0);
+
+        ledgers.push({
+          account: accountInfo,
+          entries,
+          previousBalance,
+          totalDebit,
+          totalCredit,
+          finalBalance: entries.length > 0 ? entries[entries.length - 1].balance : previousBalance,
+        });
+      }
+
+      // Ordenar por código de cuenta
+      ledgers.sort((a, b) => a.account.account_code.localeCompare(b.account.account_code));
+
+      setAccountLedgers(ledgers);
+      // Expandir todas las cuentas por defecto
+      setExpandedAccounts(new Set(ledgers.map(l => l.account.id)));
       setReportGenerated(true);
       
+      const totalMovements = ledgers.reduce((sum, l) => sum + l.entries.length, 0);
       toast({
         title: "Reporte generado",
-        description: `Se encontraron ${entries.length} movimientos para ${selectedAccounts.length} cuenta(s)`,
+        description: `Se encontraron ${totalMovements} movimientos en ${ledgers.length} cuenta(s)`,
       });
     } catch (error: any) {
       toast({
@@ -314,39 +401,64 @@ export default function ReporteLibroMayor() {
   };
 
   const handleExport = (options: FolioExportOptions) => {
-    if (ledgerEntries.length === 0) return;
+    if (accountLedgers.length === 0) return;
 
-    const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
-    const accountsLabel = selectedAccounts.length === accounts.length 
-      ? "Todas las cuentas"
-      : selectedAccountsInfo.map(a => `${a.account_code} ${a.account_name}`).join(", ");
+    const headers = ["Cuenta", "Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    const data: any[][] = [];
 
-    const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
-    const data = ledgerEntries.map(entry => [
-      entry.entry_date,
-      entry.entry_number,
-      entry.description,
-      entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
-      entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
-      formatCurrency(Math.abs(entry.balance)),
-    ]);
+    accountLedgers.forEach(ledger => {
+      // Agregar encabezado de cuenta
+      data.push([
+        `${ledger.account.account_code} - ${ledger.account.account_name}`,
+        "",
+        "",
+        `Saldo Anterior: ${formatCurrency(Math.abs(ledger.previousBalance))}`,
+        "",
+        "",
+        ""
+      ]);
 
-    const totalDebit = ledgerEntries.reduce((sum, entry) => sum + entry.debit_amount, 0);
-    const totalCredit = ledgerEntries.reduce((sum, entry) => sum + entry.credit_amount, 0);
-    const previousBalance = ledgerEntries[0]?.previous_balance || 0;
-    const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
+      // Agregar movimientos
+      ledger.entries.forEach(entry => {
+        data.push([
+          "",
+          entry.entry_date,
+          entry.entry_number,
+          entry.description,
+          entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
+          entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
+          formatCurrency(Math.abs(entry.balance)),
+        ]);
+      });
+
+      // Agregar totales de la cuenta
+      data.push([
+        "",
+        "",
+        "",
+        "TOTALES:",
+        formatCurrency(ledger.totalDebit),
+        formatCurrency(ledger.totalCredit),
+        formatCurrency(Math.abs(ledger.finalBalance)),
+      ]);
+
+      // Línea en blanco entre cuentas
+      data.push(["", "", "", "", "", "", ""]);
+    });
+
+    const grandTotalDebit = accountLedgers.reduce((sum, l) => sum + l.totalDebit, 0);
+    const grandTotalCredit = accountLedgers.reduce((sum, l) => sum + l.totalCredit, 0);
 
     const exportOptions = {
       filename: `Libro_Mayor_${startDate}_${endDate}`,
-      title: `Libro Mayor - ${accountsLabel}`,
+      title: `Libro Mayor - Del ${startDate} al ${endDate}`,
       enterpriseName: enterpriseName,
       headers,
       data,
       totals: [
-        { label: "Saldo Anterior", value: formatCurrency(Math.abs(previousBalance)) },
-        { label: "Total Debe", value: formatCurrency(totalDebit) },
-        { label: "Total Haber", value: formatCurrency(totalCredit) },
-        { label: "Saldo Final", value: formatCurrency(Math.abs(finalBalance)) },
+        { label: "Total General Debe", value: formatCurrency(grandTotalDebit) },
+        { label: "Total General Haber", value: formatCurrency(grandTotalCredit) },
+        { label: "Cantidad de Cuentas", value: accountLedgers.length.toString() },
       ],
     };
 
@@ -368,10 +480,8 @@ export default function ReporteLibroMayor() {
     });
   };
 
-  const totalDebit = ledgerEntries.reduce((sum, entry) => sum + entry.debit_amount, 0);
-  const totalCredit = ledgerEntries.reduce((sum, entry) => sum + entry.credit_amount, 0);
-  const previousBalance = ledgerEntries[0]?.previous_balance || 0;
-  const finalBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0;
+  const grandTotalDebit = accountLedgers.reduce((sum, l) => sum + l.totalDebit, 0);
+  const grandTotalCredit = accountLedgers.reduce((sum, l) => sum + l.totalCredit, 0);
 
   if (!currentEnterpriseId) {
     return (
@@ -380,8 +490,6 @@ export default function ReporteLibroMayor() {
       </div>
     );
   }
-
-  const selectedAccountsInfo = accounts.filter(a => selectedAccounts.includes(a.id));
 
   return (
     <div className="space-y-6">
@@ -470,11 +578,16 @@ export default function ReporteLibroMayor() {
           Generar Reporte
         </Button>
         
-        {reportGenerated && ledgerEntries.length > 0 && (
-          <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
-            <Download className="mr-2 h-4 w-4" />
-            Exportar
-          </Button>
+        {reportGenerated && accountLedgers.length > 0 && (
+          <>
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar
+            </Button>
+            <Button variant="outline" size="sm" onClick={toggleExpandAll}>
+              {expandedAccounts.size === accountLedgers.length ? "Contraer todo" : "Expandir todo"}
+            </Button>
+          </>
         )}
       </div>
 
@@ -485,81 +598,121 @@ export default function ReporteLibroMayor() {
         title="Exportar Libro Mayor"
       />
 
-      {reportGenerated && ledgerEntries.length > 0 && (
+      {reportGenerated && accountLedgers.length > 0 && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          {/* Totales generales */}
+          <div className="flex justify-end gap-6 text-sm p-4 bg-muted rounded-lg">
             <div>
-              <h3 className="text-lg font-semibold">
-                {selectedAccounts.length === accounts.length
-                  ? "Todas las cuentas"
-                  : selectedAccountsInfo.map(a => `${a.account_code} - ${a.account_name}`).join(", ")}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Del {startDate} al {endDate}
-              </p>
+              <span className="text-muted-foreground">Total General Debe: </span>
+              <span className="font-semibold">{formatCurrency(grandTotalDebit)}</span>
             </div>
-            <div className="flex gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Saldo Anterior: </span>
-                <Badge variant="outline" className={previousBalance < 0 ? 'text-red-600' : ''}>
-                  {formatCurrency(Math.abs(previousBalance))}
-                </Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total Debe: </span>
-                <Badge variant="secondary">{formatCurrency(totalDebit)}</Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total Haber: </span>
-                <Badge variant="secondary">{formatCurrency(totalCredit)}</Badge>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Saldo Final: </span>
-                <Badge variant={finalBalance >= 0 ? "default" : "destructive"}>
-                  {formatCurrency(Math.abs(finalBalance))}
-                </Badge>
-              </div>
+            <div>
+              <span className="text-muted-foreground">Total General Haber: </span>
+              <span className="font-semibold">{formatCurrency(grandTotalCredit)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cuentas: </span>
+              <span className="font-semibold">{accountLedgers.length}</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[120px]">Fecha</TableHead>
-                  <TableHead className="w-[150px]">No. Partida</TableHead>
-                  <TableHead className="min-w-[250px]">Descripción</TableHead>
-                  <TableHead className="w-[120px] text-right">Debe</TableHead>
-                  <TableHead className="w-[120px] text-right">Haber</TableHead>
-                  <TableHead className="w-[120px] text-right">Saldo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ledgerEntries.map((entry) => (
-                  <TableRow key={entry.id}>
-                    <TableCell>{entry.entry_date}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {entry.entry_number}
-                    </TableCell>
-                    <TableCell>{entry.description}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-"}
-                    </TableCell>
-                    <TableCell className={`text-right font-mono font-semibold ${entry.balance < 0 ? 'text-red-600' : ''}`}>
-                      {formatCurrency(Math.abs(entry.balance))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          {/* Lista de cuentas con sus movimientos */}
+          {accountLedgers.map((ledger) => (
+            <Collapsible
+              key={ledger.account.id}
+              open={expandedAccounts.has(ledger.account.id)}
+              onOpenChange={() => toggleExpandAccount(ledger.account.id)}
+            >
+              <div className="border rounded-lg overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <div className="flex justify-between items-center p-4 bg-muted/50 cursor-pointer hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-3">
+                      {expandedAccounts.has(ledger.account.id) ? (
+                        <ChevronDown className="h-5 w-5" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5" />
+                      )}
+                      <div>
+                        <h3 className="font-semibold">
+                          {ledger.account.account_code} - {ledger.account.account_name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Del {startDate} al {endDate} • {ledger.entries.length} movimiento(s)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Saldo Ant: </span>
+                        <Badge variant="outline" className={ledger.previousBalance < 0 ? 'text-destructive' : ''}>
+                          {formatCurrency(Math.abs(ledger.previousBalance))}
+                        </Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Debe: </span>
+                        <Badge variant="secondary">{formatCurrency(ledger.totalDebit)}</Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Haber: </span>
+                        <Badge variant="secondary">{formatCurrency(ledger.totalCredit)}</Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Saldo Final: </span>
+                        <Badge variant={ledger.finalBalance >= 0 ? "default" : "destructive"}>
+                          {formatCurrency(Math.abs(ledger.finalBalance))}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent>
+                  {ledger.entries.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[120px]">Fecha</TableHead>
+                          <TableHead className="w-[150px]">No. Partida</TableHead>
+                          <TableHead className="min-w-[250px]">Descripción</TableHead>
+                          <TableHead className="w-[120px] text-right">Debe</TableHead>
+                          <TableHead className="w-[120px] text-right">Haber</TableHead>
+                          <TableHead className="w-[120px] text-right">Saldo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ledger.entries.map((entry) => (
+                          <TableRow key={entry.id}>
+                            <TableCell>{entry.entry_date}</TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {entry.entry_number}
+                            </TableCell>
+                            <TableCell>{entry.description}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-"}
+                            </TableCell>
+                            <TableCell className={`text-right font-mono font-semibold ${entry.balance < 0 ? 'text-destructive' : ''}`}>
+                              {formatCurrency(Math.abs(entry.balance))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="p-4 text-center text-muted-foreground">
+                      Sin movimientos en el período seleccionado
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          ))}
         </div>
       )}
 
-      {reportGenerated && ledgerEntries.length === 0 && !loading && (
+      {reportGenerated && accountLedgers.length === 0 && !loading && (
         <div className="text-center text-muted-foreground py-8">
           No se encontraron movimientos para los criterios seleccionados
         </div>
