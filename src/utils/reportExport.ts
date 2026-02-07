@@ -7,6 +7,11 @@ interface FolioOptions {
   startingFolio: number;
 }
 
+interface PdfTypographyOptions {
+  fontFamily?: "helvetica" | "courier" | "times";
+  fontSize?: number;
+}
+
 interface ExportOptions {
   filename: string;
   title: string;
@@ -16,6 +21,7 @@ interface ExportOptions {
   totals?: { label: string; value: string }[];
   statistics?: { label: string; items: { name: string; value: string; count: number }[] }[];
   folioOptions?: FolioOptions;
+  pdfTypography?: PdfTypographyOptions;
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
@@ -68,7 +74,7 @@ export const exportToExcel = ({ filename, title, enterpriseName, headers, data, 
   XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions }: ExportOptions) => {
+export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography }: ExportOptions) => {
   const doc = new jsPDF({
     orientation: headers.length > 5 ? 'landscape' : 'portrait',
   });
@@ -77,23 +83,32 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
   const pageHeight = doc.internal.pageSize.height;
   const includeFolio = folioOptions?.includeFolio ?? false;
   const startingFolio = folioOptions?.startingFolio ?? 1;
+  
+  // Typography configuration
+  const fontFamily = pdfTypography?.fontFamily ?? 'helvetica';
+  const baseFontSize = pdfTypography?.fontSize ?? 8;
+  const headerFontSize = baseFontSize + 2;
+  const titleFontSize = baseFontSize + 8;
+  const subtitleFontSize = baseFontSize + 4;
 
   // Function to add folio to a page
   const addFolioToPage = (pageNumber: number) => {
     if (includeFolio) {
       const folioNumber = startingFolio + pageNumber - 1;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(baseFontSize + 2);
+      doc.setFont(fontFamily, 'bold');
       // Add folio in top right corner
       doc.text(`Folio: ${folioNumber}`, pageWidth - 14, 10, { align: 'right' });
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(fontFamily, 'normal');
     }
   };
 
   // Encabezado
-  doc.setFontSize(16);
+  doc.setFont(fontFamily, 'bold');
+  doc.setFontSize(titleFontSize);
   doc.text(enterpriseName, 14, 15);
-  doc.setFontSize(12);
+  doc.setFont(fontFamily, 'normal');
+  doc.setFontSize(subtitleFontSize);
   doc.text(title, 14, 22);
   
   // Add folio to first page
@@ -105,13 +120,15 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     head: [headers],
     body: data,
     styles: {
-      fontSize: 8,
+      font: fontFamily,
+      fontSize: baseFontSize,
       cellPadding: 2,
     },
     headStyles: {
       fillColor: [59, 130, 246],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
+      fontSize: headerFontSize,
     },
     alternateRowStyles: {
       fillColor: [245, 247, 250],
@@ -129,11 +146,12 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
 
   // Totales
   if (totals && totals.length > 0) {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(baseFontSize + 2);
+    doc.setFont(fontFamily, 'bold');
     doc.text('RESUMEN DE TOTALES', 14, currentY);
     currentY += 6;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(fontFamily, 'normal');
+    doc.setFontSize(baseFontSize);
     totals.forEach((total) => {
       doc.text(`${total.label}: ${total.value}`, 14, currentY);
       currentY += 5;
@@ -152,12 +170,12 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
         currentY = 20;
       }
 
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(baseFontSize + 2);
+      doc.setFont(fontFamily, 'bold');
       doc.text(stat.label, 14, currentY);
       currentY += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFont(fontFamily, 'normal');
+      doc.setFontSize(baseFontSize + 1);
       
       stat.items.forEach((item) => {
         doc.text(`${item.name}: ${item.value} (${item.count} docs)`, 20, currentY);

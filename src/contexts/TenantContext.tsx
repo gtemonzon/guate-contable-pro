@@ -15,6 +15,8 @@ interface Tenant {
   max_enterprises: number;
   max_users: number;
   plan_type: string;
+  pdf_font_family: string;
+  pdf_font_size: number;
 }
 
 interface TenantContextType {
