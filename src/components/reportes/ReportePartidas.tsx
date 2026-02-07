@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, ChevronRight, ChevronDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -20,6 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface JournalEntryData {
   id: number;
@@ -51,6 +56,8 @@ export default function ReportePartidas() {
   const [includeDetails, setIncludeDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -147,6 +154,11 @@ export default function ReportePartidas() {
           });
         });
         setEntryDetails(groupedDetails);
+        // Expand all entries by default when loading with details
+        setExpandedEntries(new Set(data.map((e: any) => e.id)));
+      } else {
+        setEntryDetails({});
+        setExpandedEntries(new Set());
       }
       
       if (!data || data.length === 0) {
@@ -165,6 +177,44 @@ export default function ReportePartidas() {
       setLoading(false);
     }
   };
+
+  const toggleEntry = (entryId: number) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllEntries = () => {
+    if (expandedEntries.size === entries.length) {
+      setExpandedEntries(new Set());
+    } else {
+      setExpandedEntries(new Set(entries.map(e => e.id)));
+    }
+  };
+
+  // Filter entries based on search term
+  const filteredEntries = useMemo(() => {
+    if (!searchTerm.trim()) return entries;
+    
+    const term = searchTerm.toLowerCase();
+    return entries.filter(entry => 
+      entry.entry_number.toLowerCase().includes(term) ||
+      entry.description.toLowerCase().includes(term) ||
+      entry.entry_type.toLowerCase().includes(term) ||
+      // Also search in details if they exist
+      (entryDetails[entry.id] && entryDetails[entry.id].some(detail => 
+        detail.account_code.toLowerCase().includes(term) ||
+        detail.account_name.toLowerCase().includes(term) ||
+        (detail.description && detail.description.toLowerCase().includes(term))
+      ))
+    );
+  }, [entries, entryDetails, searchTerm]);
 
   const handleExport = (options: FolioExportOptions) => {
     let data: any[] = [];
@@ -242,8 +292,8 @@ export default function ReportePartidas() {
     });
   };
 
-  const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
-  const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+  const totalDebit = filteredEntries.reduce((sum, e) => sum + e.total_debit, 0);
+  const totalCredit = filteredEntries.reduce((sum, e) => sum + e.total_credit, 0);
 
   return (
     <div className="space-y-6">
@@ -305,10 +355,29 @@ export default function ReportePartidas() {
 
       {entries.length > 0 && (
         <div className="space-y-4">
+          {/* Search bar */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por número, descripción, cuenta..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {includeDetails && (
+              <Button variant="outline" size="sm" onClick={toggleAllEntries}>
+                {expandedEntries.size === entries.length ? "Contraer todo" : "Expandir todo"}
+              </Button>
+            )}
+          </div>
+
           <div className="rounded-lg border overflow-auto max-h-[500px]">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
+                  {includeDetails && <TableHead className="w-8"></TableHead>}
                   <TableHead>Número</TableHead>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Tipo</TableHead>
@@ -319,43 +388,81 @@ export default function ReportePartidas() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry, idx) => (
+                {filteredEntries.map((entry) => (
                   <React.Fragment key={entry.id}>
-                    <TableRow className="font-semibold">
-                      <TableCell>{entry.entry_number}</TableCell>
-                      <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
-                      <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                      <TableCell>{entry.description}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
-                      <TableCell>
-                        {entry.is_posted ? (
-                          <span className="text-green-600">Contabilizado</span>
-                        ) : (
-                          <span className="text-muted-foreground">Borrador</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                    {includeDetails && entryDetails[entry.id] && (
-                      <>
-                        {entryDetails[entry.id].map((detail, detailIdx) => (
-                          <TableRow key={`${entry.id}-${detailIdx}`} className="bg-muted/30">
-                            <TableCell className="pl-8 text-sm" colSpan={2}>
-                              {detail.account_code} - {detail.account_name}
-                            </TableCell>
-                            <TableCell className="text-sm" colSpan={2}>
-                              {detail.description || '-'}
-                            </TableCell>
-                            <TableCell className="text-right text-sm">
-                              {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}
-                            </TableCell>
-                            <TableCell className="text-right text-sm">
-                              {detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '-'}
-                            </TableCell>
-                            <TableCell></TableCell>
-                          </TableRow>
-                        ))}
-                      </>
+                    {includeDetails ? (
+                      <Collapsible
+                        open={expandedEntries.has(entry.id)}
+                        onOpenChange={() => toggleEntry(entry.id)}
+                        asChild
+                      >
+                        <>
+                          <CollapsibleTrigger asChild>
+                            <TableRow className="font-semibold cursor-pointer hover:bg-muted/50">
+                              <TableCell className="w-8">
+                                {entryDetails[entry.id] && entryDetails[entry.id].length > 0 && (
+                                  expandedEntries.has(entry.id) ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )
+                                )}
+                              </TableCell>
+                              <TableCell>{entry.entry_number}</TableCell>
+                              <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
+                              <TableCell className="capitalize">{entry.entry_type}</TableCell>
+                              <TableCell>{entry.description}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
+                              <TableCell>
+                                {entry.is_posted ? (
+                                  <span className="text-green-600">Contabilizado</span>
+                                ) : (
+                                  <span className="text-muted-foreground">Borrador</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent asChild>
+                            <>
+                              {entryDetails[entry.id]?.map((detail, detailIdx) => (
+                                <TableRow key={`${entry.id}-${detailIdx}`} className="bg-muted/30">
+                                  <TableCell></TableCell>
+                                  <TableCell className="pl-4 text-sm" colSpan={2}>
+                                    {detail.account_code} - {detail.account_name}
+                                  </TableCell>
+                                  <TableCell className="text-sm" colSpan={2}>
+                                    {detail.description || '-'}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm">
+                                    {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-right text-sm">
+                                    {detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '-'}
+                                  </TableCell>
+                                  <TableCell></TableCell>
+                                </TableRow>
+                              ))}
+                            </>
+                          </CollapsibleContent>
+                        </>
+                      </Collapsible>
+                    ) : (
+                      <TableRow className="font-semibold">
+                        <TableCell>{entry.entry_number}</TableCell>
+                        <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
+                        <TableCell className="capitalize">{entry.entry_type}</TableCell>
+                        <TableCell>{entry.description}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
+                        <TableCell>
+                          {entry.is_posted ? (
+                            <span className="text-green-600">Contabilizado</span>
+                          ) : (
+                            <span className="text-muted-foreground">Borrador</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
                     )}
                   </React.Fragment>
                 ))}
@@ -374,7 +481,7 @@ export default function ReportePartidas() {
             </div>
             <div>
               <span className="text-muted-foreground">Partidas: </span>
-              <span className="font-semibold">{entries.length}</span>
+              <span className="font-semibold">{filteredEntries.length}</span>
             </div>
           </div>
         </div>
