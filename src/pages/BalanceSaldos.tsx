@@ -357,65 +357,67 @@ export default function BalanceSaldos() {
 
   return (
     <div className="p-8 space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Balance de Saldos</h1>
-          <p className="text-muted-foreground">Saldos de cuentas por período contable</p>
-          
-          <div className="mt-4 flex gap-6 text-sm">
-            <div>
-              <span className="text-muted-foreground">Total Debe: </span>
-              <span className="font-semibold">Q {totals.totalDebit}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Total Haber: </span>
-              <span className="font-semibold">Q {totals.totalCredit}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex gap-4 items-end flex-wrap">
+      <div className="sticky top-0 z-10 bg-background pb-4 -mx-8 px-8 pt-0 border-b mb-2">
+        <div className="flex justify-between items-start">
           <div>
-            <Label htmlFor="period-select">Período Contable</Label>
-            <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
-              <SelectTrigger id="period-select" className="w-[200px]">
-                <SelectValue placeholder="Seleccionar período" />
-              </SelectTrigger>
-              <SelectContent>
-                {periods.map((period) => (
-                  <SelectItem key={period.id} value={String(period.id)}>
-                    {period.year} ({period.status})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="start-date">Desde</Label>
-            <Input
-              id="start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-[150px]"
-            />
+            <h1 className="text-3xl font-bold">Balance de Saldos</h1>
+            <p className="text-muted-foreground">Saldos de cuentas por período contable</p>
+            
+            <div className="mt-4 flex gap-6 text-sm">
+              <div>
+                <span className="text-muted-foreground">Total Debe: </span>
+                <span className="font-semibold">Q {totals.totalDebit}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Total Haber: </span>
+                <span className="font-semibold">Q {totals.totalCredit}</span>
+              </div>
+            </div>
           </div>
           
-          <div>
-            <Label htmlFor="end-date">Hasta</Label>
-            <Input
-              id="end-date"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-[150px]"
-            />
-          </div>
+          <div className="flex gap-4 items-end flex-wrap">
+            <div>
+              <Label htmlFor="period-select">Período Contable</Label>
+              <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
+                <SelectTrigger id="period-select" className="w-[200px]">
+                  <SelectValue placeholder="Seleccionar período" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map((period) => (
+                    <SelectItem key={period.id} value={String(period.id)}>
+                      {period.year} ({period.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Button onClick={handleDateFilterChange} variant="outline">
-            Filtrar
-          </Button>
+            <div>
+              <Label htmlFor="start-date">Desde</Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-[150px]"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="end-date">Hasta</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-[150px]"
+              />
+            </div>
+
+            <Button onClick={handleDateFilterChange} variant="outline">
+              Filtrar
+            </Button>
+          </div>
         </div>
       </div>
 
