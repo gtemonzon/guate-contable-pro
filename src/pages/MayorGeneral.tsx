@@ -429,14 +429,17 @@ export default function MayorGeneral() {
         const totalDebit = entries.reduce((sum, e) => sum + e.debit_amount, 0);
         const totalCredit = entries.reduce((sum, e) => sum + e.credit_amount, 0);
 
-        ledgers.push({
-          account: accountInfo,
-          entries,
-          previousBalance,
-          totalDebit,
-          totalCredit,
-          finalBalance: entries.length > 0 ? entries[entries.length - 1].balance : previousBalance,
-        });
+        // Solo agregar cuentas que tienen movimientos en el período
+        if (entries.length > 0) {
+          ledgers.push({
+            account: accountInfo,
+            entries,
+            previousBalance,
+            totalDebit,
+            totalCredit,
+            finalBalance: entries[entries.length - 1].balance,
+          });
+        }
       }
 
       // Ordenar por código de cuenta
