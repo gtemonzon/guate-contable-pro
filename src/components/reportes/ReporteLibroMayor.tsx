@@ -470,6 +470,7 @@ export default function ReporteLibroMayor() {
     } else {
       exportToPDF({
         ...exportOptions,
+        forcePortrait: true,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,

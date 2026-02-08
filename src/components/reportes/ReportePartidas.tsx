@@ -279,6 +279,7 @@ export default function ReportePartidas() {
     } else {
       exportToPDF({
         ...exportOptions,
+        forcePortrait: true,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
