@@ -234,31 +234,75 @@ export default function ReportePartidas() {
     let data: any[] = [];
     
     // Export only posted entries (entries state already filtered)
+    // New layout: details first, then description and totals at the end of each entry
     if (includeDetails) {
+      // Headers for detailed view: Cuenta, Descripción Línea, Debe, Haber
+      const headers = ["Cuenta", "Concepto", "Debe", "Haber"];
+      
       entries.forEach(e => {
+        // First: Entry header row with number, date, type (no totals yet)
         data.push([
-          e.entry_number,
-          new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-          e.entry_type,
-          e.description,
-          options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
-          options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
+          `${e.entry_number} - ${new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} - ${e.entry_type}`,
+          '',
+          '',
+          '',
         ]);
         
+        // Second: Detail lines
         if (entryDetails[e.id]) {
           entryDetails[e.id].forEach(detail => {
             data.push([
-              '',
-              `  ${detail.account_code} - ${detail.account_name}`,
-              '',
+              `${detail.account_code} - ${detail.account_name}`,
               detail.description || '',
               detail.debit_amount > 0 ? (options.format === 'excel' ? detail.debit_amount.toFixed(2) : formatCurrency(detail.debit_amount)) : '',
               detail.credit_amount > 0 ? (options.format === 'excel' ? detail.credit_amount.toFixed(2) : formatCurrency(detail.credit_amount)) : '',
             ]);
           });
         }
+        
+        // Third: Description and totals at the end of the entry
+        data.push([
+          e.description,
+          'TOTALES:',
+          options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
+          options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
+        ]);
+        
+        // Add empty row separator between entries
+        data.push(['', '', '', '']);
       });
+
+      const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+      const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+
+      const exportOptions = {
+        filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+        title: `Libro Diario con Detalle - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+        enterpriseName,
+        headers,
+        data,
+        totals: [
+          { label: "Total Debe", value: formatCurrency(totalDebit) },
+          { label: "Total Haber", value: formatCurrency(totalCredit) },
+          { label: "Cantidad de Partidas", value: entries.length.toString() },
+        ],
+      };
+
+      if (options.format === 'excel') {
+        exportToExcel(exportOptions);
+      } else {
+        exportToPDF({
+          ...exportOptions,
+          forcePortrait: true,
+          folioOptions: {
+            includeFolio: options.includeFolio,
+            startingFolio: options.startingFolio,
+          },
+        });
+      }
     } else {
+      // Simple view without details
+      const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber"];
       data = entries.map(e => [
         e.entry_number,
         new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
@@ -267,37 +311,35 @@ export default function ReportePartidas() {
         options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
         options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
       ]);
-    }
 
-    const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
-    const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+      const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+      const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
-    // Removed "Estado" column since we only export posted entries
-    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber"];
-    const exportOptions = {
-      filename: `Libro_Diario_${dateFrom}_${dateTo}`,
-      title: `Libro Diario${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
-      enterpriseName,
-      headers,
-      data,
-      totals: [
-        { label: "Total Debe", value: formatCurrency(totalDebit) },
-        { label: "Total Haber", value: formatCurrency(totalCredit) },
-        { label: "Cantidad de Partidas", value: entries.length.toString() },
-      ],
-    };
+      const exportOptions = {
+        filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+        title: `Libro Diario - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+        enterpriseName,
+        headers,
+        data,
+        totals: [
+          { label: "Total Debe", value: formatCurrency(totalDebit) },
+          { label: "Total Haber", value: formatCurrency(totalCredit) },
+          { label: "Cantidad de Partidas", value: entries.length.toString() },
+        ],
+      };
 
-    if (options.format === 'excel') {
-      exportToExcel(exportOptions);
-    } else {
-      exportToPDF({
-        ...exportOptions,
-        forcePortrait: true,
-        folioOptions: {
-          includeFolio: options.includeFolio,
-          startingFolio: options.startingFolio,
-        },
-      });
+      if (options.format === 'excel') {
+        exportToExcel(exportOptions);
+      } else {
+        exportToPDF({
+          ...exportOptions,
+          forcePortrait: true,
+          folioOptions: {
+            includeFolio: options.includeFolio,
+            startingFolio: options.startingFolio,
+          },
+        });
+      }
     }
 
     toast({
