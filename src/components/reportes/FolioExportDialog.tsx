@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { FileText, FileSpreadsheet } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileText, FileSpreadsheet, AlertTriangle } from "lucide-react";
 
 export interface FolioExportOptions {
   format: 'excel' | 'pdf';
@@ -24,13 +25,15 @@ interface FolioExportDialogProps {
   onOpenChange: (open: boolean) => void;
   onExport: (options: FolioExportOptions) => void;
   title?: string;
+  warningMessage?: string;
 }
 
 export function FolioExportDialog({
   open,
   onOpenChange,
   onExport,
-  title = "Exportar Reporte"
+  title = "Exportar Reporte",
+  warningMessage
 }: FolioExportDialogProps) {
   const [includeFolio, setIncludeFolio] = useState(false);
   const [startingFolio, setStartingFolio] = useState(1);
@@ -58,6 +61,16 @@ export function FolioExportDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Warning message if provided */}
+          {warningMessage && (
+            <Alert className="border-amber-500/50 bg-amber-500/10">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-foreground">
+                {warningMessage}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Folio Options */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">

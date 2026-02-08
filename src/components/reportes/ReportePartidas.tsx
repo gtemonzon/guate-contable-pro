@@ -46,12 +46,19 @@ interface JournalEntryDetail {
   description: string | null;
 }
 
+// Separate posted entries from draft entries
+interface ReportData {
+  postedEntries: JournalEntryData[];
+  draftCount: number;
+}
+
 export default function ReportePartidas() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [entries, setEntries] = useState<JournalEntryData[]>([]);
+  const [draftCount, setDraftCount] = useState(0);
   const [entryDetails, setEntryDetails] = useState<Record<number, JournalEntryDetail[]>>({});
   const [includeDetails, setIncludeDetails] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -122,7 +129,14 @@ export default function ReportePartidas() {
           .order("entry_date", { ascending: true })
           .order("entry_number", { ascending: true })
       );
-      setEntries(data || []);
+      
+      // Separate posted entries and count drafts
+      const allEntries = data || [];
+      const postedEntries = allEntries.filter((e: JournalEntryData) => e.is_posted);
+      const drafts = allEntries.filter((e: JournalEntryData) => !e.is_posted).length;
+      
+      setEntries(postedEntries);
+      setDraftCount(drafts);
 
       // Fetch details if needed (con paginación automática)
       if (includeDetails && data && data.length > 0) {
@@ -219,6 +233,7 @@ export default function ReportePartidas() {
   const handleExport = (options: FolioExportOptions) => {
     let data: any[] = [];
     
+    // Export only posted entries (entries state already filtered)
     if (includeDetails) {
       entries.forEach(e => {
         data.push([
@@ -228,7 +243,6 @@ export default function ReportePartidas() {
           e.description,
           options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
           options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
-          e.is_posted ? 'Contabilizado' : 'Borrador',
         ]);
         
         if (entryDetails[e.id]) {
@@ -240,7 +254,6 @@ export default function ReportePartidas() {
               detail.description || '',
               detail.debit_amount > 0 ? (options.format === 'excel' ? detail.debit_amount.toFixed(2) : formatCurrency(detail.debit_amount)) : '',
               detail.credit_amount > 0 ? (options.format === 'excel' ? detail.credit_amount.toFixed(2) : formatCurrency(detail.credit_amount)) : '',
-              '',
             ]);
           });
         }
@@ -253,14 +266,14 @@ export default function ReportePartidas() {
         e.description,
         options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
         options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
-        e.is_posted ? 'Contabilizado' : 'Borrador',
       ]);
     }
 
     const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
     const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
-    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber", "Estado"];
+    // Removed "Estado" column since we only export posted entries
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber"];
     const exportOptions = {
       filename: `Libro_Diario_${dateFrom}_${dateTo}`,
       title: `Libro Diario${includeDetails ? ' con Detalle' : ''} - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
@@ -352,6 +365,7 @@ export default function ReportePartidas() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro Diario"
+        warningMessage={draftCount > 0 ? `El reporte se emitirá únicamente con partidas contabilizadas. En el período seleccionado hay ${draftCount} partida${draftCount > 1 ? 's' : ''} en estado borrador o pendiente${draftCount > 1 ? 's' : ''} de contabilizar.` : undefined}
       />
 
       {entries.length > 0 && (
@@ -385,7 +399,6 @@ export default function ReportePartidas() {
                   <TableHead>Descripción</TableHead>
                   <TableHead className="text-right">Debe</TableHead>
                   <TableHead className="text-right">Haber</TableHead>
-                  <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -415,13 +428,6 @@ export default function ReportePartidas() {
                               <TableCell>{entry.description}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
-                              <TableCell>
-                                {entry.is_posted ? (
-                                  <span className="text-green-600">Contabilizado</span>
-                                ) : (
-                                  <span className="text-muted-foreground">Borrador</span>
-                                )}
-                              </TableCell>
                             </TableRow>
                           </CollapsibleTrigger>
                           <CollapsibleContent asChild>
@@ -441,7 +447,6 @@ export default function ReportePartidas() {
                                   <TableCell className="text-right text-sm">
                                     {detail.credit_amount > 0 ? formatCurrency(detail.credit_amount) : '-'}
                                   </TableCell>
-                                  <TableCell></TableCell>
                                 </TableRow>
                               ))}
                             </>
@@ -456,13 +461,6 @@ export default function ReportePartidas() {
                         <TableCell>{entry.description}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
-                        <TableCell>
-                          {entry.is_posted ? (
-                            <span className="text-green-600">Contabilizado</span>
-                          ) : (
-                            <span className="text-muted-foreground">Borrador</span>
-                          )}
-                        </TableCell>
                       </TableRow>
                     )}
                   </React.Fragment>
