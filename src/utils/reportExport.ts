@@ -22,6 +22,7 @@ interface ExportOptions {
   statistics?: { label: string; items: { name: string; value: string; count: number }[] }[];
   folioOptions?: FolioOptions;
   pdfTypography?: PdfTypographyOptions;
+  forcePortrait?: boolean;
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
@@ -74,9 +75,13 @@ export const exportToExcel = ({ filename, title, enterpriseName, headers, data, 
   XLSX.writeFile(wb, `${filename}.xlsx`);
 };
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography }: ExportOptions) => {
+interface PdfOrientationOptions {
+  forcePortrait?: boolean;
+}
+
+export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait }: ExportOptions) => {
   const doc = new jsPDF({
-    orientation: headers.length > 5 ? 'landscape' : 'portrait',
+    orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
 
   const pageWidth = doc.internal.pageSize.width;
@@ -144,45 +149,62 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
   let currentY = (doc as any).lastAutoTable.finalY + 10;
   let currentPage = doc.getNumberOfPages();
 
-  // Totales
-  if (totals && totals.length > 0) {
-    doc.setFontSize(baseFontSize + 2);
-    doc.setFont(fontFamily, 'bold');
-    doc.text('RESUMEN DE TOTALES', 14, currentY);
-    currentY += 6;
-    doc.setFont(fontFamily, 'normal');
-    doc.setFontSize(baseFontSize);
-    totals.forEach((total) => {
-      doc.text(`${total.label}: ${total.value}`, 14, currentY);
-      currentY += 5;
-    });
-    currentY += 5;
-  }
+  // Calculate if we have statistics to show side by side
+  const hasStatistics = statistics && statistics.length > 0;
+  
+  // Totales y Estadísticas lado a lado
+  if ((totals && totals.length > 0) || hasStatistics) {
+    // Check if we need a new page
+    const requiredHeight = Math.max(
+      totals ? (totals.length * 5 + 15) : 0,
+      hasStatistics ? (statistics!.reduce((sum, s) => sum + s.items.length * 5 + 10, 0) + 10) : 0
+    );
+    
+    if (currentY + requiredHeight > pageHeight - 20) {
+      doc.addPage();
+      currentPage++;
+      addFolioToPage(currentPage);
+      currentY = 20;
+    }
 
-  // Estadísticas
-  if (statistics && statistics.length > 0) {
-    statistics.forEach((stat) => {
-      // Verificar si necesitamos nueva página
-      if (currentY > pageHeight - 40) {
-        doc.addPage();
-        currentPage++;
-        addFolioToPage(currentPage);
-        currentY = 20;
-      }
+    const leftColumnX = 14;
+    const rightColumnX = pageWidth / 2 + 10;
+    let leftY = currentY;
+    let rightY = currentY;
 
+    // Totales en la columna izquierda
+    if (totals && totals.length > 0) {
       doc.setFontSize(baseFontSize + 2);
       doc.setFont(fontFamily, 'bold');
-      doc.text(stat.label, 14, currentY);
-      currentY += 6;
+      doc.text('RESUMEN DE TOTALES', leftColumnX, leftY);
+      leftY += 6;
       doc.setFont(fontFamily, 'normal');
-      doc.setFontSize(baseFontSize + 1);
-      
-      stat.items.forEach((item) => {
-        doc.text(`${item.name}: ${item.value} (${item.count} docs)`, 20, currentY);
-        currentY += 5;
+      doc.setFontSize(baseFontSize);
+      totals.forEach((total) => {
+        doc.text(`${total.label}: ${total.value}`, leftColumnX, leftY);
+        leftY += 5;
       });
-      currentY += 3;
-    });
+    }
+
+    // Estadísticas en la columna derecha
+    if (hasStatistics) {
+      statistics!.forEach((stat) => {
+        doc.setFontSize(baseFontSize + 2);
+        doc.setFont(fontFamily, 'bold');
+        doc.text(stat.label, rightColumnX, rightY);
+        rightY += 6;
+        doc.setFont(fontFamily, 'normal');
+        doc.setFontSize(baseFontSize + 1);
+        
+        stat.items.forEach((item) => {
+          doc.text(`${item.name}: ${item.value} (${item.count} docs)`, rightColumnX + 4, rightY);
+          rightY += 5;
+        });
+        rightY += 3;
+      });
+    }
+
+    currentY = Math.max(leftY, rightY) + 5;
   }
 
   doc.save(`${filename}.pdf`);

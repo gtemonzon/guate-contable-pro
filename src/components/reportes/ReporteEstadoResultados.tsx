@@ -426,11 +426,32 @@ export default function ReporteEstadoResultados() {
   };
 
   const handleExportPDF = () => {
-    const headers = ["Concepto", "Monto"];
-    const data = reportLines.map(line => [
-      line.type === 'account' ? `  ${line.label}` : line.label,
-      `Q ${line.amount.toFixed(2)}`,
-    ]);
+    // Get max account level for dynamic column generation
+    const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
+    const levelCount = Math.min(maxLevel, 5); // Cap at 5 levels
+    
+    // Create headers with level columns
+    const headers = ["Concepto", ...Array.from({ length: levelCount }, (_, i) => `Nivel ${i + 1}`)];
+    
+    // Transform data to multi-column format
+    const data = filteredReportLines.map(line => {
+      const row: string[] = [line.type === 'account' ? `  ${line.label}` : line.label];
+      
+      // Add empty columns for each level
+      for (let i = 0; i < levelCount; i++) {
+        if (line.type === 'section') {
+          row.push('');
+        } else if (line.type === 'account' && line.accountLevel === i + 1) {
+          row.push(`Q ${line.amount.toFixed(2)}`);
+        } else if ((line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated') && i === levelCount - 1) {
+          row.push(`Q ${line.amount.toFixed(2)}`);
+        } else {
+          row.push('');
+        }
+      }
+      
+      return row;
+    });
 
     exportToPDF({
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
@@ -438,6 +459,7 @@ export default function ReporteEstadoResultados() {
       enterpriseName,
       headers,
       data,
+      forcePortrait: true,
     });
 
     toast({
