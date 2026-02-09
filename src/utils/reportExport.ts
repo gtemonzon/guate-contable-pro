@@ -23,6 +23,7 @@ interface ExportOptions {
   folioOptions?: FolioOptions;
   pdfTypography?: PdfTypographyOptions;
   forcePortrait?: boolean;
+  boldRows?: number[];
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
@@ -79,7 +80,7 @@ interface PdfOrientationOptions {
   forcePortrait?: boolean;
 }
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait }: ExportOptions) => {
+export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows }: ExportOptions) => {
   const doc = new jsPDF({
     orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
@@ -137,6 +138,11 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     },
     alternateRowStyles: {
       fillColor: [245, 247, 250],
+    },
+    didParseCell: (cellData) => {
+      if (boldRows && boldRows.includes(cellData.row.index)) {
+        cellData.cell.styles.fontStyle = 'bold';
+      }
     },
     didDrawPage: (data) => {
       // Add folio to each new page (except first which we already did)
