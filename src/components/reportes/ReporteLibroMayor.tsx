@@ -72,6 +72,7 @@ export default function ReporteLibroMayor() {
   const [reportGenerated, setReportGenerated] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
+  const [levelFilter, setLevelFilter] = useState<number | null>(null);
 
   const { toast } = useToast();
 
@@ -146,6 +147,26 @@ export default function ReporteLibroMayor() {
     }
   };
 
+  // Compute available levels and filtered accounts
+  const accountLevels = useMemo(() => {
+    const levels = new Set<number>();
+    accounts.forEach(a => {
+      const level = a.account_code.replace(/\.0*$/, '').split('.').length;
+      // Also count by dots: level = number of segments
+      const dotLevel = a.account_code.split('.').filter(s => s.length > 0).length;
+      levels.add(dotLevel);
+    });
+    return Array.from(levels).sort((a, b) => a - b);
+  }, [accounts]);
+
+  const filteredAccounts = useMemo(() => {
+    if (levelFilter === null) return accounts;
+    return accounts.filter(a => {
+      const level = a.account_code.split('.').filter(s => s.length > 0).length;
+      return level === levelFilter;
+    });
+  }, [accounts, levelFilter]);
+
   const toggleAccount = (accountId: number) => {
     setSelectedAccounts(prev =>
       prev.includes(accountId)
@@ -155,10 +176,15 @@ export default function ReporteLibroMayor() {
   };
 
   const toggleAllAccounts = () => {
-    if (selectedAccounts.length === accounts.length) {
-      setSelectedAccounts([]);
+    const targetAccounts = filteredAccounts;
+    const allSelected = targetAccounts.every(a => selectedAccounts.includes(a.id));
+    if (allSelected) {
+      setSelectedAccounts(prev => prev.filter(id => !targetAccounts.find(a => a.id === id)));
     } else {
-      setSelectedAccounts(accounts.map(a => a.id));
+      setSelectedAccounts(prev => {
+        const newIds = targetAccounts.map(a => a.id).filter(id => !prev.includes(id));
+        return [...prev, ...newIds];
+      });
     }
   };
 
@@ -406,16 +432,15 @@ export default function ReporteLibroMayor() {
   const handleExport = (options: FolioExportOptions) => {
     if (accountLedgers.length === 0) return;
 
-    const headers = ["Cuenta", "Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
     const data: any[][] = [];
     const boldRows: number[] = [];
 
     accountLedgers.forEach(ledger => {
-      // Agregar encabezado de cuenta (bold)
+      // Agregar encabezado de cuenta (bold) - spans full width
       boldRows.push(data.length);
       data.push([
         `${ledger.account.account_code} - ${ledger.account.account_name}`,
-        "",
         "",
         `Saldo Anterior: ${formatCurrency(Math.abs(ledger.previousBalance))}`,
         "",
@@ -426,7 +451,6 @@ export default function ReporteLibroMayor() {
       // Agregar movimientos
       ledger.entries.forEach(entry => {
         data.push([
-          "",
           entry.entry_date,
           entry.entry_number,
           entry.description,
@@ -441,7 +465,6 @@ export default function ReporteLibroMayor() {
       data.push([
         "",
         "",
-        "",
         "TOTALES:",
         formatCurrency(ledger.totalDebit),
         formatCurrency(ledger.totalCredit),
@@ -449,7 +472,7 @@ export default function ReporteLibroMayor() {
       ]);
 
       // Línea en blanco entre cuentas
-      data.push(["", "", "", "", "", "", ""]);
+      data.push(["", "", "", "", "", ""]);
     });
 
     const exportOptions = {
@@ -514,22 +537,45 @@ export default function ReporteLibroMayor() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
-              <div className="max-h-[300px] overflow-y-auto p-2">
-                <div className="flex items-center space-x-2 px-2 py-2 border-b">
+              <div className="p-2 border-b">
+                <div className="flex flex-wrap gap-1 mb-2">
+                  <Button
+                    variant={levelFilter === null ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setLevelFilter(null)}
+                  >
+                    Todas
+                  </Button>
+                  {accountLevels.map(level => (
+                    <Button
+                      key={level}
+                      variant={levelFilter === level ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setLevelFilter(level)}
+                    >
+                      Nivel {level}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center space-x-2 px-2 py-1">
                   <Checkbox
                     id="select-all"
-                    checked={selectedAccounts.length === accounts.length}
+                    checked={filteredAccounts.length > 0 && filteredAccounts.every(a => selectedAccounts.includes(a.id))}
                     onCheckedChange={toggleAllAccounts}
                   />
                   <label
                     htmlFor="select-all"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    className="text-sm font-medium leading-none cursor-pointer"
                   >
-                    Seleccionar todas
+                    Seleccionar todas {levelFilter !== null ? `(Nivel ${levelFilter})` : ''}
                   </label>
                 </div>
-                <div className="space-y-1 mt-2">
-                  {accounts.map((account) => (
+              </div>
+              <div className="max-h-[300px] overflow-y-auto p-2">
+                <div className="space-y-1">
+                  {filteredAccounts.map((account) => (
                     <div
                       key={account.id}
                       className="flex items-center space-x-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
