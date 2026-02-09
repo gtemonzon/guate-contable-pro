@@ -408,9 +408,11 @@ export default function ReporteLibroMayor() {
 
     const headers = ["Cuenta", "Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
     const data: any[][] = [];
+    const boldRows: number[] = [];
 
     accountLedgers.forEach(ledger => {
-      // Agregar encabezado de cuenta
+      // Agregar encabezado de cuenta (bold)
+      boldRows.push(data.length);
       data.push([
         `${ledger.account.account_code} - ${ledger.account.account_name}`,
         "",
@@ -434,7 +436,8 @@ export default function ReporteLibroMayor() {
         ]);
       });
 
-      // Agregar totales de la cuenta
+      // Agregar totales de la cuenta (bold)
+      boldRows.push(data.length);
       data.push([
         "",
         "",
@@ -449,20 +452,13 @@ export default function ReporteLibroMayor() {
       data.push(["", "", "", "", "", "", ""]);
     });
 
-    const grandTotalDebit = accountLedgers.reduce((sum, l) => sum + l.totalDebit, 0);
-    const grandTotalCredit = accountLedgers.reduce((sum, l) => sum + l.totalCredit, 0);
-
     const exportOptions = {
       filename: `Libro_Mayor_${startDate}_${endDate}`,
       title: `Libro Mayor - Del ${startDate} al ${endDate}`,
       enterpriseName: enterpriseName,
       headers,
       data,
-      totals: [
-        { label: "Total General Debe", value: formatCurrency(grandTotalDebit) },
-        { label: "Total General Haber", value: formatCurrency(grandTotalCredit) },
-        { label: "Cantidad de Cuentas", value: accountLedgers.length.toString() },
-      ],
+      boldRows,
     };
 
     if (options.format === 'excel') {
@@ -471,6 +467,7 @@ export default function ReporteLibroMayor() {
       exportToPDF({
         ...exportOptions,
         forcePortrait: true,
+        boldRows,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
