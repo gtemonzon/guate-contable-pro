@@ -50,6 +50,7 @@ interface SaleEntry {
   isNew?: boolean;
   establishment_code?: string | null;
   establishment_name?: string | null;
+  _recommendedFields?: string[];
 }
 
 export default function LibroVentas() {
@@ -391,6 +392,9 @@ export default function LibroVentas() {
       defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
+    const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
+    if (lastIncomeAccountId) recommendedList.push('income_account_id');
+
     const newEntry: SaleEntry = {
       client_id: `tmp-${crypto.randomUUID()}`,
       invoice_series: "",
@@ -406,6 +410,7 @@ export default function LibroVentas() {
       income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
+      _recommendedFields: recommendedList,
     };
     setSales(prev => [...prev, newEntry]);
     setFocusNewRow(true);
@@ -1242,6 +1247,7 @@ export default function LibroVentas() {
                     onSave={saveRow}
                     onDelete={deleteRow}
                     onToggleAnnulled={toggleAnnulled}
+                    recommendedFields={sale.isNew ? (sale as any)._recommendedFields || [] : []}
                     isEditing={editingIndex === realIndex}
                     onStartEdit={(idx) => setEditingIndex(idx)}
                     onCancelEdit={() => setEditingIndex(null)}
