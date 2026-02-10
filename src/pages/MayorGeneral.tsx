@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -122,6 +122,7 @@ export default function MayorGeneral() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [accountsPopoverOpen, setAccountsPopoverOpen] = useState(false);
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
+  const [levelFilter, setLevelFilter] = useState<number | null>(null);
 
   const { toast } = useToast();
 
@@ -218,11 +219,31 @@ export default function MayorGeneral() {
     );
   };
 
+  const accountLevels = useMemo(() => {
+    const levels = new Set<number>();
+    accounts.forEach(a => {
+      const dotLevel = a.account_code.split('.').filter(s => s.length > 0).length;
+      levels.add(dotLevel);
+    });
+    return Array.from(levels).sort();
+  }, [accounts]);
+
+  const filteredAccounts = useMemo(() => {
+    if (levelFilter === null) return accounts;
+    return accounts.filter(a => {
+      const dotLevel = a.account_code.split('.').filter(s => s.length > 0).length;
+      return dotLevel === levelFilter;
+    });
+  }, [accounts, levelFilter]);
+
   const toggleAllAccounts = () => {
-    if (selectedAccounts.length === accounts.length) {
-      setSelectedAccounts([]);
+    const targetAccounts = filteredAccounts;
+    const allSelected = targetAccounts.every(a => selectedAccounts.includes(a.id));
+    if (allSelected) {
+      setSelectedAccounts(prev => prev.filter(id => !targetAccounts.some(a => a.id === id)));
     } else {
-      setSelectedAccounts(accounts.map(a => a.id));
+      const newIds = targetAccounts.map(a => a.id);
+      setSelectedAccounts(prev => Array.from(new Set([...prev, ...newIds])));
     }
   };
 
@@ -566,17 +587,38 @@ export default function MayorGeneral() {
                 <PopoverContent className="w-[400px] p-0" align="start">
                   <Command>
                     <CommandInput placeholder="Buscar cuenta..." />
+                    <div className="flex flex-wrap gap-1 px-2 py-2 border-b">
+                      <Button
+                        variant={levelFilter === null ? "default" : "outline"}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setLevelFilter(null)}
+                      >
+                        Todos
+                      </Button>
+                      {accountLevels.map((level) => (
+                        <Button
+                          key={level}
+                          variant={levelFilter === level ? "default" : "outline"}
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setLevelFilter(level)}
+                        >
+                          Nivel {level}
+                        </Button>
+                      ))}
+                    </div>
                     <CommandList className="max-h-[300px]">
                       <CommandEmpty>No se encontraron cuentas.</CommandEmpty>
                       <CommandGroup>
                         <CommandItem onSelect={toggleAllAccounts}>
                           <Checkbox
-                            checked={selectedAccounts.length === accounts.length && accounts.length > 0}
+                            checked={filteredAccounts.length > 0 && filteredAccounts.every(a => selectedAccounts.includes(a.id))}
                             className="mr-2"
                           />
                           <span className="font-semibold">Seleccionar todas</span>
                         </CommandItem>
-                        {accounts.map((account) => (
+                        {filteredAccounts.map((account) => (
                           <CommandItem
                             key={account.id}
                             value={`${account.account_code} ${account.account_name}`}
