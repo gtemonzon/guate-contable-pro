@@ -48,6 +48,7 @@ interface PurchaseEntry {
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;
+  _recommendedFields?: string[];
 }
 
 export default function LibroCompras() {
@@ -399,6 +400,10 @@ export default function LibroCompras() {
       defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
+    const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
+    if (lastExpenseAccountId) recommendedList.push('expense_account_id');
+    if (lastBankAccountId) recommendedList.push('bank_account_id');
+
     const newEntry: PurchaseEntry = {
       invoice_series: "",
       invoice_number: "",
@@ -415,6 +420,7 @@ export default function LibroCompras() {
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
+      _recommendedFields: recommendedList,
     };
     setPurchases(prev => [...prev, newEntry]);
     setFocusNewRow(true);
@@ -1187,6 +1193,7 @@ export default function LibroCompras() {
                     }
                   }}
                   onDelete={deleteRow}
+                  recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
                   isEditing={editingIndex === index}
                   onStartEdit={(idx) => setEditingIndex(idx)}
                   onCancelEdit={() => setEditingIndex(null)}

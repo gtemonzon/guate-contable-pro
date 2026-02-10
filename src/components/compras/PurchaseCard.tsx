@@ -39,6 +39,7 @@ interface PurchaseCardProps {
   onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
+  recommendedFields?: string[];
   isHighlighted?: boolean;
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
@@ -48,6 +49,9 @@ interface PurchaseCardProps {
 export interface PurchaseCardRef {
   focusDateField: () => void;
 }
+
+// Style for system-recommended values that user hasn't touched
+const recommendedStyle = "italic text-muted-foreground/60";
 
 export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ 
   purchase, 
@@ -59,12 +63,14 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   onUpdate, 
   onSave, 
   onDelete, 
+  recommendedFields = [],
   isHighlighted,
   isEditing = false,
   onStartEdit,
   onCancelEdit
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -73,12 +79,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
 
+  // Check if a field is a system recommendation (not touched by user)
+  const isRecommended = (field: string): boolean => {
+    if (!isNewRecord) return false;
+    return recommendedFields.includes(field) && !touchedFields.has(field);
+  };
+
   useImperativeHandle(ref, () => ({
     focusDateField: () => {
       if (cardRef.current) {
         cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      // Use a slightly longer timeout to ensure the card is rendered and scrolled
       setTimeout(() => {
         if (dateInputRef.current) {
           dateInputRef.current.focus();
@@ -109,15 +120,19 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
+    setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
 
-  const restoreFocusById = (activeId?: string | null) => {
-    if (!activeId) return;
-    window.setTimeout(() => {
-      const el = document.getElementById(activeId) as HTMLElement | null;
-      if (el && document.contains(el)) el.focus();
-    }, 80);
+  // Clear untouched recommended optional fields before saving
+  const clearUntouchedRecommendedFields = () => {
+    if (!isNewRecord) return;
+    const optionalRecommendedFields = ['expense_account_id', 'bank_account_id', 'operation_type_id'];
+    optionalRecommendedFields.forEach(field => {
+      if (recommendedFields.includes(field) && !touchedFields.has(field)) {
+        onUpdate(index, field as keyof PurchaseEntry, null);
+      }
+    });
   };
 
   // Auto-save with debounce when there are changes
@@ -128,15 +143,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       }
       
       saveTimeoutRef.current = setTimeout(() => {
-        // Capture focus BEFORE any state changes
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         
-        // Perform save
+        clearUntouchedRecommendedFields();
         onSave(index);
         setHasChanges(false);
         
-        // Restore focus after a small delay to allow React to settle
         if (activeId) {
           window.requestAnimationFrame(() => {
             window.setTimeout(() => {
@@ -186,6 +199,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    clearUntouchedRecommendedFields();
     onSave(index);
     setHasChanges(false);
     onCancelEdit?.();
@@ -291,7 +305,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 type="date"
                 value={purchase.invoice_date}
                 onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
-                className="h-8"
+                className={cn("h-8", isRecommended("invoice_date") && recommendedStyle)}
               />
             </div>
             <div className="col-span-1">
@@ -300,7 +314,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 id={`purchase-${index}-invoice_series`}
                 value={purchase.invoice_series}
                 onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
-                placeholder="A"
+                placeholder="Ej: A"
                 className="h-8"
               />
             </div>
@@ -315,12 +329,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               />
             </div>
             <div className="col-span-1">
-              <label className="text-xs text-muted-foreground">Tipo Doc</label>
+              <label className="text-xs text-muted-foreground">
+                Tipo Doc
+                {isRecommended("fel_document_type") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <Select
                 value={purchase.fel_document_type}
                 onValueChange={(v) => handleFieldChange("fel_document_type", v)}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className={cn("h-8", isRecommended("fel_document_type") && recommendedStyle)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -376,12 +395,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Tipo Operación</label>
+              <label className="text-xs text-muted-foreground">
+                Tipo Operación
+                {isRecommended("operation_type_id") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <Select
                 value={purchase.operation_type_id?.toString() || ""}
                 onValueChange={(v) => handleFieldChange("operation_type_id", v ? parseInt(v) : null)}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className={cn("h-8", isRecommended("operation_type_id") && recommendedStyle)}>
                   <SelectValue placeholder="Tipo..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -394,13 +418,18 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </Select>
             </div>
             <div className="col-span-3">
-              <label className="text-xs text-muted-foreground">Cuenta</label>
+              <label className="text-xs text-muted-foreground">
+                Cuenta
+                {isRecommended("expense_account_id") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <AccountCombobox
                 accounts={expenseAccounts}
                 value={purchase.expense_account_id}
                 onValueChange={(val) => handleFieldChange("expense_account_id", val)}
                 placeholder="Cuenta de gasto..."
-                className="w-full"
+                className={cn("w-full", isRecommended("expense_account_id") && recommendedStyle)}
               />
             </div>
             <div className="col-span-2">

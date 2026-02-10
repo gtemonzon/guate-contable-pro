@@ -46,6 +46,7 @@ interface PurchaseEntry {
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;
+  _recommendedFields?: string[];
 }
 
 interface SaleEntry {
@@ -65,6 +66,9 @@ interface SaleEntry {
   journal_entry_id: number | null;
   is_annulled?: boolean;
   isNew?: boolean;
+  establishment_code?: string | null;
+  establishment_name?: string | null;
+  _recommendedFields?: string[];
 }
 
 export default function LibrosFiscales() {
@@ -690,6 +694,10 @@ export default function LibrosFiscales() {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
+    const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
+    if (lastExpenseAccountId) recommendedList.push('expense_account_id');
+    if (lastBankAccountId) recommendedList.push('bank_account_id');
+
     const newEntry: PurchaseEntry = {
       invoice_series: "",
       invoice_number: "",
@@ -706,6 +714,7 @@ export default function LibrosFiscales() {
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
+      _recommendedFields: recommendedList,
     };
     setPurchases((prev) => {
       const updated = [newEntry, ...prev];
@@ -719,6 +728,9 @@ export default function LibrosFiscales() {
   const createSaleEntry = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
     const defaultDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
+    if (lastIncomeAccountId) recommendedList.push('income_account_id');
 
     const newEntry: SaleEntry = {
       client_id: `tmp-${crypto.randomUUID()}`,
@@ -735,6 +747,7 @@ export default function LibrosFiscales() {
       income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
+      _recommendedFields: recommendedList,
     };
     setSales((prev) => {
       const updated = [newEntry, ...prev];
@@ -1455,6 +1468,7 @@ export default function LibrosFiscales() {
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
+                      recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === purchase.id}
                       isEditing={editingPurchaseIndex === index}
                       onStartEdit={(idx) => {
@@ -1487,6 +1501,7 @@ export default function LibrosFiscales() {
                       onSave={saveSaleRow}
                       onDelete={deleteSaleRow}
                       onToggleAnnulled={toggleSaleAnnulled}
+                      recommendedFields={sale.isNew ? sale._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === sale.id}
                       isEditing={editingSaleIndex === index}
                       onStartEdit={(idx) => {

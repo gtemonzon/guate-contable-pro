@@ -53,6 +53,7 @@ interface SalesCardProps {
   onSave: (rowId: string) => void;
   onDelete: (index: number) => void;
   onToggleAnnulled: (index: number) => void;
+  recommendedFields?: string[];
   isHighlighted?: boolean;
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
@@ -62,6 +63,9 @@ interface SalesCardProps {
 export interface SalesCardRef {
   focusDateField: () => void;
 }
+
+// Style for system-recommended values that user hasn't touched
+const recommendedStyle = "italic text-muted-foreground/60";
 
 export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ 
   sale, 
@@ -74,12 +78,14 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   onSave, 
   onDelete, 
   onToggleAnnulled, 
+  recommendedFields = [],
   isHighlighted,
   isEditing = false,
   onStartEdit,
   onCancelEdit
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -87,6 +93,12 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
+
+  // Check if a field is a system recommendation (not touched by user)
+  const isRecommended = (field: string): boolean => {
+    if (!isNewRecord) return false;
+    return recommendedFields.includes(field) && !touchedFields.has(field);
+  };
 
   useImperativeHandle(ref, () => ({
     focusDateField: () => {
@@ -123,6 +135,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
   const handleFieldChange = (field: keyof SaleEntry, value: any) => {
     setHasChanges(true);
+    setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
 
@@ -134,6 +147,17 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     }, 80);
   };
 
+  // Clear untouched recommended optional fields before saving
+  const clearUntouchedRecommendedFields = () => {
+    if (!isNewRecord) return;
+    const optionalRecommendedFields = ['income_account_id', 'operation_type_id'];
+    optionalRecommendedFields.forEach(field => {
+      if (recommendedFields.includes(field) && !touchedFields.has(field)) {
+        onUpdate(index, field as keyof SaleEntry, null);
+      }
+    });
+  };
+
   // Auto-save with debounce when there are changes
   useEffect(() => {
     if (hasChanges && inEditMode) {
@@ -142,15 +166,13 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
       }
       
       saveTimeoutRef.current = setTimeout(() => {
-        // Capture focus BEFORE any state changes
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         
-        // Perform save
+        clearUntouchedRecommendedFields();
         onSave(rowId);
         setHasChanges(false);
         
-        // Restore focus after a small delay to allow React to settle
         if (activeId) {
           window.requestAnimationFrame(() => {
             window.setTimeout(() => {
@@ -200,6 +222,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    clearUntouchedRecommendedFields();
     onSave(rowId);
     setHasChanges(false);
     onCancelEdit?.();
@@ -321,7 +344,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   type="date"
                   value={sale.invoice_date}
                   onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
-                  className="h-8"
+                  className={cn("h-8", isRecommended("invoice_date") && recommendedStyle)}
                 />
               </div>
             </div>
@@ -331,7 +354,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 id={`sale-${rowId}-invoice_series`}
                 value={sale.invoice_series}
                 onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
-                placeholder="A"
+                placeholder="Ej: A"
                 className="h-8"
               />
             </div>
@@ -346,12 +369,17 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               />
             </div>
             <div className="col-span-1">
-              <label className="text-xs text-muted-foreground">Tipo Doc</label>
+              <label className="text-xs text-muted-foreground">
+                Tipo Doc
+                {isRecommended("fel_document_type") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <Select
                 value={sale.fel_document_type}
                 onValueChange={(v) => handleFieldChange("fel_document_type", v)}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className={cn("h-8", isRecommended("fel_document_type") && recommendedStyle)}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -426,12 +454,17 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Tipo Operación</label>
+              <label className="text-xs text-muted-foreground">
+                Tipo Operación
+                {isRecommended("operation_type_id") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <Select
                 value={sale.operation_type_id?.toString() || ""}
                 onValueChange={(v) => handleFieldChange("operation_type_id", v ? parseInt(v) : null)}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className={cn("h-8", isRecommended("operation_type_id") && recommendedStyle)}>
                   <SelectValue placeholder="Tipo..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -444,13 +477,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               </Select>
             </div>
             <div className="col-span-4">
-              <label className="text-xs text-muted-foreground">Cuenta</label>
+              <label className="text-xs text-muted-foreground">
+                Cuenta
+                {isRecommended("income_account_id") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
               <AccountCombobox
                 accounts={incomeAccounts}
                 value={sale.income_account_id}
                 onValueChange={(val) => handleFieldChange("income_account_id", val)}
                 placeholder="Cuenta de ingreso..."
-                className="w-full"
+                className={cn("w-full", isRecommended("income_account_id") && recommendedStyle)}
               />
             </div>
             <div className="col-span-2 flex items-end gap-1">
@@ -483,14 +521,14 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                       <AlertDialogDescription>
                         {sale.is_annulled 
                           ? `La factura ${sale.invoice_series}-${sale.invoice_number} será reactivada y se incluirá nuevamente en los cálculos.`
-                          : `La factura ${sale.invoice_series}-${sale.invoice_number} será marcada como anulada. No se incluirá en los totales pero seguirá visible para las declaraciones fiscales.`
+                          : `La factura ${sale.invoice_series}-${sale.invoice_number} será marcada como anulada. Los valores se mantendrán pero no se incluirán en los cálculos.`
                         }
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
                       <AlertDialogAction onClick={() => onToggleAnnulled(index)}>
-                        {sale.is_annulled ? "Reactivar" : "Anular"}
+                        {sale.is_annulled ? "Sí, reactivar" : "Sí, anular"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
