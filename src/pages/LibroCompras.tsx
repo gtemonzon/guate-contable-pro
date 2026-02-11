@@ -86,6 +86,7 @@ export default function LibroCompras() {
   
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
   const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
+  const [lastOperationTypeId, setLastOperationTypeId] = useState<number | null>(null);
   const [focusNewRow, setFocusNewRow] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -167,6 +168,8 @@ export default function LibroCompras() {
       const savedBank = localStorage.getItem(`lastBankAccount_${enterpriseId}`);
       if (savedExpense) setLastExpenseAccountId(parseInt(savedExpense));
       if (savedBank) setLastBankAccountId(parseInt(savedBank));
+      const savedOpType = localStorage.getItem(`lastOperationType_purchases_${enterpriseId}`);
+      if (savedOpType) setLastOperationTypeId(parseInt(savedOpType));
     } else {
       setLoading(false);
       toast({
@@ -403,6 +406,7 @@ export default function LibroCompras() {
     const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
     if (lastExpenseAccountId) recommendedList.push('expense_account_id');
     if (lastBankAccountId) recommendedList.push('bank_account_id');
+    if (lastOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: PurchaseEntry = {
       invoice_series: "",
@@ -415,7 +419,7 @@ export default function LibroCompras() {
       base_amount: 0,
       vat_amount: 0,
       batch_reference: "",
-      operation_type_id: null,
+      operation_type_id: lastOperationTypeId,
       expense_account_id: lastExpenseAccountId,
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
@@ -424,7 +428,7 @@ export default function LibroCompras() {
     };
     setPurchases(prev => [...prev, newEntry]);
     setFocusNewRow(true);
-  }, [purchases, selectedMonth, selectedYear, felDocTypes, lastExpenseAccountId, lastBankAccountId]);
+  }, [purchases, selectedMonth, selectedYear, felDocTypes, lastExpenseAccountId, lastBankAccountId, lastOperationTypeId]);
 
   // Focus new row after render
   useEffect(() => {
@@ -541,6 +545,10 @@ export default function LibroCompras() {
       if (entry.bank_account_id) {
         setLastBankAccountId(entry.bank_account_id);
         localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
+      }
+      if (entry.operation_type_id) {
+        setLastOperationTypeId(entry.operation_type_id);
+        localStorage.setItem(`lastOperationType_purchases_${currentEnterpriseId}`, entry.operation_type_id.toString());
       }
 
       if (entry.isNew) {

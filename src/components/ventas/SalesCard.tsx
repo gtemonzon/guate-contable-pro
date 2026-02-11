@@ -169,7 +169,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         
-        clearUntouchedRecommendedFields();
         onSave(rowId);
         setHasChanges(false);
         

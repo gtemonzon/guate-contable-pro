@@ -82,6 +82,7 @@ export default function LibroVentas() {
   }>>([]);
   
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
+  const [lastOperationTypeId, setLastOperationTypeId] = useState<number | null>(null);
   const [focusNewRow, setFocusNewRow] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -209,6 +210,8 @@ export default function LibroVentas() {
       // Cargar última cuenta usada desde localStorage
       const savedIncome = localStorage.getItem(`lastIncomeAccount_${enterpriseId}`);
       if (savedIncome) setLastIncomeAccountId(parseInt(savedIncome));
+      const savedOpType = localStorage.getItem(`lastOperationType_sales_${enterpriseId}`);
+      if (savedOpType) setLastOperationTypeId(parseInt(savedOpType));
     } else {
       setLoading(false);
       toast({
@@ -394,6 +397,7 @@ export default function LibroVentas() {
 
     const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
     if (lastIncomeAccountId) recommendedList.push('income_account_id');
+    if (lastOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: SaleEntry = {
       client_id: `tmp-${crypto.randomUUID()}`,
@@ -406,7 +410,7 @@ export default function LibroVentas() {
       total_amount: 0,
       vat_amount: 0,
       net_amount: 0,
-      operation_type_id: null,
+      operation_type_id: lastOperationTypeId,
       income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
@@ -414,7 +418,7 @@ export default function LibroVentas() {
     };
     setSales(prev => [...prev, newEntry]);
     setFocusNewRow(true);
-  }, [sales, selectedMonth, selectedYear, felDocTypes, lastIncomeAccountId]);
+  }, [sales, selectedMonth, selectedYear, felDocTypes, lastIncomeAccountId, lastOperationTypeId]);
 
   // Focus new row after render
   useEffect(() => {
@@ -550,10 +554,14 @@ export default function LibroVentas() {
         operation_type_id: safeOperationTypeId ?? null,
       };
       
-      // Guardar última cuenta usada
+      // Guardar última cuenta y tipo de operación usados
       if (entry.income_account_id) {
         setLastIncomeAccountId(entry.income_account_id);
         localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
+      }
+      if (safeOperationTypeId) {
+        setLastOperationTypeId(safeOperationTypeId);
+        localStorage.setItem(`lastOperationType_sales_${currentEnterpriseId}`, safeOperationTypeId.toString());
       }
 
       if (entry.isNew) {
