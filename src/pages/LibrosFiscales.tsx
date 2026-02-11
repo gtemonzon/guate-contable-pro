@@ -39,6 +39,7 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
+  idp_amount: number;
   batch_reference: string;
   operation_type_id: number | null;
   expense_account_id: number | null;
@@ -715,6 +716,7 @@ export default function LibrosFiscales() {
       total_amount: 0,
       base_amount: 0,
       vat_amount: 0,
+      idp_amount: 0,
       batch_reference: "",
       operation_type_id: lastPurchaseOperationTypeId,
       expense_account_id: lastExpenseAccountId,
@@ -837,11 +839,14 @@ export default function LibrosFiscales() {
       if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
 
-      if (field === "total_amount" || field === "fel_document_type") {
+      if (field === "total_amount" || field === "fel_document_type" || field === "idp_amount") {
         const currentTotal = Number(updated[index].total_amount) || 0;
         const nextTotal = field === "total_amount" ? parseFloat(value) || 0 : currentTotal;
         const nextDoc = field === "fel_document_type" ? value : updated[index].fel_document_type;
-        const { base, vat } = calculateVAT(nextTotal, nextDoc);
+        const idp = field === "idp_amount" ? (parseFloat(value) || 0) : (updated[index].idp_amount || 0);
+        // For fuel: subtract IDP before VAT calculation
+        const taxableTotal = nextTotal - idp;
+        const { base, vat } = calculateVAT(taxableTotal, nextDoc);
         updated[index].base_amount = base;
         updated[index].vat_amount = vat;
       }
@@ -908,6 +913,7 @@ export default function LibrosFiscales() {
         total_amount: entry.total_amount,
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
+        idp_amount: entry.idp_amount || 0,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
