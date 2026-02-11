@@ -1275,14 +1275,15 @@ export function ImportPurchasesDialog({
                                   setSelectedIndices(next);
                                 }}
                               />
-                              <span className="w-20 font-mono shrink-0">{record.invoice_date}</span>
-                              <span className="w-12 shrink-0">{record.invoice_series || "—"}</span>
-                              <span className="w-16 font-mono shrink-0">{record.invoice_number}</span>
+                              <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
+                              <span className="w-[90px] text-right font-mono shrink-0">
+                                Q{formatCurrency(record.total_amount)}
+                              </span>
+                              <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
+                                {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
+                              </span>
                               <span className="flex-1 truncate" title={record.supplier_name}>
                                 {record.supplier_name}
-                              </span>
-                              <span className="w-24 text-right font-mono shrink-0">
-                                Q{formatCurrency(record.total_amount)}
                               </span>
                             </div>
                           ))}
@@ -1490,14 +1491,15 @@ export function ImportPurchasesDialog({
                                   setSelectedIndices(next);
                                 }}
                               />
-                              <span className="w-20 font-mono shrink-0">{record.invoice_date}</span>
-                              <span className="w-12 shrink-0">{record.invoice_series || "—"}</span>
-                              <span className="w-16 font-mono shrink-0">{record.invoice_number}</span>
+                              <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
+                              <span className="w-[90px] text-right font-mono shrink-0">
+                                Q{formatCurrency(record.total_amount)}
+                              </span>
+                              <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
+                                {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
+                              </span>
                               <span className="flex-1 truncate" title={record.supplier_name}>
                                 {record.supplier_name}
-                              </span>
-                              <span className="w-24 text-right font-mono shrink-0">
-                                Q{formatCurrency(record.total_amount)}
                               </span>
                             </div>
                           ))}
