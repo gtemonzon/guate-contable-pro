@@ -1213,6 +1213,86 @@ export function ImportPurchasesDialog({
                 )}
               </div>
 
+              {/* Collapsible Valid Records List in options step */}
+              {validationResult.validRecords.length > 0 && (
+                <Collapsible>
+                  <div className="border rounded-lg">
+                    <CollapsibleTrigger className="w-full px-4 py-2 border-b flex items-center justify-between hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-sm font-medium">
+                          {selectedIndices.size} registros seleccionados a importar
+                        </span>
+                        {validationResult.validRecords.length - selectedIndices.size > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            · {validationResult.validRecords.length - selectedIndices.size} no seleccionados
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            if (selectedIndices.size === validationResult.validRecords.length) {
+                              setSelectedIndices(new Set());
+                            } else {
+                              setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)));
+                            }
+                          }}
+                        >
+                          {selectedIndices.size === validationResult.validRecords.length
+                            ? "Desmarcar todos"
+                            : "Seleccionar todos"}
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {selectedIndices.size} de {validationResult.validRecords.length}
+                        </span>
+                      </div>
+                      <ScrollArea className="h-[200px]">
+                        <div className="divide-y">
+                          {validationResult.validRecords.map((record, idx) => (
+                            <div
+                              key={idx}
+                              className={cn(
+                                "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
+                                !selectedIndices.has(idx) && "opacity-50"
+                              )}
+                            >
+                              <Checkbox
+                                checked={selectedIndices.has(idx)}
+                                onCheckedChange={(checked) => {
+                                  const next = new Set(selectedIndices);
+                                  if (checked) {
+                                    next.add(idx);
+                                  } else {
+                                    next.delete(idx);
+                                  }
+                                  setSelectedIndices(next);
+                                }}
+                              />
+                              <span className="w-20 font-mono shrink-0">{record.invoice_date}</span>
+                              <span className="w-12 shrink-0">{record.invoice_series || "—"}</span>
+                              <span className="w-16 font-mono shrink-0">{record.invoice_number}</span>
+                              <span className="flex-1 truncate" title={record.supplier_name}>
+                                {record.supplier_name}
+                              </span>
+                              <span className="w-24 text-right font-mono shrink-0">
+                                Q{formatCurrency(record.total_amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Cancelar
@@ -1220,7 +1300,7 @@ export function ImportPurchasesDialog({
                 <Button 
                   onClick={handleProceedToSummary} 
                   className="flex-1"
-                  disabled={validationResult.validRecords.length === 0 && validationResult.duplicateRecords.length === 0}
+                  disabled={selectedIndices.size === 0 && validationResult.duplicateRecords.length === 0}
                 >
                   Continuar
                 </Button>
