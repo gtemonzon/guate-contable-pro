@@ -146,7 +146,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
         
-        clearUntouchedRecommendedFields();
         onSave(index);
         setHasChanges(false);
         

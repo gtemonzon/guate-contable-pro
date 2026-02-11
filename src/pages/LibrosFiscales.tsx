@@ -118,6 +118,8 @@ export default function LibrosFiscales() {
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
   const [lastBankAccountId, setLastBankAccountId] = useState<number | null>(null);
   const [lastIncomeAccountId, setLastIncomeAccountId] = useState<number | null>(null);
+  const [lastPurchaseOperationTypeId, setLastPurchaseOperationTypeId] = useState<number | null>(null);
+  const [lastSaleOperationTypeId, setLastSaleOperationTypeId] = useState<number | null>(null);
 
   // Inline-edit state + focus management
   const [editingPurchaseIndex, setEditingPurchaseIndex] = useState<number | null>(null);
@@ -336,6 +338,10 @@ export default function LibrosFiscales() {
       if (savedExpense) setLastExpenseAccountId(parseInt(savedExpense));
       if (savedBank) setLastBankAccountId(parseInt(savedBank));
       if (savedIncome) setLastIncomeAccountId(parseInt(savedIncome));
+      const savedPurchaseOpType = localStorage.getItem(`lastOperationType_purchases_${enterpriseId}`);
+      const savedSaleOpType = localStorage.getItem(`lastOperationType_sales_${enterpriseId}`);
+      if (savedPurchaseOpType) setLastPurchaseOperationTypeId(parseInt(savedPurchaseOpType));
+      if (savedSaleOpType) setLastSaleOperationTypeId(parseInt(savedSaleOpType));
     } else {
       setLoading(false);
     }
@@ -697,6 +703,7 @@ export default function LibrosFiscales() {
     const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
     if (lastExpenseAccountId) recommendedList.push('expense_account_id');
     if (lastBankAccountId) recommendedList.push('bank_account_id');
+    if (lastPurchaseOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: PurchaseEntry = {
       invoice_series: "",
@@ -709,7 +716,7 @@ export default function LibrosFiscales() {
       base_amount: 0,
       vat_amount: 0,
       batch_reference: "",
-      operation_type_id: null,
+      operation_type_id: lastPurchaseOperationTypeId,
       expense_account_id: lastExpenseAccountId,
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
@@ -723,7 +730,7 @@ export default function LibrosFiscales() {
     });
     setEditingPurchaseIndex(0);
     setPendingFocusTab("compras");
-  }, [selectedYear, selectedMonth, felDocTypes, lastExpenseAccountId, lastBankAccountId]);
+  }, [selectedYear, selectedMonth, felDocTypes, lastExpenseAccountId, lastBankAccountId, lastPurchaseOperationTypeId]);
 
   const createSaleEntry = useCallback(() => {
     const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -731,6 +738,7 @@ export default function LibrosFiscales() {
 
     const recommendedList: string[] = ['invoice_date', 'fel_document_type'];
     if (lastIncomeAccountId) recommendedList.push('income_account_id');
+    if (lastSaleOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: SaleEntry = {
       client_id: `tmp-${crypto.randomUUID()}`,
@@ -743,7 +751,7 @@ export default function LibrosFiscales() {
       total_amount: 0,
       vat_amount: 0,
       net_amount: 0,
-      operation_type_id: null,
+      operation_type_id: lastSaleOperationTypeId,
       income_account_id: lastIncomeAccountId,
       journal_entry_id: null,
       isNew: true,
@@ -756,7 +764,7 @@ export default function LibrosFiscales() {
     });
     setEditingSaleIndex(0);
     setPendingFocusTab("ventas");
-  }, [selectedYear, selectedMonth, felDocTypes, lastIncomeAccountId]);
+  }, [selectedYear, selectedMonth, felDocTypes, lastIncomeAccountId, lastSaleOperationTypeId]);
 
   // Save current record first, then create new one
   const addNewPurchase = useCallback(async () => {
@@ -932,6 +940,10 @@ export default function LibrosFiscales() {
           setLastBankAccountId(entry.bank_account_id);
           localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
         }
+        if (entry.operation_type_id) {
+          setLastPurchaseOperationTypeId(entry.operation_type_id);
+          localStorage.setItem(`lastOperationType_purchases_${currentEnterpriseId}`, entry.operation_type_id.toString());
+        }
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_purchase_ledger")
@@ -948,6 +960,10 @@ export default function LibrosFiscales() {
         if (entry.bank_account_id) {
           setLastBankAccountId(entry.bank_account_id);
           localStorage.setItem(`lastBankAccount_${currentEnterpriseId}`, entry.bank_account_id.toString());
+        }
+        if (entry.operation_type_id) {
+          setLastPurchaseOperationTypeId(entry.operation_type_id);
+          localStorage.setItem(`lastOperationType_purchases_${currentEnterpriseId}`, entry.operation_type_id.toString());
         }
       }
 
@@ -1032,6 +1048,10 @@ export default function LibrosFiscales() {
           setLastIncomeAccountId(entry.income_account_id);
           localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
         }
+        if (entry.operation_type_id) {
+          setLastSaleOperationTypeId(entry.operation_type_id);
+          localStorage.setItem(`lastOperationType_sales_${currentEnterpriseId}`, entry.operation_type_id.toString());
+        }
       } else if (entry.id) {
         // DB-first merge guard:
         // Prevent stale UI state (e.g., during tab/month changes or rapid shortcuts)
@@ -1090,6 +1110,10 @@ export default function LibrosFiscales() {
         if (entry.income_account_id) {
           setLastIncomeAccountId(entry.income_account_id);
           localStorage.setItem(`lastIncomeAccount_${currentEnterpriseId}`, entry.income_account_id.toString());
+        }
+        if (entry.operation_type_id) {
+          setLastSaleOperationTypeId(entry.operation_type_id);
+          localStorage.setItem(`lastOperationType_sales_${currentEnterpriseId}`, entry.operation_type_id.toString());
         }
       }
 
