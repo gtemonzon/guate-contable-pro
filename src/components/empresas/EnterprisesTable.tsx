@@ -30,8 +30,14 @@ import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
-type SortField = "nit" | "business_name" | "tax_regime" | "active_period";
+type SortField = "nit" | "business_name" | "tax_regime" | "active_period" | "last_tax_form";
 type SortDirection = "asc" | "desc";
+
+interface LastTaxFormInfo {
+  tax_type: string;
+  period_month: number;
+  period_year: number;
+}
 
 interface EnterprisesTableProps {
   enterprises: Enterprise[];
@@ -47,6 +53,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
   const [activePeriods, setActivePeriods] = useState<Record<number, string>>({});
+  const [lastTaxForms, setLastTaxForms] = useState<Record<number, LastTaxFormInfo>>({});
   const [exportingId, setExportingId] = useState<number | null>(null);
   useEffect(() => {
     const storedId = localStorage.getItem("currentEnterpriseId");
@@ -60,16 +67,19 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       const enterpriseIds = enterprises.map(e => e.id);
       if (enterpriseIds.length === 0) return;
 
+      // First try default period, then fallback to most recent open period
       const { data } = await supabase
         .from('tab_accounting_periods')
-        .select('enterprise_id, year')
+        .select('enterprise_id, year, status, is_default_period')
         .in('enterprise_id', enterpriseIds)
-        .eq('is_default_period', true);
+        .eq('status', 'abierto')
+        .order('year', { ascending: false });
 
       if (data) {
         const periodsMap: Record<number, string> = {};
         data.forEach(p => {
-          if (p.enterprise_id) {
+          if (p.enterprise_id && !periodsMap[p.enterprise_id]) {
+            // First match per enterprise (highest year, open)
             periodsMap[p.enterprise_id] = p.year.toString();
           }
         });
@@ -77,7 +87,34 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       }
     };
 
+    const fetchLastTaxForms = async () => {
+      const enterpriseIds = enterprises.map(e => e.id);
+      if (enterpriseIds.length === 0) return;
+
+      const { data } = await supabase
+        .from('tab_tax_forms')
+        .select('enterprise_id, tax_type, period_month, period_year, created_at')
+        .in('enterprise_id', enterpriseIds)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        const formsMap: Record<number, LastTaxFormInfo> = {};
+        data.forEach(f => {
+          if (f.enterprise_id && !formsMap[f.enterprise_id] && f.tax_type && f.period_month && f.period_year) {
+            formsMap[f.enterprise_id] = {
+              tax_type: f.tax_type,
+              period_month: f.period_month,
+              period_year: f.period_year,
+            };
+          }
+        });
+        setLastTaxForms(formsMap);
+      }
+    };
+
     fetchActivePeriods();
+    fetchLastTaxForms();
   }, [enterprises]);
 
   const handleSort = (field: SortField) => {
@@ -120,6 +157,10 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
           valueA = activePeriods[a.id] || "";
           valueB = activePeriods[b.id] || "";
           break;
+        case "last_tax_form":
+          valueA = lastTaxForms[a.id] ? `${lastTaxForms[a.id].period_year}-${lastTaxForms[a.id].period_month}` : "";
+          valueB = lastTaxForms[b.id] ? `${lastTaxForms[b.id].period_year}-${lastTaxForms[b.id].period_month}` : "";
+          break;
         default:
           return 0;
       }
@@ -129,7 +170,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       }
       return valueB.localeCompare(valueA);
     });
-  }, [enterprises, sortField, sortDirection, activePeriods]);
+  }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
 
   const handleSelect = async (enterprise: Enterprise) => {
     localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
@@ -287,6 +328,15 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                 {getSortIcon("active_period")}
               </div>
             </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none"
+              onClick={() => handleSort("last_tax_form")}
+            >
+              <div className="flex items-center">
+                Último Formulario
+                {getSortIcon("last_tax_form")}
+              </div>
+            </TableHead>
             <TableHead className="text-right w-[120px]">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -320,6 +370,13 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                 </TableCell>
                 <TableCell>{getRegimeLabel(enterprise.tax_regime)}</TableCell>
                 <TableCell>{activePeriods[enterprise.id] || "-"}</TableCell>
+                <TableCell>
+                  {lastTaxForms[enterprise.id] ? (
+                    <span className="text-sm">
+                      {lastTaxForms[enterprise.id].tax_type} - {String(lastTaxForms[enterprise.id].period_month).padStart(2, '0')}/{lastTaxForms[enterprise.id].period_year}
+                    </span>
+                  ) : "-"}
+                </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     {/* Botón Seleccionar */}
