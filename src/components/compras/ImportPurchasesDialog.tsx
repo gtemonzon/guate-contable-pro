@@ -13,8 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown } from "lucide-react";
+import { cn, formatCurrency } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
   normalizeHeader,
@@ -38,6 +38,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -268,6 +270,9 @@ export function ImportPurchasesDialog({
   // Option to overwrite duplicates
   const [overwriteDuplicates, setOverwriteDuplicates] = useState(false);
 
+  // Record selection state
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+
   const { isDragging, dragProps } = useFileDrop({
     accept: [
       ".csv", ".xls", ".xlsx", ".pdf",
@@ -291,6 +296,7 @@ export function ImportPurchasesDialog({
     setSelectedExpenseAccount(null);
     setSelectedOperationType(null);
     setOverwriteDuplicates(false);
+    setSelectedIndices(new Set());
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -630,6 +636,9 @@ export function ImportPurchasesDialog({
         periodSummary
       });
       
+      // Select all valid records by default
+      setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+      
       // If we have expense accounts or operation types available, show options dialog
       if (expenseAccounts.length > 0 || operationTypes.length > 0) {
         setDialogState("options");
@@ -868,6 +877,9 @@ export function ImportPurchasesDialog({
         periodSummary
       });
       
+      // Select all valid records by default
+      setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+      
       if (expenseAccounts.length > 0 || operationTypes.length > 0) {
         setDialogState("options");
       } else {
@@ -913,7 +925,8 @@ export function ImportPurchasesDialog({
   const handleImport = async () => {
     if (!validationResult) return;
 
-    const recordsToInsert = validationResult.validRecords;
+    // Only import selected records
+    const recordsToInsert = validationResult.validRecords.filter((_, i) => selectedIndices.has(i));
     const recordsToUpsert = overwriteDuplicates ? validationResult.duplicateRecords : [];
 
     // Map de duplicados existentes por llave (para borrar por id cuando sea posible)
@@ -1217,6 +1230,7 @@ export function ImportPurchasesDialog({
 
           {/* Summary State - Validation Results */}
           {dialogState === "summary" && validationResult && (
+            <ScrollArea className="h-[60vh] pr-4">
             <div className="space-y-4">
               {/* Summary Cards */}
               <div className="grid grid-cols-4 gap-3">
@@ -1334,38 +1348,125 @@ export function ImportPurchasesDialog({
                 </div>
               )}
 
+              {/* Collapsible Valid Records List */}
+              {validationResult.validRecords.length > 0 && (
+                <Collapsible>
+                  <div className="border rounded-lg">
+                    <CollapsibleTrigger className="w-full px-4 py-2 border-b flex items-center justify-between hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        <span className="text-sm font-medium">
+                          {selectedIndices.size} registros seleccionados a importar
+                        </span>
+                        {validationResult.validRecords.length - selectedIndices.size > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            · {validationResult.validRecords.length - selectedIndices.size} no seleccionados
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            if (selectedIndices.size === validationResult.validRecords.length) {
+                              setSelectedIndices(new Set());
+                            } else {
+                              setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)));
+                            }
+                          }}
+                        >
+                          {selectedIndices.size === validationResult.validRecords.length
+                            ? "Desmarcar todos"
+                            : "Seleccionar todos"}
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {selectedIndices.size} de {validationResult.validRecords.length}
+                        </span>
+                      </div>
+                      <ScrollArea className="h-[250px]">
+                        <div className="divide-y">
+                          {validationResult.validRecords.map((record, idx) => (
+                            <div
+                              key={idx}
+                              className={cn(
+                                "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
+                                !selectedIndices.has(idx) && "opacity-50"
+                              )}
+                            >
+                              <Checkbox
+                                checked={selectedIndices.has(idx)}
+                                onCheckedChange={(checked) => {
+                                  const next = new Set(selectedIndices);
+                                  if (checked) {
+                                    next.add(idx);
+                                  } else {
+                                    next.delete(idx);
+                                  }
+                                  setSelectedIndices(next);
+                                }}
+                              />
+                              <span className="w-20 font-mono shrink-0">{record.invoice_date}</span>
+                              <span className="w-12 shrink-0">{record.invoice_series || "—"}</span>
+                              <span className="w-16 font-mono shrink-0">{record.invoice_number}</span>
+                              <span className="flex-1 truncate" title={record.supplier_name}>
+                                {record.supplier_name}
+                              </span>
+                              <span className="w-24 text-right font-mono shrink-0">
+                                Q{formatCurrency(record.total_amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
               {/* Error Details Table */}
               {validationResult.errors.length > 0 && (
-                <div className="border rounded-lg">
-                  <div className="bg-muted/50 px-4 py-2 border-b flex items-center gap-2">
-                    <FileWarning className="h-4 w-4 text-destructive" />
-                    <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
+                <Collapsible defaultOpen={validationResult.errors.length <= 10}>
+                  <div className="border rounded-lg">
+                    <CollapsibleTrigger className="w-full bg-muted/50 px-4 py-2 border-b flex items-center justify-between hover:bg-muted/70 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <FileWarning className="h-4 w-4 text-destructive" />
+                        <span className="text-sm font-medium">Errores Detectados ({validationResult.errors.length})</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">Click para expandir/colapsar</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <ScrollArea className="h-[150px]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-16">Fila</TableHead>
+                              <TableHead className="w-24">Campo</TableHead>
+                              <TableHead className="w-32">Valor</TableHead>
+                              <TableHead>Error</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {validationResult.errors.map((err, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-mono text-xs">{err.row}</TableCell>
+                                <TableCell className="text-xs">{err.field}</TableCell>
+                                <TableCell className="font-mono text-xs max-w-[120px] truncate" title={err.value}>
+                                  {err.value}
+                                </TableCell>
+                                <TableCell className="text-xs text-destructive">{err.message}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    </CollapsibleContent>
                   </div>
-                  <ScrollArea className="h-[150px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">Fila</TableHead>
-                          <TableHead className="w-24">Campo</TableHead>
-                          <TableHead className="w-32">Valor</TableHead>
-                          <TableHead>Error</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {validationResult.errors.map((err, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="font-mono text-xs">{err.row}</TableCell>
-                            <TableCell className="text-xs">{err.field}</TableCell>
-                            <TableCell className="font-mono text-xs max-w-[120px] truncate" title={err.value}>
-                              {err.value}
-                            </TableCell>
-                            <TableCell className="text-xs text-destructive">{err.message}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                </div>
+                </Collapsible>
               )}
 
               {/* No valid records warning */}
@@ -1397,7 +1498,7 @@ export function ImportPurchasesDialog({
                 </Button>
                 <Button 
                   onClick={handleImport} 
-                  disabled={(validationResult.validRecords.length === 0 && (!overwriteDuplicates || validationResult.duplicateRecords.length === 0)) || importing}
+                  disabled={(selectedIndices.size === 0 && (!overwriteDuplicates || validationResult.duplicateRecords.length === 0)) || importing}
                   className="flex-1"
                 >
                   {importing ? (
@@ -1408,12 +1509,13 @@ export function ImportPurchasesDialog({
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Importar {validationResult.validRecords.length + (overwriteDuplicates ? validationResult.duplicateRecords.length : 0)} Registros
+                      Importar {selectedIndices.size + (overwriteDuplicates ? validationResult.duplicateRecords.length : 0)} Registros
                     </>
                   )}
                 </Button>
               </div>
             </div>
+            </ScrollArea>
           )}
         </div>
       </DialogContent>
