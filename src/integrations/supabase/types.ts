@@ -1357,6 +1357,7 @@ export type Database = {
           expense_account_id: number | null
           fel_document_type: string | null
           id: number
+          idp_amount: number | null
           imported_from_fel: boolean | null
           invoice_date: string
           invoice_number: string
@@ -1385,6 +1386,7 @@ export type Database = {
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
+          idp_amount?: number | null
           imported_from_fel?: boolean | null
           invoice_date: string
           invoice_number: string
@@ -1413,6 +1415,7 @@ export type Database = {
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
+          idp_amount?: number | null
           imported_from_fel?: boolean | null
           invoice_date?: string
           invoice_number?: string

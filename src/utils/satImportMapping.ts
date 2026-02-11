@@ -27,6 +27,7 @@ export const SAT_PURCHASES_MAPPING: Record<string, string[]> = {
   anulado: ["marca de anulado"],
   moneda: ["moneda"],
   nit_receptor: ["id del receptor"], // Para validar que sea la empresa correcta
+  petroleo: ["petroleo monto de este impuesto", "petroleo"],  // IDP - Impuesto a Distribución de Petróleo
 };
 
 // SAT column mappings for sales (receptor data for SALES we're the emisor, so we need receptor)
@@ -194,25 +195,30 @@ const NO_VAT_DOCUMENT_TYPES = ["FPEQ", "FESP", "NABN", "RDON", "RECI"];
 export function calculateVATFromTotal(
   totalAmount: number, 
   documentType: string,
-  vatRate: number = 0.12
+  vatRate: number = 0.12,
+  idpAmount: number = 0
 ): { vatAmount: number; baseAmount: number } {
   // Normalize document type
   const docType = (documentType || "FACT").toUpperCase().trim();
   
   // Check if document type generates VAT
   if (NO_VAT_DOCUMENT_TYPES.includes(docType)) {
-    // No VAT - entire total is base amount
+    // No VAT - entire total is base amount (minus IDP if any)
     return {
       vatAmount: 0,
-      baseAmount: totalAmount
+      baseAmount: totalAmount - idpAmount
     };
   }
+  
+  // If IDP (petroleum tax) is present, subtract it before VAT calculation
+  // Fuel formula: IVA = (Total - IDP) / (1 + vatRate) * vatRate
+  const taxableAmount = totalAmount - idpAmount;
   
   // Standard VAT calculation: Total = Base * (1 + vatRate)
   // So: Base = Total / (1 + vatRate)
   // And: VAT = Total - Base
-  const baseAmount = Math.round((totalAmount / (1 + vatRate)) * 100) / 100;
-  const vatAmount = Math.round((totalAmount - baseAmount) * 100) / 100;
+  const baseAmount = Math.round((taxableAmount / (1 + vatRate)) * 100) / 100;
+  const vatAmount = Math.round((taxableAmount - baseAmount) * 100) / 100;
   
   return { vatAmount, baseAmount };
 }

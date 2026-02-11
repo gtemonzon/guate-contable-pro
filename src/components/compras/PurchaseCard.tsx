@@ -21,6 +21,7 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
+  idp_amount: number;
   batch_reference: string;
   operation_type_id: number | null;
   expense_account_id: number | null;
@@ -75,6 +76,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = purchase.isNew;
+
+  // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
+  const isFuelOperation = operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
@@ -264,6 +268,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-1 text-right font-mono text-muted-foreground">
               {formatCurrency(purchase.vat_amount)}
+              {purchase.idp_amount > 0 && (
+                <span className="block text-[10px] text-muted-foreground/70">IDP: {formatCurrency(purchase.idp_amount)}</span>
+              )}
             </div>
             <div className="col-span-1 text-center">
               {getOperationTypeName(purchase.operation_type_id)}
@@ -383,7 +390,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -393,7 +400,21 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 className="h-8 bg-muted"
               />
             </div>
-            <div className="col-span-2">
+            {/* Show IDP field when operation type is COMBUSTIBLE */}
+            {isFuelOperation && (
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">IDP</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={purchase.idp_amount || 0}
+                  onChange={(e) => handleFieldChange("idp_amount", e.target.value)}
+                  className="h-8"
+                  title="Impuesto a Distribución de Petróleo"
+                />
+              </div>
+            )}
+            <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
               <label className="text-xs text-muted-foreground">
                 Tipo Operación
                 {isRecommended("operation_type_id") && (

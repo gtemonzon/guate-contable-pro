@@ -41,6 +41,7 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
+  idp_amount: number;
   batch_reference: string;
   operation_type_id: number | null;
   expense_account_id: number | null;
@@ -418,6 +419,7 @@ export default function LibroCompras() {
       total_amount: 0,
       base_amount: 0,
       vat_amount: 0,
+      idp_amount: 0,
       batch_reference: "",
       operation_type_id: lastOperationTypeId,
       expense_account_id: lastExpenseAccountId,
@@ -473,13 +475,22 @@ export default function LibroCompras() {
     
     updated[index] = { ...updated[index], [field]: value };
 
-    // Auto-calcular IVA cuando cambia total_amount
-    if (field === "total_amount") {
-      const total = parseFloat(value) || 0;
-      const base = total / 1.12;
-      const vat = total - base;
+    // Auto-calcular IVA cuando cambia total_amount o idp_amount
+    if (field === "total_amount" || field === "idp_amount") {
+      const total = field === "total_amount" ? (parseFloat(value) || 0) : (updated[index].total_amount || 0);
+      const idp = field === "idp_amount" ? (parseFloat(value) || 0) : (updated[index].idp_amount || 0);
+      // For fuel: IVA = (Total - IDP) / 1.12 * 12%
+      const taxable = total - idp;
+      const base = taxable / 1.12;
+      const vat = taxable - base;
       updated[index].base_amount = parseFloat(base.toFixed(2));
       updated[index].vat_amount = parseFloat(vat.toFixed(2));
+      if (field === "total_amount") {
+        updated[index].total_amount = total;
+      }
+      if (field === "idp_amount") {
+        updated[index].idp_amount = idp;
+      }
     }
 
     setPurchases(updated);
@@ -530,6 +541,7 @@ export default function LibroCompras() {
         total_amount: entry.total_amount,
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
+        idp_amount: entry.idp_amount || 0,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
@@ -739,12 +751,14 @@ export default function LibroCompras() {
 
         for (const p of purchaseItems) {
           if (p.expense_account_id) {
-            // Usar base_amount real de la factura (respeta si aplica IVA o no)
-            // Si vat_amount es 0, la base es igual al total (pequeño contribuyente, etc.)
+            // For fuel invoices with IDP: expense = base_amount + idp_amount
+            // For regular invoices: expense = base_amount (total - vat)
+            const idpAmount = (p as any).idp_amount || 0;
             const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
+            const expenseAmount = baseAmount + idpAmount;
             expenseByAccount.set(
               p.expense_account_id,
-              (expenseByAccount.get(p.expense_account_id) || 0) + baseAmount
+              (expenseByAccount.get(p.expense_account_id) || 0) + expenseAmount
             );
           }
           // Usar el IVA real de la factura, no recalcular

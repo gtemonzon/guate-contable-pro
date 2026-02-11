@@ -74,6 +74,7 @@ interface ValidPurchase {
   vat_amount: number;
   net_amount: number;
   total_amount: number;
+  idp_amount?: number;
   expense_account_id?: number | null;
   operation_type_id?: number | null;
 }
@@ -388,6 +389,7 @@ export function ImportPurchasesDialog({
           iva: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.iva),
           anulado: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.anulado),
           nit_receptor: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nit_receptor),
+          petroleo: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.petroleo),
         };
 
         // Validate enterprise NIT from file matches active enterprise
@@ -458,6 +460,11 @@ export function ImportPurchasesDialog({
         
         // Parse total and calculate VAT from it (ignore SAT's IVA column as it may be incorrect)
         const total = parseNumber(values[colIndices.total]);
+        
+        // Check for IDP (Impuesto a Distribución de Petróleo) - fuel invoices
+        const idpAmount = colIndices.petroleo !== undefined && colIndices.petroleo !== -1
+          ? parseNumber(values[colIndices.petroleo])
+          : 0;
 
         if (total <= 0) {
           errors.push({
@@ -469,8 +476,9 @@ export function ImportPurchasesDialog({
           continue;
         }
 
-        // Calculate VAT based on document type - SAT exports may have incorrect IVA values
-        const { vatAmount, baseAmount } = calculateVATFromTotal(total, tipoDoc);
+        // Calculate VAT based on document type - pass IDP for fuel invoices
+        // For fuel: IVA = (Total - IDP) / 1.12 * 12%
+        const { vatAmount, baseAmount } = calculateVATFromTotal(total, tipoDoc, 0.12, idpAmount);
 
         // Get other fields
         const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
@@ -531,6 +539,7 @@ export function ImportPurchasesDialog({
           vat_amount: vatAmount,
           net_amount: baseAmount,
           total_amount: total,
+          idp_amount: idpAmount > 0 ? idpAmount : 0,
         });
       }
 
