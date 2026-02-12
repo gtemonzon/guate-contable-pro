@@ -24,8 +24,11 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 
-const RECENT_SEARCHES_KEY = "global-search-recent";
+const RECENT_SEARCHES_KEY_PREFIX = "global-search-recent";
 const MAX_RECENT = 8;
+
+const getRecentSearchesKey = (enterpriseId: string | null) =>
+  enterpriseId ? `${RECENT_SEARCHES_KEY_PREFIX}-${enterpriseId}` : RECENT_SEARCHES_KEY_PREFIX;
 
 interface SearchResult {
   id: string;
@@ -60,10 +63,11 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
   // Load recent searches
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+      const stored = localStorage.getItem(getRecentSearchesKey(enterpriseId));
       if (stored) setRecentSearches(JSON.parse(stored));
+      else setRecentSearches([]);
     } catch {}
-  }, []);
+  }, [enterpriseId]);
 
   // Cmd+K / Ctrl+K listener
   useEffect(() => {
@@ -90,14 +94,14 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
     if (!trimmed || trimmed.length < 2) return;
     const updated = [trimmed, ...recentSearches.filter((s) => s !== trimmed)].slice(0, MAX_RECENT);
     setRecentSearches(updated);
-    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    localStorage.setItem(getRecentSearchesKey(enterpriseId), JSON.stringify(updated));
   };
 
   const removeRecentSearch = (term: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = recentSearches.filter((s) => s !== term);
     setRecentSearches(updated);
-    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    localStorage.setItem(getRecentSearchesKey(enterpriseId), JSON.stringify(updated));
   };
 
   const performSearch = useCallback(
