@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown, Search } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -273,6 +273,7 @@ export function ImportPurchasesDialog({
 
   // Record selection state
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [recordSearchFilter, setRecordSearchFilter] = useState("");
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [
@@ -298,6 +299,7 @@ export function ImportPurchasesDialog({
     setSelectedOperationType(null);
     setOverwriteDuplicates(false);
     setSelectedIndices(new Set());
+    setRecordSearchFilter("");
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -1262,40 +1264,59 @@ export function ImportPurchasesDialog({
                           {selectedIndices.size} de {validationResult.validRecords.length}
                         </span>
                       </div>
+                      <div className="px-4 py-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Buscar por proveedor o serie-factura..."
+                            value={recordSearchFilter}
+                            onChange={(e) => setRecordSearchFilter(e.target.value)}
+                            className="w-full h-8 pl-7 pr-3 text-xs rounded-md border border-input bg-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
                       <ScrollArea className="h-[200px]">
                         <div className="divide-y">
-                          {validationResult.validRecords.map((record, idx) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
-                                !selectedIndices.has(idx) && "opacity-50"
-                              )}
-                            >
-                              <Checkbox
-                                checked={selectedIndices.has(idx)}
-                                onCheckedChange={(checked) => {
-                                  const next = new Set(selectedIndices);
-                                  if (checked) {
-                                    next.add(idx);
-                                  } else {
-                                    next.delete(idx);
-                                  }
-                                  setSelectedIndices(next);
-                                }}
-                              />
-                              <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
-                              <span className="w-[90px] text-right font-mono shrink-0">
-                                Q{formatCurrency(record.total_amount)}
-                              </span>
-                              <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
-                                {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
-                              </span>
-                              <span className="flex-1 truncate" title={record.supplier_name}>
-                                {record.supplier_name}
-                              </span>
-                            </div>
-                          ))}
+                          {validationResult.validRecords.map((record, idx) => {
+                            if (recordSearchFilter) {
+                              const q = recordSearchFilter.toLowerCase();
+                              const serieNum = `${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`.toLowerCase();
+                              if (!record.supplier_name.toLowerCase().includes(q) && !serieNum.includes(q)) return null;
+                            }
+                            return (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
+                                  !selectedIndices.has(idx) && "opacity-50"
+                                )}
+                              >
+                                <Checkbox
+                                  checked={selectedIndices.has(idx)}
+                                  onCheckedChange={(checked) => {
+                                    const next = new Set(selectedIndices);
+                                    if (checked) {
+                                      next.add(idx);
+                                    } else {
+                                      next.delete(idx);
+                                    }
+                                    setSelectedIndices(next);
+                                  }}
+                                />
+                                <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
+                                <span className="w-[90px] text-right font-mono shrink-0">
+                                  Q{formatCurrency(record.total_amount)}
+                                </span>
+                                <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
+                                  {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
+                                </span>
+                                <span className="flex-1 truncate" title={record.supplier_name}>
+                                  {record.supplier_name}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </CollapsibleContent>
@@ -1478,40 +1499,59 @@ export function ImportPurchasesDialog({
                           {selectedIndices.size} de {validationResult.validRecords.length}
                         </span>
                       </div>
+                      <div className="px-4 py-2 border-b">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Buscar por proveedor o serie-factura..."
+                            value={recordSearchFilter}
+                            onChange={(e) => setRecordSearchFilter(e.target.value)}
+                            className="w-full h-8 pl-7 pr-3 text-xs rounded-md border border-input bg-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
                       <ScrollArea className="h-[250px]">
                         <div className="divide-y">
-                          {validationResult.validRecords.map((record, idx) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
-                                !selectedIndices.has(idx) && "opacity-50"
-                              )}
-                            >
-                              <Checkbox
-                                checked={selectedIndices.has(idx)}
-                                onCheckedChange={(checked) => {
-                                  const next = new Set(selectedIndices);
-                                  if (checked) {
-                                    next.add(idx);
-                                  } else {
-                                    next.delete(idx);
-                                  }
-                                  setSelectedIndices(next);
-                                }}
-                              />
-                              <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
-                              <span className="w-[90px] text-right font-mono shrink-0">
-                                Q{formatCurrency(record.total_amount)}
-                              </span>
-                              <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
-                                {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
-                              </span>
-                              <span className="flex-1 truncate" title={record.supplier_name}>
-                                {record.supplier_name}
-                              </span>
-                            </div>
-                          ))}
+                          {validationResult.validRecords.map((record, idx) => {
+                            if (recordSearchFilter) {
+                              const q = recordSearchFilter.toLowerCase();
+                              const serieNum = `${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`.toLowerCase();
+                              if (!record.supplier_name.toLowerCase().includes(q) && !serieNum.includes(q)) return null;
+                            }
+                            return (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
+                                  !selectedIndices.has(idx) && "opacity-50"
+                                )}
+                              >
+                                <Checkbox
+                                  checked={selectedIndices.has(idx)}
+                                  onCheckedChange={(checked) => {
+                                    const next = new Set(selectedIndices);
+                                    if (checked) {
+                                      next.add(idx);
+                                    } else {
+                                      next.delete(idx);
+                                    }
+                                    setSelectedIndices(next);
+                                  }}
+                                />
+                                <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
+                                <span className="w-[90px] text-right font-mono shrink-0">
+                                  Q{formatCurrency(record.total_amount)}
+                                </span>
+                                <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
+                                  {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
+                                </span>
+                                <span className="flex-1 truncate" title={record.supplier_name}>
+                                  {record.supplier_name}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </CollapsibleContent>
