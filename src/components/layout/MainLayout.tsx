@@ -21,6 +21,7 @@ import { useActivityTracker } from "@/hooks/useActivityTracker";
 import { TenantSelector } from "@/components/tenants/TenantSelector";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantFavicon } from "@/hooks/useTenantFavicon";
+import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -219,7 +220,8 @@ const MainLayout = () => {
               </div>
             </div>
 
-            <div className="ml-auto flex items-center gap-4">
+            <div className="ml-auto flex items-center gap-3">
+              <GlobalSearchPalette enterpriseId={currentEnterpriseId} />
               <TenantSelector />
               <NotificationCenter enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
 
