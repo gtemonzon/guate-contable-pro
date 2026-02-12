@@ -9,6 +9,7 @@ import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
+import { validateNIT } from "@/utils/nitValidation";
 
 interface PurchaseEntry {
   id?: number;
@@ -72,6 +73,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -361,11 +363,24 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={purchase.supplier_nit}
-                onChange={(e) => handleFieldChange("supplier_nit", e.target.value.replace(/-/g, ""))}
-                onBlur={(e) => searchSupplierByNit(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/-/g, "");
+                  handleFieldChange("supplier_nit", val);
+                  if (nitError && validateNIT(val)) setNitError(null);
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (val && !validateNIT(val)) {
+                    setNitError("NIT inválido");
+                  } else {
+                    setNitError(null);
+                  }
+                  searchSupplierByNit(val);
+                }}
                 placeholder="123456789"
-                className="h-8"
+                className={cn("h-8", nitError && "border-destructive")}
               />
+              {nitError && <p className="text-[10px] text-destructive mt-0.5">{nitError}</p>}
             </div>
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Proveedor</label>

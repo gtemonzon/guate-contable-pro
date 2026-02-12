@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { validateNIT } from "@/utils/nitValidation";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -40,7 +41,10 @@ import type { Database } from "@/integrations/supabase/types";
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
 const formSchema = z.object({
-  nit: z.string().min(1, "NIT es requerido"),
+  nit: z.string().min(1, "NIT es requerido").refine(
+    (val) => validateNIT(val),
+    { message: "NIT inválido" }
+  ),
   business_name: z.string().min(1, "Razón social es requerida"),
   trade_name: z.string().optional(),
   tax_regime: z.enum([
