@@ -295,7 +295,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
         </kbd>
       </button>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
           placeholder="Buscar partidas, cuentas, facturas, movimientos..."
           value={query}
