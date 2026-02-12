@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,17 @@ const Cuentas = () => {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedEnterprise, setSelectedEnterprise] = useState<number | null>(null);
   const [presetConfig, setPresetConfig] = useState<PresetConfig | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read URL params from global search
+  useEffect(() => {
+    const searchParam = searchParams.get("search");
+    if (searchParam) {
+      setSearchQuery(decodeURIComponent(searchParam));
+      searchParams.delete("search");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, []);
 
   useEffect(() => {
     fetchEnterprises();

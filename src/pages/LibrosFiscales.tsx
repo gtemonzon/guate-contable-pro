@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -144,6 +145,42 @@ export default function LibrosFiscales() {
   const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read URL params from global search navigation
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const monthParam = searchParams.get("month");
+    const yearParam = searchParams.get("year");
+    const highlightParam = searchParams.get("highlight");
+
+    let changed = false;
+    if (tabParam === "compras" || tabParam === "ventas") {
+      setActiveTab(tabParam);
+      changed = true;
+    }
+    if (monthParam) {
+      const m = parseInt(monthParam);
+      if (!isNaN(m) && m >= 1 && m <= 12) { setSelectedMonth(m); changed = true; }
+    }
+    if (yearParam) {
+      const y = parseInt(yearParam);
+      if (!isNaN(y)) { setSelectedYear(y); changed = true; }
+    }
+    if (highlightParam) {
+      const hId = parseInt(highlightParam);
+      if (!isNaN(hId)) {
+        setHighlightedInvoiceId(hId);
+        changed = true;
+        // Clear highlight after 3 seconds
+        setTimeout(() => setHighlightedInvoiceId(null), 3000);
+      }
+    }
+    if (changed) {
+      // Clean up URL params
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +99,22 @@ export default function Partidas() {
 
   const { toast } = useToast();
   const permissions = useUserPermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Open view dialog from URL params (e.g. from global search)
+  useEffect(() => {
+    const viewEntryParam = searchParams.get("viewEntry");
+    if (viewEntryParam) {
+      const entryId = parseInt(viewEntryParam);
+      if (!isNaN(entryId)) {
+        setViewingEntryId(entryId);
+        setShowViewDialog(true);
+      }
+      // Clean up the URL param
+      searchParams.delete("viewEntry");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
