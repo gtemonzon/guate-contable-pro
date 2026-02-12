@@ -1176,6 +1176,63 @@ export type Database = {
           },
         ]
       }
+      tab_journal_entry_history: {
+        Row: {
+          change_summary: string | null
+          change_type: string
+          changed_at: string
+          changed_by: string | null
+          enterprise_id: number | null
+          id: number
+          journal_entry_id: number
+          new_details: Json | null
+          new_header: Json | null
+          old_details: Json | null
+          old_header: Json | null
+        }
+        Insert: {
+          change_summary?: string | null
+          change_type?: string
+          changed_at?: string
+          changed_by?: string | null
+          enterprise_id?: number | null
+          id?: never
+          journal_entry_id: number
+          new_details?: Json | null
+          new_header?: Json | null
+          old_details?: Json | null
+          old_header?: Json | null
+        }
+        Update: {
+          change_summary?: string | null
+          change_type?: string
+          changed_at?: string
+          changed_by?: string | null
+          enterprise_id?: number | null
+          id?: never
+          journal_entry_id?: number
+          new_details?: Json | null
+          new_header?: Json | null
+          old_details?: Json | null
+          old_header?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_journal_entry_history_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entry_history_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_journal_entry_prefixes: {
         Row: {
           code: string
