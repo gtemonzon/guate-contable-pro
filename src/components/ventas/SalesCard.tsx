@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
@@ -86,6 +87,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -394,11 +396,24 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               <label className="text-xs text-muted-foreground">NIT</label>
               <Input
                 value={sale.customer_nit}
-                onChange={(e) => handleFieldChange("customer_nit", e.target.value.replace(/-/g, ""))}
-                onBlur={(e) => searchCustomerByNit(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/-/g, "");
+                  handleFieldChange("customer_nit", val);
+                  if (nitError && validateNIT(val)) setNitError(null);
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (val && !validateNIT(val)) {
+                    setNitError("NIT inválido");
+                  } else {
+                    setNitError(null);
+                  }
+                  searchCustomerByNit(val);
+                }}
                 placeholder="123456789"
-                className="h-8"
+                className={cn("h-8", nitError && "border-destructive")}
               />
+              {nitError && <p className="text-[10px] text-destructive mt-0.5">{nitError}</p>}
             </div>
             <div className={sale.establishment_name ? "col-span-2" : "col-span-4"}>
               <label className="text-xs text-muted-foreground">Cliente</label>
