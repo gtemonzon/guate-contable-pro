@@ -6,6 +6,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { DashboardAlerts } from "@/components/dashboard/DashboardAlerts";
+import { DashboardPendingEntries } from "@/components/dashboard/DashboardPendingEntries";
+import { DashboardIVASummary } from "@/components/dashboard/DashboardIVASummary";
+import { DashboardBankBalances } from "@/components/dashboard/DashboardBankBalances";
+import { DashboardTaxDeadlines } from "@/components/dashboard/DashboardTaxDeadlines";
+import { useNavigate } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,6 +65,7 @@ interface ActivePeriod {
 }
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [purchaseSummary, setPurchaseSummary] = useState<BookSummary | null>(null);
   const [salesSummary, setSalesSummary] = useState<BookSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -786,6 +792,7 @@ const Dashboard = () => {
       change: kpiData ? formatChange(kpiData.totalActivos.change) : "N/A",
       trend: kpiData?.totalActivos?.trend || 'neutral',
       icon: DollarSign,
+      link: "/saldos",
     },
     {
       title: "Total Pasivos",
@@ -793,6 +800,7 @@ const Dashboard = () => {
       change: kpiData ? formatChange(kpiData.totalPasivos.change) : "N/A",
       trend: kpiData?.totalPasivos?.trend || 'neutral',
       icon: Scale,
+      link: "/saldos",
     },
     {
       title: "Utilidad del Período",
@@ -800,13 +808,13 @@ const Dashboard = () => {
       change: kpiData ? formatChange(kpiData.utilidadMes.change) : "N/A",
       trend: kpiData?.utilidadMes?.trend || 'neutral',
       icon: TrendingUp,
+      link: "/reportes",
     },
     {
       title: "Liquidez",
-      // Si liquidez es -1, significa que hay activo circulante pero no hay pasivo corriente (muy buena situación)
       value: kpiData 
         ? (kpiData.liquidez.value === -1 
-            ? "∞" // Sin pasivo corriente pero con activo
+            ? "∞"
             : kpiData.liquidez.value.toFixed(2))
         : "0.00",
       change: kpiData 
@@ -816,6 +824,7 @@ const Dashboard = () => {
         : "N/A",
       trend: kpiData?.liquidez?.trend || 'neutral',
       icon: Wallet,
+      link: "/saldos",
     },
   ];
 
@@ -877,7 +886,11 @@ const Dashboard = () => {
       {/* KPIs Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
-          <Card key={kpi.title}>
+          <Card 
+            key={kpi.title}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => navigate(kpi.link)}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {kpi.title}
@@ -905,6 +918,14 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Secondary KPIs Row */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <DashboardPendingEntries enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+        <DashboardBankBalances enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+        <DashboardIVASummary enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+        <DashboardTaxDeadlines enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
       </div>
 
       {/* Recent Activity and Alerts */}
