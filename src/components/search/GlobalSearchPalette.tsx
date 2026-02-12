@@ -187,7 +187,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
             title: `${j.entry_number}`,
             subtitle: j.description,
             meta: `${formatCurrency(j.total_debit)} · ${j.entry_date}`,
-            route: `/partidas`,
+            route: `/partidas?viewEntry=${j.id}`,
           });
         });
 
@@ -198,33 +198,37 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
             category: "cuentas",
             title: `${a.account_code} - ${a.account_name}`,
             subtitle: a.account_type,
-            route: `/cuentas`,
+            route: `/cuentas?search=${encodeURIComponent(a.account_code)}`,
           });
         });
 
         // Map purchases
         purchases.data?.forEach((p) => {
           const d = new Date(p.invoice_date);
+          const month = d.getMonth() + 1;
+          const year = d.getFullYear();
           allResults.push({
             id: `compra-${p.id}`,
             category: "compras",
             title: `Fact. ${p.invoice_number} - ${p.supplier_name}`,
             subtitle: `NIT: ${p.supplier_nit}`,
             meta: `${formatCurrency(p.total_amount)} · ${format(d, "dd/MM/yyyy")}`,
-            route: `/libros-fiscales`,
+            route: `/libros-fiscales?tab=compras&month=${month}&year=${year}&highlight=${p.id}`,
           });
         });
 
         // Map sales
         sales.data?.forEach((s) => {
           const d = new Date(s.invoice_date);
+          const month = d.getMonth() + 1;
+          const year = d.getFullYear();
           allResults.push({
             id: `venta-${s.id}`,
             category: "ventas",
             title: `Fact. ${s.invoice_number} - ${s.customer_name}`,
             subtitle: `NIT: ${s.customer_nit}`,
             meta: `${formatCurrency(s.total_amount)} · ${format(d, "dd/MM/yyyy")}`,
-            route: `/libros-fiscales`,
+            route: `/libros-fiscales?tab=ventas&month=${month}&year=${year}&highlight=${s.id}`,
           });
         });
 
