@@ -59,6 +59,7 @@ interface LinkedPurchasesModalProps {
   documentReference: string;
   enterpriseId: number;
   bankAccountId?: number | null;
+  journalEntryId?: number | null;
   onPurchasesPosted: (lines: DetailLine[]) => void;
 }
 
@@ -76,9 +77,11 @@ export default function LinkedPurchasesModal({
   documentReference,
   enterpriseId,
   bankAccountId,
+  journalEntryId,
   onPurchasesPosted,
 }: LinkedPurchasesModalProps) {
   const [purchases, setPurchases] = useState<LinkedPurchaseEntry[]>([]);
+  const [existingPurchaseIds, setExistingPurchaseIds] = useState<number[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
@@ -96,7 +99,9 @@ export default function LinkedPurchasesModal({
       loadAccounts();
       loadFelDocTypes();
       loadOperationTypes();
-      if (purchases.length === 0) {
+      if (journalEntryId) {
+        loadExistingPurchases(journalEntryId);
+      } else if (purchases.length === 0) {
         addPurchase();
       }
     }
@@ -105,6 +110,7 @@ export default function LinkedPurchasesModal({
   useEffect(() => {
     if (!open) {
       setPurchases([]);
+      setExistingPurchaseIds([]);
     }
   }, [open]);
 
@@ -165,6 +171,78 @@ export default function LinkedPurchasesModal({
       setOperationTypes(data || []);
     } catch (error: any) {
       console.error("Error loading operation types:", error);
+    }
+  };
+
+  const loadExistingPurchases = async (entryId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_purchase_ledger")
+        .select("*")
+        .eq("enterprise_id", enterpriseId)
+        .eq("journal_entry_id", entryId)
+        .order("created_at");
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setExistingPurchaseIds(data.map(d => d.id));
+        const loaded: LinkedPurchaseEntry[] = data.map(d => ({
+          id: crypto.randomUUID(),
+          invoice_series: d.invoice_series || "",
+          invoice_number: d.invoice_number,
+          invoice_date: d.invoice_date,
+          fel_document_type: d.fel_document_type || "FACT",
+          supplier_nit: d.supplier_nit,
+          supplier_name: d.supplier_name,
+          total_amount: d.total_amount,
+          base_amount: d.base_amount || Number((d.total_amount / (1 + VAT_RATE)).toFixed(2)),
+          vat_amount: d.vat_amount,
+          operation_type_id: d.operation_type_id,
+          expense_account_id: d.expense_account_id,
+          nitError: null,
+          duplicateWarning: null,
+        }));
+        setPurchases(loaded);
+      } else {
+        // No existing purchases linked, also check by batch_reference
+        if (documentReference) {
+          const { data: batchData } = await supabase
+            .from("tab_purchase_ledger")
+            .select("*")
+            .eq("enterprise_id", enterpriseId)
+            .eq("batch_reference", documentReference)
+            .order("created_at");
+
+          if (batchData && batchData.length > 0) {
+            setExistingPurchaseIds(batchData.map(d => d.id));
+            const loaded: LinkedPurchaseEntry[] = batchData.map(d => ({
+              id: crypto.randomUUID(),
+              invoice_series: d.invoice_series || "",
+              invoice_number: d.invoice_number,
+              invoice_date: d.invoice_date,
+              fel_document_type: d.fel_document_type || "FACT",
+              supplier_nit: d.supplier_nit,
+              supplier_name: d.supplier_name,
+              total_amount: d.total_amount,
+              base_amount: d.base_amount || Number((d.total_amount / (1 + VAT_RATE)).toFixed(2)),
+              vat_amount: d.vat_amount,
+              operation_type_id: d.operation_type_id,
+              expense_account_id: d.expense_account_id,
+              nitError: null,
+              duplicateWarning: null,
+            }));
+            setPurchases(loaded);
+          } else {
+            addPurchase();
+          }
+        } else {
+          addPurchase();
+        }
+      }
+    } catch (error: any) {
+      console.error("Error loading existing purchases:", error);
+      addPurchase();
     }
   };
 
@@ -406,6 +484,17 @@ export default function LinkedPurchasesModal({
         });
       }
 
+      // If editing, delete old purchase records first
+      if (existingPurchaseIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("tab_purchase_ledger")
+          .delete()
+          .in("id", existingPurchaseIds);
+        if (deleteError) {
+          console.error("Error deleting old purchases:", deleteError);
+        }
+      }
+
       // Save purchases to purchase ledger (tab_purchase_ledger)
       const purchasesToInsert = purchases.map(p => ({
         enterprise_id: enterpriseId,
@@ -423,6 +512,7 @@ export default function LinkedPurchasesModal({
         expense_account_id: p.expense_account_id || null,
         bank_account_id: bankAccountId || null,
         batch_reference: documentReference || null,
+        journal_entry_id: journalEntryId || null,
       }));
 
       const { error: purchaseError } = await supabase

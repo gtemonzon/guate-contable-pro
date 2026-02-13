@@ -1170,14 +1170,14 @@ export default function JournalEntryDialog({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
               <div className="flex gap-2">
-                {/* Botón para agregar desde compras - solo visible cuando no está contabilizado */}
-                {entryStatus !== 'contabilizado' && !isReadOnly && (
+                {/* Botón para agregar desde compras - visible siempre excepto modo solo lectura */}
+                {!isReadOnly && (
                   <Button 
                     onClick={() => setShowLinkedPurchasesModal(true)} 
                     variant="outline" 
                     size="sm"
                     disabled={!entryDate}
-                    title={!entryDate ? "Primero ingrese la fecha de la partida" : "Agregar facturas de compra"}
+                    title={!entryDate ? "Primero ingrese la fecha de la partida" : "Ver/agregar facturas de compra vinculadas"}
                   >
                     <ShoppingCart className="mr-2 h-4 w-4" />
                     Agregar desde Compras
@@ -1528,6 +1528,7 @@ export default function JournalEntryDialog({
       documentReference={bankReference}
       enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
       bankAccountId={bankAccountId}
+      journalEntryId={entryToEdit?.id || null}
       onPurchasesPosted={handlePurchasesPosted}
     />
     </>
