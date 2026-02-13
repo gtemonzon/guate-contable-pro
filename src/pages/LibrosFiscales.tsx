@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
@@ -20,6 +20,7 @@ import { SaveStatusIndicator, type SaveStatus } from "@/components/ui/save-statu
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
+import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 
 interface FELDocumentType {
   id: number;
@@ -87,6 +88,7 @@ export default function LibrosFiscales() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
@@ -1379,6 +1381,10 @@ export default function LibrosFiscales() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Estadísticas
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
                     <Upload className="h-4 w-4 mr-2" />
                     Importar
@@ -1457,6 +1463,10 @@ export default function LibrosFiscales() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Estadísticas
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
                     <Upload className="h-4 w-4 mr-2" />
                     Importar
@@ -2613,6 +2623,14 @@ export default function LibrosFiscales() {
             // Clear highlight after 3 seconds
             setTimeout(() => setHighlightedInvoiceId(null), 3000);
           }}
+        />
+      )}
+      {currentEnterpriseId && (
+        <LedgerStatsModal
+          open={showStatsModal}
+          onOpenChange={setShowStatsModal}
+          enterpriseId={currentEnterpriseId}
+          type={activeTab}
         />
       )}
     </div>
