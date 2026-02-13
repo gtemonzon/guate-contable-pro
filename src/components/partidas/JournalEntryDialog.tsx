@@ -1041,7 +1041,7 @@ export default function JournalEntryDialog({
           )}
 
           {/* Encabezado */}
-          <div ref={headerRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div ref={headerRef} className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <Label>Número de Partida</Label>
               <Input value={nextEntryNumber} disabled />
@@ -1095,7 +1095,7 @@ export default function JournalEntryDialog({
               </Select>
             </div>
 
-            <div className="md:col-span-2 lg:col-span-3">
+            <div className="col-span-2 md:col-span-4">
               <Label htmlFor="headerDesc">Descripción General</Label>
               <Textarea
                 id="headerDesc"
