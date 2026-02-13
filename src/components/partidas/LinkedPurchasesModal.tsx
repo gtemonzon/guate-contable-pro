@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Calculator, FileText } from "lucide-react";
+import { Plus, Trash2, Calculator, FileText, Save } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -108,6 +108,29 @@ export default function LinkedPurchasesModal({
       setPurchases([]);
     }
   }, [open]);
+
+  // Ctrl+Alt+"+" para guardar fila actual y crear nueva
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && (e.key === '+' || e.key === 'Add')) {
+        e.preventDefault();
+        // Validate last purchase has minimum data before adding new
+        const lastPurchase = purchases[purchases.length - 1];
+        if (lastPurchase && lastPurchase.supplier_nit.trim() && lastPurchase.total_amount > 0) {
+          addPurchase();
+          toast({
+            title: "Nueva factura agregada",
+            description: "Se agregó una nueva fila de factura",
+          });
+        } else {
+          addPurchase();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, purchases]);
 
   const loadAccounts = async () => {
     try {
