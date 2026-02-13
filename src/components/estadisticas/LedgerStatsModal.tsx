@@ -58,6 +58,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"top10" | "full">("top10");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+  const [sortField, setSortField] = useState<"total" | "name">("total");
 
   const label = type === "compras" ? "Proveedores" : "Clientes";
   const tableName = type === "compras" ? "tab_purchase_ledger" : "tab_sales_ledger";
@@ -140,11 +141,14 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
   }, [open, enterpriseId, selectedYears, selectedMonths, tableName, nameField, type]);
 
   const sortedData = useMemo(() => {
-    const sorted = [...data].sort((a, b) =>
-      sortDir === "desc" ? b.total - a.total : a.total - b.total
-    );
+    const sorted = [...data].sort((a, b) => {
+      if (sortField === "total") {
+        return sortDir === "desc" ? b.total - a.total : a.total - b.total;
+      }
+      return sortDir === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
+    });
     return viewMode === "top10" ? sorted.slice(0, 10) : sorted;
-  }, [data, sortDir, viewMode]);
+  }, [data, sortDir, sortField, viewMode]);
 
   const maxTotal = useMemo(() => Math.max(...sortedData.map((d) => d.total), 1), [sortedData]);
 
@@ -188,7 +192,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden border-primary/20">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden border-primary/20">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 pb-4 border-b">
           <DialogHeader>
@@ -295,18 +299,29 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
           <span className="font-semibold">
             Total: Q {formatCurrency(grandTotal)}
           </span>
-          <span className="ml-auto">
+          <span className="ml-auto flex gap-1">
             <Button
-              variant="ghost"
+              variant={sortField === "name" ? "secondary" : "ghost"}
               size="sm"
               className="h-6 text-xs gap-1 px-2"
-              onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+              onClick={() => {
+                if (sortField === "name") setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                else { setSortField("name"); setSortDir("asc"); }
+              }}
             >
-              {sortDir === "desc" ? (
-                <ArrowDown className="h-3 w-3" />
-              ) : (
-                <ArrowUp className="h-3 w-3" />
-              )}
+              {sortField === "name" ? (sortDir === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3" />}
+              Nombre
+            </Button>
+            <Button
+              variant={sortField === "total" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-6 text-xs gap-1 px-2"
+              onClick={() => {
+                if (sortField === "total") setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+                else { setSortField("total"); setSortDir("desc"); }
+              }}
+            >
+              {sortField === "total" ? (sortDir === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3" />}
               Monto
             </Button>
           </span>
