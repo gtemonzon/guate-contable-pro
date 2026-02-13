@@ -46,12 +46,19 @@ interface LinkedPurchaseEntry {
   duplicateWarning: string | null;
 }
 
+interface OperationType {
+  id: number;
+  code: string;
+  name: string;
+}
+
 interface LinkedPurchasesModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   entryDate: string;
   documentReference: string;
   enterpriseId: number;
+  bankAccountId?: number | null;
   onPurchasesPosted: (lines: DetailLine[]) => void;
 }
 
@@ -68,11 +75,13 @@ export default function LinkedPurchasesModal({
   entryDate,
   documentReference,
   enterpriseId,
+  bankAccountId,
   onPurchasesPosted,
 }: LinkedPurchasesModalProps) {
   const [purchases, setPurchases] = useState<LinkedPurchaseEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
+  const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
 
   const { toast } = useToast();
@@ -86,6 +95,7 @@ export default function LinkedPurchasesModal({
     if (open && enterpriseId) {
       loadAccounts();
       loadFelDocTypes();
+      loadOperationTypes();
       if (purchases.length === 0) {
         addPurchase();
       }
@@ -139,6 +149,22 @@ export default function LinkedPurchasesModal({
       setFelDocTypes(data || []);
     } catch (error: any) {
       console.error("Error loading FEL doc types:", error);
+    }
+  };
+
+  const loadOperationTypes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_operation_types")
+        .select("id, code, name")
+        .eq("applies_to", "compras")
+        .eq("is_active", true)
+        .or(`enterprise_id.eq.${enterpriseId},is_system.eq.true`)
+        .order("name");
+      if (error) throw error;
+      setOperationTypes(data || []);
+    } catch (error: any) {
+      console.error("Error loading operation types:", error);
     }
   };
 
@@ -196,7 +222,6 @@ export default function LinkedPurchasesModal({
       return;
     }
     updatePurchase(purchase.id, 'nitError', null);
-    // Auto-lookup supplier name
     await searchSupplierByNit(purchase.id, nit);
   };
 
@@ -210,7 +235,6 @@ export default function LinkedPurchasesModal({
         .order("invoice_date", { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
-        // Only auto-fill if supplier_name is empty
         setPurchases(prev => prev.map(p => {
           if (p.id !== purchaseId) return p;
           if (p.supplier_name.trim()) return p;
@@ -229,11 +253,6 @@ export default function LinkedPurchasesModal({
       return;
     }
     try {
-      const invoiceDate = new Date(purchase.invoice_date + 'T00:00:00');
-      const month = invoiceDate.getMonth() + 1;
-      const year = invoiceDate.getFullYear();
-
-      // Check in DB
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
         .select("id, invoice_date")
@@ -318,7 +337,8 @@ export default function LinkedPurchasesModal({
       toast({ title: "Configuración incompleta", description: "Debe configurar la cuenta de IVA Crédito Fiscal en Configuración de Empresa", variant: "destructive" });
       return false;
     }
-    if (!config?.suppliers_account_id) {
+    // If no bank account, require suppliers account
+    if (!bankAccountId && !config?.suppliers_account_id) {
       toast({ title: "Configuración incompleta", description: "Debe configurar la cuenta de Proveedores en Configuración de Empresa", variant: "destructive" });
       return false;
     }
@@ -368,11 +388,17 @@ export default function LinkedPurchasesModal({
         });
       }
 
-      if (config?.suppliers_account_id) {
+      // Credit line: use bank account if selected, otherwise use suppliers account
+      const creditAccountId = bankAccountId || config?.suppliers_account_id;
+      const creditLabel = bankAccountId
+        ? `Banco - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`
+        : `Proveedores - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`;
+
+      if (creditAccountId) {
         generatedLines.push({
           id: crypto.randomUUID(),
-          account_id: config.suppliers_account_id,
-          description: `Proveedores - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`,
+          account_id: creditAccountId,
+          description: creditLabel,
           bank_reference: documentReference,
           cost_center: "",
           debit_amount: 0,
@@ -380,8 +406,36 @@ export default function LinkedPurchasesModal({
         });
       }
 
+      // Save purchases to purchase ledger (tab_purchase_ledger)
+      const purchasesToInsert = purchases.map(p => ({
+        enterprise_id: enterpriseId,
+        invoice_series: p.invoice_series || null,
+        invoice_number: p.invoice_number,
+        invoice_date: p.invoice_date,
+        fel_document_type: p.fel_document_type,
+        supplier_nit: p.supplier_nit,
+        supplier_name: p.supplier_name,
+        total_amount: p.total_amount,
+        net_amount: p.base_amount,
+        base_amount: p.base_amount,
+        vat_amount: p.vat_amount,
+        operation_type_id: p.operation_type_id || null,
+        expense_account_id: p.expense_account_id || null,
+        bank_account_id: bankAccountId || null,
+        batch_reference: documentReference || null,
+      }));
+
+      const { error: purchaseError } = await supabase
+        .from("tab_purchase_ledger")
+        .insert(purchasesToInsert);
+
+      if (purchaseError) {
+        console.error("Error saving purchases:", purchaseError);
+        toast({ title: "Advertencia", description: "Las líneas contables se generaron pero hubo un error al guardar en el libro de compras: " + purchaseError.message, variant: "destructive" });
+      }
+
       onPurchasesPosted(generatedLines);
-      toast({ title: "Facturas contabilizadas", description: `Se generaron ${generatedLines.length} líneas de detalle` });
+      toast({ title: "Facturas contabilizadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras` });
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Error al contabilizar", description: getSafeErrorMessage(error), variant: "destructive" });
@@ -392,9 +446,12 @@ export default function LinkedPurchasesModal({
 
   const totals = getTotals();
 
+  // Determine credit account label for preview
+  const creditPreviewLabel = bankAccountId ? "Banco" : "Proveedores";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -515,7 +572,7 @@ export default function LinkedPurchasesModal({
                   </div>
                 </div>
 
-                {/* Row 2: Total, Cuenta Gasto, Delete */}
+                {/* Row 2: Total, IVA, Tipo Operación, Cuenta Gasto, Warnings, Delete */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-2">
                     <label className="text-xs text-muted-foreground">Total c/IVA</label>
@@ -529,15 +586,31 @@ export default function LinkedPurchasesModal({
                       className="h-8 text-xs"
                     />
                   </div>
-                  <div className="col-span-1">
+                  <div className="col-span-2">
                     <label className="text-xs text-muted-foreground">IVA</label>
                     <Input
-                      value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : ""}
+                      value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
                       readOnly
                       className="h-8 text-xs bg-muted"
                     />
                   </div>
-                  <div className="col-span-4">
+                  <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Tipo Operación</label>
+                    <Select
+                      value={purchase.operation_type_id?.toString() || ""}
+                      onValueChange={(v) => updatePurchase(purchase.id, 'operation_type_id', v ? parseInt(v) : null)}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Tipo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {operationTypes.map((t) => (
+                          <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-3">
                     <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                     <AccountCombobox
                       accounts={accounts}
@@ -547,7 +620,7 @@ export default function LinkedPurchasesModal({
                       className="w-full"
                     />
                   </div>
-                  <div className="col-span-4 flex items-end gap-2">
+                  <div className="col-span-2 flex items-end gap-1">
                     {purchase.duplicateWarning && (
                       <div className="flex items-center gap-1 text-destructive text-[10px] pb-1">
                         <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -578,7 +651,7 @@ export default function LinkedPurchasesModal({
                     <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base)}) + IVA Crédito ({formatCurrency(totals.vat)})
                   </p>
                   <p className="text-muted-foreground">
-                    <span className="font-medium">HABER:</span> Proveedores ({formatCurrency(totals.total)})
+                    <span className="font-medium">HABER:</span> {creditPreviewLabel} ({formatCurrency(totals.total)})
                   </p>
                 </div>
               </div>

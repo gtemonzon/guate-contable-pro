@@ -1527,6 +1527,7 @@ export default function JournalEntryDialog({
       entryDate={entryDate}
       documentReference={bankReference}
       enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+      bankAccountId={bankAccountId}
       onPurchasesPosted={handlePurchasesPosted}
     />
     </>
