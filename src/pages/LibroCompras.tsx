@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus } from "lucide-react";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { PurchaseCard, PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SaveStatusIndicator, SaveStatus } from "@/components/ui/save-status-indicator";
@@ -66,6 +67,7 @@ export default function LibroCompras() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
+  const [showStatsModal, setShowStatsModal] = useState(false);
   
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
     id: number;
@@ -1083,6 +1085,14 @@ export default function LibroCompras() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowStatsModal(true)}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Estadísticas
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowImportDialog(true)}
               >
                 <Upload className="h-4 w-4 mr-2" />
@@ -1239,6 +1249,14 @@ export default function LibroCompras() {
         expenseAccounts={expenseAccounts}
         operationTypes={operationTypes}
       />
+      {currentEnterpriseId && (
+        <LedgerStatsModal
+          open={showStatsModal}
+          onOpenChange={setShowStatsModal}
+          enterpriseId={currentEnterpriseId}
+          type="compras"
+        />
+      )}
     </div>
   );
 }

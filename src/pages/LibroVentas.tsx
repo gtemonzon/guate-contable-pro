@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus } from "lucide-react";
+import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SaveStatusIndicator, SaveStatus } from "@/components/ui/save-status-indicator";
@@ -67,6 +68,7 @@ export default function LibroVentas() {
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
@@ -1124,6 +1126,14 @@ export default function LibroVentas() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowStatsModal(true)}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Estadísticas
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowImportDialog(true)}
               >
                 <Upload className="h-4 w-4 mr-2" />
@@ -1280,6 +1290,14 @@ export default function LibroVentas() {
         incomeAccounts={incomeAccounts}
         operationTypes={operationTypes}
       />
+      {currentEnterpriseId && (
+        <LedgerStatsModal
+          open={showStatsModal}
+          onOpenChange={setShowStatsModal}
+          enterpriseId={currentEnterpriseId}
+          type="ventas"
+        />
+      )}
     </div>
   );
 }
