@@ -192,7 +192,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden border-primary/20">
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden border-primary/20">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6 pb-4 border-b">
           <DialogHeader>
@@ -328,7 +328,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
         </div>
 
         {/* Data list */}
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4 space-y-1.5">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -387,7 +387,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
               })
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
