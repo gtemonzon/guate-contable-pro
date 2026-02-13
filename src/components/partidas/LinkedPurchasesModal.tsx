@@ -163,7 +163,7 @@ export default function LinkedPurchasesModal({
       const { data, error } = await supabase
         .from("tab_operation_types")
         .select("id, code, name")
-        .eq("applies_to", "compras")
+        .in("applies_to", ["purchases", "both"])
         .eq("is_active", true)
         .or(`enterprise_id.eq.${enterpriseId},is_system.eq.true`)
         .order("name");
