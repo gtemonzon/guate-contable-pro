@@ -541,7 +541,7 @@ export default function LinkedPurchasesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -572,7 +572,7 @@ export default function LinkedPurchasesModal({
         </div>
 
         {/* Invoices list */}
-        <ScrollArea className="flex-1 min-h-0 max-h-[calc(90vh-220px)]">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           <div className="space-y-3 pb-4">
             <div className="flex justify-between items-center">
               <h4 className="font-medium text-sm">Facturas ({purchases.length})</h4>
@@ -747,7 +747,7 @@ export default function LinkedPurchasesModal({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
