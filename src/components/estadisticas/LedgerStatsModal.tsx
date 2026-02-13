@@ -63,6 +63,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
   const label = type === "compras" ? "Proveedores" : "Clientes";
   const tableName = type === "compras" ? "tab_purchase_ledger" : "tab_sales_ledger";
   const nameField = type === "compras" ? "supplier_name" : "customer_name";
+  const nitField = type === "compras" ? "supplier_nit" : "customer_nit";
 
   // Fetch available years
   useEffect(() => {
@@ -99,7 +100,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
 
             let query: any = supabase
               .from(tableName)
-              .select(`${nameField}, total_amount`)
+              .select(`${nitField}, ${nameField}, total_amount, invoice_date`)
               .eq("enterprise_id", parseInt(enterpriseId))
               .gte("invoice_date", startDate)
               .lte("invoice_date", endDate);
@@ -113,19 +114,26 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
           }
         }
 
-        // Aggregate
-        const map = new Map<string, { total: number; count: number }>();
+        // Aggregate by NIT, use most recent name
+        const map = new Map<string, { total: number; count: number; name: string; lastDate: string }>();
         for (const row of allRows) {
+          const nit = (row[nitField] || "").toUpperCase().trim();
           const name = (row[nameField] || "").toUpperCase().trim();
-          if (!name || name === "ANULADA") continue;
-          const existing = map.get(name) || { total: 0, count: 0 };
+          if (!nit || nit === "ANULADA" || !name || name === "ANULADA") continue;
+          const existing = map.get(nit) || { total: 0, count: 0, name, lastDate: "" };
           existing.total += Number(row.total_amount) || 0;
           existing.count += 1;
-          map.set(name, existing);
+          // Keep the name from the most recent invoice
+          const invoiceDate = row.invoice_date || "";
+          if (invoiceDate >= existing.lastDate) {
+            existing.name = name;
+            existing.lastDate = invoiceDate;
+          }
+          map.set(nit, existing);
         }
 
-        const result: StatRow[] = Array.from(map.entries()).map(([name, v]) => ({
-          name,
+        const result: StatRow[] = Array.from(map.values()).map((v) => ({
+          name: v.name,
           total: v.total,
           count: v.count,
         }));
