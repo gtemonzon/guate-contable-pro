@@ -1095,16 +1095,6 @@ export default function JournalEntryDialog({
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="docRef">Referencia de Documento</Label>
-              <Input
-                id="docRef"
-                placeholder="Opcional"
-                value={documentReference}
-                onChange={(e) => setDocumentReference(e.target.value)}
-              />
-            </div>
-
             <div className="md:col-span-2 lg:col-span-3">
               <Label htmlFor="headerDesc">Descripción General</Label>
               <Textarea
@@ -1535,7 +1525,7 @@ export default function JournalEntryDialog({
       open={showLinkedPurchasesModal}
       onOpenChange={setShowLinkedPurchasesModal}
       entryDate={entryDate}
-      documentReference={documentReference}
+      documentReference={bankReference}
       enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
       onPurchasesPosted={handlePurchasesPosted}
     />
