@@ -474,45 +474,72 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
               Empresa Seleccionada
             </Button>
           )}
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => onEdit(enterprise)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => onEdit(enterprise)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Editar empresa</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {onOpenWizard && (
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => onOpenWizard(enterprise)}
-            >
-              <Wand2 className="h-4 w-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => onOpenWizard(enterprise)}
+                  >
+                    <Wand2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Asistente de configuración</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => exportEnterpriseData({
-              enterpriseId: enterprise.id,
-              enterpriseName: enterprise.business_name,
-            })}
-            disabled={isExporting}
-            title="Descargar backup (Excel)"
-          >
-            {isExporting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => exportEnterpriseData({
+                    enterpriseId: enterprise.id,
+                    enterpriseName: enterprise.business_name,
+                  })}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Descargar respaldo (Excel)</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Desactivar empresa</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="flex items-center justify-center">
