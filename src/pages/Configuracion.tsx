@@ -12,6 +12,8 @@ import { AlertConfigManager } from "@/components/configuracion/AlertConfigManage
 import { TaxDueDateConfig } from "@/components/configuracion/TaxDueDateConfig";
 import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
 import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
+import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreManager";
+import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
@@ -38,6 +40,8 @@ export default function Configuracion() {
           <TabsTrigger value="due-dates">Fechas Vencimiento</TabsTrigger>
           <TabsTrigger value="pdf-typography">Tipografía PDFs</TabsTrigger>
           <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
+          <TabsTrigger value="backup">Respaldo</TabsTrigger>
+          <TabsTrigger value="integrity">Integridad</TabsTrigger>
         </TabsList>
 
         <TabsContent value="enterprise-accounts" className="mt-6">
@@ -109,6 +113,14 @@ export default function Configuracion() {
 
         <TabsContent value="permissions" className="mt-6">
           <PermissionsMatrix />
+        </TabsContent>
+
+        <TabsContent value="backup" className="mt-6">
+          <BackupRestoreManager />
+        </TabsContent>
+
+        <TabsContent value="integrity" className="mt-6">
+          <IntegrityValidationPanel />
         </TabsContent>
       </Tabs>
     </div>

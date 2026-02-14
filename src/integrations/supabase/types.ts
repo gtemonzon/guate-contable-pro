@@ -232,6 +232,47 @@ export type Database = {
           },
         ]
       }
+      tab_backup_history: {
+        Row: {
+          backup_type: string
+          created_at: string
+          created_by: string
+          enterprise_id: number
+          file_name: string
+          id: number
+          metadata: Json | null
+          record_count: number
+        }
+        Insert: {
+          backup_type: string
+          created_at?: string
+          created_by: string
+          enterprise_id: number
+          file_name: string
+          id?: number
+          metadata?: Json | null
+          record_count?: number
+        }
+        Update: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string
+          enterprise_id?: number
+          file_name?: string
+          id?: number
+          metadata?: Json | null
+          record_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_backup_history_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_bank_accounts: {
         Row: {
           account_id: number | null
@@ -1044,6 +1085,95 @@ export type Database = {
             columns: ["imported_by"]
             isOneToOne: false
             referencedRelation: "tab_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_integrity_rules_config: {
+        Row: {
+          created_at: string
+          enterprise_id: number
+          id: number
+          is_enabled: boolean
+          rule_code: string
+          severity_override: string | null
+        }
+        Insert: {
+          created_at?: string
+          enterprise_id: number
+          id?: number
+          is_enabled?: boolean
+          rule_code: string
+          severity_override?: string | null
+        }
+        Update: {
+          created_at?: string
+          enterprise_id?: number
+          id?: number
+          is_enabled?: boolean
+          rule_code?: string
+          severity_override?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_integrity_rules_config_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_integrity_validations: {
+        Row: {
+          enterprise_id: number
+          health_score: number
+          id: number
+          period_id: number | null
+          results: Json
+          run_at: string
+          run_by: string
+          total_errors: number
+          total_info: number
+          total_warnings: number
+        }
+        Insert: {
+          enterprise_id: number
+          health_score?: number
+          id?: number
+          period_id?: number | null
+          results?: Json
+          run_at?: string
+          run_by: string
+          total_errors?: number
+          total_info?: number
+          total_warnings?: number
+        }
+        Update: {
+          enterprise_id?: number
+          health_score?: number
+          id?: number
+          period_id?: number | null
+          results?: Json
+          run_at?: string
+          run_by?: string
+          total_errors?: number
+          total_info?: number
+          total_warnings?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_integrity_validations_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_integrity_validations_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounting_periods"
             referencedColumns: ["id"]
           },
         ]
