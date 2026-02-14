@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
@@ -33,9 +33,28 @@ const BACKUP_TABLES = [
   'tab_enterprise_documents',
   'tab_period_inventory_closing',
   'tab_dashboard_card_config',
+  'tab_audit_log',
+  'tab_bank_import_templates',
+  'tab_integrity_rules_config',
 ] as const;
 
 type BackupTable = typeof BACKUP_TABLES[number];
+
+// Tables that do NOT need ID remapping (no child tables reference them)
+const BATCH_INSERT_TABLES = new Set([
+  'tab_notifications',
+  'tab_alert_config',
+  'tab_holidays',
+  'tab_custom_reminders',
+  'tab_dashboard_card_config',
+  'tab_import_logs',
+  'tab_audit_log',
+  'tab_role_permissions',
+  'tab_tax_due_date_config',
+  'tab_enterprise_documents',
+  'tab_integrity_rules_config',
+  'tab_tax_forms',
+]);
 
 interface BackupMetadata {
   export_date: string;
@@ -43,6 +62,7 @@ interface BackupMetadata {
   source_enterprise_name: string;
   app_version: string;
   table_counts: Record<string, number>;
+  total_records: number;
 }
 
 interface BackupFile {
@@ -50,7 +70,7 @@ interface BackupFile {
   data: Record<string, any[]>;
 }
 
-interface RestoreProgress {
+export interface RestoreProgress {
   currentTable: string;
   currentIndex: number;
   totalTables: number;
@@ -58,10 +78,25 @@ interface RestoreProgress {
   totalRecords: number;
 }
 
-interface BackupPreview {
+export interface BackupPreview {
   metadata: BackupMetadata;
   tableCounts: Record<string, number>;
   totalRecords: number;
+}
+
+export interface FailedRecord {
+  table: string;
+  record: any;
+  error: string;
+}
+
+export interface RestoreResult {
+  success: boolean;
+  recordsProcessed: number;
+  recordsFailed: number;
+  failedRecords: FailedRecord[];
+  tableResults: Record<string, { inserted: number; failed: number }>;
+  duration: number;
 }
 
 export function useEnterpriseBackupRestore() {
@@ -70,20 +105,13 @@ export function useEnterpriseBackupRestore() {
   const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgress | null>(null);
   const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(null);
+  const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
+  const cancelRef = useRef(false);
 
   // Helper: fetch table data with enterprise_id filter
   const fetchTableData = async (tableName: string, enterpriseId: number): Promise<any[]> => {
-    // Tables that don't have enterprise_id directly
-    const indirectTables: Record<string, { via: string; parentTable: string; parentFilter: string }> = {
-      tab_journal_entry_details: { via: 'journal_entry_id', parentTable: 'tab_journal_entries', parentFilter: 'enterprise_id' },
-      tab_journal_entry_history: { via: 'journal_entry_id', parentTable: 'tab_journal_entries', parentFilter: 'enterprise_id' },
-      tab_financial_statement_sections: { via: 'format_id', parentTable: 'tab_financial_statement_formats', parentFilter: 'enterprise_id' },
-      tab_financial_statement_section_accounts: { via: 'section_id', parentTable: 'tab_financial_statement_sections', parentFilter: 'format_id' },
-    };
-
     try {
       if (tableName === 'tab_journal_entry_details' || tableName === 'tab_journal_entry_history') {
-        // Get entry IDs first
         const entriesQuery = supabase
           .from('tab_journal_entries')
           .select('id')
@@ -93,9 +121,8 @@ export function useEnterpriseBackupRestore() {
         
         const entryIds = entries.map((e: any) => e.id);
         const allData: any[] = [];
-        const batchSize = 500;
-        for (let i = 0; i < entryIds.length; i += batchSize) {
-          const batch = entryIds.slice(i, i + batchSize);
+        for (let i = 0; i < entryIds.length; i += 500) {
+          const batch = entryIds.slice(i, i + 500);
           const { data } = await supabase
             .from(tableName as any)
             .select('*')
@@ -111,11 +138,10 @@ export function useEnterpriseBackupRestore() {
           .select('id')
           .eq('enterprise_id', enterpriseId);
         if (!formats || formats.length === 0) return [];
-        const formatIds = formats.map(f => f.id);
         const { data } = await supabase
           .from('tab_financial_statement_sections')
           .select('*')
-          .in('format_id', formatIds);
+          .in('format_id', formats.map(f => f.id));
         return data || [];
       }
 
@@ -125,18 +151,24 @@ export function useEnterpriseBackupRestore() {
           .select('id')
           .eq('enterprise_id', enterpriseId);
         if (!formats || formats.length === 0) return [];
-        const formatIds = formats.map(f => f.id);
         const { data: sections } = await supabase
           .from('tab_financial_statement_sections')
           .select('id')
-          .in('format_id', formatIds);
+          .in('format_id', formats.map(f => f.id));
         if (!sections || sections.length === 0) return [];
-        const sectionIds = sections.map(s => s.id);
         const { data } = await supabase
           .from('tab_financial_statement_section_accounts')
           .select('*')
-          .in('section_id', sectionIds);
+          .in('section_id', sections.map(s => s.id));
         return data || [];
+      }
+
+      if (tableName === 'tab_bank_import_templates') {
+        const query = supabase
+          .from('tab_bank_import_templates')
+          .select('*')
+          .eq('enterprise_id', enterpriseId);
+        return await fetchAllRecords<any>(query);
       }
 
       // Standard tables with enterprise_id
@@ -171,18 +203,20 @@ export function useEnterpriseBackupRestore() {
         }
       }
 
+      const totalRecords = Object.values(tableCounts).reduce((a, b) => a + b, 0);
+
       const backup: BackupFile = {
         metadata: {
           export_date: new Date().toISOString(),
           source_enterprise_id: enterpriseId,
           source_enterprise_name: enterpriseName,
-          app_version: '1.0.0',
+          app_version: '2.0.0',
           table_counts: tableCounts,
+          total_records: totalRecords,
         },
         data: backupData,
       };
 
-      // Download
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -194,22 +228,31 @@ export function useEnterpriseBackupRestore() {
       a.click();
       URL.revokeObjectURL(url);
 
-      // Log to backup history
+      // Log to backup history + audit log
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const totalRecords = Object.values(tableCounts).reduce((a, b) => a + b, 0);
-        await supabase.from('tab_backup_history').insert({
-          enterprise_id: enterpriseId,
-          backup_type: 'export',
-          file_name: a.download,
-          record_count: totalRecords,
-          metadata: { table_counts: tableCounts } as any,
-          created_by: user.id,
-        });
+        await Promise.all([
+          supabase.from('tab_backup_history').insert({
+            enterprise_id: enterpriseId,
+            backup_type: 'export',
+            file_name: a.download,
+            record_count: totalRecords,
+            metadata: { table_counts: tableCounts } as any,
+            created_by: user.id,
+          }),
+          supabase.from('tab_audit_log').insert({
+            enterprise_id: enterpriseId,
+            user_id: user.id,
+            action: 'backup_export',
+            table_name: 'system',
+            record_id: enterpriseId,
+            new_values: { tables_count: Object.keys(tableCounts).length, records_count: totalRecords, file_name: a.download } as any,
+          }),
+        ]);
       }
 
       toast.success('Backup exportado exitosamente', {
-        description: `${Object.values(tableCounts).reduce((a, b) => a + b, 0)} registros exportados`,
+        description: `${totalRecords.toLocaleString()} registros en ${Object.keys(tableCounts).length} tablas`,
       });
     } catch (error: any) {
       console.error('Export error:', error);
@@ -228,15 +271,20 @@ export function useEnterpriseBackupRestore() {
         try {
           const backup: BackupFile = JSON.parse(e.target?.result as string);
           if (!backup.metadata || !backup.data) {
-            throw new Error('Archivo de backup inválido');
+            throw new Error('Archivo de backup inválido: faltan metadata o data');
           }
           const tableCounts = backup.metadata.table_counts || {};
-          const totalRecords = Object.values(tableCounts).reduce((a, b) => a + b, 0);
-          const preview: BackupPreview = {
-            metadata: backup.metadata,
-            tableCounts,
-            totalRecords,
-          };
+          const totalRecords = backup.metadata.total_records || Object.values(tableCounts).reduce((a, b) => a + b, 0);
+
+          // Validate record counts match actual data
+          for (const [table, expectedCount] of Object.entries(tableCounts)) {
+            const actualCount = backup.data[table]?.length || 0;
+            if (actualCount !== expectedCount) {
+              console.warn(`Count mismatch for ${table}: expected ${expectedCount}, got ${actualCount}`);
+            }
+          }
+
+          const preview: BackupPreview = { metadata: backup.metadata, tableCounts, totalRecords };
           setBackupPreview(preview);
           resolve(preview);
         } catch (err: any) {
@@ -248,6 +296,11 @@ export function useEnterpriseBackupRestore() {
     });
   }, []);
 
+  // Cancel restore
+  const cancelRestore = useCallback(() => {
+    cancelRef.current = true;
+  }, []);
+
   // RESTORE
   const restoreBackup = useCallback(async (
     file: File,
@@ -255,6 +308,12 @@ export function useEnterpriseBackupRestore() {
     mode: 'restore' | 'clone'
   ) => {
     setIsRestoring(true);
+    cancelRef.current = false;
+    setRestoreResult(null);
+    const startTime = Date.now();
+
+    const failedRecords: FailedRecord[] = [];
+    const tableResults: Record<string, { inserted: number; failed: number }> = {};
 
     try {
       const text = await file.text();
@@ -264,7 +323,15 @@ export function useEnterpriseBackupRestore() {
         throw new Error('Archivo de backup inválido');
       }
 
-      const totalRecords = Object.values(backup.metadata.table_counts).reduce((a, b) => a + b, 0);
+      // Pre-validation: check critical tables
+      const criticalTables = ['tab_accounts', 'tab_accounting_periods'];
+      for (const ct of criticalTables) {
+        if (backup.data[ct] && backup.data[ct].length === 0) {
+          console.warn(`Tabla crítica ${ct} está vacía en el backup`);
+        }
+      }
+
+      const totalRecords = Object.entries(backup.data).reduce((sum, [, records]) => sum + records.length, 0);
       const idMapping: Record<string, Record<number, number>> = {};
       let recordsProcessed = 0;
 
@@ -274,7 +341,6 @@ export function useEnterpriseBackupRestore() {
         for (const tableName of reverseTables) {
           try {
             if (['tab_journal_entry_details', 'tab_journal_entry_history'].includes(tableName)) {
-              // Delete via journal entries
               const { data: entries } = await supabase
                 .from('tab_journal_entries')
                 .select('id')
@@ -285,8 +351,7 @@ export function useEnterpriseBackupRestore() {
                   await supabase.from(tableName as any).delete().in('journal_entry_id', ids.slice(i, i + 500));
                 }
               }
-            } else if (tableName === 'tab_financial_statement_sections' || tableName === 'tab_financial_statement_section_accounts') {
-              // Handled via cascade or manual
+            } else if (tableName === 'tab_financial_statement_section_accounts' || tableName === 'tab_financial_statement_sections') {
               const { data: formats } = await supabase
                 .from('tab_financial_statement_formats')
                 .select('id')
@@ -305,6 +370,8 @@ export function useEnterpriseBackupRestore() {
                   await supabase.from('tab_financial_statement_sections').delete().in('format_id', formatIds);
                 }
               }
+            } else if (tableName === 'tab_bank_import_templates') {
+              await supabase.from('tab_bank_import_templates').delete().eq('enterprise_id', targetEnterpriseId);
             } else {
               await supabase.from(tableName as any).delete().eq('enterprise_id', targetEnterpriseId);
             }
@@ -314,148 +381,107 @@ export function useEnterpriseBackupRestore() {
         }
       }
 
+      // Get tables present in the backup (in topological order)
+      const tablesToProcess = BACKUP_TABLES.filter(t => backup.data[t] && backup.data[t].length > 0);
+
       // Insert data in topological order
-      for (let tableIdx = 0; tableIdx < BACKUP_TABLES.length; tableIdx++) {
-        const tableName = BACKUP_TABLES[tableIdx];
+      for (let tableIdx = 0; tableIdx < tablesToProcess.length; tableIdx++) {
+        if (cancelRef.current) {
+          toast.info('Restauración cancelada por el usuario');
+          break;
+        }
+
+        const tableName = tablesToProcess[tableIdx];
         const records = backup.data[tableName];
         if (!records || records.length === 0) continue;
 
         setRestoreProgress({
           currentTable: tableName,
           currentIndex: tableIdx,
-          totalTables: BACKUP_TABLES.length,
+          totalTables: tablesToProcess.length,
           recordsProcessed,
           totalRecords,
         });
 
         idMapping[tableName] = {};
+        tableResults[tableName] = { inserted: 0, failed: 0 };
 
-        // Process records
-        const batchSize = 100;
-        for (let i = 0; i < records.length; i += batchSize) {
-          const batch = records.slice(i, i + batchSize);
-          
-          for (const record of batch) {
+        const useBatchInsert = BATCH_INSERT_TABLES.has(tableName) && mode === 'clone';
+
+        if (useBatchInsert) {
+          // Batch insert for tables that don't need ID remapping
+          const batchSize = 100;
+          for (let i = 0; i < records.length; i += batchSize) {
+            if (cancelRef.current) break;
+            const batch = records.slice(i, i + batchSize).map((record: any) => {
+              const newRecord = { ...record };
+              delete newRecord.id;
+              delete newRecord.created_at;
+              if ('enterprise_id' in newRecord) {
+                newRecord.enterprise_id = targetEnterpriseId;
+              }
+              // Remove user UUIDs for clone
+              if (mode === 'clone') {
+                ['created_by', 'updated_by', 'reviewed_by', 'deleted_by', 'closed_by', 'imported_by', 'confirmed_by', 'user_id', 'run_by'].forEach(f => {
+                  if (f in newRecord && typeof newRecord[f] === 'string' && newRecord[f]?.length === 36) {
+                    delete newRecord[f];
+                  }
+                });
+              }
+              return newRecord;
+            });
+
+            try {
+              const { error } = await supabase.from(tableName as any).insert(batch as any);
+              if (error) {
+                // Fallback to one-by-one
+                for (const rec of batch) {
+                  try {
+                    const { error: singleError } = await supabase.from(tableName as any).insert(rec as any);
+                    if (singleError) {
+                      failedRecords.push({ table: tableName, record: rec, error: singleError.message });
+                      tableResults[tableName].failed++;
+                    } else {
+                      tableResults[tableName].inserted++;
+                    }
+                  } catch (err: any) {
+                    failedRecords.push({ table: tableName, record: rec, error: err.message });
+                    tableResults[tableName].failed++;
+                  }
+                }
+              } else {
+                tableResults[tableName].inserted += batch.length;
+              }
+            } catch (err: any) {
+              failedRecords.push({ table: tableName, record: { batch_start: i }, error: err.message });
+              tableResults[tableName].failed += batch.length;
+            }
+            recordsProcessed += batch.length;
+          }
+        } else {
+          // Single insert with ID remapping
+          for (const record of records) {
+            if (cancelRef.current) break;
             const oldId = record.id;
             const newRecord = { ...record };
-            delete newRecord.id; // Let DB generate new ID
+            delete newRecord.id;
+            delete newRecord.created_at;
 
-            // Remap enterprise_id for clone mode
             if (mode === 'clone' && 'enterprise_id' in newRecord) {
               newRecord.enterprise_id = targetEnterpriseId;
             }
 
-            // Remap FKs based on table
-            if (tableName === 'tab_accounts' && newRecord.parent_account_id && idMapping['tab_accounts']) {
-              newRecord.parent_account_id = idMapping['tab_accounts'][newRecord.parent_account_id] || null;
-            }
-            if (tableName === 'tab_journal_entry_details') {
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
-              if (newRecord.account_id && idMapping['tab_accounts']) {
-                newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id] || newRecord.account_id;
-              }
-            }
-            if (tableName === 'tab_journal_entry_history') {
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
-            }
-            if (tableName === 'tab_journal_entries') {
-              if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']) {
-                newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id] || newRecord.accounting_period_id;
-              }
-              if (newRecord.bank_account_id && idMapping['tab_accounts']) {
-                newRecord.bank_account_id = idMapping['tab_accounts'][newRecord.bank_account_id] || newRecord.bank_account_id;
-              }
-              // Remove user UUIDs for clone (they won't exist in target)
-              if (mode === 'clone') {
-                delete newRecord.created_by;
-                delete newRecord.updated_by;
-                delete newRecord.reviewed_by;
-                delete newRecord.deleted_by;
-              }
-            }
-            if (tableName === 'tab_purchase_ledger') {
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
-              if (newRecord.purchase_book_id && idMapping['tab_purchase_books']) {
-                newRecord.purchase_book_id = idMapping['tab_purchase_books'][newRecord.purchase_book_id] || newRecord.purchase_book_id;
-              }
-              if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']) {
-                newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id] || newRecord.accounting_period_id;
-              }
-              if (newRecord.expense_account_id && idMapping['tab_accounts']) {
-                newRecord.expense_account_id = idMapping['tab_accounts'][newRecord.expense_account_id] || newRecord.expense_account_id;
-              }
-              if (newRecord.bank_account_id && idMapping['tab_accounts']) {
-                newRecord.bank_account_id = idMapping['tab_accounts'][newRecord.bank_account_id] || newRecord.bank_account_id;
-              }
-              if (newRecord.operation_type_id && idMapping['tab_operation_types']) {
-                newRecord.operation_type_id = idMapping['tab_operation_types'][newRecord.operation_type_id] || newRecord.operation_type_id;
-              }
-            }
-            if (tableName === 'tab_sales_ledger') {
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
-              if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']) {
-                newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id] || newRecord.accounting_period_id;
-              }
-              if (newRecord.operation_type_id && idMapping['tab_operation_types']) {
-                newRecord.operation_type_id = idMapping['tab_operation_types'][newRecord.operation_type_id] || newRecord.operation_type_id;
-              }
-            }
-            if (tableName === 'tab_bank_movements') {
-              if (newRecord.bank_account_id && idMapping['tab_bank_accounts']) {
-                newRecord.bank_account_id = idMapping['tab_bank_accounts'][newRecord.bank_account_id] || newRecord.bank_account_id;
-              }
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
-              if (newRecord.reconciliation_id && idMapping['tab_bank_reconciliations']) {
-                newRecord.reconciliation_id = idMapping['tab_bank_reconciliations'][newRecord.reconciliation_id] || newRecord.reconciliation_id;
-              }
-            }
-            if (tableName === 'tab_bank_reconciliations') {
-              if (newRecord.bank_account_id && idMapping['tab_bank_accounts']) {
-                newRecord.bank_account_id = idMapping['tab_bank_accounts'][newRecord.bank_account_id] || newRecord.bank_account_id;
-              }
-            }
-            if (tableName === 'tab_bank_accounts') {
-              if (newRecord.account_id && idMapping['tab_accounts']) {
-                newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id] || newRecord.account_id;
-              }
-            }
-            if (tableName === 'tab_financial_statement_formats') {
-              // No FK remapping needed beyond enterprise_id
-            }
-            if (tableName === 'tab_financial_statement_sections') {
-              if (newRecord.format_id && idMapping['tab_financial_statement_formats']) {
-                newRecord.format_id = idMapping['tab_financial_statement_formats'][newRecord.format_id] || newRecord.format_id;
-              }
-            }
-            if (tableName === 'tab_financial_statement_section_accounts') {
-              if (newRecord.section_id && idMapping['tab_financial_statement_sections']) {
-                newRecord.section_id = idMapping['tab_financial_statement_sections'][newRecord.section_id] || newRecord.section_id;
-              }
-              if (newRecord.account_id && idMapping['tab_accounts']) {
-                newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id] || newRecord.account_id;
-              }
-            }
-            if (tableName === 'tab_period_inventory_closing') {
-              if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']) {
-                newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id] || newRecord.accounting_period_id;
-              }
-              if (newRecord.journal_entry_id && idMapping['tab_journal_entries']) {
-                newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id] || newRecord.journal_entry_id;
-              }
+            // Remove user UUIDs for clone
+            if (mode === 'clone') {
+              ['created_by', 'updated_by', 'reviewed_by', 'deleted_by', 'closed_by', 'imported_by', 'confirmed_by'].forEach(f => {
+                if (f in newRecord && typeof newRecord[f] === 'string' && newRecord[f]?.length === 36) {
+                  delete newRecord[f];
+                }
+              });
             }
 
-            // Remove fields that shouldn't be inserted
-            delete newRecord.created_at;
+            // === FK Remapping ===
+            this_remapForeignKeys(tableName, newRecord, idMapping, mode);
 
             try {
               const { data: inserted, error } = await supabase
@@ -465,70 +491,299 @@ export function useEnterpriseBackupRestore() {
                 .single();
 
               if (error) {
-                console.warn(`Error inserting into ${tableName}:`, error.message, newRecord);
+                failedRecords.push({ table: tableName, record: { old_id: oldId, ...newRecord }, error: error.message });
+                tableResults[tableName].failed++;
               } else if (inserted && oldId) {
                 idMapping[tableName][oldId] = (inserted as any).id;
+                tableResults[tableName].inserted++;
               }
-            } catch (err) {
-              console.warn(`Skipping record in ${tableName}:`, err);
+            } catch (err: any) {
+              failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err.message });
+              tableResults[tableName].failed++;
             }
 
             recordsProcessed++;
+            if (recordsProcessed % 200 === 0) {
+              setRestoreProgress({
+                currentTable: tableName,
+                currentIndex: tableIdx,
+                totalTables: tablesToProcess.length,
+                recordsProcessed,
+                totalRecords,
+              });
+            }
           }
-        }
 
-        // Second pass for self-referencing tables (accounts with parent_account_id)
-        if (tableName === 'tab_accounts' && Object.keys(idMapping['tab_accounts'] || {}).length > 0) {
-          for (const record of records) {
-            if (record.parent_account_id && idMapping['tab_accounts'][record.id]) {
-              const newParentId = idMapping['tab_accounts'][record.parent_account_id];
-              if (newParentId) {
-                await supabase
-                  .from('tab_accounts')
-                  .update({ parent_account_id: newParentId })
-                  .eq('id', idMapping['tab_accounts'][record.id]);
+          // Second pass for self-referencing tables (accounts with parent_account_id)
+          if (tableName === 'tab_accounts' && Object.keys(idMapping['tab_accounts'] || {}).length > 0) {
+            for (const record of records) {
+              if (record.parent_account_id && idMapping['tab_accounts'][record.id]) {
+                const newParentId = idMapping['tab_accounts'][record.parent_account_id];
+                if (newParentId) {
+                  await supabase
+                    .from('tab_accounts')
+                    .update({ parent_account_id: newParentId })
+                    .eq('id', idMapping['tab_accounts'][record.id]);
+                }
               }
             }
           }
         }
       }
 
-      // Log to backup history
+      const duration = Date.now() - startTime;
+      const totalFailed = failedRecords.length;
+      const result: RestoreResult = {
+        success: totalFailed === 0 || (totalFailed / Math.max(recordsProcessed, 1)) < 0.1,
+        recordsProcessed,
+        recordsFailed: totalFailed,
+        failedRecords,
+        tableResults,
+        duration,
+      };
+      setRestoreResult(result);
+
+      // Log to backup history + audit log
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('tab_backup_history').insert({
-          enterprise_id: targetEnterpriseId,
-          backup_type: mode,
-          file_name: file.name,
-          record_count: recordsProcessed,
-          metadata: { source: backup.metadata.source_enterprise_name, table_counts: backup.metadata.table_counts } as any,
-          created_by: user.id,
+        await Promise.all([
+          supabase.from('tab_backup_history').insert({
+            enterprise_id: targetEnterpriseId,
+            backup_type: mode,
+            file_name: file.name,
+            record_count: recordsProcessed,
+            metadata: {
+              source: backup.metadata.source_enterprise_name,
+              table_counts: backup.metadata.table_counts,
+              failed_count: totalFailed,
+              duration_ms: duration,
+            } as any,
+            created_by: user.id,
+          }),
+          supabase.from('tab_audit_log').insert({
+            enterprise_id: targetEnterpriseId,
+            user_id: user.id,
+            action: mode === 'restore' ? 'backup_restore' : 'backup_clone',
+            table_name: 'system',
+            record_id: targetEnterpriseId,
+            new_values: {
+              source_enterprise: backup.metadata.source_enterprise_name,
+              tables_count: Object.keys(backup.metadata.table_counts).length,
+              records_processed: recordsProcessed,
+              records_failed: totalFailed,
+              duration_ms: duration,
+            } as any,
+          }),
+        ]);
+      }
+
+      if (totalFailed > 0) {
+        const failRate = (totalFailed / Math.max(recordsProcessed + totalFailed, 1)) * 100;
+        if (failRate > 10) {
+          toast.error(`Restauración con errores significativos`, {
+            description: `${totalFailed} registros fallaron (${failRate.toFixed(1)}%). Revisa el resumen.`,
+          });
+        } else {
+          toast.warning(`Restauración completada con advertencias`, {
+            description: `${recordsProcessed} insertados, ${totalFailed} fallaron`,
+          });
+        }
+      } else {
+        toast.success(`${mode === 'restore' ? 'Restauración' : 'Clonación'} completada`, {
+          description: `${recordsProcessed.toLocaleString()} registros procesados en ${(duration / 1000).toFixed(1)}s`,
         });
       }
 
-      toast.success(`${mode === 'restore' ? 'Restauración' : 'Clonación'} completada`, {
-        description: `${recordsProcessed} registros procesados`,
-      });
+      return result;
     } catch (error: any) {
       console.error('Restore error:', error);
       toast.error('Error en la restauración', { description: error.message });
+      const duration = Date.now() - startTime;
+      const result: RestoreResult = {
+        success: false, recordsProcessed: 0, recordsFailed: 0,
+        failedRecords: [], tableResults: {}, duration,
+      };
+      setRestoreResult(result);
+      return result;
     } finally {
       setIsRestoring(false);
       setRestoreProgress(null);
     }
   }, []);
 
-  const clearPreview = useCallback(() => setBackupPreview(null), []);
+  const clearPreview = useCallback(() => {
+    setBackupPreview(null);
+    setRestoreResult(null);
+  }, []);
+
+  const downloadErrorLog = useCallback(() => {
+    if (!restoreResult || restoreResult.failedRecords.length === 0) return;
+    const blob = new Blob([JSON.stringify(restoreResult.failedRecords, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `restore_errors_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [restoreResult]);
 
   return {
     exportBackup,
     previewBackup,
     restoreBackup,
     clearPreview,
+    cancelRestore,
+    downloadErrorLog,
     isExporting,
     isRestoring,
     exportProgress,
     restoreProgress,
     backupPreview,
+    restoreResult,
   };
+}
+
+// Extracted FK remapping logic
+function this_remapForeignKeys(
+  tableName: string,
+  newRecord: any,
+  idMapping: Record<string, Record<number, number>>,
+  mode: 'restore' | 'clone'
+) {
+  // Accounts: parent handled in 2nd pass, but clear it on first insert
+  if (tableName === 'tab_accounts' && newRecord.parent_account_id) {
+    if (mode === 'clone') {
+      newRecord.parent_account_id = null; // Set in second pass
+    } else if (idMapping['tab_accounts']?.[newRecord.parent_account_id]) {
+      newRecord.parent_account_id = idMapping['tab_accounts'][newRecord.parent_account_id];
+    }
+  }
+
+  if (tableName === 'tab_journal_entries') {
+    if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']?.[newRecord.accounting_period_id]) {
+      newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id];
+    }
+    if (newRecord.bank_account_id && idMapping['tab_accounts']?.[newRecord.bank_account_id]) {
+      newRecord.bank_account_id = idMapping['tab_accounts'][newRecord.bank_account_id];
+    }
+  }
+
+  if (tableName === 'tab_journal_entry_details') {
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+    if (newRecord.account_id && idMapping['tab_accounts']?.[newRecord.account_id]) {
+      newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id];
+    }
+  }
+
+  if (tableName === 'tab_journal_entry_history') {
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+  }
+
+  if (tableName === 'tab_purchase_ledger') {
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+    if (newRecord.purchase_book_id && idMapping['tab_purchase_books']?.[newRecord.purchase_book_id]) {
+      newRecord.purchase_book_id = idMapping['tab_purchase_books'][newRecord.purchase_book_id];
+    }
+    if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']?.[newRecord.accounting_period_id]) {
+      newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id];
+    }
+    if (newRecord.expense_account_id && idMapping['tab_accounts']?.[newRecord.expense_account_id]) {
+      newRecord.expense_account_id = idMapping['tab_accounts'][newRecord.expense_account_id];
+    }
+    if (newRecord.bank_account_id && idMapping['tab_accounts']?.[newRecord.bank_account_id]) {
+      newRecord.bank_account_id = idMapping['tab_accounts'][newRecord.bank_account_id];
+    }
+    if (newRecord.operation_type_id && idMapping['tab_operation_types']?.[newRecord.operation_type_id]) {
+      newRecord.operation_type_id = idMapping['tab_operation_types'][newRecord.operation_type_id];
+    }
+  }
+
+  if (tableName === 'tab_sales_ledger') {
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+    if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']?.[newRecord.accounting_period_id]) {
+      newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id];
+    }
+    if (newRecord.operation_type_id && idMapping['tab_operation_types']?.[newRecord.operation_type_id]) {
+      newRecord.operation_type_id = idMapping['tab_operation_types'][newRecord.operation_type_id];
+    }
+    if (newRecord.income_account_id && idMapping['tab_accounts']?.[newRecord.income_account_id]) {
+      newRecord.income_account_id = idMapping['tab_accounts'][newRecord.income_account_id];
+    }
+  }
+
+  if (tableName === 'tab_bank_movements') {
+    if (newRecord.bank_account_id && idMapping['tab_bank_accounts']?.[newRecord.bank_account_id]) {
+      newRecord.bank_account_id = idMapping['tab_bank_accounts'][newRecord.bank_account_id];
+    }
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+    if (newRecord.reconciliation_id && idMapping['tab_bank_reconciliations']?.[newRecord.reconciliation_id]) {
+      newRecord.reconciliation_id = idMapping['tab_bank_reconciliations'][newRecord.reconciliation_id];
+    }
+  }
+
+  if (tableName === 'tab_bank_reconciliations') {
+    if (newRecord.bank_account_id && idMapping['tab_bank_accounts']?.[newRecord.bank_account_id]) {
+      newRecord.bank_account_id = idMapping['tab_bank_accounts'][newRecord.bank_account_id];
+    }
+  }
+
+  if (tableName === 'tab_bank_accounts') {
+    if (newRecord.account_id && idMapping['tab_accounts']?.[newRecord.account_id]) {
+      newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id];
+    }
+  }
+
+  if (tableName === 'tab_financial_statement_sections') {
+    if (newRecord.format_id && idMapping['tab_financial_statement_formats']?.[newRecord.format_id]) {
+      newRecord.format_id = idMapping['tab_financial_statement_formats'][newRecord.format_id];
+    }
+  }
+
+  if (tableName === 'tab_financial_statement_section_accounts') {
+    if (newRecord.section_id && idMapping['tab_financial_statement_sections']?.[newRecord.section_id]) {
+      newRecord.section_id = idMapping['tab_financial_statement_sections'][newRecord.section_id];
+    }
+    if (newRecord.account_id && idMapping['tab_accounts']?.[newRecord.account_id]) {
+      newRecord.account_id = idMapping['tab_accounts'][newRecord.account_id];
+    }
+  }
+
+  if (tableName === 'tab_period_inventory_closing') {
+    if (newRecord.accounting_period_id && idMapping['tab_accounting_periods']?.[newRecord.accounting_period_id]) {
+      newRecord.accounting_period_id = idMapping['tab_accounting_periods'][newRecord.accounting_period_id];
+    }
+    if (newRecord.journal_entry_id && idMapping['tab_journal_entries']?.[newRecord.journal_entry_id]) {
+      newRecord.journal_entry_id = idMapping['tab_journal_entries'][newRecord.journal_entry_id];
+    }
+  }
+
+  if (tableName === 'tab_enterprise_config') {
+    const accountFields = [
+      'vat_credit_account_id', 'vat_debit_account_id', 'period_result_account_id',
+      'initial_inventory_account_id', 'final_inventory_account_id', 'purchases_account_id',
+      'sales_account_id', 'customers_account_id', 'suppliers_account_id',
+      'inventory_account_id', 'cost_of_sales_account_id',
+    ];
+    for (const field of accountFields) {
+      if (newRecord[field] && idMapping['tab_accounts']?.[newRecord[field]]) {
+        newRecord[field] = idMapping['tab_accounts'][newRecord[field]];
+      }
+    }
+  }
+
+  if (tableName === 'tab_bank_import_templates') {
+    if (newRecord.bank_account_id && idMapping['tab_accounts']?.[newRecord.bank_account_id]) {
+      newRecord.bank_account_id = idMapping['tab_accounts'][newRecord.bank_account_id];
+    }
+  }
 }
