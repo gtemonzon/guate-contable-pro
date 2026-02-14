@@ -540,6 +540,44 @@ export type Database = {
           },
         ]
       }
+      tab_dashboard_card_config: {
+        Row: {
+          card_order: string[] | null
+          created_at: string | null
+          enterprise_id: number
+          id: number
+          updated_at: string | null
+          user_id: string
+          visible_cards: string[]
+        }
+        Insert: {
+          card_order?: string[] | null
+          created_at?: string | null
+          enterprise_id: number
+          id?: number
+          updated_at?: string | null
+          user_id: string
+          visible_cards?: string[]
+        }
+        Update: {
+          card_order?: string[] | null
+          created_at?: string | null
+          enterprise_id?: number
+          id?: number
+          updated_at?: string | null
+          user_id?: string
+          visible_cards?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_dashboard_card_config_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_enterprise_config: {
         Row: {
           cost_of_sales_account_id: number | null
