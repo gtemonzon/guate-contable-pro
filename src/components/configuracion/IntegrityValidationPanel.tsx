@@ -17,6 +17,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   D: 'Integridad Fiscal',
   E: 'Conciliación Bancaria',
   F: 'Balance Contable',
+  G: 'Costo de Ventas',
 };
 
 const severityConfig = {
