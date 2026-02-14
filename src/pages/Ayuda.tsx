@@ -356,11 +356,28 @@ const helpSections: HelpSection[] = [
             description:
               "Configure qué acciones puede realizar cada rol en el sistema: ver, crear, editar, eliminar, aprobar, etc.",
           },
+          {
+            title: "Respaldo y Restauración",
+            description:
+              "Exporte toda la información de la empresa en formato JSON para respaldo completo. Restaure o clone datos desde un archivo de respaldo previamente generado.",
+          },
+          {
+            title: "Validación de Integridad Contable",
+            description:
+              "Ejecute una auditoría automática de los datos contables. El sistema verifica 25+ reglas en 7 categorías: partidas, cuentas, períodos, fiscal, bancos, balance y costo de ventas. Muestra un puntaje de salud y detalle de errores, advertencias e informativos.",
+          },
+          {
+            title: "Tipografía de PDFs",
+            description:
+              "Personalice la fuente, tamaño y estilo de los documentos PDF generados por el sistema (reportes, folios, etc.).",
+          },
         ],
         tips: [
           "Configure las cuentas especiales antes de importar compras/ventas para que las partidas automáticas funcionen correctamente.",
           "El diseño de estados financieros permite personalizar la presentación según las necesidades de cada empresa.",
           "Los feriados afectan el cálculo de vencimientos cuando está habilitada la opción 'Considerar días hábiles'.",
+          "Ejecute la validación de integridad periódicamente para detectar inconsistencias en los datos contables.",
+          "La validación de integridad es obligatoria antes de cerrar un período contable.",
         ],
       },
       {
@@ -893,36 +910,55 @@ const helpSections: HelpSection[] = [
   },
   {
     id: "backup",
-    title: "Respaldo de Datos",
+    title: "Respaldo y Restauración de Datos",
     icon: Download,
-    description: "Descargue backups completos de la información de cada empresa.",
+    description: "Exporte, restaure y clone la información completa de cada empresa.",
     isNew: true,
     steps: [
       {
-        title: "Backup por Empresa",
+        title: "Backup Excel (por Empresa)",
         description:
-          "En la sección Empresas, cada tarjeta tiene un botón de descarga (ícono de nube con flecha) para generar el backup.",
+          "En la sección Empresas, cada tarjeta tiene un botón de descarga (ícono de nube con flecha) para generar un backup rápido en formato Excel (.xlsx) con hojas separadas por tabla.",
       },
       {
-        title: "Contenido del Backup",
+        title: "Backup JSON Completo",
         description:
-          "El archivo Excel incluye hojas separadas para: Empresa, Períodos, Cuentas, Partidas, Detalles de Partidas, Compras, Ventas, Formularios, Configuración, Movimientos Bancarios, Permisos, Notificaciones, Alertas, Feriados y Recordatorios.",
+          "En Configuración → Respaldo, haga clic en 'Exportar Respaldo Completo (JSON)'. Este formato incluye 28+ tablas en orden topológico y preserva todas las relaciones entre registros para restauración perfecta.",
       },
       {
-        title: "Formato del Archivo",
+        title: "Contenido del Backup JSON",
         description:
-          "El backup se descarga como archivo .xlsx (Excel). El nombre incluye el nombre de la empresa y la fecha de generación.",
+          "Incluye: Cuentas, Períodos, Partidas y Detalles, Compras, Ventas, Cuentas Bancarias, Movimientos Bancarios, Conciliaciones, Formularios, Configuración de Empresa, Estados Financieros, Notificaciones, Alertas, Feriados, Bitácora y más.",
       },
       {
-        title: "Uso del Backup",
+        title: "Restaurar Datos",
         description:
-          "El archivo puede usarse para: archivo histórico, migración de datos, auditorías externas o análisis en Excel.",
+          "En Configuración → Respaldo, suba un archivo JSON de backup. Elija el modo 'Restaurar en esta empresa' para reemplazar los datos existentes. Se muestra una vista previa con los conteos de registros antes de confirmar.",
+      },
+      {
+        title: "Clonar a Otra Empresa",
+        description:
+          "Elija el modo 'Clonar a esta empresa' para importar los datos del backup sin borrar los existentes. El sistema genera nuevos IDs y reasigna automáticamente todas las relaciones (FK remapping).",
+      },
+      {
+        title: "Progreso y Resultados",
+        description:
+          "Durante la restauración se muestra el progreso por tabla. Al finalizar, se presenta un resumen detallado con registros exitosos, fallidos y porcentaje de éxito. Puede descargar un log de errores si hubo fallos.",
+      },
+      {
+        title: "Historial de Respaldos",
+        description:
+          "El sistema registra cada operación de respaldo (exportación, restauración, clonación) con fecha, usuario y conteo de registros. Consulte el historial en Configuración → Respaldo.",
       },
     ],
     tips: [
       "Genere backups periódicos (mensual o trimestral) como buena práctica de respaldo.",
-      "El backup no incluye archivos adjuntos (PDFs de formularios, documentos de empresa) - solo datos.",
+      "El backup JSON es el formato recomendado para restauraciones y migraciones completas.",
+      "El backup Excel es útil para análisis en hojas de cálculo y auditorías externas.",
+      "La restauración elimina los datos existentes - se requiere confirmación explícita.",
+      "La clonación es ideal para crear empresas de prueba o migrar datos entre empresas.",
       "Para empresas con muchos registros, la generación puede tomar algunos segundos.",
+      "Solo los roles Super Admin y Admin Empresa pueden realizar respaldos y restauraciones.",
     ],
   },
 ];
@@ -1002,6 +1038,26 @@ const faqItems = [
     question: "¿Puedo importar estados de cuenta bancarios?",
     answer:
       "Sí, en el módulo de Conciliación Bancaria puede importar archivos Excel o CSV de estados de cuenta. Configure el mapeo de columnas y guárdelo como plantilla para futuras importaciones.",
+  },
+  {
+    question: "¿Cómo hago un respaldo completo de la empresa?",
+    answer:
+      "Vaya a Configuración → Respaldo y haga clic en 'Exportar Respaldo Completo (JSON)'. Este formato incluye todas las tablas y preserva las relaciones entre registros. También puede usar el botón de descarga Excel en la tarjeta de la empresa para un respaldo rápido.",
+  },
+  {
+    question: "¿Puedo restaurar un respaldo en otra empresa?",
+    answer:
+      "Sí, use el modo 'Clonar a esta empresa' en Configuración → Respaldo. El sistema genera nuevos identificadores y reasigna automáticamente todas las relaciones entre registros. Esto es ideal para crear empresas de prueba o migrar datos.",
+  },
+  {
+    question: "¿Qué es la Validación de Integridad Contable?",
+    answer:
+      "Es una auditoría automática que verifica 25+ reglas en 7 categorías: integridad de partidas, cuentas, períodos, fiscal, bancos, balance y costo de ventas. Genera un puntaje de salud y detalla los errores encontrados. Acceda desde Configuración → Integridad.",
+  },
+  {
+    question: "¿Qué significan los colores del puntaje de integridad?",
+    answer:
+      "Verde (95-100%): excelente, la contabilidad está consistente. Amarillo (80-95%): hay advertencias que revisar. Rojo (menos de 80%): existen errores críticos que deben corregirse antes de generar reportes o cerrar períodos.",
   },
 ];
 
