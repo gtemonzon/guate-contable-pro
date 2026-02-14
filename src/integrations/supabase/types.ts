@@ -542,12 +542,15 @@ export type Database = {
       }
       tab_enterprise_config: {
         Row: {
+          cost_of_sales_account_id: number | null
+          cost_of_sales_method: string | null
           created_at: string | null
           customers_account_id: number | null
           enterprise_id: number
           final_inventory_account_id: number | null
           id: number
           initial_inventory_account_id: number | null
+          inventory_account_id: number | null
           period_result_account_id: number | null
           purchases_account_id: number | null
           sales_account_id: number | null
@@ -556,12 +559,15 @@ export type Database = {
           vat_debit_account_id: number | null
         }
         Insert: {
+          cost_of_sales_account_id?: number | null
+          cost_of_sales_method?: string | null
           created_at?: string | null
           customers_account_id?: number | null
           enterprise_id: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
+          inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
           sales_account_id?: number | null
@@ -570,12 +576,15 @@ export type Database = {
           vat_debit_account_id?: number | null
         }
         Update: {
+          cost_of_sales_account_id?: number | null
+          cost_of_sales_method?: string | null
           created_at?: string | null
           customers_account_id?: number | null
           enterprise_id?: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
+          inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
           sales_account_id?: number | null
@@ -583,7 +592,22 @@ export type Database = {
           vat_credit_account_id?: number | null
           vat_debit_account_id?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tab_enterprise_config_cost_of_sales_account_id_fkey"
+            columns: ["cost_of_sales_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_inventory_account_id_fkey"
+            columns: ["inventory_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_enterprise_documents: {
         Row: {
@@ -1356,6 +1380,79 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_period_inventory_closing: {
+        Row: {
+          accounting_period_id: number
+          calculated_at: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          cost_of_sales_amount: number | null
+          created_at: string | null
+          enterprise_id: number
+          final_inventory_amount: number | null
+          id: number
+          initial_inventory_amount: number
+          journal_entry_id: number | null
+          purchases_amount: number
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          accounting_period_id: number
+          calculated_at?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          cost_of_sales_amount?: number | null
+          created_at?: string | null
+          enterprise_id: number
+          final_inventory_amount?: number | null
+          id?: number
+          initial_inventory_amount?: number
+          journal_entry_id?: number | null
+          purchases_amount?: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          accounting_period_id?: number
+          calculated_at?: string | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          cost_of_sales_amount?: number | null
+          created_at?: string | null
+          enterprise_id?: number
+          final_inventory_amount?: number | null
+          id?: number
+          initial_inventory_amount?: number
+          journal_entry_id?: number | null
+          purchases_amount?: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_period_inventory_closing_accounting_period_id_fkey"
+            columns: ["accounting_period_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounting_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_period_inventory_closing_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_period_inventory_closing_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
             referencedColumns: ["id"]
           },
         ]

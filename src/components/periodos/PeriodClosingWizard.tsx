@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -20,10 +22,13 @@ import {
   PartyPopper,
   Loader2,
   ExternalLink,
-  AlertCircle
+  AlertCircle,
+  Package,
+  RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
+import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -55,6 +60,13 @@ interface AccountBalance {
   balance: number;
 }
 
+interface StepDef {
+  id: string;
+  title: string;
+  icon: any;
+  description: string;
+}
+
 interface PeriodClosingWizardProps {
   open: boolean;
   period: Period | null;
@@ -63,14 +75,6 @@ interface PeriodClosingWizardProps {
   onSuccess: () => void;
 }
 
-const STEPS = [
-  { id: 1, title: 'Partidas', icon: FileText, description: 'Revisar pendientes' },
-  { id: 2, title: 'Generar', icon: Calculator, description: 'Partida de cierre' },
-  { id: 3, title: 'Verificar', icon: Scale, description: 'Balances' },
-  { id: 4, title: 'Confirmar', icon: Lock, description: 'Cierre' },
-  { id: 5, title: 'Completado', icon: PartyPopper, description: '' },
-];
-
 export function PeriodClosingWizard({ 
   open, 
   period, 
@@ -78,29 +82,52 @@ export function PeriodClosingWizard({
   onOpenChange, 
   onSuccess 
 }: PeriodClosingWizardProps) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   
-  // Step 1: Pending entries
+  // Step: Pending entries
   const [pendingEntries, setPendingEntries] = useState<PendingEntry[]>([]);
   const [continueDespitePending, setContinueDespitePending] = useState(false);
   
-  // Step 2: Closing entry
+  // Step: Closing entry
   const [incomeAccounts, setIncomeAccounts] = useState<AccountBalance[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<AccountBalance[]>([]);
   const [closingEntryGenerated, setClosingEntryGenerated] = useState(false);
   const [closingEntryId, setClosingEntryId] = useState<number | null>(null);
   
-  // Step 3: Balance verification
+  // Step: Balance verification
   const [totalAssets, setTotalAssets] = useState(0);
   const [totalLiabilities, setTotalLiabilities] = useState(0);
   const [totalEquity, setTotalEquity] = useState(0);
   const [isBalanced, setIsBalanced] = useState(false);
   
-  // Step 4: Confirmation
+  // Step: Confirmation
   const [confirmClose, setConfirmClose] = useState(false);
   
   const { config } = useEnterpriseConfig(enterpriseId);
+  
+  const cdv = useCostOfSalesCalculation(enterpriseId, period?.id || 0);
+  
+  const hasCdvStep = config?.cost_of_sales_method === 'coeficiente';
+
+  // Dynamic steps
+  const steps = useMemo<StepDef[]>(() => {
+    const s: StepDef[] = [
+      { id: 'partidas', title: 'Partidas', icon: FileText, description: 'Revisar pendientes' },
+    ];
+    if (hasCdvStep) {
+      s.push({ id: 'cdv', title: 'Costo Ventas', icon: Package, description: 'Calcular CDV' });
+    }
+    s.push(
+      { id: 'generar', title: 'Generar', icon: Calculator, description: 'Partida de cierre' },
+      { id: 'verificar', title: 'Verificar', icon: Scale, description: 'Balances' },
+      { id: 'confirmar', title: 'Confirmar', icon: Lock, description: 'Cierre' },
+      { id: 'completado', title: 'Completado', icon: PartyPopper, description: '' },
+    );
+    return s;
+  }, [hasCdvStep]);
+
+  const currentStepId = steps[currentStepIndex]?.id || 'partidas';
   
   const totalIncome = incomeAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
   const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
@@ -109,7 +136,7 @@ export function PeriodClosingWizard({
   // Reset state when dialog opens
   useEffect(() => {
     if (open && period) {
-      setCurrentStep(1);
+      setCurrentStepIndex(0);
       setPendingEntries([]);
       setContinueDespitePending(false);
       setIncomeAccounts([]);
@@ -153,8 +180,6 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      // Get all accounts for this enterprise (income and expense types)
-      // Use lowercase variants as account_type may be stored in different cases
       const { data: accounts, error: accountsError } = await supabase
         .from('tab_accounts')
         .select('id, account_code, account_name, account_type, allows_movement')
@@ -163,7 +188,6 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
       
-      // Get all posted journal entry details for this period
       const entries = await fetchAllRecords(
         supabase
           .from('tab_journal_entries')
@@ -180,7 +204,6 @@ export function PeriodClosingWizard({
           .eq('is_posted', true)
       );
       
-      // Calculate balances per account
       const balanceMap = new Map<number, number>();
       
       entries.forEach((entry: any) => {
@@ -201,7 +224,6 @@ export function PeriodClosingWizard({
         const isIncomeOrExpense = accountTypeLower === 'ingreso' || accountTypeLower === 'gasto' || accountTypeLower === 'costo';
         const isDetailAccount = account.allows_movement === true;
         
-        // Only include detail accounts with movements that are income/expense/cost type
         if (Math.abs(balance) > 0.01 && isIncomeOrExpense && isDetailAccount) {
           const accBalance: AccountBalance = {
             account_id: account.id,
@@ -237,7 +259,6 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      // Get the period result account info
       const { data: resultAccount, error: accountError } = await supabase
         .from('tab_accounts')
         .select('id, account_code, account_name')
@@ -248,7 +269,6 @@ export function PeriodClosingWizard({
         throw new Error('No se encontró la cuenta de Resultado del Período');
       }
       
-      // Generate entry number with CIER prefix
       const year = period.year;
       const { data: lastEntry } = await supabase
         .from('tab_journal_entries')
@@ -266,7 +286,6 @@ export function PeriodClosingWizard({
       
       const entryNumber = `CIER-${year}-${String(nextNumber).padStart(4, '0')}`;
       
-      // Create the closing entry
       const { data: newEntry, error: entryError } = await supabase
         .from('tab_journal_entries')
         .insert({
@@ -287,11 +306,9 @@ export function PeriodClosingWizard({
       
       if (entryError) throw entryError;
       
-      // Create detail lines
       const detailLines: any[] = [];
       let lineNumber = 1;
       
-      // Close income accounts (debit to close credit balances)
       incomeAccounts.forEach(acc => {
         detailLines.push({
           journal_entry_id: newEntry.id,
@@ -303,7 +320,6 @@ export function PeriodClosingWizard({
         });
       });
       
-      // Close expense accounts (credit to close debit balances)
       expenseAccounts.forEach(acc => {
         detailLines.push({
           journal_entry_id: newEntry.id,
@@ -315,9 +331,7 @@ export function PeriodClosingWizard({
         });
       });
       
-      // Add period result line
       if (periodResult >= 0) {
-        // Profit - credit to period result
         detailLines.push({
           journal_entry_id: newEntry.id,
           line_number: lineNumber,
@@ -327,7 +341,6 @@ export function PeriodClosingWizard({
           credit_amount: Math.abs(periodResult)
         });
       } else {
-        // Loss - debit to period result
         detailLines.push({
           journal_entry_id: newEntry.id,
           line_number: lineNumber,
@@ -360,7 +373,6 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      // Get all accounts
       const { data: accounts, error: accountsError } = await supabase
         .from('tab_accounts')
         .select('id, account_code, account_name, account_type, balance_type')
@@ -369,7 +381,6 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
       
-      // Get all posted journal entry details for this period
       const entries = await fetchAllRecords(
         supabase
           .from('tab_journal_entries')
@@ -386,7 +397,6 @@ export function PeriodClosingWizard({
           .eq('is_posted', true)
       );
       
-      // Calculate balances per account
       const balanceMap = new Map<number, number>();
       
       entries.forEach((entry: any) => {
@@ -438,7 +448,7 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      // 1. Post the closing entry
+      // Post the closing entry
       const { error: postError } = await supabase
         .from('tab_journal_entries')
         .update({
@@ -450,10 +460,8 @@ export function PeriodClosingWizard({
       
       if (postError) throw postError;
       
-      // 2. Get current user
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 3. Close the period
       const { error: closeError } = await supabase
         .from('tab_accounting_periods')
         .update({
@@ -465,7 +473,6 @@ export function PeriodClosingWizard({
       
       if (closeError) throw closeError;
       
-      // 4. Clear active period if this was it
       const activePeriodId = localStorage.getItem('activePeriodId');
       if (activePeriodId === String(period.id)) {
         localStorage.removeItem('activePeriodId');
@@ -474,7 +481,7 @@ export function PeriodClosingWizard({
       }
       
       toast.success('Período cerrado exitosamente');
-      setCurrentStep(5);
+      setCurrentStepIndex(steps.length - 1); // Go to "Completado"
     } catch (error) {
       console.error('Error closing period:', error);
       toast.error('Error al cerrar el período');
@@ -484,14 +491,16 @@ export function PeriodClosingWizard({
   };
 
   const canAdvance = () => {
-    switch (currentStep) {
-      case 1:
+    switch (currentStepId) {
+      case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
-      case 2:
+      case 'cdv':
+        return cdv.finalInventory !== null && cdv.closingData?.journal_entry_id != null;
+      case 'generar':
         return closingEntryGenerated;
-      case 3:
-        return true; // Can always advance from verification
-      case 4:
+      case 'verificar':
+        return true;
+      case 'confirmar':
         return confirmClose && closingEntryId;
       default:
         return true;
@@ -499,22 +508,46 @@ export function PeriodClosingWizard({
   };
 
   const handleNext = async () => {
-    if (currentStep === 1 && canAdvance()) {
-      setCurrentStep(2);
+    const nextIndex = currentStepIndex + 1;
+    if (nextIndex >= steps.length) return;
+    const nextStepId = steps[nextIndex].id;
+
+    if (currentStepId === 'partidas' && canAdvance()) {
+      if (nextStepId === 'cdv') {
+        setCurrentStepIndex(nextIndex);
+        cdv.calculate();
+      } else {
+        setCurrentStepIndex(nextIndex);
+        await loadAccountBalances();
+      }
+    } else if (currentStepId === 'cdv' && canAdvance()) {
+      // Post CDV entry before generating closing entry
+      setLoading(true);
+      try {
+        const posted = await cdv.postCdvEntry();
+        if (!posted) {
+          toast.error('Error al contabilizar la partida de costo de ventas');
+          setLoading(false);
+          return;
+        }
+      } finally {
+        setLoading(false);
+      }
+      setCurrentStepIndex(nextIndex);
       await loadAccountBalances();
-    } else if (currentStep === 2 && canAdvance()) {
-      setCurrentStep(3);
+    } else if (currentStepId === 'generar' && canAdvance()) {
+      setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
-    } else if (currentStep === 3) {
-      setCurrentStep(4);
-    } else if (currentStep === 4 && canAdvance()) {
+    } else if (currentStepId === 'verificar') {
+      setCurrentStepIndex(nextIndex);
+    } else if (currentStepId === 'confirmar' && canAdvance()) {
       await handleClosePeriod();
     }
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(currentStepIndex - 1);
     }
   };
 
@@ -531,6 +564,8 @@ export function PeriodClosingWizard({
 
   if (!period) return null;
 
+  const isLastStep = currentStepIndex === steps.length - 1;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
@@ -546,10 +581,10 @@ export function PeriodClosingWizard({
 
         {/* Stepper */}
         <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 rounded-lg">
-          {STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const Icon = step.icon;
-            const isActive = currentStep === step.id;
-            const isCompleted = currentStep > step.id;
+            const isActive = currentStepIndex === index;
+            const isCompleted = currentStepIndex > index;
             
             return (
               <div key={step.id} className="flex items-center">
@@ -574,7 +609,7 @@ export function PeriodClosingWizard({
                     {step.title}
                   </span>
                 </div>
-                {index < STEPS.length - 1 && (
+                {index < steps.length - 1 && (
                   <div className={cn(
                     "w-12 h-0.5 mx-2",
                     isCompleted ? "bg-primary" : "bg-muted-foreground/30"
@@ -588,8 +623,8 @@ export function PeriodClosingWizard({
         {/* Content */}
         <ScrollArea className="flex-1 px-1">
           <div className="py-4">
-            {/* Step 1: Pending Entries */}
-            {currentStep === 1 && (
+            {/* Step: Pending Entries */}
+            {currentStepId === 'partidas' && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-lg font-medium">
                   <FileText className="h-5 w-5" />
@@ -676,8 +711,194 @@ export function PeriodClosingWizard({
               </div>
             )}
 
-            {/* Step 2: Generate Closing Entry */}
-            {currentStep === 2 && (
+            {/* Step: Cost of Sales (CDV) */}
+            {currentStepId === 'cdv' && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Cálculo de Costo de Ventas por Coeficiente
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Missing config warning */}
+                    {(!config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id) && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Faltan cuentas configuradas. Vaya a Configuración → Cuentas Especiales para configurar:
+                          {!config?.inventory_account_id && ' Inventario de Mercaderías,'}
+                          {!config?.purchases_account_id && ' Compras,'}
+                          {!config?.cost_of_sales_account_id && ' Cuenta de Costo de Ventas.'}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Recalculation warning */}
+                    {cdv.needsRecalculation && (
+                      <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="flex items-center justify-between">
+                          <span>Los saldos han cambiado desde el último cálculo. Se recomienda recalcular.</span>
+                          <Button variant="outline" size="sm" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                            Recalcular
+                          </Button>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {cdv.loading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <>
+                        {/* Calculation table */}
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Concepto</TableHead>
+                              <TableHead className="text-right">Monto</TableHead>
+                              <TableHead>Estado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell>Inventario Inicial de Mercaderías</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(cdv.initialInventory)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                  ✅ Calculado
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell>(+) Compras del Período</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {formatCurrency(cdv.purchasesAmount)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                  ✅ Calculado
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                            <TableRow className="bg-muted/50">
+                              <TableCell className="font-semibold">(=) Mercadería Disponible para Venta</TableCell>
+                              <TableCell className="text-right font-mono font-semibold">
+                                {formatCurrency(cdv.initialInventory + cdv.purchasesAmount)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">Subtotal</Badge>
+                              </TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell>(-) Inventario Final de Mercaderías</TableCell>
+                              <TableCell className="text-right">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={cdv.finalInventory ?? ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') return;
+                                    cdv.saveFinalInventory(parseFloat(val));
+                                  }}
+                                  placeholder="Ingrese conteo físico"
+                                  className="w-48 text-right font-mono ml-auto"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {cdv.finalInventory !== null ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                    ✅ Ingresado
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                                    ⚠️ Pendiente
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            <TableRow className="border-t-2 font-bold">
+                              <TableCell className="text-base">(=) COSTO DE VENTAS</TableCell>
+                              <TableCell className="text-right font-mono text-lg">
+                                {cdv.costOfSales !== null ? formatCurrency(cdv.costOfSales) : '—'}
+                              </TableCell>
+                              <TableCell>
+                                {cdv.costOfSales !== null ? (
+                                  cdv.costOfSales < 0 ? (
+                                    <Badge variant="destructive">⚠️ Negativo</Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                      ✅ Calculado
+                                    </Badge>
+                                  )
+                                ) : (
+                                  <Badge variant="secondary">Pendiente</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+
+                        {/* Negative cost warning */}
+                        {cdv.costOfSales !== null && cdv.costOfSales < 0 && (
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>
+                              El costo de ventas es negativo. Esto puede indicar un error en los datos
+                              o que el inventario final es mayor que la mercadería disponible.
+                              Verifique los montos antes de continuar.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {/* Info note */}
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            El inventario final debe corresponder al conteo físico de mercaderías
+                            al cierre del período. Este dato no es calculado por el sistema.
+                          </AlertDescription>
+                        </Alert>
+
+                        {/* Action buttons */}
+                        <div className="flex gap-2">
+                          <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Recalcular
+                          </Button>
+                          {cdv.closingData?.journal_entry_id ? (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                Partida CDV generada
+                              </Badge>
+                            </div>
+                          ) : (
+                            <Button
+                              onClick={cdv.generateCostOfSalesEntry}
+                              disabled={cdv.loading || cdv.finalInventory === null || cdv.costOfSales === null || !config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id}
+                            >
+                              <Calculator className="h-4 w-4 mr-2" />
+                              Generar Partida de Costo de Ventas
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Step: Generate Closing Entry */}
+            {currentStepId === 'generar' && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-lg font-medium">
                   <Calculator className="h-5 w-5" />
@@ -705,7 +926,6 @@ export function PeriodClosingWizard({
                 ) : (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Income Accounts */}
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center justify-between">
@@ -731,7 +951,6 @@ export function PeriodClosingWizard({
                         </CardContent>
                       </Card>
 
-                      {/* Expense Accounts */}
                       <Card>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center justify-between">
@@ -760,7 +979,6 @@ export function PeriodClosingWizard({
 
                     <Separator />
 
-                    {/* Result Summary */}
                     <Card className={cn(
                       periodResult >= 0 
                         ? "border-green-200 bg-green-50 dark:bg-green-950/20" 
@@ -822,8 +1040,8 @@ export function PeriodClosingWizard({
               </div>
             )}
 
-            {/* Step 3: Balance Verification */}
-            {currentStep === 3 && (
+            {/* Step: Balance Verification */}
+            {currentStepId === 'verificar' && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-lg font-medium">
                   <Scale className="h-5 w-5" />
@@ -899,8 +1117,8 @@ export function PeriodClosingWizard({
               </div>
             )}
 
-            {/* Step 4: Confirmation */}
-            {currentStep === 4 && (
+            {/* Step: Confirmation */}
+            {currentStepId === 'confirmar' && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-lg font-medium">
                   <Lock className="h-5 w-5" />
@@ -913,6 +1131,12 @@ export function PeriodClosingWizard({
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
                       <span>Partida de cierre generada</span>
                     </div>
+                    {hasCdvStep && (
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <span>Costo de ventas calculado y contabilizado</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
                       <span>Balance verificado</span>
@@ -963,8 +1187,8 @@ export function PeriodClosingWizard({
               </div>
             )}
 
-            {/* Step 5: Completed */}
-            {currentStep === 5 && (
+            {/* Step: Completed */}
+            {currentStepId === 'completado' && (
               <div className="flex flex-col items-center justify-center py-12 space-y-6">
                 <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                   <CheckCircle2 className="h-12 w-12 text-green-600" />
@@ -993,12 +1217,12 @@ export function PeriodClosingWizard({
         </ScrollArea>
 
         {/* Footer with navigation buttons */}
-        {currentStep < 5 && (
+        {!isLastStep && (
           <div className="flex justify-between pt-4 border-t">
             <Button
               variant="outline"
               onClick={handleBack}
-              disabled={currentStep === 1 || loading}
+              disabled={currentStepIndex === 0 || loading}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Anterior
@@ -1008,7 +1232,7 @@ export function PeriodClosingWizard({
               disabled={!canAdvance() || loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {currentStep === 4 ? (
+              {currentStepId === 'confirmar' ? (
                 <>
                   <Lock className="mr-2 h-4 w-4" />
                   Cerrar Período
