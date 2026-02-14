@@ -5,11 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileSpreadsheet, FileText, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatementFormat";
+import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
+
+interface CdvBreakdown {
+  initialInventory: number;
+  purchases: number;
+  availableForSale: number;
+  finalInventory: number;
+  costOfSales: number;
+}
 
 interface ReportLine {
   type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
@@ -39,7 +49,10 @@ export default function ReporteEstadoResultados() {
   const [reportLines, setReportLines] = useState<ReportLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [displayLevel, setDisplayLevel] = useState<number>(0);
+  const [cdvBreakdown, setCdvBreakdown] = useState<CdvBreakdown | null>(null);
   const { toast } = useToast();
+
+  const { config } = useEnterpriseConfig(currentEnterpriseId);
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
     currentEnterpriseId,
@@ -172,6 +185,44 @@ export default function ReporteEstadoResultados() {
           balance,
         };
       });
+
+      // Load CDV breakdown if method is coeficiente
+      let loadedCdv: CdvBreakdown | null = null;
+      if (config?.cost_of_sales_method === 'coeficiente') {
+        // Find accounting periods that overlap with the date range
+        const { data: periods } = await supabase
+          .from('tab_accounting_periods')
+          .select('id')
+          .eq('enterprise_id', currentEnterpriseId)
+          .lte('start_date', dateTo)
+          .gte('end_date', dateFrom);
+
+        if (periods && periods.length > 0) {
+          const periodIds = periods.map(p => p.id);
+          const { data: closings } = await supabase
+            .from('tab_period_inventory_closing')
+            .select('*')
+            .eq('enterprise_id', currentEnterpriseId)
+            .eq('status', 'contabilizado')
+            .in('accounting_period_id', periodIds);
+
+          if (closings && closings.length > 0) {
+            // Aggregate across all matching periods
+            const totals = closings.reduce((acc, c) => ({
+              initialInventory: acc.initialInventory + Number(c.initial_inventory_amount || 0),
+              purchases: acc.purchases + Number(c.purchases_amount || 0),
+              finalInventory: acc.finalInventory + Number(c.final_inventory_amount || 0),
+              costOfSales: acc.costOfSales + Number(c.cost_of_sales_amount || 0),
+            }), { initialInventory: 0, purchases: 0, finalInventory: 0, costOfSales: 0 });
+
+            loadedCdv = {
+              ...totals,
+              availableForSale: totals.initialInventory + totals.purchases,
+            };
+          }
+        }
+      }
+      setCdvBreakdown(loadedCdv);
 
       // If we have a configured format, use it
       if (format && format.sections.length > 0) {
@@ -404,12 +455,30 @@ export default function ReporteEstadoResultados() {
     return lines;
   };
 
+  const formatQ = (amount: number) => `Q ${amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const getCdvExportLines = (): string[][] => {
+    if (!cdvBreakdown) return [];
+    return [
+      ['', ''],
+      ['COSTO DE VENTAS (Método de Coeficiente):', ''],
+      ['  Inventario Inicial de Mercaderías', cdvBreakdown.initialInventory.toFixed(2)],
+      ['  (+) Compras Netas del Período', cdvBreakdown.purchases.toFixed(2)],
+      ['  (=) Mercadería Disponible p/Venta', cdvBreakdown.availableForSale.toFixed(2)],
+      ['  (-) Inventario Final de Mercaderías', cdvBreakdown.finalInventory.toFixed(2)],
+      ['  (=) Costo de Ventas', cdvBreakdown.costOfSales.toFixed(2)],
+    ];
+  };
+
   const handleExportExcel = () => {
     const headers = ["Concepto", "Monto"];
-    const data = reportLines.map(line => [
+    const data = filteredReportLines.map(line => [
       line.type === 'account' ? `  ${line.label}` : line.label,
       line.amount.toFixed(2),
     ]);
+
+    // Append CDV breakdown
+    data.push(...getCdvExportLines());
 
     exportToExcel({
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
@@ -437,7 +506,6 @@ export default function ReporteEstadoResultados() {
     const data = filteredReportLines.map(line => {
       const row: string[] = [line.type === 'account' ? `  ${line.label}` : line.label];
       
-      // Add empty columns for each level
       for (let i = 0; i < levelCount; i++) {
         if (line.type === 'section') {
           row.push('');
@@ -453,9 +521,26 @@ export default function ReporteEstadoResultados() {
       return row;
     });
 
+    // Append CDV breakdown to PDF
+    if (cdvBreakdown) {
+      const emptyLevels = Array(levelCount).fill('');
+      const lastLevel = (val: string) => { const cols = Array(levelCount).fill(''); cols[levelCount - 1] = val; return cols; };
+      data.push(
+        ['', ...emptyLevels],
+        ['COSTO DE VENTAS (Método de Coeficiente):', ...emptyLevels],
+        ['  Inventario Inicial de Mercaderías', ...lastLevel(`Q ${cdvBreakdown.initialInventory.toFixed(2)}`)],
+        ['  (+) Compras Netas del Período', ...lastLevel(`Q ${cdvBreakdown.purchases.toFixed(2)}`)],
+        ['  (=) Mercadería Disponible p/Venta', ...lastLevel(`Q ${cdvBreakdown.availableForSale.toFixed(2)}`)],
+        ['  (-) Inventario Final de Mercaderías', ...lastLevel(`Q ${cdvBreakdown.finalInventory.toFixed(2)}`)],
+        ['  (=) Costo de Ventas', ...lastLevel(`Q ${cdvBreakdown.costOfSales.toFixed(2)}`)],
+      );
+    }
+
+    const footnote = cdvBreakdown ? 'Costo de ventas calculado por método de coeficiente (inventario periódico)' : undefined;
+
     exportToPDF({
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
-      title: `Estado de Resultados del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      title: `Estado de Resultados del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}${footnote ? '\n' + footnote : ''}`,
       enterpriseName,
       headers,
       data,
@@ -566,6 +651,49 @@ export default function ReporteEstadoResultados() {
               </div>
             ))}
           </div>
+
+          {/* CDV Breakdown Section */}
+          {cdvBreakdown && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <h4 className="font-bold text-sm mb-2">COSTO DE VENTAS (Método de Coeficiente):</h4>
+              <div className="space-y-1 font-mono text-sm">
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>Inventario Inicial de Mercaderías</div>
+                  <div className="text-right">{formatQ(cdvBreakdown.initialInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>(+) Compras Netas del Período</div>
+                  <div className="text-right">{formatQ(cdvBreakdown.purchases)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4 bg-muted/50 font-semibold">
+                  <div>(=) Mercadería Disponible p/Venta</div>
+                  <div className="text-right">{formatQ(cdvBreakdown.availableForSale)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>(-) Inventario Final de Mercaderías</div>
+                  <div className="text-right">{formatQ(cdvBreakdown.finalInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4 border-t-2 border-border font-bold">
+                  <div>(=) Costo de Ventas</div>
+                  <div className="text-right">{formatQ(cdvBreakdown.costOfSales)}</div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                Costo de ventas calculado por método de coeficiente (inventario periódico)
+              </p>
+            </div>
+          )}
+
+          {/* Warning when method is coeficiente but no posted closing exists */}
+          {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && filteredReportLines.length > 0 && (
+            <Alert className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                ⚠️ Costo de ventas no calculado por coeficiente para este período. 
+                Realice el cierre del período para incluir el desglose del costo de ventas.
+              </AlertDescription>
+            </Alert>
+          )}
         </div>
       )}
     </div>
