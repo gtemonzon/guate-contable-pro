@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Check } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Building2, FileText, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Check, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -10,6 +10,13 @@ import { DashboardPendingEntries } from "@/components/dashboard/DashboardPending
 import { DashboardIVASummary } from "@/components/dashboard/DashboardIVASummary";
 import { DashboardBankBalances } from "@/components/dashboard/DashboardBankBalances";
 import { DashboardTaxDeadlines } from "@/components/dashboard/DashboardTaxDeadlines";
+import { DashboardISRMensualSummary } from "@/components/dashboard/DashboardISRMensualSummary";
+import { DashboardISRTrimestralProjection } from "@/components/dashboard/DashboardISRTrimestralProjection";
+import { DashboardTaxSummary } from "@/components/dashboard/DashboardTaxSummary";
+import { DashboardCardConfigDialog } from "@/components/dashboard/DashboardCardConfigDialog";
+import { useDashboardTaxData } from "@/hooks/useDashboardTaxData";
+import { CARD_REGISTRY, DEFAULT_VISIBLE_CARDS } from "@/constants/dashboardCards";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -79,6 +86,34 @@ const Dashboard = () => {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [selectedChartYears, setSelectedChartYears] = useState<number[]>([new Date().getFullYear()]);
   const [activePeriod, setActivePeriod] = useState<ActivePeriod | null>(null);
+  const [showCardConfig, setShowCardConfig] = useState(false);
+
+  const currentEnterpriseIdStr = localStorage.getItem("currentEnterpriseId");
+  const currentEntId = currentEnterpriseIdStr ? parseInt(currentEnterpriseIdStr) : null;
+
+  // Centralized tax data
+  const taxData = useDashboardTaxData(currentEntId);
+  const queryClient = useQueryClient();
+
+  // Card config
+  const { data: cardConfig } = useQuery({
+    queryKey: ["dashboard-card-config", currentEntId],
+    queryFn: async () => {
+      if (!currentEntId) return null;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase
+        .from("tab_dashboard_card_config")
+        .select("visible_cards, card_order")
+        .eq("enterprise_id", currentEntId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentEntId,
+  });
+
+  const visibleCards: string[] = (cardConfig?.visible_cards as string[]) || DEFAULT_VISIBLE_CARDS;
 
   const formatNumber = (num: number): string => {
     return num.toLocaleString('es-GT', {
@@ -832,7 +867,7 @@ const Dashboard = () => {
     { id: 1, number: "-", date: "-", description: "No hay partidas registradas", amount: "Q 0.00" }
   ];
 
-  const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
+  // currentEntId is already computed at the top of the component
 
   // Formatear fechas del período para mostrar
   const formatPeriodDisplay = (): string => {
@@ -866,19 +901,26 @@ const Dashboard = () => {
           </p>
         </div>
         
-        {/* Indicador del período activo */}
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
-          <Calendar className="h-4 w-4 text-primary" />
-          <div className="text-sm">
-            <span className="text-muted-foreground">Período: </span>
-            <span className="font-semibold text-primary">
-              {activePeriod ? `${activePeriod.year}` : "Sin período"}
-            </span>
-            {activePeriod && (
-              <span className="text-xs text-muted-foreground ml-2">
-                ({formatPeriodDisplay()})
+        <div className="flex items-center gap-2">
+          {/* Settings button for card configuration */}
+          <Button variant="ghost" size="icon" onClick={() => setShowCardConfig(true)}>
+            <Settings className="h-4 w-4" />
+          </Button>
+
+          {/* Indicador del período activo */}
+          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
+            <Calendar className="h-4 w-4 text-primary" />
+            <div className="text-sm">
+              <span className="text-muted-foreground">Período: </span>
+              <span className="font-semibold text-primary">
+                {activePeriod ? `${activePeriod.year}` : "Sin período"}
               </span>
-            )}
+              {activePeriod && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  ({formatPeriodDisplay()})
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -920,12 +962,46 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Secondary KPIs Row */}
+      {/* Secondary KPIs Row - Dynamic based on card config */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <DashboardPendingEntries enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
-        <DashboardBankBalances enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
-        <DashboardIVASummary enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
-        <DashboardTaxDeadlines enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+        {visibleCards.includes('partidas_pendientes') && (
+          <DashboardPendingEntries enterpriseId={currentEntId} />
+        )}
+        {visibleCards.includes('saldos_bancarios') && (
+          <DashboardBankBalances enterpriseId={currentEntId} />
+        )}
+        {visibleCards.includes('resumen_iva') && (
+          <DashboardIVASummary
+            ivaData={taxData.ivaData}
+            loading={taxData.loading}
+            monthName={taxData.monthName}
+            year={taxData.referenceYear}
+          />
+        )}
+        {visibleCards.includes('proximos_vencimientos') && (
+          <DashboardTaxDeadlines enterpriseId={currentEntId} />
+        )}
+        {visibleCards.includes('resumen_isr_mensual') && (
+          <DashboardISRMensualSummary
+            data={taxData.isrMensualData}
+            loading={taxData.loading}
+            monthName={taxData.monthName}
+            year={taxData.referenceYear}
+          />
+        )}
+        {visibleCards.includes('proyeccion_isr_trimestral') && (
+          <DashboardISRTrimestralProjection
+            data={taxData.isrTrimestralData}
+            loading={taxData.loading}
+          />
+        )}
+        {visibleCards.includes('resumen_impuestos') && (
+          <DashboardTaxSummary
+            taxSummary={taxData.taxSummary}
+            totalTaxEstimate={taxData.totalTaxEstimate}
+            loading={taxData.loading}
+          />
+        )}
       </div>
 
       {/* Recent Activity and Alerts */}
@@ -960,7 +1036,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        <DashboardAlerts enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+        <DashboardAlerts enterpriseId={currentEntId} />
       </div>
 
       {/* Latest Books Summary */}
@@ -1338,6 +1414,16 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Card Config Dialog */}
+      <DashboardCardConfigDialog
+        open={showCardConfig}
+        onOpenChange={setShowCardConfig}
+        enterpriseId={currentEntId}
+        taxConfigs={taxData.taxConfigs}
+        currentVisibleCards={visibleCards}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ["dashboard-card-config"] })}
+      />
     </div>
   );
 };
