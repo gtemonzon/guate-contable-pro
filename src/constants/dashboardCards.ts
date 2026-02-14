@@ -7,6 +7,7 @@ import {
   Building2,
   Receipt,
   CalendarClock,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +52,8 @@ export const CARD_REGISTRY: DashboardCardDefinition[] = [
     icon: TrendingUp, category: 'impuestos', requiresTaxConfig: 'ISR_TRIMESTRAL', isDefault: false },
   { id: 'resumen_impuestos', label: 'Resumen de Impuestos', description: 'Vista consolidada de todos los impuestos pendientes',
     icon: Receipt, category: 'impuestos', isDefault: false },
+  { id: 'integridad_contable', label: 'Integridad Contable', description: 'Puntaje de salud de la integridad de datos',
+    icon: ShieldCheck, category: 'operativo', isDefault: false },
 ];
 
 export const DEFAULT_VISIBLE_CARDS = CARD_REGISTRY
