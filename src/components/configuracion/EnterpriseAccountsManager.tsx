@@ -3,9 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AccountCombobox, Account } from '@/components/ui/account-combobox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, AlertCircle } from 'lucide-react';
 
 export function EnterpriseAccountsManager() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
@@ -18,12 +21,13 @@ export function EnterpriseAccountsManager() {
     vat_credit_account_id: null as number | null,
     vat_debit_account_id: null as number | null,
     period_result_account_id: null as number | null,
-    initial_inventory_account_id: null as number | null,
-    final_inventory_account_id: null as number | null,
     purchases_account_id: null as number | null,
     sales_account_id: null as number | null,
     customers_account_id: null as number | null,
     suppliers_account_id: null as number | null,
+    inventory_account_id: null as number | null,
+    cost_of_sales_method: 'manual' as 'manual' | 'coeficiente',
+    cost_of_sales_account_id: null as number | null,
   });
 
   useEffect(() => {
@@ -39,12 +43,13 @@ export function EnterpriseAccountsManager() {
         vat_credit_account_id: config.vat_credit_account_id,
         vat_debit_account_id: config.vat_debit_account_id,
         period_result_account_id: config.period_result_account_id,
-        initial_inventory_account_id: config.initial_inventory_account_id,
-        final_inventory_account_id: config.final_inventory_account_id,
         purchases_account_id: config.purchases_account_id,
         sales_account_id: config.sales_account_id,
         customers_account_id: config.customers_account_id,
         suppliers_account_id: config.suppliers_account_id,
+        inventory_account_id: config.inventory_account_id,
+        cost_of_sales_method: config.cost_of_sales_method || 'manual',
+        cost_of_sales_account_id: config.cost_of_sales_account_id,
       });
     }
   }, [config]);
@@ -84,12 +89,13 @@ export function EnterpriseAccountsManager() {
       vat_credit_account_id: formData.vat_credit_account_id,
       vat_debit_account_id: formData.vat_debit_account_id,
       period_result_account_id: formData.period_result_account_id,
-      initial_inventory_account_id: formData.initial_inventory_account_id,
-      final_inventory_account_id: formData.final_inventory_account_id,
       purchases_account_id: formData.purchases_account_id,
       sales_account_id: formData.sales_account_id,
       customers_account_id: formData.customers_account_id,
       suppliers_account_id: formData.suppliers_account_id,
+      inventory_account_id: formData.inventory_account_id,
+      cost_of_sales_method: formData.cost_of_sales_method,
+      cost_of_sales_account_id: formData.cost_of_sales_account_id,
     });
   };
 
@@ -109,8 +115,7 @@ export function EnterpriseAccountsManager() {
     { key: 'vat_credit_account_id', label: 'IVA Crédito Fiscal', description: 'Cuenta para registrar el IVA de compras' },
     { key: 'vat_debit_account_id', label: 'IVA Débito Fiscal', description: 'Cuenta para registrar el IVA de ventas' },
     { key: 'period_result_account_id', label: 'Resultado del Período', description: 'Cuenta para acumular utilidad/pérdida del ejercicio' },
-    { key: 'initial_inventory_account_id', label: 'Inventario Inicial', description: 'Cuenta de inventario al inicio del período' },
-    { key: 'final_inventory_account_id', label: 'Inventario Final', description: 'Cuenta de inventario al cierre del período' },
+    { key: 'inventory_account_id', label: 'Inventario de Mercaderías', description: 'Cuenta de inventario (se usa para calcular inventario inicial y final)' },
     { key: 'purchases_account_id', label: 'Compras', description: 'Cuenta para registrar las compras' },
     { key: 'sales_account_id', label: 'Ventas', description: 'Cuenta para registrar las ventas' },
     { key: 'customers_account_id', label: 'Clientes', description: 'Cuenta de cuentas por cobrar' },
@@ -138,13 +143,74 @@ export function EnterpriseAccountsManager() {
                   <Label htmlFor={key}>{label}</Label>
                   <AccountCombobox
                     accounts={accounts}
-                    value={formData[key as keyof typeof formData]}
+                    value={formData[key as keyof typeof formData] as number | null}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, [key]: value }))}
                     placeholder={`Seleccionar ${label.toLowerCase()}`}
                   />
                   <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
               ))}
+            </div>
+
+            <Separator />
+
+            {/* Costo de Ventas Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Costo de Ventas</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Método de Costo de Ventas</Label>
+                  <Select
+                    value={formData.cost_of_sales_method}
+                    onValueChange={(value: 'manual' | 'coeficiente') =>
+                      setFormData(prev => ({ ...prev, cost_of_sales_method: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual</SelectItem>
+                      <SelectItem value="coeficiente">Por Coeficiente (Inventario Periódico)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.cost_of_sales_method === 'manual'
+                      ? 'El usuario registra el costo de ventas manualmente'
+                      : 'El sistema calcula automáticamente durante el cierre del período'}
+                  </p>
+                </div>
+
+                {formData.cost_of_sales_method === 'coeficiente' && (
+                  <div className="space-y-2">
+                    <Label>Cuenta de Costo de Ventas</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={formData.cost_of_sales_account_id}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, cost_of_sales_account_id: value }))}
+                      placeholder="Seleccionar cuenta de costo de ventas"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Cuenta donde se registrará el costo de ventas calculado
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {formData.cost_of_sales_method === 'coeficiente' && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Al usar el método por coeficiente, el sistema calculará automáticamente:
+                    <br />
+                    <strong>Costo de Ventas = Inventario Inicial + Compras - Inventario Final</strong>
+                    <br />
+                    El inventario inicial se toma del saldo acumulado de la cuenta de inventario.
+                    El inventario final debe ingresarse manualmente durante el cierre del período.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
 
             <div className="flex justify-end">

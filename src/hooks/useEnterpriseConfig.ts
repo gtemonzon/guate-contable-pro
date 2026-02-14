@@ -14,6 +14,9 @@ export interface EnterpriseConfig {
   sales_account_id: number | null;
   customers_account_id: number | null;
   suppliers_account_id: number | null;
+  inventory_account_id: number | null;
+  cost_of_sales_method: 'manual' | 'coeficiente';
+  cost_of_sales_account_id: number | null;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
@@ -27,6 +30,9 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   sales_account_id: null,
   customers_account_id: null,
   suppliers_account_id: null,
+  inventory_account_id: null,
+  cost_of_sales_method: 'manual',
+  cost_of_sales_account_id: null,
 });
 
 export function useEnterpriseConfig(enterpriseId: number | null) {
@@ -75,6 +81,9 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         sales_account_id: newConfig.sales_account_id,
         customers_account_id: newConfig.customers_account_id,
         suppliers_account_id: newConfig.suppliers_account_id,
+        inventory_account_id: newConfig.inventory_account_id,
+        cost_of_sales_method: newConfig.cost_of_sales_method,
+        cost_of_sales_account_id: newConfig.cost_of_sales_account_id,
       };
 
       const { data: existing } = await supabase
