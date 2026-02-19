@@ -65,6 +65,539 @@ export type Database = {
         }
         Relationships: []
       }
+      fixed_asset_categories: {
+        Row: {
+          accumulated_depreciation_account_id: number | null
+          asset_account_id: number | null
+          code: string
+          created_at: string
+          default_residual_value: number
+          default_useful_life_months: number
+          depreciation_expense_account_id: number | null
+          enterprise_id: number
+          gain_loss_on_disposal_account_id: number | null
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          accumulated_depreciation_account_id?: number | null
+          asset_account_id?: number | null
+          code: string
+          created_at?: string
+          default_residual_value?: number
+          default_useful_life_months?: number
+          depreciation_expense_account_id?: number | null
+          enterprise_id: number
+          gain_loss_on_disposal_account_id?: number | null
+          id?: number
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          accumulated_depreciation_account_id?: number | null
+          asset_account_id?: number | null
+          code?: string
+          created_at?: string
+          default_residual_value?: number
+          default_useful_life_months?: number
+          depreciation_expense_account_id?: number | null
+          enterprise_id?: number
+          gain_loss_on_disposal_account_id?: number | null
+          id?: number
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_categories_accumulated_depreciation_account_id_fkey"
+            columns: ["accumulated_depreciation_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_categories_asset_account_id_fkey"
+            columns: ["asset_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_categories_depreciation_expense_account_id_fkey"
+            columns: ["depreciation_expense_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_categories_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_categories_gain_loss_on_disposal_account_id_fkey"
+            columns: ["gain_loss_on_disposal_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_custodians: {
+        Row: {
+          contact: string | null
+          created_at: string
+          enterprise_id: number
+          id: number
+          identifier: string | null
+          is_active: boolean
+          name: string
+          notes: string | null
+        }
+        Insert: {
+          contact?: string | null
+          created_at?: string
+          enterprise_id: number
+          id?: number
+          identifier?: string | null
+          is_active?: boolean
+          name: string
+          notes?: string | null
+        }
+        Update: {
+          contact?: string | null
+          created_at?: string
+          enterprise_id?: number
+          id?: number
+          identifier?: string | null
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_custodians_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_depreciation_schedule: {
+        Row: {
+          accumulated_depreciation: number
+          asset_id: number
+          created_at: string
+          enterprise_id: number
+          id: number
+          journal_entry_id: number | null
+          month: number
+          net_book_value: number
+          planned_depreciation_amount: number
+          posted_at: string | null
+          posted_depreciation_amount: number | null
+          posting_run_id: string | null
+          status: string
+          year: number
+        }
+        Insert: {
+          accumulated_depreciation: number
+          asset_id: number
+          created_at?: string
+          enterprise_id: number
+          id?: number
+          journal_entry_id?: number | null
+          month: number
+          net_book_value: number
+          planned_depreciation_amount: number
+          posted_at?: string | null
+          posted_depreciation_amount?: number | null
+          posting_run_id?: string | null
+          status?: string
+          year: number
+        }
+        Update: {
+          accumulated_depreciation?: number
+          asset_id?: number
+          created_at?: string
+          enterprise_id?: number
+          id?: number
+          journal_entry_id?: number | null
+          month?: number
+          net_book_value?: number
+          planned_depreciation_amount?: number
+          posted_at?: string | null
+          posted_depreciation_amount?: number | null
+          posting_run_id?: string | null
+          status?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_depreciation_schedule_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_depreciation_schedule_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_depreciation_schedule_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_disposal_reasons: {
+        Row: {
+          code: string
+          id: number
+          name: string
+        }
+        Insert: {
+          code: string
+          id?: number
+          name: string
+        }
+        Update: {
+          code?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      fixed_asset_event_log: {
+        Row: {
+          actor_user_id: string | null
+          asset_id: number
+          created_at: string
+          enterprise_id: number
+          event_type: string
+          id: number
+          metadata_json: Json | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          asset_id: number
+          created_at?: string
+          enterprise_id: number
+          event_type: string
+          id?: number
+          metadata_json?: Json | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          asset_id?: number
+          created_at?: string
+          enterprise_id?: number
+          event_type?: string
+          id?: number
+          metadata_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_event_log_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_event_log_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_locations: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_locations_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_policy: {
+        Row: {
+          accounting_standard_mode: string
+          allow_mid_month_disposal_proration: boolean
+          created_at: string
+          depreciation_method: string
+          depreciation_start_rule: string
+          enterprise_id: number
+          id: number
+          posting_frequency: string
+          rounding_decimals: number
+          updated_at: string
+        }
+        Insert: {
+          accounting_standard_mode?: string
+          allow_mid_month_disposal_proration?: boolean
+          created_at?: string
+          depreciation_method?: string
+          depreciation_start_rule?: string
+          enterprise_id: number
+          id?: number
+          posting_frequency?: string
+          rounding_decimals?: number
+          updated_at?: string
+        }
+        Update: {
+          accounting_standard_mode?: string
+          allow_mid_month_disposal_proration?: boolean
+          created_at?: string
+          depreciation_method?: string
+          depreciation_start_rule?: string
+          enterprise_id?: number
+          id?: number
+          posting_frequency?: string
+          rounding_decimals?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_policy_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: true
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_asset_suppliers: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          name: string
+          phone: string | null
+          tax_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          tax_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          tax_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_suppliers_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fixed_assets: {
+        Row: {
+          acquisition_cost: number
+          acquisition_date: string
+          activated_at: string | null
+          activated_by: string | null
+          asset_code: string
+          asset_name: string
+          category_id: number
+          cost_center: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          custodian_id: number | null
+          disposal_je_id: number | null
+          disposal_proceeds: number | null
+          disposal_reason_id: number | null
+          disposed_at: string | null
+          enterprise_id: number
+          id: number
+          in_service_date: string | null
+          location_id: number | null
+          notes: string | null
+          purchase_reference_id: number | null
+          residual_value: number
+          status: string
+          supplier_id: number | null
+          tenant_id: number
+          updated_at: string
+          useful_life_months: number
+        }
+        Insert: {
+          acquisition_cost: number
+          acquisition_date: string
+          activated_at?: string | null
+          activated_by?: string | null
+          asset_code: string
+          asset_name: string
+          category_id: number
+          cost_center?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          custodian_id?: number | null
+          disposal_je_id?: number | null
+          disposal_proceeds?: number | null
+          disposal_reason_id?: number | null
+          disposed_at?: string | null
+          enterprise_id: number
+          id?: number
+          in_service_date?: string | null
+          location_id?: number | null
+          notes?: string | null
+          purchase_reference_id?: number | null
+          residual_value?: number
+          status?: string
+          supplier_id?: number | null
+          tenant_id: number
+          updated_at?: string
+          useful_life_months: number
+        }
+        Update: {
+          acquisition_cost?: number
+          acquisition_date?: string
+          activated_at?: string | null
+          activated_by?: string | null
+          asset_code?: string
+          asset_name?: string
+          category_id?: number
+          cost_center?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          custodian_id?: number | null
+          disposal_je_id?: number | null
+          disposal_proceeds?: number | null
+          disposal_reason_id?: number | null
+          disposed_at?: string | null
+          enterprise_id?: number
+          id?: number
+          in_service_date?: string | null
+          location_id?: number | null
+          notes?: string | null
+          purchase_reference_id?: number | null
+          residual_value?: number
+          status?: string
+          supplier_id?: number | null
+          tenant_id?: number
+          updated_at?: string
+          useful_life_months?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_assets_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_custodian_id_fkey"
+            columns: ["custodian_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_custodians"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_disposal_je_id_fkey"
+            columns: ["disposal_je_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_disposal_reason_id_fkey"
+            columns: ["disposal_reason_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_disposal_reasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_assets_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_accounting_periods: {
         Row: {
           closed_at: string | null
@@ -2426,6 +2959,10 @@ export type Database = {
           tablename: string
         }[]
       }
+      generate_asset_depreciation_schedule: {
+        Args: { p_asset_id: number }
+        Returns: undefined
+      }
       get_account_balances_by_period: {
         Args: { p_end_date: string; p_enterprise_id: number }
         Returns: {
@@ -2437,6 +2974,23 @@ export type Database = {
           balance_type: string
           total_credit: number
           total_debit: number
+        }[]
+      }
+      get_asset_depreciation_summary: {
+        Args: { p_as_of_date?: string; p_enterprise_id: number }
+        Returns: {
+          accumulated_depreciation: number
+          acquisition_cost: number
+          acquisition_date: string
+          asset_code: string
+          asset_id: number
+          asset_name: string
+          category_name: string
+          in_service_date: string
+          net_book_value: number
+          residual_value: number
+          status: string
+          useful_life_months: number
         }[]
       }
       get_balance_sheet: {
