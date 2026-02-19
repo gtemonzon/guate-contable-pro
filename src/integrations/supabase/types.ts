@@ -2296,9 +2296,24 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_rls_coverage: {
+        Row: {
+          commands_covered: string[] | null
+          compliance_gap: string | null
+          has_all_policy: boolean | null
+          is_reference_table: boolean | null
+          is_rls_compliant: boolean | null
+          is_write_protected: boolean | null
+          policy_count: number | null
+          rls_enabled: boolean | null
+          tablename: unknown
+          write_protected_reason: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      assert_tenant_context: { Args: never; Returns: undefined }
       can_access_tenant: {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean
@@ -2349,6 +2364,17 @@ export type Database = {
             }
             Returns: Json
           }
+      current_enterprise_id: { Args: never; Returns: number }
+      current_tenant_id: { Args: never; Returns: number }
+      fail_if_rls_gap: {
+        Args: never
+        Returns: {
+          compliance_gap: string
+          policy_count: number
+          rls_enabled: boolean
+          tablename: string
+        }[]
+      }
       get_account_balances_by_period: {
         Args: { p_end_date: string; p_enterprise_id: number }
         Returns: {
