@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import LinkedPurchasesModal from "./LinkedPurchasesModal";
+import { AccountBalanceInspector } from "./AccountBalanceInspector";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
@@ -51,6 +53,8 @@ export default function JournalEntryDialog({
   const form = useJournalEntryForm(open, entryToEdit ?? null, onSuccess, onOpenChange);
   const { selectedEnterpriseId } = useEnterprise();
 
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
   const balanced = form.isBalanced();
@@ -58,9 +62,36 @@ export default function JournalEntryDialog({
   const canSaveDraft = form.entryStatus !== 'contabilizado' && form.permissions.canCreateEntries && !form.isReadOnly;
   const canPost = form.entryStatus !== 'contabilizado' && form.permissions.canPostEntries && !form.isReadOnly;
 
+  // Determine the currently active line's account (for Balance Inspector)
+  const activeLine = form.activeLineId
+    ? form.detailLines.find(l => l.id === form.activeLineId)
+    : null;
+  const activeAccount = activeLine?.account_id
+    ? form.accounts.find(a => a.id === activeLine.account_id)
+    : null;
+
+  // F2 / Alt+B → open Balance Inspector for active account
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (inspectorOpen) return; // let inspector handle its own keys
+      const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+      const isAltB = e.key === "b"   && e.altKey   && !e.ctrlKey && !e.metaKey;
+      if (isF2 || isAltB) {
+        if (activeAccount) {
+          e.preventDefault();
+          e.stopPropagation();
+          setInspectorOpen(true);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [open, activeAccount, inspectorOpen]);
+
   // Keyboard shortcuts: Ctrl+Enter → Post, Ctrl+Shift+Enter → Save Draft
   useFormShortcuts({
-    isEnabled: open && !form.isLoadingEntry,
+    isEnabled: open && !form.isLoadingEntry && !inspectorOpen,
     onSave: canPost ? () => form.saveEntry(true) : undefined,
     onSaveDraft: canSaveDraft ? () => form.saveEntry(false) : undefined,
     onCancel: () => form.handleCloseAttempt(false),
@@ -135,6 +166,7 @@ export default function JournalEntryDialog({
                 onRemoveLine={form.removeLine}
                 onUpdateLine={form.updateLine}
                 onOpenPurchasesModal={() => form.setShowLinkedPurchasesModal(true)}
+                onOpenBalanceInspector={() => setInspectorOpen(true)}
                 entryDate={form.entryDate}
               />
 
@@ -183,6 +215,19 @@ export default function JournalEntryDialog({
         journalEntryId={entryToEdit?.id || null}
         onPurchasesPosted={form.handlePurchasesPosted}
       />
+
+      {/* Account Balance Inspector — F2 / Alt+B */}
+      <AccountBalanceInspector
+        open={inspectorOpen}
+        onOpenChange={setInspectorOpen}
+        accountId={activeAccount?.id ?? null}
+        accountCode={activeAccount?.account_code ?? ""}
+        accountName={activeAccount?.account_name ?? ""}
+        balanceType={activeAccount?.balance_type ?? null}
+        entryDate={form.entryDate}
+        enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+      />
     </>
   );
 }
+

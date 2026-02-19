@@ -4,7 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Account, DetailLine } from "./useJournalEntryForm";
 
@@ -25,18 +26,45 @@ interface JournalEntryLinesTableProps {
   onRemoveLine: (id: string) => void;
   onUpdateLine: (id: string, field: keyof DetailLine, value: any) => void;
   onOpenPurchasesModal: () => void;
+  /** Opens the Account Balance Inspector for the currently active line's account */
+  onOpenBalanceInspector: () => void;
   entryDate: string;
 }
 
 export function JournalEntryLinesTable({
   detailLines, accounts, activeLineId, setActiveLineId, accountSearch, setAccountSearch,
   accountPopoverOpen, setAccountPopoverOpen, isReadOnly, totalDebit, totalCredit, isBalanced,
-  onAddLine, onRemoveLine, onUpdateLine, onOpenPurchasesModal, entryDate,
+  onAddLine, onRemoveLine, onUpdateLine, onOpenPurchasesModal, onOpenBalanceInspector, entryDate,
 }: JournalEntryLinesTableProps) {
+  // Determine active line's account for the inspector button
+  const activeLine = activeLineId ? detailLines.find(l => l.id === activeLineId) : null;
+  const activeLineHasAccount = !!activeLine?.account_id;
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
+          {/* Balance Inspector shortcut hint */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 gap-1 text-xs text-muted-foreground"
+                disabled={!activeLineHasAccount}
+                onClick={onOpenBalanceInspector}
+              >
+                <BarChart2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Inspector</span>
+                <kbd className="ml-1 px-1 py-0.5 text-[10px] bg-muted rounded border text-muted-foreground font-mono">F2</kbd>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Ver saldo e historial de la cuenta activa</p>
+              <p className="text-xs text-muted-foreground">F2 · Alt+B</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
         <div className="flex gap-2">
           {!isReadOnly && (
             <Button onClick={onOpenPurchasesModal} variant="outline" size="sm" disabled={!entryDate} title={!entryDate ? "Primero ingrese la fecha de la partida" : "Ver/agregar facturas de compra vinculadas"}>
