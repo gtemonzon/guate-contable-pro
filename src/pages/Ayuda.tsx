@@ -4,7 +4,7 @@ import {
   Search, Home, Building2, Users, Settings, BookOpen, FileText, ShoppingCart, Receipt,
   Calculator, FileBarChart, HelpCircle, ChevronRight, ExternalLink, Lightbulb, AlertCircle,
   FileDown, Bell, Banknote, CalendarDays, ClipboardList, Building, Keyboard, Download,
-  MessageCircle, Package, Inbox, Wand2,
+  MessageCircle, Package, Inbox, Wand2, Key, Wrench,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from "jspdf";
@@ -40,7 +40,7 @@ const helpSections: HelpSection[] = [
   {
     id: "inicio",
     title: "Inicio Rápido",
-    icon: Home,
+    icon: Key,
     description: "Primeros pasos para comenzar a usar el sistema contable.",
     steps: [
       { title: "Iniciar Sesión", description: "Ingrese su correo electrónico y contraseña. Si olvidó su contraseña, use el enlace 'Olvidé mi contraseña' para recuperarla." },
@@ -114,7 +114,7 @@ const helpSections: HelpSection[] = [
   {
     id: "administracion",
     title: "Administración",
-    icon: Building2,
+    icon: Wrench,
     description: "Gestión de usuarios, empresas y configuración del sistema.",
     subsections: [
       {
@@ -694,15 +694,46 @@ const Ayuda = () => {
 
         {/* Title row — always visible, shrinks on scroll */}
         <div className={`flex items-center justify-between transition-all duration-300 ${scrolled ? "py-2" : "pt-0 pb-3"}`}>
-          <div className="flex items-center gap-3">
-            <div className={`rounded-lg bg-primary/10 transition-all duration-300 ${scrolled ? "p-1.5" : "p-2"}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`rounded-lg bg-primary/10 transition-all duration-300 flex-shrink-0 ${scrolled ? "p-1.5" : "p-2"}`}>
               <HelpCircle className={`text-primary transition-all duration-300 ${scrolled ? "h-4 w-4" : "h-6 w-6"}`} />
             </div>
-            <h1 className={`font-bold text-foreground transition-all duration-300 ${scrolled ? "text-lg" : "text-3xl"}`}>
+            <h1 className={`font-bold text-foreground transition-all duration-300 flex-shrink-0 ${scrolled ? "text-lg" : "text-3xl"}`}>
               Centro de Ayuda
             </h1>
+
+            {/* Mini section icons — appear only when scrolled/collapsed */}
+            <div
+              className="flex items-center gap-1 overflow-hidden transition-all duration-300"
+              style={{ maxWidth: scrolled ? "400px" : "0px", opacity: scrolled ? 1 : 0 }}
+            >
+              <div className="w-px h-4 bg-border mx-1 flex-shrink-0" />
+              {helpSections.slice(0, 5).map((section) => (
+                <button
+                  key={section.id}
+                  title={section.title}
+                  onClick={() => {
+                    setExpandedSection(section.id);
+                    document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="p-1.5 rounded-md hover:bg-accent transition-colors flex-shrink-0 group relative"
+                >
+                  <section.icon className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </button>
+              ))}
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Servicio Técnico WhatsApp"
+                className="p-1.5 rounded-md hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors flex-shrink-0"
+              >
+                <MessageCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+              </a>
+            </div>
           </div>
-          <Button onClick={handleExportPDF} variant="outline" size={scrolled ? "sm" : "default"}>
+
+          <Button onClick={handleExportPDF} variant="outline" size={scrolled ? "sm" : "default"} className="flex-shrink-0">
             <FileDown className="h-4 w-4 mr-2" />
             {scrolled ? "PDF" : "Exportar PDF"}
           </Button>
