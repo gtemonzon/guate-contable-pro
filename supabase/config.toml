@@ -1,7 +1,11 @@
 project_id = "fgtmirepzlosocmkoxng"
 
+# JWT is validated manually via getClaims() in each function body.
+# verify_jwt = false is required for the signing-keys approach (Supabase docs).
+# Both functions check Authorization header and return 401 if missing/invalid.
 [functions.parse-tax-form-pdf]
 verify_jwt = false
 
 [functions.parse-purchases-pdf]
 verify_jwt = false
+

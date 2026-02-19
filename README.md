@@ -1,73 +1,67 @@
-# Welcome to your Lovable project
+# Guate Contable Pro
 
-## Project info
+A multi-tenant accounting platform for Guatemalan firms.
 
-**URL**: https://lovable.dev/projects/616bdd67-f9c5-4e3a-81b8-e1450a3d1232
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/616bdd67-f9c5-4e3a-81b8-e1450a3d1232) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Quick start
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+cd <project>
+cp .env.example .env          # fill in your public Supabase values
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Environment variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Variable | Purpose | Safe to commit? |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL | ✅ Yes (public) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Anon/public key | ✅ Yes (public) |
+| `VITE_SUPABASE_PROJECT_ID` | Project reference | ✅ Yes |
 
-**Use GitHub Codespaces**
+> ⚠️ **Never** add `SUPABASE_SERVICE_ROLE_KEY` or any private key to `.env` or commit it to git.  
+> Private keys belong only in Lovable Cloud Secrets (server-side only).
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Secrets Safety Checklist
 
-## What technologies are used for this project?
+- [ ] `.env` is listed in `.gitignore` — never committed
+- [ ] Only the **anon (publishable)** key is used in client code
+- [ ] `SERVICE_ROLE_KEY` lives only in Cloud Secrets, used only in Edge Functions
+- [ ] If a key is ever accidentally committed: rotate it immediately (see `SECURITY.md §1.1`)
+- [ ] Run `git rm --cached .env` to untrack if accidentally staged
 
-This project is built with:
+## Pre-commit hooks (recommended)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Install Husky to block accidental secret commits locally:
 
-## How can I deploy this project?
+```sh
+npx husky install
+chmod +x .husky/pre-commit
+```
 
-Simply open [Lovable](https://lovable.dev/projects/616bdd67-f9c5-4e3a-81b8-e1450a3d1232) and click on Share -> Publish.
+The hook will reject commits that contain `.env` files or common secret patterns.
 
-## Can I connect a custom domain to my Lovable project?
+## CI pipeline
 
-Yes, you can!
+Every push runs:
+1. `tsc` — type check
+2. `eslint` — lint
+3. Secret scan (blocks `service_role`, `PRIVATE_KEY`, etc.)
+4. `vite build` — production build
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+See `.github/workflows/ci.yml`.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Tech stack
+
+- React 18 + TypeScript + Vite
+- Tailwind CSS + shadcn/ui
+- Lovable Cloud (Supabase under the hood) for auth, DB, Edge Functions
+
+## Security
+
+See `SECURITY.md` for the full security checklist, RLS patterns, and incident response guide.
+
+## Contributing
+
+See `CONTRIBUTING.md`.

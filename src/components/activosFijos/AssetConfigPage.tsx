@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import DepreciationPolicyForm from "./config/DepreciationPolicyForm";
 import AssetCategoriesManager from "./config/AssetCategoriesManager";
 import AssetLocationsManager from "./config/AssetLocationsManager";
@@ -7,11 +7,7 @@ import AssetCustodiansManager from "./config/AssetCustodiansManager";
 import AssetSuppliersManager from "./config/AssetSuppliersManager";
 
 export default function AssetConfigPage() {
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
-  useEffect(() => {
-    const id = localStorage.getItem("currentEnterpriseId");
-    if (id) setEnterpriseId(Number(id));
-  }, []);
+  const { selectedEnterpriseId: enterpriseId } = useEnterprise();
 
   if (!enterpriseId) {
     return (

@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   useFixedAssets, useAssetPolicy, useActivateAsset, useUpsertFixedAsset,
   useAssetCategories, useAssetLocations, useAssetCustodians, useAssetSuppliers,
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useTenant } from "@/contexts/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,15 +36,9 @@ const EMPTY_ASSET: Partial<FixedAsset> = {
 };
 
 export default function AssetList() {
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
-  const [tenantId, setTenantId] = useState<number | null>(null);
-
-  useEffect(() => {
-    const eid = localStorage.getItem("currentEnterpriseId");
-    const tid = localStorage.getItem("currentTenantId");
-    if (eid) setEnterpriseId(Number(eid));
-    if (tid) setTenantId(Number(tid));
-  }, []);
+  const { selectedEnterpriseId: enterpriseId } = useEnterprise();
+  const { currentTenant } = useTenant();
+  const tenantId = currentTenant?.id ?? null;
 
   const { data: assets = [], isLoading } = useFixedAssets(enterpriseId);
   const { data: policy } = useAssetPolicy(enterpriseId);

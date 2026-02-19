@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { User, Session } from "@supabase/supabase-js";
-import { LogOut } from "lucide-react";
+import { LogOut, ChevronDown, Building2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ import { NotificationCenter } from "@/components/notifications/NotificationCente
 import { useActivityTracker } from "@/hooks/useActivityTracker";
 import { TenantSelector } from "@/components/tenants/TenantSelector";
 import { useTenant } from "@/contexts/TenantContext";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenantFavicon } from "@/hooks/useTenantFavicon";
 import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 
@@ -27,33 +28,29 @@ const MainLayout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { currentTenant, isTenantActive, isSuperAdmin } = useTenant();
+  const {
+    enterprises,
+    selectedEnterprise,
+    selectedEnterpriseId,
+    switchEnterprise,
+  } = useEnterprise();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentEnterprise, setCurrentEnterprise] = useState<string>("");
-  const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
-        if (!session) {
-          navigate("/login");
-        }
+        if (!session) navigate("/login");
       }
     );
 
-    // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
-      if (!session) {
-        navigate("/login");
-      }
+      if (!session) navigate("/login");
       setLoading(false);
     });
 
@@ -61,14 +58,13 @@ const MainLayout = () => {
   }, [navigate]);
 
   // Activity tracking
-  useActivityTracker({ userId: user?.id, enterpriseName: currentEnterprise });
+  useActivityTracker({ userId: user?.id, enterpriseName: selectedEnterprise?.business_name ?? "" });
 
   // Dynamic favicon based on tenant logo
   useTenantFavicon(currentTenant?.logo_url);
 
-  // Verificación periódica del estado del Tenant
+  // Tenant active check (every 60 s)
   useEffect(() => {
-    // Super admins no son afectados por la desactivación del tenant
     if (isSuperAdmin || !currentTenant) return;
 
     const checkTenantStatus = async () => {
@@ -89,105 +85,32 @@ const MainLayout = () => {
       }
     };
 
-    // Verificar cada minuto
     const interval = setInterval(checkTenantStatus, 60000);
     return () => clearInterval(interval);
   }, [currentTenant, isSuperAdmin, navigate, toast]);
 
-  // Fetch and listen for current enterprise changes
-  useEffect(() => {
-    const fetchCurrentEnterprise = async () => {
-      let enterpriseId = localStorage.getItem("currentEnterpriseId");
-      
-      // Si no hay empresa en localStorage, buscar última empresa del usuario en BD
-      if (!enterpriseId && user) {
-        try {
-          const { data: userData } = await supabase
-            .from('tab_users')
-            .select('last_enterprise_id')
-            .eq('id', user.id)
-            .single();
-          
-          if (userData?.last_enterprise_id) {
-            enterpriseId = userData.last_enterprise_id.toString();
-            localStorage.setItem("currentEnterpriseId", enterpriseId);
-          }
-        } catch (error) {
-          console.error("Error fetching last enterprise from DB:", error);
-        }
-      }
-      
-      setCurrentEnterpriseId(enterpriseId);
-      
-      if (enterpriseId) {
-        try {
-          const { data, error } = await supabase
-            .from("tab_enterprises")
-            .select("business_name")
-            .eq("id", parseInt(enterpriseId))
-            .single();
-          
-          if (error) throw error;
-          setCurrentEnterprise(data.business_name);
-        } catch (error) {
-          console.error("Error fetching enterprise:", error);
-          setCurrentEnterprise("");
-        }
-      } else {
-        setCurrentEnterprise("");
-      }
-    };
-
-    // Only fetch when user is available
-    if (user) {
-      fetchCurrentEnterprise();
-    }
-
-    // Listen for storage events (from other tabs)
-    const handleStorageChange = () => {
-      fetchCurrentEnterprise();
-    };
-
-    // Listen for custom enterprise changed events (from same tab)
-    const handleEnterpriseChanged = () => {
-      fetchCurrentEnterprise();
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("enterpriseChanged", handleEnterpriseChanged);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("enterpriseChanged", handleEnterpriseChanged);
-    };
-  }, [user]);
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    toast({
-      title: "Sesión cerrada",
-      description: "Has cerrado sesión exitosamente",
-    });
+    toast({ title: "Sesión cerrada", description: "Has cerrado sesión exitosamente" });
     navigate("/login");
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
-  const userInitials = user.user_metadata?.full_name
-    ?.split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase() || user.email?.substring(0, 2).toUpperCase();
+  const userInitials =
+    user.user_metadata?.full_name
+      ?.split(" ")
+      .map((n: string) => n[0])
+      .join("")
+      .toUpperCase() || user.email?.substring(0, 2).toUpperCase();
 
   return (
     <SidebarProvider>
@@ -196,7 +119,7 @@ const MainLayout = () => {
         <div className="flex-1 flex flex-col">
           <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
             <SidebarTrigger />
-            
+
             <div className="flex items-center gap-2">
               {currentTenant?.logo_url ? (
                 <Avatar className="h-10 w-10">
@@ -212,18 +135,51 @@ const MainLayout = () => {
                 <span className="text-sm font-semibold leading-tight">
                   {currentTenant?.tenant_name || "Sistema Contable"}
                 </span>
-                {currentEnterprise && (
+                {selectedEnterprise && (
                   <span className="text-xs text-muted-foreground leading-tight">
-                    {currentEnterprise}
+                    {selectedEnterprise.business_name}
                   </span>
                 )}
               </div>
             </div>
 
+            {/* Enterprise switcher — only show if user has >1 enterprise */}
+            {enterprises.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="hidden md:flex items-center gap-1 max-w-[200px]">
+                    <Building2 className="h-3 w-3 shrink-0" />
+                    <span className="truncate text-xs">
+                      {selectedEnterprise?.business_name ?? "Seleccionar empresa"}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Cambiar empresa
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {enterprises.map((ent) => (
+                    <DropdownMenuItem
+                      key={ent.id}
+                      onClick={() => switchEnterprise(ent.id)}
+                      className={selectedEnterpriseId === ent.id ? "bg-accent" : ""}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{ent.business_name}</span>
+                        <span className="text-xs text-muted-foreground">{ent.nit}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             <div className="ml-auto flex items-center gap-3">
-              <GlobalSearchPalette enterpriseId={currentEnterpriseId} />
+              <GlobalSearchPalette enterpriseId={selectedEnterpriseId ? selectedEnterpriseId.toString() : null} />
               <TenantSelector />
-              <NotificationCenter enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null} />
+              <NotificationCenter enterpriseId={selectedEnterpriseId} />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -241,9 +197,7 @@ const MainLayout = () => {
                       <p className="text-sm font-medium leading-none">
                         {user.user_metadata?.full_name || "Usuario"}
                       </p>
-                      <p className="text-xs leading-none text-muted-foreground">
-                        {user.email}
-                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
