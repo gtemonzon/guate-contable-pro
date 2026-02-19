@@ -31,6 +31,7 @@ const Notificaciones = lazy(() => import("./pages/Notificaciones"));
 const Propuesta = lazy(() => import("./pages/Propuesta"));
 const Tenants = lazy(() => import("./pages/Tenants"));
 const Bitacora = lazy(() => import("./pages/Bitacora"));
+const ActivosFijos = lazy(() => import("./pages/ActivosFijos"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -73,6 +74,7 @@ const App = () => (
               <Route path="/reportes" element={<Suspense fallback={<PageLoader />}><Reportes /></Suspense>} />
               <Route path="/configuracion" element={<Suspense fallback={<PageLoader />}><Configuracion /></Suspense>} />
               <Route path="/bitacora" element={<Suspense fallback={<PageLoader />}><Bitacora /></Suspense>} />
+              <Route path="/activos-fijos" element={<Suspense fallback={<PageLoader />}><ActivosFijos /></Suspense>} />
               <Route path="/importar" element={<div>Importación (próximamente)</div>} />
               <Route path="/notificaciones" element={<Suspense fallback={<PageLoader />}><Notificaciones /></Suspense>} />
               <Route path="/ayuda" element={<Suspense fallback={<PageLoader />}><Ayuda /></Suspense>} />
