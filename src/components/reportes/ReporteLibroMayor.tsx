@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllRecords } from "@/utils/supabaseHelpers";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -222,197 +222,79 @@ export default function ReporteLibroMayor() {
       setLoading(true);
       setReportGenerated(false);
 
-      // Función recursiva para obtener todas las cuentas hijas que permiten movimiento
-      const getDetailAccountIds = async (accountId: number): Promise<number[]> => {
-        const { data: childAccounts, error } = await supabase
-          .from("tab_accounts")
-          .select("id, allows_movement")
-          .eq("parent_account_id", accountId)
-          .eq("enterprise_id", parseInt(currentEnterpriseId))
-          .eq("is_active", true);
+      // Use server-side RPC — all aggregation and opening balance computed in Postgres
+      const { data: rpcRows, error: rpcError } = await supabase.rpc('get_ledger_detail', {
+        p_enterprise_id: parseInt(currentEnterpriseId),
+        p_account_ids: selectedAccounts,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      });
 
-        if (error) throw error;
+      if (rpcError) throw rpcError;
 
-        let detailIds: number[] = [];
-
-        for (const child of childAccounts || []) {
-          if (child.allows_movement) {
-            detailIds.push(child.id);
-          } else {
-            const childDetailIds = await getDetailAccountIds(child.id);
-            detailIds = [...detailIds, ...childDetailIds];
-          }
-        }
-
-        return detailIds;
-      };
-
-      // Obtener todas las cuentas de detalle para las cuentas seleccionadas
-      // Mantenemos un mapa de cuenta original -> cuentas de detalle
-      const accountDetailMap: Map<number, number[]> = new Map();
-      
-      for (const accountId of selectedAccounts) {
-        const { data: accountData, error: accountError } = await supabase
-          .from("tab_accounts")
-          .select("id, allows_movement")
-          .eq("id", accountId)
-          .single();
-
-        if (accountError) throw accountError;
-
-        if (accountData.allows_movement) {
-          accountDetailMap.set(accountId, [accountId]);
-        } else {
-          const childIds = await getDetailAccountIds(accountId);
-          if (childIds.length > 0) {
-            accountDetailMap.set(accountId, childIds);
-          }
-        }
-      }
-
-      // Obtener todos los IDs de cuentas de detalle únicos
-      const allDetailAccountIds = Array.from(new Set(
-        Array.from(accountDetailMap.values()).flat()
-      ));
-
-      if (allDetailAccountIds.length === 0) {
+      if (!rpcRows || rpcRows.length === 0) {
         setAccountLedgers([]);
         toast({
           title: "Sin movimientos",
-          description: "Las cuentas seleccionadas no tienen movimientos",
-          variant: "default",
+          description: "Las cuentas seleccionadas no tienen movimientos en el período",
         });
         setLoading(false);
         return;
       }
 
-      // Obtener detalles de partidas que afectan las cuentas (con paginación automática)
-      const details = await fetchAllRecords<any>(
-        supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            id,
-            account_id,
-            debit_amount,
-            credit_amount,
-            description,
-            journal_entry_id,
-            tab_journal_entries!inner (
-              id,
-              entry_number,
-              entry_date,
-              description,
-              is_posted,
-              enterprise_id
-            )
-          `)
-          .in("account_id", allDetailAccountIds)
-          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-          .eq("tab_journal_entries.is_posted", true)
-          .gte("tab_journal_entries.entry_date", startDate)
-          .lte("tab_journal_entries.entry_date", endDate)
-      );
+      // Group rows by account_id and build running balances client-side (pure UI logic)
+      const rowsByAccount = new Map<number, typeof rpcRows>();
+      for (const row of rpcRows) {
+        const accId = Number(row.account_id);
+        if (!rowsByAccount.has(accId)) rowsByAccount.set(accId, []);
+        rowsByAccount.get(accId)!.push(row);
+      }
 
-      // Calcular saldo anterior (antes del startDate) con paginación automática
-      const previousDetails = await fetchAllRecords<any>(
-        supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            account_id,
-            debit_amount,
-            credit_amount,
-            tab_journal_entries!inner (
-              entry_date,
-              is_posted,
-              enterprise_id
-            )
-          `)
-          .in("account_id", allDetailAccountIds)
-          .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
-          .eq("tab_journal_entries.is_posted", true)
-          .lt("tab_journal_entries.entry_date", startDate)
-      );
-
-      // Calcular saldo anterior por cuenta de detalle
-      const previousBalanceByAccount: Record<number, number> = {};
-      (previousDetails || []).forEach((detail: any) => {
-        const debit = Number(detail.debit_amount) || 0;
-        const credit = Number(detail.credit_amount) || 0;
-        if (!previousBalanceByAccount[detail.account_id]) {
-          previousBalanceByAccount[detail.account_id] = 0;
-        }
-        previousBalanceByAccount[detail.account_id] += debit - credit;
-      });
-
-      // Agrupar movimientos por cuenta seleccionada
       const ledgers: AccountLedger[] = [];
 
-      for (const [originalAccountId, detailAccountIds] of accountDetailMap) {
-        const accountInfo = accounts.find(a => a.id === originalAccountId);
+      for (const [accountId, rows] of rowsByAccount) {
+        const accountInfo = accounts.find(a => a.id === accountId);
         if (!accountInfo) continue;
 
-        // Filtrar detalles que pertenecen a esta cuenta (o sus hijas)
-        const accountDetails = (details || []).filter((d: any) => 
-          detailAccountIds.includes(d.account_id)
-        );
-
-        // Ordenar por fecha
-        const sortedDetails = accountDetails.sort((a: any, b: any) => {
-          const dateA = new Date(a.tab_journal_entries.entry_date).getTime();
-          const dateB = new Date(b.tab_journal_entries.entry_date).getTime();
-          return dateA - dateB;
-        });
-
-        // Calcular saldo anterior para esta cuenta
-        let previousBalance = 0;
-        for (const detailAccountId of detailAccountIds) {
-          previousBalance += previousBalanceByAccount[detailAccountId] || 0;
-        }
-
-        // Calcular balance acumulado comenzando con el saldo anterior
+        const previousBalance = Number(rows[0]?.opening_balance ?? 0);
         let runningBalance = previousBalance;
-        const entries: LedgerEntry[] = sortedDetails.map((detail: any) => {
-          const debit = Number(detail.debit_amount) || 0;
-          const credit = Number(detail.credit_amount) || 0;
-          runningBalance += debit - credit;
 
+        const entries: LedgerEntry[] = rows.map((row: any) => {
+          const debit  = Number(row.debit_amount)  || 0;
+          const credit = Number(row.credit_amount) || 0;
+          runningBalance += debit - credit;
           return {
-            id: detail.id,
-            entry_date: detail.tab_journal_entries.entry_date,
-            entry_number: detail.tab_journal_entries.entry_number,
-            description: detail.description || detail.tab_journal_entries.description,
+            id: Number(row.detail_id),
+            entry_date: row.entry_date,
+            entry_number: row.entry_number,
+            description: row.line_description || row.entry_description,
             debit_amount: debit,
             credit_amount: credit,
             balance: runningBalance,
             previous_balance: previousBalance,
-            account_id: detail.account_id,
+            account_id: accountId,
           };
         });
 
-        const totalDebit = entries.reduce((sum, e) => sum + e.debit_amount, 0);
-        const totalCredit = entries.reduce((sum, e) => sum + e.credit_amount, 0);
+        const totalDebit  = entries.reduce((s, e) => s + e.debit_amount,  0);
+        const totalCredit = entries.reduce((s, e) => s + e.credit_amount, 0);
 
-        // Solo agregar cuentas que tienen movimientos en el período
-        if (entries.length > 0) {
-          ledgers.push({
-            account: accountInfo,
-            entries,
-            previousBalance,
-            totalDebit,
-            totalCredit,
-            finalBalance: entries[entries.length - 1].balance,
-          });
-        }
+        ledgers.push({
+          account: accountInfo,
+          entries,
+          previousBalance,
+          totalDebit,
+          totalCredit,
+          finalBalance: entries[entries.length - 1]?.balance ?? previousBalance,
+        });
       }
 
-      // Ordenar por código de cuenta
       ledgers.sort((a, b) => a.account.account_code.localeCompare(b.account.account_code));
 
       setAccountLedgers(ledgers);
-      // Expandir todas las cuentas por defecto
       setExpandedAccounts(new Set(ledgers.map(l => l.account.id)));
       setReportGenerated(true);
-      
+
       const totalMovements = ledgers.reduce((sum, l) => sum + l.entries.length, 0);
       toast({
         title: "Reporte generado",

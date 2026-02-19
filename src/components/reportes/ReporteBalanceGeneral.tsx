@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllRecords } from "@/utils/supabaseHelpers";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -102,64 +102,23 @@ export default function ReporteBalanceGeneral() {
     try {
       setLoading(true);
 
-      // Get ALL accounts for the enterprise (needed for hierarchy)
-      const { data: accountsData, error: accountsError } = await supabase
-        .from("tab_accounts")
-        .select("id, account_code, account_name, account_type, level, parent_account_id")
-        .eq("enterprise_id", currentEnterpriseId)
-        .eq("is_active", true)
-        .order("account_code");
-
-      if (accountsError) throw accountsError;
-
-      // Get all journal entry details up to the report date
-      const detailsData = await fetchAllRecords<any>(
-        supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            *,
-            tab_journal_entries!inner(
-              entry_date,
-              enterprise_id,
-              is_posted
-            )
-          `)
-          .eq("tab_journal_entries.enterprise_id", currentEnterpriseId)
-          .eq("tab_journal_entries.is_posted", true)
-          .lte("tab_journal_entries.entry_date", reportDate)
-      );
-
-      // Calculate balances per account
-      const balanceMap = new Map<number, { debit: number; credit: number }>();
-      
-      (detailsData || []).forEach((detail: any) => {
-        const current = balanceMap.get(detail.account_id) || { debit: 0, credit: 0 };
-        current.debit += Number(detail.debit_amount || 0);
-        current.credit += Number(detail.credit_amount || 0);
-        balanceMap.set(detail.account_id, current);
+      // Use server-side RPC — no raw movement rows pulled to client
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_balance_sheet', {
+        p_enterprise_id: currentEnterpriseId,
+        p_as_of_date: reportDate,
       });
 
-      // Create balance data with correct sign logic
-      const accountBalances: AccountBalance[] = (accountsData || []).map((acc: any) => {
-        const movements = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
+      if (rpcError) throw rpcError;
 
-        // Sign rules (Guatemala):
-        // - Activo / Gasto: Debe - Haber
-        // - Pasivo / Capital / Ingreso: Haber - Debe
-        const balance = (acc.account_type === "activo" || acc.account_type === "gasto")
-          ? (movements.debit - movements.credit)
-          : (movements.credit - movements.debit);
-
-        return {
-          id: acc.id,
-          account_code: acc.account_code,
-          account_name: acc.account_name,
-          account_type: acc.account_type,
-          level: acc.level,
-          parent_account_id: acc.parent_account_id,
-          balance,
-        };
-      });
+      const accountBalances: AccountBalance[] = (rpcData || []).map((row: any) => ({
+        id: Number(row.account_id),
+        account_code: row.account_code,
+        account_name: row.account_name,
+        account_type: row.account_type,
+        level: row.level,
+        parent_account_id: row.parent_account_id ? Number(row.parent_account_id) : null,
+        balance: Number(row.balance),
+      }));
 
       // If we have a configured format, use it
       if (format && format.sections.length > 0) {

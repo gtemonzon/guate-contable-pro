@@ -2439,9 +2439,43 @@ export type Database = {
           total_debit: number
         }[]
       }
+      get_balance_sheet: {
+        Args: { p_as_of_date: string; p_enterprise_id: number }
+        Returns: {
+          account_code: string
+          account_id: number
+          account_name: string
+          account_type: string
+          balance: number
+          balance_type: string
+          level: number
+          parent_account_id: number
+          total_credit: number
+          total_debit: number
+        }[]
+      }
       get_enterprise_tenant_id: {
         Args: { _enterprise_id: number }
         Returns: number
+      }
+      get_ledger_detail: {
+        Args: {
+          p_account_ids: number[]
+          p_end_date: string
+          p_enterprise_id: number
+          p_start_date: string
+        }
+        Returns: {
+          account_id: number
+          credit_amount: number
+          debit_amount: number
+          detail_id: number
+          entry_date: string
+          entry_description: string
+          entry_number: string
+          line_description: string
+          opening_balance: number
+        }[]
       }
       get_monthly_ledger_summary: {
         Args: { p_enterprise_id: number; p_ledger: string; p_year: number }
@@ -2460,6 +2494,48 @@ export type Database = {
           p_start_date: string
         }
         Returns: number
+      }
+      get_pnl: {
+        Args: {
+          p_end_date: string
+          p_enterprise_id: number
+          p_start_date: string
+        }
+        Returns: {
+          account_code: string
+          account_id: number
+          account_name: string
+          account_type: string
+          balance: number
+          level: number
+          parent_account_id: number
+          period_credit: number
+          period_debit: number
+        }[]
+      }
+      get_trial_balance: {
+        Args: {
+          p_end_date: string
+          p_enterprise_id: number
+          p_start_date: string
+        }
+        Returns: {
+          account_code: string
+          account_id: number
+          account_name: string
+          account_type: string
+          balance_type: string
+          closing_balance: number
+          closing_credit: number
+          closing_debit: number
+          level: number
+          opening_balance: number
+          opening_credit: number
+          opening_debit: number
+          parent_account_id: number
+          period_credit: number
+          period_debit: number
+        }[]
       }
       get_user_role: {
         Args: { _enterprise_id: number; _user_id: string }

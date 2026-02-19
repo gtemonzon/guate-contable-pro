@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllRecords } from "@/utils/supabaseHelpers";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -131,173 +131,34 @@ export default function BalanceSaldos() {
     }
   };
 
-  const fetchBalances = async (enterpriseId: string, periodId: number, fromDate?: string, toDate?: string) => {
+  const fetchBalances = async (enterpriseId: string, _periodId: number, fromDate?: string, toDate?: string) => {
     try {
       setLoading(true);
 
       const dateFrom = fromDate || startDate;
-      const dateTo = toDate || endDate;
+      const dateTo   = toDate   || endDate;
 
-      // Obtener todas las cuentas de la empresa
-      const { data: accountsData, error: accountsError } = await supabase
-        .from("tab_accounts")
-        .select("*")
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("is_active", true)
-        .order("account_code");
-
-      if (accountsError) throw accountsError;
-
-      // Obtener el período seleccionado
-      const { data: period, error: periodError } = await supabase
-        .from("tab_accounting_periods")
-        .select("*")
-        .eq("id", periodId)
-        .single();
-
-      if (periodError) throw periodError;
-
-      // Obtener todos los movimientos del período y rango de fechas (con paginación automática)
-      const entries = await fetchAllRecords<any>(
-        supabase
-          .from("tab_journal_entries")
-          .select(`
-            id,
-            entry_date,
-            is_posted,
-            tab_journal_entry_details (
-              account_id,
-              debit_amount,
-              credit_amount
-            )
-          `)
-          .eq("enterprise_id", parseInt(enterpriseId))
-          .eq("accounting_period_id", periodId)
-          .eq("is_posted", true)
-          .gte("entry_date", dateFrom)
-          .lte("entry_date", dateTo)
-      );
-
-      // Calcular saldos anteriores (antes del dateFrom) con paginación automática
-      const prevEntries = await fetchAllRecords<any>(
-        supabase
-          .from("tab_journal_entries")
-          .select(`
-            id,
-            entry_date,
-            tab_journal_entry_details (
-              account_id,
-              debit_amount,
-              credit_amount
-            )
-          `)
-          .eq("enterprise_id", parseInt(enterpriseId))
-          .eq("accounting_period_id", periodId)
-          .eq("is_posted", true)
-          .lt("entry_date", dateFrom)
-      );
-
-      // Calcular saldos anteriores por cuenta de detalle
-      const previousBalances: Record<number, { debit: number; credit: number }> = {};
-      prevEntries?.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
-          if (!previousBalances[detail.account_id]) {
-            previousBalances[detail.account_id] = { debit: 0, credit: 0 };
-          }
-          previousBalances[detail.account_id].debit += detail.debit_amount || 0;
-          previousBalances[detail.account_id].credit += detail.credit_amount || 0;
-        });
+      // Use server-side RPC — Postgres computes opening + period aggregates
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_trial_balance', {
+        p_enterprise_id: parseInt(enterpriseId),
+        p_start_date: dateFrom,
+        p_end_date:   dateTo,
       });
 
-      // Calcular saldos por cuenta de detalle (movimientos directos)
-      const balances: Record<number, { debit: number; credit: number }> = {};
+      if (rpcError) throw rpcError;
 
-      entries?.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
-          if (!balances[detail.account_id]) {
-            balances[detail.account_id] = { debit: 0, credit: 0 };
-          }
-          balances[detail.account_id].debit += detail.debit_amount || 0;
-          balances[detail.account_id].credit += detail.credit_amount || 0;
-        });
-      });
-
-      // Crear mapa de cuentas por ID para acceso rápido
-      const accountMap: Record<number, any> = {};
-      accountsData.forEach((account: any) => {
-        const prevBal = previousBalances[account.id] || { debit: 0, credit: 0 };
-        accountMap[account.id] = {
-          ...account,
-          previous_debit: prevBal.debit,
-          previous_credit: prevBal.credit,
-          debit: balances[account.id]?.debit || 0,
-          credit: balances[account.id]?.credit || 0,
-        };
-      });
-
-      // Propagar saldos anteriores hacia arriba en la jerarquía
-      const sortedAccountsForPrev = [...accountsData].sort((a, b) => b.level - a.level);
-      sortedAccountsForPrev.forEach((account: any) => {
-        const currentAccount = accountMap[account.id];
-        if (account.parent_account_id && accountMap[account.parent_account_id]) {
-          accountMap[account.parent_account_id].previous_debit += currentAccount.previous_debit;
-          accountMap[account.parent_account_id].previous_credit += currentAccount.previous_credit;
-        }
-      });
-
-      // Propagar saldos hacia arriba en la jerarquía
-      // Ordenar por nivel descendente para procesar desde las hojas hacia arriba
-      const sortedAccounts = [...accountsData].sort((a, b) => b.level - a.level);
-      
-      sortedAccounts.forEach((account: any) => {
-        const currentAccount = accountMap[account.id];
-        
-        // Si tiene cuenta padre, sumar sus saldos al padre
-        if (account.parent_account_id && accountMap[account.parent_account_id]) {
-          accountMap[account.parent_account_id].debit += currentAccount.debit;
-          accountMap[account.parent_account_id].credit += currentAccount.credit;
-        }
-      });
-
-      // Combinar cuentas con sus saldos propagados
-      const accountsWithBalances: Account[] = accountsData.map((account: any) => {
-        const accountData = accountMap[account.id];
-        const prevDebit = accountData.previous_debit;
-        const prevCredit = accountData.previous_credit;
-        const debit = accountData.debit;
-        const credit = accountData.credit;
-        
-        // Calcular balance anterior según tipo de cuenta
-        let previousBalance = 0;
-        if (account.balance_type === "deudor") {
-          previousBalance = prevDebit - prevCredit;
-        } else {
-          previousBalance = prevCredit - prevDebit;
-        }
-        
-        // Calcular balance actual: saldo anterior + movimientos del período
-        let balance = 0;
-        if (account.balance_type === "deudor") {
-          // Cuenta deudora: saldo anterior + debe - haber
-          balance = previousBalance + debit - credit;
-        } else {
-          // Cuenta acreedora: saldo anterior + haber - debe
-          balance = previousBalance + credit - debit;
-        }
-
-        return {
-          id: account.id,
-          account_code: account.account_code,
-          account_name: account.account_name,
-          balance_type: account.balance_type,
-          level: account.level,
-          previous_balance: previousBalance,
-          debit,
-          credit,
-          balance,
-          parent_account_id: account.parent_account_id,
-        };
-      });
+      const accountsWithBalances: Account[] = (rpcData || []).map((row: any) => ({
+        id:               Number(row.account_id),
+        account_code:     row.account_code,
+        account_name:     row.account_name,
+        balance_type:     row.balance_type,
+        level:            row.level,
+        previous_balance: Number(row.opening_balance),
+        debit:            Number(row.period_debit),
+        credit:           Number(row.period_credit),
+        balance:          Number(row.closing_balance),
+        parent_account_id: row.parent_account_id ? Number(row.parent_account_id) : null,
+      }));
 
       setAccounts(accountsWithBalances);
     } catch (error: any) {
@@ -310,6 +171,7 @@ export default function BalanceSaldos() {
       setLoading(false);
     }
   };
+
 
   const handlePeriodChange = (periodId: string) => {
     setSelectedPeriod(periodId);
