@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,13 +31,8 @@ interface AssetSummary {
 }
 
 export default function AssetReports() {
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
+  const { selectedEnterpriseId: enterpriseId } = useEnterprise();
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split("T")[0]);
-
-  useEffect(() => {
-    const id = localStorage.getItem("currentEnterpriseId");
-    if (id) setEnterpriseId(Number(id));
-  }, []);
 
   const { data: assets = [], isLoading: assetsLoading } = useFixedAssets(enterpriseId);
 

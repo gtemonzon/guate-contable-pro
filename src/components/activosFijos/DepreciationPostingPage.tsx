@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,13 +76,8 @@ function AssetScheduleFetcher({
 }
 
 export default function DepreciationPostingPage() {
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
+  const { selectedEnterpriseId: enterpriseId } = useEnterprise();
   const qc = useQueryClient();
-
-  useEffect(() => {
-    const id = localStorage.getItem("currentEnterpriseId");
-    if (id) setEnterpriseId(Number(id));
-  }, []);
 
   const { data: policy } = useAssetPolicy(enterpriseId);
   const { data: assets = [] } = useFixedAssets(enterpriseId);
