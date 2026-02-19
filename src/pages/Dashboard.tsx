@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, DollarSign, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Settings } from "lucide-react";
+import { TrendingUp, DollarSign, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Settings, Inbox } from "lucide-react";
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -27,7 +27,11 @@ import { useKpis } from "@/hooks/dashboard/useKpis";
 import { useBookSummaries } from "@/hooks/dashboard/useBookSummaries";
 import { useYearlyCharts, fetchAvailableChartYears } from "@/hooks/dashboard/useYearlyCharts";
 import { useRecentEntries } from "@/hooks/dashboard/useRecentEntries";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useInboxItems } from "@/hooks/useInboxItems";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { BookSummary } from "@/hooks/dashboard/useBookSummaries";
+
 
 const YEAR_COLORS = [
   "hsl(var(--success))",
@@ -240,8 +244,11 @@ const Dashboard = () => {
   const [selectedChartYears, setSelectedChartYears] = useState<number[]>([new Date().getFullYear()]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
 
-  const currentEnterpriseIdStr = localStorage.getItem("currentEnterpriseId");
-  const currentEntId = currentEnterpriseIdStr ? parseInt(currentEnterpriseIdStr) : null;
+  const { selectedEnterpriseId: currentEntId } = useEnterprise();
+  const { data: inboxItems = [] } = useInboxItems(currentEntId);
+  const urgentInboxCount = inboxItems.filter((i) => i.priority === "urgente").length;
+  const totalInboxCount = inboxItems.length;
+
 
   // ── Data hooks ──────────────────────────────────────────────────────────
   const { activePeriod } = useActivePeriod(currentEntId);
@@ -325,6 +332,40 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Inbox quick-access banner */}
+      {totalInboxCount > 0 && (
+        <Card
+          className="cursor-pointer border-warning/40 bg-warning/5 hover:bg-warning/10 transition-colors"
+          onClick={() => navigate("/inbox")}
+        >
+          <CardContent className="flex items-center justify-between py-3 px-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-warning/20 p-2">
+                <Inbox className="h-4 w-4 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">
+                  {totalInboxCount} elemento{totalInboxCount !== 1 ? "s" : ""} pendiente{totalInboxCount !== 1 ? "s" : ""} de acción
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {urgentInboxCount > 0
+                    ? `${urgentInboxCount} urgente${urgentInboxCount !== 1 ? "s" : ""} — requieren atención inmediata`
+                    : "Revisa la bandeja de contabilidad"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {urgentInboxCount > 0 && (
+                <StatusBadge status="error" label={`${urgentInboxCount} urgente${urgentInboxCount !== 1 ? "s" : ""}`} />
+              )}
+              <Button variant="outline" size="sm" className="text-xs">
+                Ver bandeja
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

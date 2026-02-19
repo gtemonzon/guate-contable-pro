@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package, Inbox } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -30,6 +30,7 @@ type MenuItemOrSection = MenuItem | MenuSection;
 
 const allMenuItems: MenuItemOrSection[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "Bandeja", url: "/inbox", icon: Inbox },
   {
     title: "Contabilidad",
     items: [
