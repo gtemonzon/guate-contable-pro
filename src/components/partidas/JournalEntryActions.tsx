@@ -26,6 +26,9 @@ const STATUS_LABELS: Record<EntryStatus, string> = {
   rechazado: 'Rechazado',
 };
 
+const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+const modKey = isMac ? "⌘" : "Ctrl";
+
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
   onCancel, onSaveDraft, onPost, auditInfo, formatDateTime,
@@ -48,7 +51,19 @@ export function JournalEntryActions({
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Shortcut hints */}
+          {!isReadOnly && (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground mr-1">
+              {canCreateEntries && entryStatus !== 'contabilizado' && (
+                <><kbd className="px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd> Borrador</>
+              )}
+              {canPostEntries && entryStatus !== 'contabilizado' && (
+                <><span className="mx-1">·</span><kbd className="px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd> Contabilizar</>
+              )}
+            </span>
+          )}
+
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
 
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (

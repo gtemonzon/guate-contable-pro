@@ -857,13 +857,10 @@ export default function LibrosFiscales() {
     return () => window.clearTimeout(t);
   }, [pendingFocusTab, purchases.length, sales.length]);
 
-  // Keyboard shortcut: Ctrl+Alt+Plus (numpad) -> new invoice on current tab
-  // Now saves current record BEFORE creating new one
+  // Keyboard shortcut: Alt+N -> new invoice on current tab (replaces deprecated Ctrl+Alt++)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Alt+Plus (numpad or regular +)
-      if (!e.ctrlKey || !e.altKey) return;
-      if (e.key !== "+" && e.code !== "NumpadAdd") return;
+      if (!e.altKey || e.key.toLowerCase() !== "n") return;
       e.preventDefault();
       if (activeTab === "compras") addNewPurchase();
       else addNewSale();
