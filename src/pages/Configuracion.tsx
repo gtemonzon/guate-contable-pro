@@ -14,6 +14,7 @@ import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
 import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
 import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreManager";
 import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
+import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
@@ -42,6 +43,7 @@ export default function Configuracion() {
           <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
           <TabsTrigger value="backup">Respaldo</TabsTrigger>
           <TabsTrigger value="integrity">Integridad</TabsTrigger>
+          <TabsTrigger value="health">Estado del Sistema</TabsTrigger>
         </TabsList>
 
         <TabsContent value="enterprise-accounts" className="mt-6">
@@ -121,6 +123,10 @@ export default function Configuracion() {
 
         <TabsContent value="integrity" className="mt-6">
           <IntegrityValidationPanel />
+        </TabsContent>
+
+        <TabsContent value="health" className="mt-6">
+          <SystemHealthCheck />
         </TabsContent>
       </Tabs>
     </div>

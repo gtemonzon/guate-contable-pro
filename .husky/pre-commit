@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+# Pre-commit hook — runs automatically before every commit.
+# To install: npx husky install  (see CONTRIBUTING.md)
+
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Pre-commit: checking for .env files..."
+if git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example'; then
+  echo "❌ Blocked: You are about to commit a .env file."
+  echo "   Add it to .gitignore and rotate any exposed keys."
+  exit 1
+fi
+
+echo "🔍 Pre-commit: scanning for secret patterns..."
+SECRET_PATTERNS=(
+  'SUPABASE_SERVICE_ROLE_KEY\s*=\s*ey'
+  'service_role.*ey[A-Za-z0-9_-]{20,}'
+  'sk_live_[A-Za-z0-9]{24,}'
+  'BEGIN (RSA |EC )?PRIVATE KEY'
+)
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+FAIL=0
+for pattern in "${SECRET_PATTERNS[@]}"; do
+  HITS=$(echo "$STAGED" | xargs grep -lEi "$pattern" 2>/dev/null || true)
+  if [ -n "$HITS" ]; then
+    echo "❌ Secret pattern '$pattern' found in staged files:"
+    echo "$HITS"
+    FAIL=1
+  fi
+done
+
+if [ "$FAIL" -eq 1 ]; then
+  echo "Commit blocked. Rotate exposed keys and remove them from code."
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed."
