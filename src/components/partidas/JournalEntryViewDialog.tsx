@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import JournalEntryHistoryTimeline from "./JournalEntryHistoryTimeline";
+import EntityAuditLog from "@/components/audit/EntityAuditLog";
 
 interface JournalEntryDetail {
   line_number: number;
@@ -160,6 +161,7 @@ export default function JournalEntryViewDialog({
             <TabsList>
               <TabsTrigger value="detalle">Detalle</TabsTrigger>
               <TabsTrigger value="historial">Historial</TabsTrigger>
+              <TabsTrigger value="auditoria">Auditoría</TabsTrigger>
             </TabsList>
 
             <TabsContent value="detalle">
@@ -270,6 +272,15 @@ export default function JournalEntryViewDialog({
               <JournalEntryHistoryTimeline
                 entryId={entryId}
                 visible={activeTab === "historial"}
+              />
+            </TabsContent>
+
+            <TabsContent value="auditoria">
+              <EntityAuditLog
+                entityType="tab_journal_entries"
+                entityId={entryId}
+                visible={activeTab === "auditoria"}
+                showHashChain={true}
               />
             </TabsContent>
           </Tabs>

@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_event_log: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          after_json: Json | null
+          before_json: Json | null
+          created_at: string
+          enterprise_id: number | null
+          entity_id: number | null
+          entity_type: string
+          id: number
+          metadata_json: Json | null
+          prev_row_hash: string | null
+          request_id: string | null
+          row_hash: string | null
+          tenant_id: number | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          enterprise_id?: number | null
+          entity_id?: number | null
+          entity_type: string
+          id?: number
+          metadata_json?: Json | null
+          prev_row_hash?: string | null
+          request_id?: string | null
+          row_hash?: string | null
+          tenant_id?: number | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          after_json?: Json | null
+          before_json?: Json | null
+          created_at?: string
+          enterprise_id?: number | null
+          entity_id?: number | null
+          entity_type?: string
+          id?: number
+          metadata_json?: Json | null
+          prev_row_hash?: string | null
+          request_id?: string | null
+          row_hash?: string | null
+          tenant_id?: number | null
+        }
+        Relationships: []
+      }
       tab_accounting_periods: {
         Row: {
           closed_at: string | null
@@ -2448,6 +2499,34 @@ export type Database = {
       validate_invoice_date: {
         Args: { book_month: number; book_year: number; invoice_date: string }
         Returns: boolean
+      }
+      verify_audit_chain: {
+        Args: { p_enterprise_id: number; p_entity_type?: string }
+        Returns: {
+          action: string
+          chain_valid: boolean
+          created_at: string
+          entity_id: number
+          entity_type: string
+          id: number
+          prev_row_hash: string
+          row_hash: string
+        }[]
+      }
+      write_audit_event: {
+        Args: {
+          p_action: string
+          p_actor_user_id: string
+          p_after_json?: Json
+          p_before_json?: Json
+          p_enterprise_id: number
+          p_entity_id: number
+          p_entity_type: string
+          p_metadata_json?: Json
+          p_request_id?: string
+          p_tenant_id: number
+        }
+        Returns: undefined
       }
     }
     Enums: {
