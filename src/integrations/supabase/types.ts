@@ -2976,6 +2976,30 @@ export type Database = {
           total_debit: number
         }[]
       }
+      get_account_ledger_as_of: {
+        Args: {
+          p_account_id: number
+          p_as_of_date: string
+          p_enterprise_id: number
+          p_include_drafts?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_year: number
+        }
+        Returns: {
+          credit_amount: number
+          debit_amount: number
+          detail_id: number
+          entry_date: string
+          entry_description: string
+          entry_number: string
+          entry_status: string
+          line_description: string
+          opening_balance_year: number
+          running_balance: number
+          total_rows: number
+        }[]
+      }
       get_asset_depreciation_summary: {
         Args: { p_as_of_date?: string; p_enterprise_id: number }
         Returns: {
