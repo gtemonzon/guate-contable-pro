@@ -138,34 +138,45 @@ const helpSections: HelpSection[] = [
     id: "atajos",
     title: "Atajos de Teclado",
     icon: Keyboard,
-    description: "Acelere su trabajo con los atajos de teclado disponibles en el sistema.",
+    description: "Atajos de teclado seguros para navegadores disponibles en todo el sistema.",
     isNew: true,
     steps: [
       {
-        title: "Nuevo Registro en Libros Fiscales",
+        title: "Guardar / Contabilizar — Ctrl+Enter (⌘+Enter en Mac)",
         description:
-          "Presione Ctrl+Alt++ (tecla más del teclado numérico) para crear rápidamente un nuevo registro de compra o venta sin usar el mouse.",
+          "En cualquier formulario o diálogo de partida contable, presione Ctrl+Enter para ejecutar la acción principal (Contabilizar). Funciona de forma confiable sin conflictos con el navegador.",
+      },
+      {
+        title: "Guardar Borrador — Ctrl+Shift+Enter (⌘+Shift+Enter en Mac)",
+        description:
+          "Guarda el formulario actual como borrador sin contabilizarlo. Útil para pausar el ingreso y continuar después.",
+      },
+      {
+        title: "Nuevo Registro — Alt+N",
+        description:
+          "En los Libros Fiscales (Compras / Ventas) y en los formularios compatibles, presione Alt+N para crear rápidamente un nuevo registro sin usar el mouse. El sistema guarda el registro actual antes de crear el nuevo.",
+      },
+      {
+        title: "Cancelar / Cerrar — Esc",
+        description:
+          "Cierra el diálogo o formulario activo cuando no hay cambios pendientes. Si hay cambios sin guardar, se muestra una confirmación antes de cerrar.",
       },
       {
         title: "Guardado Automático",
         description:
-          "Los cambios en los libros fiscales se guardan automáticamente cada 3 segundos. No es necesario presionar un botón de guardar.",
+          "Los cambios en los libros fiscales se guardan automáticamente cada pocos segundos. No es necesario presionar un botón de guardar.",
       },
       {
         title: "Navegación Rápida",
         description:
           "Use Tab para moverse entre campos y Enter para confirmar selecciones en los selectores desplegables.",
       },
-      {
-        title: "Búsqueda Global",
-        description:
-          "En cualquier lista o catálogo, use Ctrl+F o el campo de búsqueda para filtrar rápidamente los registros.",
-      },
     ],
     tips: [
-      "Al usar Ctrl+Alt++ el sistema guarda automáticamente el registro actual antes de crear uno nuevo.",
-      "Los campos se validan en tiempo real para evitar errores de captura.",
-      "En el selector de cuentas, escriba el código o nombre para filtrar rápidamente.",
+      "Ctrl+Enter está disponible en el diálogo de Partidas Contables: contabiliza si la partida está balanceada.",
+      "Alt+N es el único atajo de 'Nuevo Registro'; el antiguo Ctrl+Alt++ fue eliminado por conflictos con el zoom del navegador.",
+      "Los atajos se suprimen automáticamente cuando el foco está en un campo de texto multilínea o durante la composición IME.",
+      "En formularios con indicadores de atajo (junto a los botones), los atajos disponibles se muestran directamente.",
     ],
   },
   {

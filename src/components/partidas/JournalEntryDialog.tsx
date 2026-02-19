@@ -21,6 +21,8 @@ import { JournalEntryBankSection } from "./JournalEntryBankSection";
 import { JournalEntryLinesTable } from "./JournalEntryLinesTable";
 import { JournalEntryTotalsBar } from "./JournalEntryTotalsBar";
 import { JournalEntryActions } from "./JournalEntryActions";
+import { useFormShortcuts } from "@/hooks/useFormShortcuts";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 
 interface JournalEntryDialogProps {
   open: boolean;
@@ -47,10 +49,23 @@ export default function JournalEntryDialog({
   entryToEdit = null,
 }: JournalEntryDialogProps) {
   const form = useJournalEntryForm(open, entryToEdit ?? null, onSuccess, onOpenChange);
+  const { selectedEnterpriseId } = useEnterprise();
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
   const balanced = form.isBalanced();
+
+  const canSaveDraft = form.entryStatus !== 'contabilizado' && form.permissions.canCreateEntries && !form.isReadOnly;
+  const canPost = form.entryStatus !== 'contabilizado' && form.permissions.canPostEntries && !form.isReadOnly;
+
+  // Keyboard shortcuts: Ctrl+Enter → Post, Ctrl+Shift+Enter → Save Draft
+  useFormShortcuts({
+    isEnabled: open && !form.isLoadingEntry,
+    onSave: canPost ? () => form.saveEntry(true) : undefined,
+    onSaveDraft: canSaveDraft ? () => form.saveEntry(false) : undefined,
+    onCancel: () => form.handleCloseAttempt(false),
+    isDirty: false, // ESC always allowed from dialog
+  });
 
   return (
     <>
@@ -163,7 +178,7 @@ export default function JournalEntryDialog({
         onOpenChange={form.setShowLinkedPurchasesModal}
         entryDate={form.entryDate}
         documentReference={form.bankReference}
-        enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+        enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
         bankAccountId={form.bankAccountId}
         journalEntryId={entryToEdit?.id || null}
         onPurchasesPosted={form.handlePurchasesPosted}
