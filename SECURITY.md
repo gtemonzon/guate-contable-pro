@@ -189,6 +189,108 @@ If a security breach is suspected:
 
 ---
 
+## 9. Tenant Isolation Contract
+
+### 9.1 The Contract
+
+Every row in every business table is scoped by the authenticated user's **tenant** and **enterprise** context. No frontend filtering can substitute for this — the database is the last line of defense.
+
+| Guarantee | Mechanism |
+|-----------|-----------|
+| A user can only read rows from their own tenant | RLS policies join through `tab_user_enterprises` or `tab_enterprises.tenant_id` |
+| A user can only write rows for enterprises they are linked to | `WITH CHECK` constraints on `tab_user_enterprises` membership |
+| Posted entries are immutable | `trg_journal_entry_immutability` trigger (ERRCODE P0001) |
+| Posting unbalanced entries is blocked | `trg_enforce_balanced_on_post` trigger (ERRCODE P0002) |
+| Posting to closed periods is blocked | `trg_enforce_open_period_on_post` trigger (ERRCODE P0004) |
+| No row can be written without a resolvable tenant | `assert_tenant_context()` guard in all cross-enterprise functions |
+
+### 9.2 Tenant Isolation Helpers
+
+Three SECURITY DEFINER helper functions enforce isolation:
+
+```sql
+-- Returns tenant_id for the current session (JWT → tab_users fallback)
+SELECT public.current_tenant_id();
+
+-- Returns enterprise_id from JWT app_metadata (NULL if not set)
+SELECT public.current_enterprise_id();
+
+-- Raises SQLSTATE P0010 if tenant context is missing
+PERFORM public.assert_tenant_context();
+```
+
+Call `assert_tenant_context()` at the start of any `SECURITY DEFINER` function that performs cross-tenant operations.
+
+### 9.3 Isolation Scoping by Table Category
+
+| Category | Scope Key | How Isolated |
+|----------|-----------|--------------|
+| Business data (entries, accounts, ledger…) | `enterprise_id` | `enterprise_id IN (SELECT enterprise_id FROM tab_user_enterprises WHERE user_id = auth.uid())` |
+| Enterprise metadata | `tenant_id` (via `tab_enterprises`) | `get_enterprise_tenant_id()` + `can_access_tenant()` |
+| User data | `tenant_id` (on `tab_users`) | `is_tenant_admin_for()` or `id = auth.uid()` |
+| Join tables (e.g. journal_entry_details) | FK chain → `enterprise_id` | Parent FK lookup through `tab_journal_entries` |
+| Reference tables (currencies, etc.) | None — shared global | Read-only for `authenticated`, write-only for `super_admin` |
+| Write-protected (audit_log, entry_history) | `enterprise_id` | Write only via SECURITY DEFINER triggers; clients can only SELECT |
+
+### 9.4 Frontend Must Not Be Trusted for Isolation
+
+The `currentEnterpriseId` in `localStorage` is used for **UX context only** (determining which data to show). It is **never** used in RLS policies. All isolation decisions happen server-side via `tab_user_enterprises` membership checks.
+
+---
+
+## 10. Policy Coverage Check
+
+### 10.1 Audit View
+
+```sql
+-- Show all tables with their RLS coverage status
+SELECT * FROM public.v_rls_coverage ORDER BY tablename;
+
+-- Show only problem tables (must return 0 rows in a healthy system)
+SELECT tablename, rls_enabled, policy_count, compliance_gap
+FROM public.v_rls_coverage
+WHERE is_rls_compliant = false OR compliance_gap IS NOT NULL;
+```
+
+### 10.2 CI Guard Function
+
+```sql
+-- Returns 0 rows when all tables are compliant.
+-- In CI pipelines, fail if this returns any rows:
+SELECT count(*) FROM public.fail_if_rls_gap(); -- must be 0
+```
+
+### 10.3 Column Definitions
+
+| Column | Meaning |
+|--------|---------|
+| `rls_enabled` | Whether `ALTER TABLE … ENABLE ROW LEVEL SECURITY` has been run |
+| `policy_count` | Number of policies (an `ALL` policy counts as 1) |
+| `has_all_policy` | Table has a policy covering all DML commands at once |
+| `is_reference_table` | Intentionally shared (currencies, exchange rates, etc.) — only SELECT needed |
+| `is_write_protected` | Writes only allowed via triggers (audit_log, entry_history) |
+| `is_rls_compliant` | `true` when RLS is on AND at least one policy exists |
+| `compliance_gap` | `NULL` means fully covered; non-NULL describes the missing protection |
+
+### 10.4 Run Periodically
+
+Add to your monthly security checklist:
+
+```bash
+# Via psql
+psql "$DATABASE_URL" -c "SELECT count(*) FROM fail_if_rls_gap();"
+# Expected output: count = 0
+```
+
+### 10.5 What to Do When a Gap is Found
+
+1. Identify the table and gap type from `v_rls_coverage`
+2. Create a migration adding the missing RLS policy
+3. Re-run `fail_if_rls_gap()` to verify count = 0
+4. Document the new policy in this file under §3
+
+---
+
 ## 8. Dependency Security
 
 ```bash
