@@ -2349,8 +2349,39 @@ export type Database = {
             }
             Returns: Json
           }
+      get_account_balances_by_period: {
+        Args: { p_end_date: string; p_enterprise_id: number }
+        Returns: {
+          account_code: string
+          account_id: number
+          account_name: string
+          account_type: string
+          balance: number
+          balance_type: string
+          total_credit: number
+          total_debit: number
+        }[]
+      }
       get_enterprise_tenant_id: {
         Args: { _enterprise_id: number }
+        Returns: number
+      }
+      get_monthly_ledger_summary: {
+        Args: { p_enterprise_id: number; p_ledger: string; p_year: number }
+        Returns: {
+          base_amount: number
+          month_num: number
+          record_count: number
+          total: number
+          vat_amount: number
+        }[]
+      }
+      get_period_profit: {
+        Args: {
+          p_end_date: string
+          p_enterprise_id: number
+          p_start_date: string
+        }
         Returns: number
       }
       get_user_role: {
