@@ -7,9 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAssetCategories, useUpsertAssetCategory, useDeleteAssetCategory, useEnterpriseAccounts, type FixedAssetCategory } from "@/hooks/useFixedAssets";
-import { AccountCombobox } from "@/components/ui/account-combobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAssetCategories, useUpsertAssetCategory, useDeleteAssetCategory, type FixedAssetCategory } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props { enterpriseId: number; }
 
@@ -20,8 +22,53 @@ const EMPTY: Partial<FixedAssetCategory> = {
   is_active: true,
 };
 
+function useEnterpriseAccounts(enterpriseId: number) {
+  return useQuery({
+    queryKey: ["accounts", enterpriseId],
+    enabled: !!enterpriseId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tab_accounts")
+        .select("id, account_code, account_name")
+        .eq("enterprise_id", enterpriseId)
+        .eq("allows_movement", true)
+        .order("account_code");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+interface AccountSelectProps {
+  accounts: Array<{ id: number; account_code: string; account_name: string }>;
+  value: number | null;
+  onChange: (v: number | null) => void;
+  placeholder?: string;
+}
+
+function AccountSelect({ accounts, value, onChange, placeholder = "Seleccionar cuenta..." }: AccountSelectProps) {
+  return (
+    <Select
+      value={value ? String(value) : ""}
+      onValueChange={(v) => onChange(v ? Number(v) : null)}
+    >
+      <SelectTrigger className="h-8 text-xs">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {accounts.map((a) => (
+          <SelectItem key={a.id} value={String(a.id)} className="text-xs">
+            {a.account_code} - {a.account_name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export default function AssetCategoriesManager({ enterpriseId }: Props) {
   const { data: categories = [], isLoading } = useAssetCategories(enterpriseId);
+  const { data: accounts = [] } = useEnterpriseAccounts(enterpriseId);
   const upsert = useUpsertAssetCategory();
   const del = useDeleteAssetCategory();
 
@@ -163,8 +210,8 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
               ].map(({ label, key }) => (
                 <div key={key}>
                   <Label>{label}</Label>
-                  <AccountCombobox
-                    enterpriseId={enterpriseId}
+                  <AccountSelect
+                    accounts={accounts}
                     value={form[key] ?? null}
                     onChange={(v) => setForm((f) => ({ ...f, [key]: v }))}
                     placeholder="Seleccionar cuenta..."
