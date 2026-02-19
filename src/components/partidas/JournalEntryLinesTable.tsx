@@ -1,0 +1,188 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
+import type { Account, DetailLine } from "./useJournalEntryForm";
+
+interface JournalEntryLinesTableProps {
+  detailLines: DetailLine[];
+  accounts: Account[];
+  activeLineId: string | null;
+  setActiveLineId: (id: string) => void;
+  accountSearch: Record<string, string>;
+  setAccountSearch: (fn: (prev: Record<string, string>) => Record<string, string>) => void;
+  accountPopoverOpen: Record<string, boolean>;
+  setAccountPopoverOpen: (fn: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
+  isReadOnly: boolean;
+  totalDebit: number;
+  totalCredit: number;
+  isBalanced: boolean;
+  onAddLine: () => void;
+  onRemoveLine: (id: string) => void;
+  onUpdateLine: (id: string, field: keyof DetailLine, value: any) => void;
+  onOpenPurchasesModal: () => void;
+  entryDate: string;
+}
+
+export function JournalEntryLinesTable({
+  detailLines, accounts, activeLineId, setActiveLineId, accountSearch, setAccountSearch,
+  accountPopoverOpen, setAccountPopoverOpen, isReadOnly, totalDebit, totalCredit, isBalanced,
+  onAddLine, onRemoveLine, onUpdateLine, onOpenPurchasesModal, entryDate,
+}: JournalEntryLinesTableProps) {
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
+        <div className="flex gap-2">
+          {!isReadOnly && (
+            <Button onClick={onOpenPurchasesModal} variant="outline" size="sm" disabled={!entryDate} title={!entryDate ? "Primero ingrese la fecha de la partida" : "Ver/agregar facturas de compra vinculadas"}>
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Agregar desde Compras
+            </Button>
+          )}
+          <Button onClick={onAddLine} variant="outline" size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Agregar Línea
+          </Button>
+        </div>
+      </div>
+
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[25%]">Cuenta</TableHead>
+              <TableHead className="w-[35%]">Descripción</TableHead>
+              <TableHead className="w-[12%]">Centro Costo</TableHead>
+              <TableHead className="w-[12%] text-right">Debe</TableHead>
+              <TableHead className="w-[12%] text-right">Haber</TableHead>
+              <TableHead className="w-[4%]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {detailLines.map((line) => {
+              const account = accounts.find(a => a.id === line.account_id);
+              const isActive = activeLineId === line.id;
+
+              return (
+                <TableRow
+                  key={line.id}
+                  className={cn("cursor-pointer transition-colors", isActive ? "bg-primary/5 border-l-4 border-l-primary" : "hover:bg-[hsl(var(--table-row-hover))] border-l-4 border-l-transparent")}
+                  onClick={() => setActiveLineId(line.id)}
+                >
+                  <TableCell className="py-1">
+                    {isActive ? (
+                      <Popover
+                        open={accountPopoverOpen[line.id] || false}
+                        onOpenChange={(open) => {
+                          setAccountPopoverOpen(prev => ({ ...prev, [line.id]: open }));
+                          if (!open) setAccountSearch(prev => ({ ...prev, [line.id]: "" }));
+                        }}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-9 max-w-[280px]">
+                            <span className="truncate">
+                              {line.account_id ? (() => { const a = accounts.find(x => x.id === line.account_id); return a ? `${a.account_code} - ${a.account_name}` : "Seleccionar"; })() : "Seleccionar"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command shouldFilter={false}>
+                            <CommandInput placeholder="Buscar cuenta..." value={accountSearch[line.id] || ""} onValueChange={(v) => setAccountSearch(prev => ({ ...prev, [line.id]: v }))} />
+                            <CommandList>
+                              <CommandEmpty>No se encontró la cuenta.</CommandEmpty>
+                              <CommandGroup>
+                                <ScrollArea className="h-[300px]">
+                                  {accounts.filter(acc => { const s = (accountSearch[line.id] || "").toLowerCase(); return !s || `${acc.account_code} ${acc.account_name}`.toLowerCase().includes(s); })
+                                    .map((acc) => (
+                                      <CommandItem key={acc.id} value={`${acc.account_code} ${acc.account_name}`} onSelect={() => { onUpdateLine(line.id, "account_id" as keyof DetailLine, acc.id as any); setAccountSearch(prev => ({ ...prev, [line.id]: "" })); setAccountPopoverOpen(prev => ({ ...prev, [line.id]: false })); }}>
+                                        <Check className={cn("mr-2 h-4 w-4", line.account_id === acc.id ? "opacity-100" : "opacity-0")} />
+                                        {acc.account_code} - {acc.account_name}
+                                      </CommandItem>
+                                    ))}
+                                </ScrollArea>
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span className="text-sm px-1 truncate block max-w-[280px]" title={account ? `${account.account_code} - ${account.account_name}` : ''}>
+                        {account ? `${account.account_code} - ${account.account_name}` : <span className="text-muted-foreground">Seleccionar</span>}
+                      </span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="py-1">
+                    {isActive ? (
+                      <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9" />
+                    ) : (
+                      <span className="text-sm px-1 truncate block" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="py-1">
+                    {isActive ? (
+                      <Input value={line.cost_center} onChange={(e) => onUpdateLine(line.id, "cost_center", e.target.value)} placeholder={account?.requires_cost_center ? "Requerido" : "Opcional"} className={cn("h-9", account?.requires_cost_center ? "border-warning" : "")} />
+                    ) : (
+                      <span className={cn("text-sm px-1", account?.requires_cost_center && !line.cost_center ? "text-warning" : "")}>{line.cost_center || <span className="text-muted-foreground">-</span>}</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="py-1">
+                    {isActive ? (
+                      <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono" />
+                    ) : (
+                      <span className={cn("text-sm font-mono text-right block px-1", line.debit_amount > 0 ? "font-medium" : "text-muted-foreground")}>{line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="py-1">
+                    {isActive ? (
+                      <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab' && !e.shiftKey) {
+                            const idx = detailLines.findIndex(l => l.id === line.id);
+                            const next = detailLines[idx + 1];
+                            if (next) { e.preventDefault(); setActiveLineId(next.id); setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [next.id]: true })), 50); }
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className={cn("text-sm font-mono text-right block px-1", line.credit_amount > 0 ? "font-medium" : "text-muted-foreground")}>{line.credit_amount > 0 ? formatCurrency(line.credit_amount) : "-"}</span>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="py-1">
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemoveLine(line.id); }} disabled={detailLines.length <= 2} className="h-8 w-8 p-0">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+
+            <TableRow>
+              <TableCell colSpan={4} className="text-right font-semibold">Totales:</TableCell>
+              <TableCell className="font-semibold">{formatCurrency(totalDebit)}</TableCell>
+              <TableCell className="font-semibold">{formatCurrency(totalCredit)}</TableCell>
+              <TableCell></TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      {!isBalanced && totalDebit > 0 && (
+        <p className="text-sm text-destructive mt-2">⚠️ La partida no está balanceada. Diferencia: {formatCurrency(Math.abs(totalDebit - totalCredit))}</p>
+      )}
+      {isBalanced && totalDebit > 0 && (
+        <p className="text-sm text-success mt-2">✓ Partida balanceada correctamente</p>
+      )}
+    </div>
+  );
+}
