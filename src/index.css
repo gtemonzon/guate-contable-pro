@@ -20,9 +20,9 @@ All colors MUST be HSL.
     --popover-foreground: 240 5% 10%;
 
     /* Institutional Blue (#2563eb) */
-    --primary: 258 89% 66%;
-    --primary-foreground: 250 100% 97%;
-    --primary-hover: 217 91% 55%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 217 91% 50%;
 
     /* Subtle backgrounds */
     --secondary: 240 5% 33%;
@@ -46,7 +46,7 @@ All colors MUST be HSL.
 
     --border: 240 4% 83%;
     --input: 240 4% 83%;
-    --ring: 258 89% 66%;
+    --ring: 217 91% 60%;
 
     --radius: 0.5rem;
 
