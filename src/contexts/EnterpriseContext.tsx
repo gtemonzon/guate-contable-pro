@@ -21,6 +21,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 
 export interface EnterpriseOption {
   id: number;
@@ -51,6 +52,7 @@ const LS_KEY = "currentEnterpriseId";
 
 export function EnterpriseProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { currentTenant, isSuperAdmin } = useTenant();
   const [enterprises, setEnterprises] = useState<EnterpriseOption[]>([]);
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,12 +99,18 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data: ents, error: entsError } = await supabase
+      let query = supabase
         .from("tab_enterprises")
         .select("id, business_name, trade_name, nit, is_active, tax_regime")
         .in("id", ids)
-        .eq("is_active", true)
-        .order("business_name");
+        .eq("is_active", true);
+
+      // For super admins, filter by the currently selected tenant
+      if (isSuperAdmin && currentTenant?.id) {
+        query = query.eq("tenant_id", currentTenant.id);
+      }
+
+      const { data: ents, error: entsError } = await query.order("business_name");
 
       if (entsError) throw entsError;
 
@@ -147,7 +155,7 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [persist]);
+  }, [persist, isSuperAdmin, currentTenant?.id]);
 
   const switchEnterprise = useCallback(async (enterpriseId: number) => {
     setSelectedEnterpriseId(enterpriseId);
@@ -170,7 +178,7 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
     await loadEnterprises();
   }, [loadEnterprises]);
 
-  // Load on mount and on auth state changes
+  // Reload on mount, auth changes, or tenant switch
   useEffect(() => {
     loadEnterprises();
 
@@ -186,7 +194,7 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [loadEnterprises, persist]);
+  }, [loadEnterprises, persist, currentTenant?.id]);
 
   return (
     <EnterpriseContext.Provider
