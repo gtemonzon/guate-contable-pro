@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { getNextEntryNumber, findNextAvailableNumber } from "@/utils/journalEntryNumbering";
+import { previewNextEntryNumber, allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 
@@ -174,7 +174,7 @@ export function useJournalEntryForm(
         const match = periodsData.find(p => defaultDate >= p.start_date && defaultDate <= p.end_date);
         setPeriodId(match ? match.id : periodsData[0].id);
       }
-      const nextNumber = await getNextEntryNumber(enterpriseId, entryType, entryDate);
+      const nextNumber = await previewNextEntryNumber(enterpriseId, entryType, entryDate);
       setNextEntryNumber(nextNumber);
     } catch (error: any) {
       toast({ title: "Error al cargar datos", description: getSafeErrorMessage(error), variant: "destructive" });
@@ -271,7 +271,7 @@ export function useJournalEntryForm(
     if (!open || entryToEdit || !entryDate || !entryType) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
-    getNextEntryNumber(enterpriseId, entryType, entryDate)
+    previewNextEntryNumber(enterpriseId, entryType, entryDate)
       .then(setNextEntryNumber)
       .catch(console.error);
   }, [open, entryToEdit, entryType, entryDate]);
@@ -539,12 +539,9 @@ export function useJournalEntryForm(
         if (insertError) throw insertError;
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
       } else {
-        let finalEntryNumber = nextEntryNumber;
-        const { data: existing } = await supabase.from("tab_journal_entries").select("id").eq("enterprise_id", parseInt(enterpriseId)).eq("entry_number", finalEntryNumber).maybeSingle();
-        if (existing) {
-          finalEntryNumber = await findNextAvailableNumber(enterpriseId, nextEntryNumber, entryType, entryDate);
-          setNextEntryNumber(finalEntryNumber);
-        }
+        // Atomically allocate the entry number server-side
+        let finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
+        setNextEntryNumber(finalEntryNumber);
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,

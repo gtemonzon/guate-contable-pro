@@ -598,6 +598,30 @@ export type Database = {
           },
         ]
       }
+      journal_entry_counters: {
+        Row: {
+          enterprise_id: number
+          last_number: number
+          prefix: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          enterprise_id: number
+          last_number?: number
+          prefix: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          enterprise_id?: number
+          last_number?: number
+          prefix?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       tab_accounting_periods: {
         Row: {
           closed_at: string | null
@@ -2903,6 +2927,14 @@ export type Database = {
       }
     }
     Functions: {
+      allocate_journal_entry_number: {
+        Args: {
+          p_enterprise_id: number
+          p_entry_date: string
+          p_entry_type: string
+        }
+        Returns: string
+      }
       assert_tenant_context: { Args: never; Returns: undefined }
       can_access_tenant: {
         Args: { check_tenant_id: number; user_uuid: string }
@@ -3151,6 +3183,14 @@ export type Database = {
       is_tenant_admin_for_bypass: {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean
+      }
+      preview_next_entry_number: {
+        Args: {
+          p_enterprise_id: number
+          p_entry_date: string
+          p_entry_type: string
+        }
+        Returns: string
       }
       user_is_linked_to_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
