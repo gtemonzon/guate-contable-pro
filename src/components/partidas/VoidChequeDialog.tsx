@@ -159,10 +159,10 @@ export default function VoidChequeDialog({
 
         if (detailsInsertError) throw detailsInsertError;
 
-        // 5. Create VOID bank document linked to both entries
+        // 5. Upsert VOID bank document linked to both entries (idempotent)
         const { error: docError } = await supabase
           .from("tab_bank_documents")
-          .insert({
+          .upsert({
             enterprise_id: enterpriseId,
             bank_account_id: bankAccountId,
             document_number: documentNumber,
@@ -175,7 +175,7 @@ export default function VoidChequeDialog({
             void_reason: reason,
             journal_entry_id: entry!.id,
             reversal_journal_entry_id: reversalEntry.id,
-          } as any);
+          }, { onConflict: "enterprise_id,bank_account_id,document_number" });
 
         if (docError) throw docError;
 
@@ -184,10 +184,10 @@ export default function VoidChequeDialog({
           description: `Se creó la partida de reversión ${reversalEntryNumber} y se registró el cheque ${documentNumber} como ANULADO.`,
         });
       } else {
-        // ─── Not posted: just create VOID bank document (no accounting entry) ───
+        // ─── Not posted: upsert VOID bank document (idempotent) ───
         const { error: docError } = await supabase
           .from("tab_bank_documents")
-          .insert({
+          .upsert({
             enterprise_id: enterpriseId,
             bank_account_id: bankAccountId,
             document_number: documentNumber,
@@ -199,7 +199,7 @@ export default function VoidChequeDialog({
             void_date: new Date().toISOString().split("T")[0],
             void_reason: reason,
             journal_entry_id: entry?.id ?? null,
-          } as any);
+          }, { onConflict: "enterprise_id,bank_account_id,document_number" });
 
         if (docError) throw docError;
 
