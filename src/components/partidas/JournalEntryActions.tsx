@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban } from "lucide-react";
 import type { EntryStatus } from "./useJournalEntryForm";
 
 interface JournalEntryActionsProps {
@@ -11,9 +11,13 @@ interface JournalEntryActionsProps {
   isReadOnly: boolean;
   canCreateEntries: boolean;
   canPostEntries: boolean;
+  hasBankAccount: boolean;
+  hasBankReference: boolean;
+  totalDebit: number;
   onCancel: () => void;
   onSaveDraft: () => void;
   onPost: () => void;
+  onVoidCheque: () => void;
   auditInfo: { createdBy: string | null; createdAt: string | null; updatedBy: string | null; updatedAt: string | null; } | null;
   formatDateTime: (d: string | null) => string;
 }
@@ -31,8 +35,11 @@ const modKey = isMac ? "⌘" : "Ctrl";
 
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
-  onCancel, onSaveDraft, onPost, auditInfo, formatDateTime,
+  hasBankAccount, hasBankReference, totalDebit,
+  onCancel, onSaveDraft, onPost, onVoidCheque, auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
+  // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
+  const showVoidCheque = hasBankAccount && hasBankReference;
   return (
     <>
       {entryToEdit && auditInfo && (
@@ -65,6 +72,13 @@ export function JournalEntryActions({
           )}
 
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
+
+          {showVoidCheque && !isReadOnly && (
+            <Button variant="outline" onClick={onVoidCheque} disabled={loading} className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/20">
+              <Ban className="mr-2 h-4 w-4" />
+              Anular Cheque
+            </Button>
+          )}
 
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
