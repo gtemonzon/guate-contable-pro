@@ -1938,6 +1938,9 @@ export type Database = {
           is_bank_line: boolean
           journal_entry_id: number | null
           line_number: number
+          source_id: number | null
+          source_ref: string | null
+          source_type: string | null
         }
         Insert: {
           account_id?: number | null
@@ -1951,6 +1954,9 @@ export type Database = {
           is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number: number
+          source_id?: number | null
+          source_ref?: string | null
+          source_type?: string | null
         }
         Update: {
           account_id?: number | null
@@ -1964,6 +1970,9 @@ export type Database = {
           is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number?: number
+          source_id?: number | null
+          source_ref?: string | null
+          source_type?: string | null
         }
         Relationships: [
           {

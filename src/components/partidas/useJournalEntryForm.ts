@@ -35,6 +35,9 @@ export interface DetailLine {
   debit_amount: number;
   credit_amount: number;
   is_bank_line?: boolean;
+  source_type?: string | null;
+  source_id?: number | null;
+  source_ref?: string | null;
 }
 
 export interface AuditInfo {
@@ -220,6 +223,7 @@ export function useJournalEntryForm(
         id: crypto.randomUUID(), account_id: d.account_id, description: d.description || "",
         cost_center: d.cost_center || "", debit_amount: d.debit_amount, credit_amount: d.credit_amount,
         is_bank_line: d.is_bank_line || false,
+        source_type: d.source_type || null, source_id: d.source_id || null, source_ref: d.source_ref || null,
       }));
 
       // Legacy fix: if bank_account_id is set but no bank line exists, create one
@@ -472,6 +476,7 @@ export function useJournalEntryForm(
             description: l.description || headerDescription, cost_center: l.cost_center || null,
             debit_amount: l.debit_amount, credit_amount: l.credit_amount,
             is_bank_line: l.is_bank_line || false,
+            source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
           } as any))
         );
         if (insertError) throw insertError;
@@ -497,6 +502,7 @@ export function useJournalEntryForm(
             description: l.description || headerDescription, cost_center: l.cost_center || null,
             debit_amount: l.debit_amount, credit_amount: l.credit_amount,
             is_bank_line: l.is_bank_line || false,
+            source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
           } as any))
         );
         if (detailsError) throw detailsError;
