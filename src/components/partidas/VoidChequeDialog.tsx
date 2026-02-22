@@ -86,6 +86,18 @@ export default function VoidChequeDialog({
     try {
       setLoading(true);
 
+      // Resolve the tab_bank_accounts.id from the GL account id (bankAccountId is a tab_accounts.id)
+      let resolvedBankAccountId: number | null = null;
+      if (bankAccountId) {
+        const { data: bankAcct } = await supabase
+          .from("tab_bank_accounts")
+          .select("id")
+          .eq("account_id", bankAccountId)
+          .eq("enterprise_id", enterpriseId!)
+          .maybeSingle();
+        resolvedBankAccountId = bankAcct?.id ?? null;
+      }
+
       if (isPosted) {
         // ─── Posted entry: create reversal + void document ───
         // 1. Fetch original details
@@ -117,7 +129,7 @@ export default function VoidChequeDialog({
         }
         const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
 
-        // 3. Create reversal entry
+        // 3. Create reversal entry (is_balanced is GENERATED, do not pass it)
         const { data: reversalEntry, error: reversalError } = await supabase
           .from("tab_journal_entries")
           .insert({
@@ -128,7 +140,6 @@ export default function VoidChequeDialog({
             description: `ANULACIÓN CHEQUE: ${documentNumber} - ${reason}`,
             total_debit: entry!.total_credit,
             total_credit: entry!.total_debit,
-            is_balanced: true,
             is_posted: false,
             status: "borrador",
             document_reference: `REF: ${entry!.entry_number}`,
@@ -163,8 +174,8 @@ export default function VoidChequeDialog({
         const { error: docError } = await supabase
           .from("tab_bank_documents")
           .upsert({
-            enterprise_id: enterpriseId,
-            bank_account_id: bankAccountId,
+            enterprise_id: enterpriseId!,
+            bank_account_id: resolvedBankAccountId,
             document_number: documentNumber,
             direction: direction,
             document_date: docDate,
@@ -188,8 +199,8 @@ export default function VoidChequeDialog({
         const { error: docError } = await supabase
           .from("tab_bank_documents")
           .upsert({
-            enterprise_id: enterpriseId,
-            bank_account_id: bankAccountId,
+            enterprise_id: enterpriseId!,
+            bank_account_id: resolvedBankAccountId,
             document_number: documentNumber,
             direction: direction,
             document_date: docDate,
