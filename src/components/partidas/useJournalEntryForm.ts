@@ -409,13 +409,13 @@ export function useJournalEntryForm(
   const handlePurchasesPosted = (newLines: DetailLine[], purchases?: any[]) => {
     if (purchases) setLinkedPurchases(purchases);
     // Filter out any purchase-generated line that uses the bank GL account
-    // (the invariant will handle the bank line automatically)
     const filteredNewLines = bankAccountId
       ? newLines.filter(l => l.account_id !== bankAccountId)
       : newLines;
 
-    const nonEmpty = detailLines.filter(l => l.is_bank_line || l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
-    const otherLines = nonEmpty.filter(l => !l.is_bank_line);
+    // Remove any previous purchase-sourced lines to avoid duplicates on re-contabilizar
+    const nonPurchaseLines = detailLines.filter(l => l.is_bank_line || l.source_type !== 'PURCHASE');
+    const otherLines = nonPurchaseLines.filter(l => !l.is_bank_line && (l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0));
     const merged = otherLines.length === 0 ? filteredNewLines : [...otherLines, ...filteredNewLines];
 
     // Run invariant to ensure exactly one bank line with correct amount
@@ -533,6 +533,16 @@ export function useJournalEntryForm(
             is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
           } as any).eq("id", entry.id);
           if (postError) throw postError;
+        }
+        // Link any purchases saved by the modal to this new journal entry
+        if (linkedPurchases.length > 0) {
+          const purchaseIds = linkedPurchases.filter(p => p.id != null).map(p => p.id);
+          if (purchaseIds.length > 0) {
+            await supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: entry.id } as any)
+              .in("id", purchaseIds);
+          }
         }
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
       }

@@ -72,6 +72,8 @@ export default function LinkedPurchasesModal({
 }: LinkedPurchasesModalProps) {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [existingPurchaseIds, setExistingPurchaseIds] = useState<number[]>([]);
+  // Track DB-saved purchase IDs from modal contabilizar (for unsaved entries)
+  const [savedPurchaseIds, setSavedPurchaseIds] = useState<number[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
@@ -106,6 +108,9 @@ export default function LinkedPurchasesModal({
       } else if (externalPurchases && externalPurchases.length > 0) {
         // Restore from parent state (unsaved entry)
         setPurchases(externalPurchases);
+        // Also restore saved IDs from external purchases that have DB ids
+        const dbIds = externalPurchases.filter(p => p.id != null).map(p => p.id as number);
+        if (dbIds.length > 0) setSavedPurchaseIds(dbIds);
       } else if (purchases.length === 0) {
         addPurchase();
       }
@@ -114,7 +119,7 @@ export default function LinkedPurchasesModal({
 
   useEffect(() => {
     if (!open) {
-      // Don't clear purchases — parent owns the lifecycle
+      // Don't clear purchases or savedPurchaseIds — parent owns the lifecycle
       setExistingPurchaseIds([]);
       setEditingIndex(null);
       setDuplicateWarnings({});
@@ -468,12 +473,13 @@ export default function LinkedPurchasesModal({
         });
       }
 
-      // Delete old purchase records if editing
-      if (existingPurchaseIds.length > 0) {
+      // Delete old purchase records if editing (from DB-linked entries or previous contabilizar)
+      const idsToDelete = [...new Set([...existingPurchaseIds, ...savedPurchaseIds])];
+      if (idsToDelete.length > 0) {
         const { error: deleteError } = await supabase
           .from("tab_purchase_ledger")
           .delete()
-          .in("id", existingPurchaseIds);
+          .in("id", idsToDelete);
         if (deleteError) {
           console.error("Error deleting old purchases:", deleteError);
         }
@@ -533,16 +539,28 @@ export default function LinkedPurchasesModal({
         purchase_book_id: purchaseBookId,
       }));
 
-      const { error: purchaseError } = await supabase
+      const { data: insertedPurchases, error: purchaseError } = await supabase
         .from("tab_purchase_ledger")
-        .insert(purchasesToInsert);
+        .insert(purchasesToInsert)
+        .select("id");
 
       if (purchaseError) {
         console.error("Error saving purchases:", purchaseError);
         toast({ title: "Advertencia", description: "Las líneas contables se generaron pero hubo un error al guardar en el libro de compras: " + purchaseError.message, variant: "destructive" });
       }
 
-      onPurchasesPosted(generatedLines, purchases);
+      // Track saved IDs so re-contabilizar can delete them first
+      const newSavedIds = insertedPurchases?.map(p => p.id) ?? [];
+      setSavedPurchaseIds(newSavedIds);
+
+      // Update purchases with their DB ids for parent state
+      const purchasesWithIds = purchases.map((p, i) => ({
+        ...p,
+        id: newSavedIds[i] ?? p.id,
+        isNew: false,
+      }));
+
+      onPurchasesPosted(generatedLines, purchasesWithIds);
       const balanceNote = bankAccountId ? "" : " Seleccione una cuenta bancaria para balancear la partida.";
       toast({ title: "Facturas importadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
