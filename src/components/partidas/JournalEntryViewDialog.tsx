@@ -235,7 +235,7 @@ export default function JournalEntryViewDialog({
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col p-0">
         {/* Sticky collapsible header */}
         <div
-          className={`sticky top-0 z-10 flex flex-col px-6 pt-6 transition-all duration-200 ${
+          className={`sticky top-0 z-20 flex flex-col px-6 pt-6 transition-all duration-200 ${
             scrolled
               ? "pb-3 bg-muted/80 backdrop-blur-sm border-b shadow-sm"
               : "pb-0 bg-transparent"
