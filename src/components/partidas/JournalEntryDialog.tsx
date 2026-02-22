@@ -40,6 +40,7 @@ interface JournalEntryDialogProps {
     total_debit: number;
     total_credit: number;
     is_posted: boolean;
+    accounting_period_id?: number | null;
     status?: EntryStatus;
     rejection_reason?: string | null;
   } | null;
@@ -263,6 +264,7 @@ export default function JournalEntryDialog({
           total_debit: entryToEdit.total_debit,
           total_credit: entryToEdit.total_credit,
           is_posted: entryToEdit.is_posted,
+          accounting_period_id: entryToEdit.accounting_period_id,
           enterprise_id: selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0"),
           bank_account_id: form.bankAccountId,
           bank_reference: form.bankReference,

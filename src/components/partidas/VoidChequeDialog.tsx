@@ -30,6 +30,7 @@ interface VoidChequeDialogProps {
     total_credit: number;
     is_posted: boolean;
     enterprise_id?: number;
+    accounting_period_id?: number | null;
     bank_account_id?: number | null;
     bank_reference?: string;
     beneficiary_name?: string;
@@ -111,9 +112,9 @@ export default function VoidChequeDialog({
         if (detailsError) throw detailsError;
         if (!details || details.length === 0) throw new Error("La partida no tiene líneas de detalle");
 
-        // 2. Generate reversal entry number
-        const today = new Date();
-        const datePrefix = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+        // 2. Generate reversal entry number using original entry date (not today)
+        const originalDate = new Date(entry!.entry_date + "T00:00:00");
+        const datePrefix = `${originalDate.getFullYear()}${String(originalDate.getMonth() + 1).padStart(2, "0")}${String(originalDate.getDate()).padStart(2, "0")}`;
         const { data: existingReversals } = await supabase
           .from("tab_journal_entries")
           .select("entry_number")
@@ -129,13 +130,13 @@ export default function VoidChequeDialog({
         }
         const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
 
-        // 3. Create reversal entry (is_balanced is GENERATED, do not pass it)
+        // 3. Create reversal entry using original entry's date
         const { data: reversalEntry, error: reversalError } = await supabase
           .from("tab_journal_entries")
           .insert({
             enterprise_id: enterpriseId,
             entry_number: reversalEntryNumber,
-            entry_date: today.toISOString().split("T")[0],
+            entry_date: entry!.entry_date,
             entry_type: "ajuste",
             description: `ANULACIÓN CHEQUE: ${documentNumber} - ${reason}`,
             total_debit: entry!.total_credit,
@@ -146,6 +147,7 @@ export default function VoidChequeDialog({
             bank_account_id: bankAccountId,
             bank_reference: documentNumber,
             beneficiary_name: beneficiary,
+            accounting_period_id: entry!.accounting_period_id ?? null,
           })
           .select()
           .single();
@@ -182,7 +184,7 @@ export default function VoidChequeDialog({
             beneficiary_name: beneficiary,
             concept: `${concept} — ANULADO: ${reason}`,
             status: "VOID",
-            void_date: today.toISOString().split("T")[0],
+            void_date: entry!.entry_date,
             void_reason: reason,
             journal_entry_id: entry!.id,
             reversal_journal_entry_id: reversalEntry.id,

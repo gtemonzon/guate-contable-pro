@@ -56,6 +56,7 @@ interface EntryToEdit {
   total_debit: number;
   total_credit: number;
   is_posted: boolean;
+  accounting_period_id?: number | null;
   status?: EntryStatus;
   rejection_reason?: string | null;
 }
