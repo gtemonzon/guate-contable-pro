@@ -80,14 +80,14 @@ export function JournalEntryActions({
             </Button>
           )}
 
-          {canCreateEntries && !isReadOnly && (
+          {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
               <Save className="mr-2 h-4 w-4" />
               Guardar
             </Button>
           )}
 
-          {canPostEntries && !isReadOnly && (
+          {entryStatus !== 'contabilizado' && canPostEntries && !isReadOnly && (
             <Button onClick={onPost} disabled={loading || !isBalanced}>
               <CheckCircle className="mr-2 h-4 w-4" />
               Contabilizar
