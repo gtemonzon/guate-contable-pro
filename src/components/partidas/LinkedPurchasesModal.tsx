@@ -273,7 +273,8 @@ export default function LinkedPurchasesModal({
   };
 
   // In embedded mode data stays local until contabilizar.
-  // Clear isNew so the card transitions to compact read-only view.
+  // Auto-save just marks the record as no longer new (compact read-only).
+  // Does NOT clear editingIndex — that's handled by explicit save/cancel in PurchaseCard.
   const handleSave = (index: number) => {
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
@@ -283,7 +284,6 @@ export default function LinkedPurchasesModal({
       }
       return p;
     }));
-    setEditingIndex(null);
   };
 
   const checkDuplicate = async (index: number) => {
