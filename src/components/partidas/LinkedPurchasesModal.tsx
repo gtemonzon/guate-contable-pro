@@ -272,10 +272,18 @@ export default function LinkedPurchasesModal({
     }));
   };
 
-  // Save is a no-op in embedded mode (data stays local until contabilizar)
-  const handleSave = (_index: number) => {
-    // In embedded mode we don't auto-save to DB.
-    // Just clear the editing state.
+  // In embedded mode data stays local until contabilizar.
+  // Clear isNew so the card transitions to compact read-only view.
+  const handleSave = (index: number) => {
+    setPurchases(prev => prev.map((p, i) => {
+      if (i !== index) return p;
+      // Only clear isNew if the record has minimum data filled
+      if (p.supplier_nit.trim() && p.invoice_number.trim() && p.total_amount > 0) {
+        return { ...p, isNew: false };
+      }
+      return p;
+    }));
+    setEditingIndex(null);
   };
 
   const checkDuplicate = async (index: number) => {
