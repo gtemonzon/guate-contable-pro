@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
@@ -92,6 +92,10 @@ export default function Partidas() {
   const [filterYear, setFilterYear] = useState<string | null>(null);
   const [filterMonths, setFilterMonths] = useState<number[]>([]);
   
+  // Ordenamiento
+  const [sortField, setSortField] = useState<'date' | 'number'>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -156,8 +160,8 @@ export default function Partidas() {
 
   useEffect(() => {
     applyFilters();
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths]);
+    setCurrentPage(1);
+  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths, sortField, sortDir]);
 
   const fetchEntries = async (enterpriseId: string) => {
     try {
@@ -250,7 +254,28 @@ export default function Partidas() {
       });
     }
 
+    // Ordenamiento
+    filtered.sort((a, b) => {
+      let cmp: number;
+      if (sortField === 'date') {
+        cmp = a.entry_date.localeCompare(b.entry_date);
+        if (cmp === 0) cmp = a.entry_number.localeCompare(b.entry_number);
+      } else {
+        cmp = a.entry_number.localeCompare(b.entry_number);
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
     setFilteredEntries(filtered);
+  };
+
+  const toggleSort = (field: 'date' | 'number') => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
   };
 
   const clearFilters = () => {
@@ -295,36 +320,31 @@ export default function Partidas() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Sticky Header with Filters */}
-      <div className="sticky top-0 z-20 bg-background pt-6 pb-4 px-8 border-b shadow-sm">
-        <div className="flex justify-between items-center mb-4">
+      {/* Sticky Header — compact */}
+      <div className="sticky top-0 z-20 bg-muted/80 backdrop-blur-sm pt-4 pb-3 px-8 border-b">
+        <div className="flex justify-between items-center mb-3">
           <div>
-            <h1 className="text-3xl font-bold">Partidas Contables</h1>
-            <p className="text-muted-foreground">Gestiona el libro diario de la empresa</p>
+            <h1 className="text-2xl font-bold leading-tight">Partidas Contables</h1>
+            <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Indicador de partidas pendientes */}
+          <div className="flex items-center gap-3">
             {permissions.canApproveEntries && pendingReviewCount > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                  {pendingReviewCount} partida{pendingReviewCount > 1 ? 's' : ''} pendiente{pendingReviewCount > 1 ? 's' : ''} de revisión
-                </span>
-              </div>
+              <Badge variant="outline" className="border-amber-400 text-amber-600 dark:text-amber-400 gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {pendingReviewCount} pendiente{pendingReviewCount > 1 ? 's' : ''}
+              </Badge>
             )}
-            
             {permissions.canCreateEntries && (
-              <Button onClick={() => setShowEditDialog(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+              <Button size="sm" onClick={() => setShowEditDialog(true)}>
+                <Plus className="mr-1.5 h-4 w-4" />
                 Nueva Partida
               </Button>
             )}
           </div>
         </div>
 
-        {/* Compact Filter Bar */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Year/Month Quick Filter */}
+        {/* Filter Row */}
+        <div className="flex flex-wrap items-center gap-2">
           <YearMonthFilter
             entries={entries}
             selectedYear={filterYear}
@@ -333,11 +353,10 @@ export default function Partidas() {
             onMonthsChange={setFilterMonths}
           />
           
-          <div className="h-6 w-px bg-border" />
+          <div className="h-5 w-px bg-border" />
           
-          {/* Status Filter */}
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className="w-[140px] h-8 text-xs">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
@@ -350,9 +369,8 @@ export default function Partidas() {
             </SelectContent>
           </Select>
 
-          {/* Type Filter */}
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[130px] h-9">
+            <SelectTrigger className="w-[120px] h-8 text-xs">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -364,49 +382,64 @@ export default function Partidas() {
             </SelectContent>
           </Select>
 
-          {/* Number Search */}
           <Input
             placeholder="Buscar número..."
             value={filterNumber}
             onChange={(e) => setFilterNumber(e.target.value)}
-            className="w-[160px] h-9"
+            className="w-[140px] h-8 text-xs"
           />
 
           {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs px-2">
               Limpiar
             </Button>
           )}
 
           <div className="flex-1" />
-          
-          {/* Page Size & Count */}
-          <div className="flex items-center gap-2">
-            <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
-              <SelectTrigger className="w-[70px] h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10</SelectItem>
-                <SelectItem value="25">25</SelectItem>
-                <SelectItem value="50">50</SelectItem>
-                <SelectItem value="100">100</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
-              {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
-            </span>
+
+          {/* Sort selector */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant={sortField === 'date' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs px-2 gap-1"
+              onClick={() => toggleSort('date')}
+            >
+              Fecha
+              {sortField === 'date' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+            </Button>
+            <Button
+              variant={sortField === 'number' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs px-2 gap-1"
+              onClick={() => toggleSort('number')}
+            >
+              No.
+              {sortField === 'number' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+            </Button>
           </div>
+
+          <div className="h-5 w-px bg-border" />
+
+          <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+            <SelectTrigger className="w-[60px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-auto px-8 py-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Partidas Registradas</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <div className="flex-1 overflow-auto px-8 py-4">
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
           ) : filteredEntries.length === 0 ? (
@@ -595,8 +628,6 @@ export default function Partidas() {
               )}
             </>
           )}
-        </CardContent>
-      </Card>
       </div>
 
       <JournalEntryDialog
