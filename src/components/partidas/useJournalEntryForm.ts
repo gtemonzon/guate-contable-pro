@@ -6,6 +6,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { previewNextEntryNumber, allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
+import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
 
 export type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -291,97 +292,26 @@ export function useJournalEntryForm(
       });
   }, [open, bankAccountId]);
 
-  // ─── Auto Bank Line Management ─────────────────────────────────────
-  // When bankAccountId changes: create or remove bank line
+  // ─── Auto Bank Line Management (single invariant) ──────────────────
+  // Enforce exactly one bank line whenever bankAccountId, bankDirection, or non-bank line amounts change
   useEffect(() => {
     if (!open || isLoadingEntry) return;
 
     setDetailLines(prev => {
-      if (!bankAccountId) {
-        // Remove bank line when bank is cleared
-        const withoutBank = prev.filter(l => !l.is_bank_line);
-        return withoutBank.length >= 2 ? withoutBank : [
-          ...withoutBank,
-          ...Array.from({ length: 2 - withoutBank.length }, () => ({
-            id: crypto.randomUUID(), account_id: null, description: "", cost_center: "",
-            debit_amount: 0, credit_amount: 0,
-          })),
-        ];
-      }
-
-      const existingBankLine = prev.find(l => l.is_bank_line);
-      if (existingBankLine) {
-        // Update account if bank changed
-        if (existingBankLine.account_id !== bankAccountId) {
-          return prev.map(l => l.is_bank_line ? { ...l, account_id: bankAccountId } : l);
-        }
+      const next = enforceBankLineInvariant(prev, bankAccountId, bankDirection);
+      // Cheap identity check to avoid infinite loops
+      if (next.length === prev.length && next.every((l, i) =>
+        l.id === prev[i].id &&
+        l.account_id === prev[i].account_id &&
+        l.debit_amount === prev[i].debit_amount &&
+        l.credit_amount === prev[i].credit_amount &&
+        l.is_bank_line === prev[i].is_bank_line
+      )) {
         return prev;
       }
-
-      // Create new bank line
-      return [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          account_id: bankAccountId,
-          description: "Banco (auto)",
-          cost_center: "",
-          debit_amount: 0,
-          credit_amount: 0,
-          is_bank_line: true,
-        },
-      ];
+      return next;
     });
-  }, [bankAccountId, open, isLoadingEntry]);
-
-  // When bankDirection or other lines change: recalculate bank line amount
-  useEffect(() => {
-    if (!open || isLoadingEntry || !bankAccountId) return;
-
-    setDetailLines(prev => {
-      const bankLineIdx = prev.findIndex(l => l.is_bank_line);
-      if (bankLineIdx === -1) return prev;
-
-      // Sum non-bank lines
-      const otherDebits = prev.filter(l => !l.is_bank_line).reduce((s, l) => s + (l.debit_amount || 0), 0);
-      const otherCredits = prev.filter(l => !l.is_bank_line).reduce((s, l) => s + (l.credit_amount || 0), 0);
-      const diff = Math.round((otherDebits - otherCredits) * 100) / 100;
-
-      let newDebit = 0;
-      let newCredit = 0;
-
-      if (bankDirection === 'OUT') {
-        // Salida: bank goes to credit (money leaving)
-        if (diff > 0) {
-          newCredit = diff;
-        } else if (diff < 0) {
-          // Other lines have more credit than debit, bank must debit to balance
-          newDebit = Math.abs(diff);
-        }
-      } else {
-        // Entrada: bank goes to debit (money entering)
-        if (diff < 0) {
-          newDebit = Math.abs(diff);
-        } else if (diff > 0) {
-          newCredit = diff;
-        }
-      }
-
-      const bankLine = prev[bankLineIdx];
-      if (bankLine.debit_amount === newDebit && bankLine.credit_amount === newCredit && bankLine.account_id === bankAccountId) {
-        return prev;
-      }
-
-      const updated = [...prev];
-      updated[bankLineIdx] = {
-        ...bankLine,
-        account_id: bankAccountId,
-        debit_amount: newDebit,
-        credit_amount: newCredit,
-      };
-      return updated;
-    });
-  }, [bankDirection, bankAccountId, open, isLoadingEntry, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}`).join(',')]);
+  }, [bankAccountId, bankDirection, open, isLoadingEntry, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}-${l.account_id}`).join(',')]);
 
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
@@ -457,11 +387,19 @@ export function useJournalEntryForm(
   };
 
   const handlePurchasesPosted = (newLines: DetailLine[]) => {
+    // Filter out any purchase-generated line that uses the bank GL account
+    // (the invariant will handle the bank line automatically)
+    const filteredNewLines = bankAccountId
+      ? newLines.filter(l => l.account_id !== bankAccountId)
+      : newLines;
+
     const nonEmpty = detailLines.filter(l => l.is_bank_line || l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
-    const bankLine = nonEmpty.find(l => l.is_bank_line);
     const otherLines = nonEmpty.filter(l => !l.is_bank_line);
-    const combined = otherLines.length === 0 ? newLines : [...otherLines, ...newLines];
-    setDetailLines(bankLine ? [...combined, bankLine] : combined);
+    const merged = otherLines.length === 0 ? filteredNewLines : [...otherLines, ...filteredNewLines];
+
+    // Run invariant to ensure exactly one bank line with correct amount
+    const enforced = enforceBankLineInvariant(merged, bankAccountId, bankDirection);
+    setDetailLines(enforced);
   };
 
   const validateEntry = () => {
