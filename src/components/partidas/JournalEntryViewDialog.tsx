@@ -144,7 +144,14 @@ export default function JournalEntryViewDialog({
             if (d.source_ref) {
               d.source_ref.split(",").forEach((ref: string) => {
                 const cleaned = ref.trim().replace(/^FACT\s+/i, "");
-                if (cleaned) invoiceNumbers.add(cleaned);
+                if (cleaned) {
+                  invoiceNumbers.add(cleaned);
+                  // Also add the part after the last hyphen (series-number format)
+                  const lastHyphen = cleaned.lastIndexOf("-");
+                  if (lastHyphen > 0) {
+                    invoiceNumbers.add(cleaned.substring(lastHyphen + 1));
+                  }
+                }
               });
             }
           });
@@ -258,7 +265,6 @@ export default function JournalEntryViewDialog({
                     </Badge>
                   </TabsTrigger>
                 )}
-                <TabsTrigger value="historial">Historial</TabsTrigger>
                 <TabsTrigger value="auditoria">Auditoría</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -445,13 +451,6 @@ export default function JournalEntryViewDialog({
                   </div>
                 </TabsContent>
               )}
-
-              <TabsContent value="historial">
-                <JournalEntryHistoryTimeline
-                  entryId={entryId}
-                  visible={activeTab === "historial"}
-                />
-              </TabsContent>
 
               <TabsContent value="auditoria">
                 <EntityAuditLog
