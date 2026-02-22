@@ -58,16 +58,8 @@ export function AccountCombobox({
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <Command
-          onKeyDown={(e) => {
-            // Allow Enter to select the highlighted item and close
-            if (e.key === "Enter") {
-              // cmdk handles selection internally; just ensure popover closes after
-              setTimeout(() => setOpen(false), 0);
-            }
-          }}
-        >
+      <PopoverContent className="w-[400px] p-0" align="start">
+        <Command>
           <CommandInput placeholder="Buscar cuenta..." className="h-9" />
           <CommandEmpty>No se encontró cuenta.</CommandEmpty>
           <CommandGroup className="max-h-[300px] overflow-auto">
