@@ -5,6 +5,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { getNextEntryNumber, findNextAvailableNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
+import type { BankDirection } from "./JournalEntryBankSection";
 
 export type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -32,6 +33,7 @@ export interface DetailLine {
   cost_center: string;
   debit_amount: number;
   credit_amount: number;
+  is_bank_line?: boolean;
 }
 
 export interface AuditInfo {
@@ -77,6 +79,7 @@ export function useJournalEntryForm(
   const [bankAccountId, setBankAccountId] = useState<number | null>(null);
   const [bankReference, setBankReference] = useState("");
   const [beneficiaryName, setBeneficiaryName] = useState("");
+  const [bankDirection, setBankDirection] = useState<BankDirection>('OUT');
 
   // Lines
   const [detailLines, setDetailLines] = useState<DetailLine[]>([
@@ -125,7 +128,7 @@ export function useJournalEntryForm(
   const resetFormForEdit = () => {
     setNextEntryNumber(""); setEntryDate(""); setEntryType(""); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setDetailLines([]);
+    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
   };
@@ -143,7 +146,7 @@ export function useJournalEntryForm(
     });
     setEntryDate(freshDate); setEntryType("diario"); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setDetailLines(freshLines);
+    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
   };
@@ -202,6 +205,7 @@ export function useJournalEntryForm(
       setBankAccountId(entry.bank_account_id || null);
       setBankReference(entry.bank_reference || "");
       setBeneficiaryName(entry.beneficiary_name || "");
+      setBankDirection((entry as any).bank_direction || 'OUT');
 
       if (entry.accounting_period_id) {
         const { data: periodData } = await supabase.from('tab_accounting_periods').select('status').eq('id', entry.accounting_period_id).single();
@@ -211,10 +215,26 @@ export function useJournalEntryForm(
         }
       }
 
-      const lines: DetailLine[] = details.map((d) => ({
+      const lines: DetailLine[] = details.map((d: any) => ({
         id: crypto.randomUUID(), account_id: d.account_id, description: d.description || "",
         cost_center: d.cost_center || "", debit_amount: d.debit_amount, credit_amount: d.credit_amount,
+        is_bank_line: d.is_bank_line || false,
       }));
+
+      // Legacy fix: if bank_account_id is set but no bank line exists, create one
+      if (entry.bank_account_id && !lines.some(l => l.is_bank_line)) {
+        const dir = (entry as any).bank_direction || 'OUT';
+        lines.push({
+          id: crypto.randomUUID(),
+          account_id: entry.bank_account_id,
+          description: "Banco (auto)",
+          cost_center: "",
+          debit_amount: 0,
+          credit_amount: 0,
+          is_bank_line: true,
+        });
+      }
+
       initialSnapshotRef.current = serializeForDirtyCheck({
         entryDate: entry.entry_date, entryType: entry.entry_type, periodId: entry.accounting_period_id,
         documentReference: entry.document_reference || "", headerDescription: entry.description,
@@ -271,9 +291,101 @@ export function useJournalEntryForm(
       });
   }, [open, bankAccountId]);
 
+  // ─── Auto Bank Line Management ─────────────────────────────────────
+  // When bankAccountId changes: create or remove bank line
+  useEffect(() => {
+    if (!open || isLoadingEntry) return;
+
+    setDetailLines(prev => {
+      if (!bankAccountId) {
+        // Remove bank line when bank is cleared
+        const withoutBank = prev.filter(l => !l.is_bank_line);
+        return withoutBank.length >= 2 ? withoutBank : [
+          ...withoutBank,
+          ...Array.from({ length: 2 - withoutBank.length }, () => ({
+            id: crypto.randomUUID(), account_id: null, description: "", cost_center: "",
+            debit_amount: 0, credit_amount: 0,
+          })),
+        ];
+      }
+
+      const existingBankLine = prev.find(l => l.is_bank_line);
+      if (existingBankLine) {
+        // Update account if bank changed
+        if (existingBankLine.account_id !== bankAccountId) {
+          return prev.map(l => l.is_bank_line ? { ...l, account_id: bankAccountId } : l);
+        }
+        return prev;
+      }
+
+      // Create new bank line
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          account_id: bankAccountId,
+          description: "Banco (auto)",
+          cost_center: "",
+          debit_amount: 0,
+          credit_amount: 0,
+          is_bank_line: true,
+        },
+      ];
+    });
+  }, [bankAccountId, open, isLoadingEntry]);
+
+  // When bankDirection or other lines change: recalculate bank line amount
+  useEffect(() => {
+    if (!open || isLoadingEntry || !bankAccountId) return;
+
+    setDetailLines(prev => {
+      const bankLineIdx = prev.findIndex(l => l.is_bank_line);
+      if (bankLineIdx === -1) return prev;
+
+      // Sum non-bank lines
+      const otherDebits = prev.filter(l => !l.is_bank_line).reduce((s, l) => s + (l.debit_amount || 0), 0);
+      const otherCredits = prev.filter(l => !l.is_bank_line).reduce((s, l) => s + (l.credit_amount || 0), 0);
+      const diff = Math.round((otherDebits - otherCredits) * 100) / 100;
+
+      let newDebit = 0;
+      let newCredit = 0;
+
+      if (bankDirection === 'OUT') {
+        // Salida: bank goes to credit (money leaving)
+        if (diff > 0) {
+          newCredit = diff;
+        } else if (diff < 0) {
+          // Other lines have more credit than debit, bank must debit to balance
+          newDebit = Math.abs(diff);
+        }
+      } else {
+        // Entrada: bank goes to debit (money entering)
+        if (diff < 0) {
+          newDebit = Math.abs(diff);
+        } else if (diff > 0) {
+          newCredit = diff;
+        }
+      }
+
+      const bankLine = prev[bankLineIdx];
+      if (bankLine.debit_amount === newDebit && bankLine.credit_amount === newCredit && bankLine.account_id === bankAccountId) {
+        return prev;
+      }
+
+      const updated = [...prev];
+      updated[bankLineIdx] = {
+        ...bankLine,
+        account_id: bankAccountId,
+        debit_amount: newDebit,
+        credit_amount: newCredit,
+      };
+      return updated;
+    });
+  }, [bankDirection, bankAccountId, open, isLoadingEntry, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}`).join(',')]);
+
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
-      setDetailLines(lines => lines.map(line => ({ ...line, description: line.description === "" ? headerDescription : line.description })));
+      setDetailLines(lines => lines.map(line => line.is_bank_line ? line : ({ ...line, description: line.description === "" ? headerDescription : line.description })));
     }
   }, [headerDescription, entryToEdit]);
 
@@ -293,44 +405,83 @@ export function useJournalEntryForm(
 
   const addLine = () => {
     const newLineId = crypto.randomUUID();
-    setDetailLines(prev => [...prev, { id: newLineId, account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 }]);
+    setDetailLines(prev => {
+      // Insert before bank line if it exists
+      const bankIdx = prev.findIndex(l => l.is_bank_line);
+      const newLine: DetailLine = { id: newLineId, account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 };
+      if (bankIdx !== -1) {
+        const copy = [...prev];
+        copy.splice(bankIdx, 0, newLine);
+        return copy;
+      }
+      return [...prev, newLine];
+    });
     setActiveLineId(newLineId);
     setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [newLineId]: true })), 50);
   };
 
   const removeLine = (id: string) => {
-    if (detailLines.length <= 2) {
-      toast({ title: "Mínimo 2 líneas", description: "Una partida debe tener al menos 2 líneas de detalle", variant: "destructive" });
+    const line = detailLines.find(l => l.id === id);
+    if (line?.is_bank_line) {
+      toast({ title: "Línea protegida", description: "La línea bancaria se gestiona automáticamente. Para eliminarla, quite la cuenta bancaria del encabezado.", variant: "destructive" });
+      return;
+    }
+    const nonBankLines = detailLines.filter(l => !l.is_bank_line);
+    if (nonBankLines.length <= 1) {
+      toast({ title: "Mínimo requerido", description: "Debe haber al menos 1 línea de detalle además de la línea bancaria.", variant: "destructive" });
       return;
     }
     setDetailLines(detailLines.filter(l => l.id !== id));
   };
 
   const updateLine = (id: string, field: keyof DetailLine, value: any) => {
+    const line = detailLines.find(l => l.id === id);
+    // Protect bank line from account changes
+    if (line?.is_bank_line && field === 'account_id') return;
+
     setDetailLines(lines => {
       const updated = lines.map(l => l.id === id ? { ...l, [field]: value } : l);
       const idx = updated.findIndex(l => l.id === id);
-      if (idx === updated.length - 1 && (field === "debit_amount" || field === "credit_amount") && value > 0) {
-        updated.push({ id: crypto.randomUUID(), account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 });
+      if (idx === updated.length - 1 && !updated[idx].is_bank_line && (field === "debit_amount" || field === "credit_amount") && value > 0) {
+        // Insert new line before bank line
+        const bankIdx = updated.findIndex(l => l.is_bank_line);
+        const newLine: DetailLine = { id: crypto.randomUUID(), account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 };
+        if (bankIdx !== -1) {
+          updated.splice(bankIdx, 0, newLine);
+        } else {
+          updated.push(newLine);
+        }
       }
       return updated;
     });
   };
 
   const handlePurchasesPosted = (newLines: DetailLine[]) => {
-    const nonEmpty = detailLines.filter(l => l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
-    setDetailLines(nonEmpty.length === 0 ? newLines : [...nonEmpty, ...newLines]);
+    const nonEmpty = detailLines.filter(l => l.is_bank_line || l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
+    const bankLine = nonEmpty.find(l => l.is_bank_line);
+    const otherLines = nonEmpty.filter(l => !l.is_bank_line);
+    const combined = otherLines.length === 0 ? newLines : [...otherLines, ...newLines];
+    setDetailLines(bankLine ? [...combined, bankLine] : combined);
   };
 
   const validateEntry = () => {
     if (!headerDescription.trim()) { toast({ title: "Descripción requerida", description: "Debes ingresar una descripción general", variant: "destructive" }); return false; }
     if (!periodId) { toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" }); return false; }
+
+    // Bank validation
+    if (bankAccountId) {
+      const bankLines = detailLines.filter(l => l.is_bank_line);
+      if (bankLines.length !== 1) { toast({ title: "Error en línea bancaria", description: "Debe existir exactamente una línea bancaria cuando hay cuenta bancaria seleccionada.", variant: "destructive" }); return false; }
+      const bl = bankLines[0];
+      if (bl.account_id !== bankAccountId) { toast({ title: "Error en línea bancaria", description: "La cuenta de la línea bancaria no coincide con la cuenta bancaria seleccionada.", variant: "destructive" }); return false; }
+    }
+
     const validLines = detailLines.filter(l => l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
     setDetailLines(validLines.length >= 2 ? validLines : detailLines);
     if (validLines.length < 2) { toast({ title: "Líneas insuficientes", description: "Una partida debe tener al menos 2 líneas de detalle", variant: "destructive" }); return false; }
     for (const line of validLines) {
       if (!line.account_id && (line.debit_amount > 0 || line.credit_amount > 0)) { toast({ title: "Cuenta requerida", description: "Hay líneas con monto que no tienen cuenta asignada", variant: "destructive" }); return false; }
-      if (line.account_id && line.debit_amount === 0 && line.credit_amount === 0) { toast({ title: "Monto requerido", description: "Hay líneas con cuenta asignada que no tienen monto", variant: "destructive" }); return false; }
+      if (line.account_id && line.debit_amount === 0 && line.credit_amount === 0 && !line.is_bank_line) { toast({ title: "Monto requerido", description: "Hay líneas con cuenta asignada que no tienen monto", variant: "destructive" }); return false; }
       const acc = accounts.find(a => a.id === line.account_id);
       if (acc?.requires_cost_center && !line.cost_center.trim()) { toast({ title: "Centro de costo requerido", description: `La cuenta ${acc.account_code} requiere centro de costo`, variant: "destructive" }); return false; }
       if (line.debit_amount > 0 && line.credit_amount > 0) { toast({ title: "Debe o haber", description: "Una línea no puede tener monto en debe y haber al mismo tiempo", variant: "destructive" }); return false; }
@@ -363,19 +514,27 @@ export function useJournalEntryForm(
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      const bankDirectionValue = bankAccountId ? bankDirection : null;
+
       if (entryToEdit) {
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
-          beneficiary_name: beneficiaryName || null, total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
+          total_debit: getTotalDebit(), total_credit: getTotalCredit(),
           is_posted: post, posted_at: post ? new Date().toISOString() : null,
           updated_by: user.id, updated_at: new Date().toISOString(), status: post ? 'contabilizado' : 'borrador',
-        }).eq("id", entryToEdit.id);
+        } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
         const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(
-          detailLines.map((l, i) => ({ journal_entry_id: entryToEdit.id, line_number: i + 1, account_id: l.account_id, description: l.description || headerDescription, cost_center: l.cost_center || null, debit_amount: l.debit_amount, credit_amount: l.credit_amount }))
+          detailLines.map((l, i) => ({
+            journal_entry_id: entryToEdit.id, line_number: i + 1, account_id: l.account_id,
+            description: l.description || headerDescription, cost_center: l.cost_center || null,
+            debit_amount: l.debit_amount, credit_amount: l.credit_amount,
+            is_bank_line: l.is_bank_line || false,
+          } as any))
         );
         if (insertError) throw insertError;
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
@@ -390,13 +549,19 @@ export function useJournalEntryForm(
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,
           description: headerDescription, bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
-          beneficiary_name: beneficiaryName || null, total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
+          total_debit: getTotalDebit(), total_credit: getTotalCredit(),
           is_posted: post, posted_at: post ? new Date().toISOString() : null, created_by: user.id,
           status: post ? 'contabilizado' : 'borrador',
-        }).select().single();
+        } as any).select().single();
         if (entryError) throw entryError;
         const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(
-          detailLines.map((l, i) => ({ journal_entry_id: entry.id, line_number: i + 1, account_id: l.account_id, description: l.description || headerDescription, cost_center: l.cost_center || null, debit_amount: l.debit_amount, credit_amount: l.credit_amount }))
+          detailLines.map((l, i) => ({
+            journal_entry_id: entry.id, line_number: i + 1, account_id: l.account_id,
+            description: l.description || headerDescription, cost_center: l.cost_center || null,
+            debit_amount: l.debit_amount, credit_amount: l.credit_amount,
+            is_bank_line: l.is_bank_line || false,
+          } as any))
         );
         if (detailsError) throw detailsError;
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
@@ -416,7 +581,7 @@ export function useJournalEntryForm(
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
     documentReference, setDocumentReference, headerDescription, setHeaderDescription,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
-    beneficiaryName, setBeneficiaryName, detailLines,
+    beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,
     showCloseConfirm, setShowCloseConfirm, showRejectDialog, setShowRejectDialog,
     rejectionReason, setRejectionReason, entryStatus,
