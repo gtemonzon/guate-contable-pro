@@ -454,6 +454,39 @@ export default function LinkedPurchasesModal({
         }
       }
 
+      // Resolve purchase_book_id so invoices appear in /compras
+      let purchaseBookId: number | null = null;
+      try {
+        const { data: existingBook } = await supabase
+          .from("tab_purchase_books")
+          .select("id")
+          .eq("enterprise_id", enterpriseId)
+          .eq("month", entryMonth)
+          .eq("year", entryYear)
+          .maybeSingle();
+
+        if (existingBook) {
+          purchaseBookId = existingBook.id;
+        } else {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: newBook } = await supabase
+              .from("tab_purchase_books")
+              .insert({
+                enterprise_id: enterpriseId,
+                month: entryMonth,
+                year: entryYear,
+                created_by: user.id,
+              })
+              .select("id")
+              .single();
+            if (newBook) purchaseBookId = newBook.id;
+          }
+        }
+      } catch (bookError) {
+        console.error("Error resolving purchase book:", bookError);
+      }
+
       // Save purchases to purchase ledger
       const purchasesToInsert = purchases.map(p => ({
         enterprise_id: enterpriseId,
@@ -472,6 +505,7 @@ export default function LinkedPurchasesModal({
         bank_account_id: bankAccountId || null,
         batch_reference: documentReference || null,
         journal_entry_id: journalEntryId || null,
+        purchase_book_id: purchaseBookId,
       }));
 
       const { error: purchaseError } = await supabase
