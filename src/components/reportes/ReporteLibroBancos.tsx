@@ -16,9 +16,8 @@ import { FolioExportDialog, type FolioExportOptions } from "./FolioExportDialog"
 
 interface BankAccount {
   id: number;
-  bank_name: string;
-  account_number: string;
-  account_id: number | null;
+  account_name: string;
+  account_code: string;
 }
 
 interface BankDocRow {
@@ -74,7 +73,7 @@ export default function ReporteLibroBancos() {
     (async () => {
       const [{ data: enterprise }, { data: banks }] = await Promise.all([
         supabase.from("tab_enterprises").select("business_name").eq("id", parseInt(eid)).single(),
-        supabase.from("tab_bank_accounts").select("id, bank_name, account_number, account_id").eq("enterprise_id", parseInt(eid)).eq("is_active", true).order("bank_name"),
+        supabase.from("tab_accounts").select("id, account_name, account_code").eq("enterprise_id", parseInt(eid)).eq("is_bank_account", true).eq("is_active", true).is("deleted_at", null).order("account_code"),
       ]);
       setEnterpriseName(enterprise?.business_name || "");
       setBankAccounts(banks || []);
@@ -92,42 +91,52 @@ export default function ReporteLibroBancos() {
       const bank = bankAccounts.find(b => b.id === selectedBankId);
       const allRows: BankDocRow[] = [];
 
-      // 1. Fetch bank documents
-      let docQuery = supabase
-        .from("tab_bank_documents")
-        .select("*, journal_entry:tab_journal_entries!tab_bank_documents_journal_entry_id_fkey(entry_number)")
+      // Resolve tab_bank_accounts record linked to this GL account (if any)
+      const { data: linkedBankAcct } = await supabase
+        .from("tab_bank_accounts")
+        .select("id")
+        .eq("account_id", selectedBankId)
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("bank_account_id", selectedBankId)
-        .gte("document_date", dateFrom)
-        .lte("document_date", dateTo)
-        .order("document_date")
-        .order("created_at");
+        .maybeSingle();
 
-      if (statusFilter !== "ALL") {
-        docQuery = docQuery.eq("status", statusFilter);
+      // 1. Fetch bank documents (only if a tab_bank_accounts record exists)
+      if (linkedBankAcct) {
+        let docQuery = supabase
+          .from("tab_bank_documents")
+          .select("*, journal_entry:tab_journal_entries!tab_bank_documents_journal_entry_id_fkey(entry_number)")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("bank_account_id", linkedBankAcct.id)
+          .gte("document_date", dateFrom)
+          .lte("document_date", dateTo)
+          .order("document_date")
+          .order("created_at");
+
+        if (statusFilter !== "ALL") {
+          docQuery = docQuery.eq("status", statusFilter);
+        }
+
+        const docs = await fetchAllRecords<any>(docQuery);
+
+        for (const doc of docs) {
+          const isVoid = doc.status === "VOID";
+          allRows.push({
+            date: doc.document_date,
+            document_number: doc.document_number,
+            beneficiary: doc.beneficiary_name || "",
+            concept: doc.concept || "",
+            direction: doc.direction,
+            debit: isVoid ? 0 : 0,
+            credit: isVoid ? 0 : 0,
+            status: doc.status,
+            journal_entry_number: doc.journal_entry?.entry_number || null,
+            source: "document",
+          });
+        }
       }
 
-      const docs = await fetchAllRecords<any>(docQuery);
-
-      for (const doc of docs) {
-        // Skip VOID docs from debit/credit (they have no accounting effect)
-        const isVoid = doc.status === "VOID";
-        allRows.push({
-          date: doc.document_date,
-          document_number: doc.document_number,
-          beneficiary: doc.beneficiary_name || "",
-          concept: doc.concept || "",
-          direction: doc.direction,
-          debit: isVoid ? 0 : (doc.direction === "IN" ? 0 : 0), // Amount comes from journal entry
-          credit: isVoid ? 0 : 0,
-          status: doc.status,
-          journal_entry_number: doc.journal_entry?.entry_number || null,
-          source: "document",
-        });
-      }
 
       // 2. Fetch journal entry movements affecting this bank's GL account
-      if (bank?.account_id) {
+      if (bank) {
         const jeQuery = supabase
           .from("tab_journal_entry_details")
           .select(`
@@ -137,7 +146,7 @@ export default function ReporteLibroBancos() {
               bank_reference, beneficiary_name, bank_direction, enterprise_id
             )
           `)
-          .eq("account_id", bank.account_id)
+          .eq("account_id", bank.id)
           .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
           .eq("journal_entry.is_posted", true)
           .gte("journal_entry.entry_date", dateFrom)
@@ -212,7 +221,7 @@ export default function ReporteLibroBancos() {
 
   const selectedBank = bankAccounts.find(b => b.id === selectedBankId);
   const reportTitle = selectedBank
-    ? `Libro de Bancos — ${selectedBank.bank_name} (${selectedBank.account_number})`
+    ? `Libro de Bancos — ${selectedBank.account_name} (${selectedBank.account_code})`
     : "Libro de Bancos";
 
   const handleExport = (options: FolioExportOptions) => {
@@ -231,7 +240,7 @@ export default function ReporteLibroBancos() {
     ]);
 
     const exportOpts = {
-      filename: `libro-bancos-${selectedBank?.account_number || ""}`,
+      filename: `libro-bancos-${selectedBank?.account_code || ""}`,
       title: reportTitle,
       enterpriseName,
       headers,
@@ -266,7 +275,7 @@ export default function ReporteLibroBancos() {
             <SelectContent>
               {bankAccounts.map(b => (
                 <SelectItem key={b.id} value={b.id.toString()}>
-                  {b.bank_name} — {b.account_number}
+                  {b.account_code} — {b.account_name}
                 </SelectItem>
               ))}
             </SelectContent>
