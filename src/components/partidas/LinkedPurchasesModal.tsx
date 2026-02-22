@@ -588,9 +588,18 @@ export default function LinkedPurchasesModal({
                 purchase.duplicateWarning && "border-destructive/50 bg-destructive/5",
                 purchase.nitError && !purchase.duplicateWarning && "border-destructive/30"
               )}>
-                {/* Row 1: Tipo, Serie, Número, Fecha, NIT, Proveedor */}
+                {/* Row 1: Fecha, Tipo, Serie, Número, NIT, Proveedor */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-2">
+                    <label className="text-xs text-muted-foreground">Fecha</label>
+                    <Input
+                      type="date"
+                      value={purchase.invoice_date}
+                      onChange={(e) => updatePurchase(purchase.id, 'invoice_date', e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-1">
                     <label className="text-xs text-muted-foreground">Tipo Doc.</label>
                     <Select
                       value={purchase.fel_document_type}
@@ -626,15 +635,6 @@ export default function LinkedPurchasesModal({
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Fecha</label>
-                    <Input
-                      type="date"
-                      value={purchase.invoice_date}
-                      onChange={(e) => updatePurchase(purchase.id, 'invoice_date', e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-2">
                     <label className="text-xs text-muted-foreground">NIT</label>
                     <Input
                       value={purchase.supplier_nit}
@@ -651,7 +651,7 @@ export default function LinkedPurchasesModal({
                     />
                     {purchase.nitError && <p className="text-[10px] text-destructive mt-0.5">{purchase.nitError}</p>}
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     <label className="text-xs text-muted-foreground">Proveedor</label>
                     <Input
                       value={purchase.supplier_name}
