@@ -20,7 +20,6 @@ import { AlertTriangle, Ban } from "lucide-react";
 interface VoidChequeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Entry context — may be null for standalone void cheque */
   entry: {
     id: number;
     entry_number: string;
@@ -36,7 +35,6 @@ interface VoidChequeDialogProps {
     beneficiary_name?: string;
     bank_direction?: string;
   } | null;
-  /** Pre-filled values from the journal entry form (for new entries not yet saved) */
   formValues?: {
     enterpriseId: number;
     bankAccountId: number | null;
@@ -47,6 +45,31 @@ interface VoidChequeDialogProps {
     bankDirection: string;
   };
   onSuccess: () => void;
+}
+
+/**
+ * Find an existing bank document by enterprise + bank_account + document_number.
+ * Handles NULL bank_account_id correctly (PostgreSQL NULLs don't match in unique constraints).
+ */
+async function findExistingBankDocument(
+  enterpriseId: number,
+  bankAccountId: number | null,
+  documentNumber: string,
+) {
+  let query = supabase
+    .from("tab_bank_documents")
+    .select("id")
+    .eq("enterprise_id", enterpriseId)
+    .eq("document_number", documentNumber);
+
+  if (bankAccountId != null) {
+    query = query.eq("bank_account_id", bankAccountId);
+  } else {
+    query = query.is("bank_account_id", null);
+  }
+
+  const { data } = await query.maybeSingle();
+  return data;
 }
 
 export default function VoidChequeDialog({
@@ -60,7 +83,6 @@ export default function VoidChequeDialog({
   const [reason, setReason] = useState("");
   const { toast } = useToast();
 
-  // Determine values from entry or formValues
   const enterpriseId = entry?.enterprise_id ?? formValues?.enterpriseId;
   const bankAccountId = entry?.bank_account_id ?? formValues?.bankAccountId;
   const documentNumber = entry?.bank_reference ?? formValues?.bankReference ?? "";
@@ -69,6 +91,40 @@ export default function VoidChequeDialog({
   const concept = entry?.description ?? formValues?.description ?? "";
   const direction = entry?.bank_direction ?? formValues?.bankDirection ?? "OUT";
   const isPosted = entry?.is_posted ?? false;
+
+  /**
+   * Idempotent upsert: SELECT-first to handle NULL bank_account_id,
+   * then UPDATE-if-found or INSERT-if-not.
+   */
+  async function upsertBankDocument(
+    resolvedBankAccountId: number | null,
+    fields: Record<string, any>,
+  ) {
+    const existing = await findExistingBankDocument(
+      enterpriseId!,
+      resolvedBankAccountId,
+      documentNumber,
+    );
+
+    if (existing) {
+      const { error } = await supabase
+        .from("tab_bank_documents")
+        .update(fields)
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const insertRow: Record<string, any> = {
+        enterprise_id: enterpriseId!,
+        bank_account_id: resolvedBankAccountId,
+        document_number: documentNumber,
+        ...fields,
+      };
+      const { error } = await supabase
+        .from("tab_bank_documents")
+        .insert([insertRow as any]);
+      if (error) throw error;
+    }
+  }
 
   const handleVoidCheque = async () => {
     if (!reason.trim()) {
@@ -87,7 +143,7 @@ export default function VoidChequeDialog({
     try {
       setLoading(true);
 
-      // Resolve the tab_bank_accounts.id from the GL account id (bankAccountId is a tab_accounts.id)
+      // Resolve the tab_bank_accounts.id from the GL account id
       let resolvedBankAccountId: number | null = null;
       if (bankAccountId) {
         const { data: bankAcct } = await supabase
@@ -101,7 +157,6 @@ export default function VoidChequeDialog({
 
       if (isPosted) {
         // ─── Posted entry: create reversal + void document ───
-        // 1. Fetch original details
         const { data: details, error: detailsError } = await supabase
           .from("tab_journal_entry_details")
           .select("*")
@@ -112,7 +167,7 @@ export default function VoidChequeDialog({
         if (detailsError) throw detailsError;
         if (!details || details.length === 0) throw new Error("La partida no tiene líneas de detalle");
 
-        // 2. Generate reversal entry number using original entry date (not today)
+        // Generate reversal entry number using original entry date
         const originalDate = new Date(entry!.entry_date + "T00:00:00");
         const datePrefix = `${originalDate.getFullYear()}${String(originalDate.getMonth() + 1).padStart(2, "0")}${String(originalDate.getDate()).padStart(2, "0")}`;
         const { data: existingReversals } = await supabase
@@ -130,7 +185,7 @@ export default function VoidChequeDialog({
         }
         const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
 
-        // 3. Create reversal entry using original entry's date
+        // Create reversal entry as draft first
         const { data: reversalEntry, error: reversalError } = await supabase
           .from("tab_journal_entries")
           .insert({
@@ -154,7 +209,7 @@ export default function VoidChequeDialog({
 
         if (reversalError) throw reversalError;
 
-        // 4. Create reversed detail lines
+        // Create reversed detail lines
         const reversalDetails = details.map((d: any, index: number) => ({
           journal_entry_id: reversalEntry.id,
           line_number: index + 1,
@@ -172,49 +227,35 @@ export default function VoidChequeDialog({
 
         if (detailsInsertError) throw detailsInsertError;
 
-        // 5. Upsert VOID bank document linked to both entries (idempotent)
-        const { error: docError } = await supabase
-          .from("tab_bank_documents")
-          .upsert({
-            enterprise_id: enterpriseId!,
-            bank_account_id: resolvedBankAccountId,
-            document_number: documentNumber,
-            direction: direction,
-            document_date: docDate,
-            beneficiary_name: beneficiary,
-            concept: `${concept} — ANULADO: ${reason}`,
-            status: "VOID",
-            void_date: entry!.entry_date,
-            void_reason: reason,
-            journal_entry_id: entry!.id,
-            reversal_journal_entry_id: reversalEntry.id,
-          }, { onConflict: "enterprise_id,bank_account_id,document_number" });
-
-        if (docError) throw docError;
+        // Idempotent VOID bank document
+        await upsertBankDocument(resolvedBankAccountId, {
+          direction: direction,
+          document_date: docDate,
+          beneficiary_name: beneficiary,
+          concept: `${concept} — ANULADO: ${reason}`,
+          status: "VOID",
+          void_date: entry!.entry_date,
+          void_reason: reason,
+          journal_entry_id: entry!.id,
+          reversal_journal_entry_id: reversalEntry.id,
+        });
 
         toast({
           title: "Cheque anulado con reversión",
           description: `Se creó la partida de reversión ${reversalEntryNumber} y se registró el cheque ${documentNumber} como ANULADO.`,
         });
       } else {
-        // ─── Not posted: upsert VOID bank document (idempotent) ───
-        const { error: docError } = await supabase
-          .from("tab_bank_documents")
-          .upsert({
-            enterprise_id: enterpriseId!,
-            bank_account_id: resolvedBankAccountId,
-            document_number: documentNumber,
-            direction: direction,
-            document_date: docDate,
-            beneficiary_name: beneficiary,
-            concept: `${concept} — ANULADO: ${reason}`,
-            status: "VOID",
-            void_date: new Date().toISOString().split("T")[0],
-            void_reason: reason,
-            journal_entry_id: entry?.id ?? null,
-          }, { onConflict: "enterprise_id,bank_account_id,document_number" });
-
-        if (docError) throw docError;
+        // ─── Not posted: idempotent VOID bank document ───
+        await upsertBankDocument(resolvedBankAccountId, {
+          direction: direction,
+          document_date: docDate,
+          beneficiary_name: beneficiary,
+          concept: `${concept} — ANULADO: ${reason}`,
+          status: "VOID",
+          void_date: new Date().toISOString().split("T")[0],
+          void_reason: reason,
+          journal_entry_id: entry?.id ?? null,
+        });
 
         toast({
           title: "Cheque anulado",
