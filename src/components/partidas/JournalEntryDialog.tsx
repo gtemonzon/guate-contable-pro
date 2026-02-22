@@ -241,6 +241,8 @@ export default function JournalEntryDialog({
         bankAccountId={form.bankAccountId}
         journalEntryId={entryToEdit?.id || null}
         onPurchasesPosted={form.handlePurchasesPosted}
+        externalPurchases={form.linkedPurchases}
+        onExternalPurchasesChange={form.setLinkedPurchases}
       />
 
       {/* Account Balance Inspector — F2 / Alt+B */}

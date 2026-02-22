@@ -99,6 +99,7 @@ export function useJournalEntryForm(
   const [rejectionReason, setRejectionReason] = useState("");
   const [entryStatus, setEntryStatus] = useState<EntryStatus>('borrador');
   const [showLinkedPurchasesModal, setShowLinkedPurchasesModal] = useState(false);
+  const [linkedPurchases, setLinkedPurchases] = useState<any[]>([]);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
@@ -135,7 +136,7 @@ export function useJournalEntryForm(
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
     setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
-    setIsReadOnly(false); setActiveLineId(null);
+    setIsReadOnly(false); setActiveLineId(null); setLinkedPurchases([]);
   };
 
   const resetForm = () => {
@@ -153,7 +154,7 @@ export function useJournalEntryForm(
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
     setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
-    setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
+    setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null); setLinkedPurchases([]);
   };
 
   const loadInitialData = async () => {
@@ -405,7 +406,8 @@ export function useJournalEntryForm(
     });
   };
 
-  const handlePurchasesPosted = (newLines: DetailLine[]) => {
+  const handlePurchasesPosted = (newLines: DetailLine[], purchases?: any[]) => {
+    if (purchases) setLinkedPurchases(purchases);
     // Filter out any purchase-generated line that uses the bank GL account
     // (the invariant will handle the bank line automatically)
     const filteredNewLines = bankAccountId
@@ -554,6 +556,7 @@ export function useJournalEntryForm(
     showCloseConfirm, setShowCloseConfirm, showRejectDialog, setShowRejectDialog,
     rejectionReason, setRejectionReason, entryStatus,
     showLinkedPurchasesModal, setShowLinkedPurchasesModal,
+    linkedPurchases, setLinkedPurchases,
     isReadOnly, auditInfo, activeLineId, setActiveLineId,
     showStickyHeader, headerRef,
     // Computed
