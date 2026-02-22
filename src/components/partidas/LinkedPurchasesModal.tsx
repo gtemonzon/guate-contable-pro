@@ -7,17 +7,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Calculator, FileText, AlertTriangle } from "lucide-react";
+import { Calculator, FileText } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { AccountCombobox, Account } from "@/components/ui/account-combobox";
+import { Account } from "@/components/ui/account-combobox";
 import { Badge } from "@/components/ui/badge";
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { validateNIT } from "@/utils/nitValidation";
+import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
+import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
 
 interface DetailLine {
   id: string;
@@ -30,29 +30,6 @@ interface DetailLine {
   source_type?: string | null;
   source_id?: number | null;
   source_ref?: string | null;
-}
-
-interface LinkedPurchaseEntry {
-  id: string;
-  invoice_series: string;
-  invoice_number: string;
-  invoice_date: string;
-  fel_document_type: string;
-  supplier_nit: string;
-  supplier_name: string;
-  total_amount: number;
-  base_amount: number;
-  vat_amount: number;
-  operation_type_id: number | null;
-  expense_account_id: number | null;
-  nitError: string | null;
-  duplicateWarning: string | null;
-}
-
-interface OperationType {
-  id: number;
-  code: string;
-  name: string;
 }
 
 interface LinkedPurchasesModalProps {
@@ -71,6 +48,12 @@ interface FelDocumentType {
   name: string;
 }
 
+interface OperationType {
+  id: number;
+  code: string;
+  name: string;
+}
+
 const VAT_RATE = 0.12;
 
 export default function LinkedPurchasesModal({
@@ -83,12 +66,15 @@ export default function LinkedPurchasesModal({
   journalEntryId,
   onPurchasesPosted,
 }: LinkedPurchasesModalProps) {
-  const [purchases, setPurchases] = useState<LinkedPurchaseEntry[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [existingPurchaseIds, setExistingPurchaseIds] = useState<number[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [focusLastCard, setFocusLastCard] = useState(false);
+  const [duplicateWarnings, setDuplicateWarnings] = useState<Record<number, string | null>>({});
 
   const { toast } = useToast();
   const { config } = useEnterpriseConfig(enterpriseId);
@@ -114,10 +100,12 @@ export default function LinkedPurchasesModal({
     if (!open) {
       setPurchases([]);
       setExistingPurchaseIds([]);
+      setEditingIndex(null);
+      setDuplicateWarnings({});
     }
   }, [open]);
 
-  // Ctrl+Alt+"+" para agregar nueva factura
+  // Ctrl+Alt+"+" shortcut
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -179,19 +167,33 @@ export default function LinkedPurchasesModal({
 
   const loadExistingPurchases = async (entryId: number) => {
     try {
-      const { data, error } = await supabase
+      let data: any[] | null = null;
+      
+      // Try by journal_entry_id first
+      const { data: d1, error: e1 } = await supabase
         .from("tab_purchase_ledger")
         .select("*")
         .eq("enterprise_id", enterpriseId)
         .eq("journal_entry_id", entryId)
         .order("created_at");
+      if (e1) throw e1;
+      data = d1;
 
-      if (error) throw error;
+      // Fallback to batch_reference
+      if ((!data || data.length === 0) && documentReference) {
+        const { data: d2 } = await supabase
+          .from("tab_purchase_ledger")
+          .select("*")
+          .eq("enterprise_id", enterpriseId)
+          .eq("batch_reference", documentReference)
+          .order("created_at");
+        data = d2;
+      }
 
       if (data && data.length > 0) {
         setExistingPurchaseIds(data.map(d => d.id));
-        const loaded: LinkedPurchaseEntry[] = data.map(d => ({
-          id: crypto.randomUUID(),
+        const loaded: PurchaseEntry[] = data.map(d => ({
+          id: d.id,
           invoice_series: d.invoice_series || "",
           invoice_number: d.invoice_number,
           invoice_date: d.invoice_date,
@@ -201,47 +203,16 @@ export default function LinkedPurchasesModal({
           total_amount: d.total_amount,
           base_amount: d.base_amount || Number((d.total_amount / (1 + VAT_RATE)).toFixed(2)),
           vat_amount: d.vat_amount,
+          idp_amount: d.idp_amount || 0,
+          batch_reference: d.batch_reference || "",
           operation_type_id: d.operation_type_id,
           expense_account_id: d.expense_account_id,
-          nitError: null,
-          duplicateWarning: null,
+          bank_account_id: d.bank_account_id,
+          journal_entry_id: d.journal_entry_id,
         }));
         setPurchases(loaded);
       } else {
-        // No existing purchases linked, also check by batch_reference
-        if (documentReference) {
-          const { data: batchData } = await supabase
-            .from("tab_purchase_ledger")
-            .select("*")
-            .eq("enterprise_id", enterpriseId)
-            .eq("batch_reference", documentReference)
-            .order("created_at");
-
-          if (batchData && batchData.length > 0) {
-            setExistingPurchaseIds(batchData.map(d => d.id));
-            const loaded: LinkedPurchaseEntry[] = batchData.map(d => ({
-              id: crypto.randomUUID(),
-              invoice_series: d.invoice_series || "",
-              invoice_number: d.invoice_number,
-              invoice_date: d.invoice_date,
-              fel_document_type: d.fel_document_type || "FACT",
-              supplier_nit: d.supplier_nit,
-              supplier_name: d.supplier_name,
-              total_amount: d.total_amount,
-              base_amount: d.base_amount || Number((d.total_amount / (1 + VAT_RATE)).toFixed(2)),
-              vat_amount: d.vat_amount,
-              operation_type_id: d.operation_type_id,
-              expense_account_id: d.expense_account_id,
-              nitError: null,
-              duplicateWarning: null,
-            }));
-            setPurchases(loaded);
-          } else {
-            addPurchase();
-          }
-        } else {
-          addPurchase();
-        }
+        addPurchase();
       }
     } catch (error: any) {
       console.error("Error loading existing purchases:", error);
@@ -249,8 +220,7 @@ export default function LinkedPurchasesModal({
     }
   };
 
-  const createEmptyPurchase = (): LinkedPurchaseEntry => ({
-    id: crypto.randomUUID(),
+  const createEmptyPurchase = (): PurchaseEntry => ({
     invoice_series: "",
     invoice_number: "",
     invoice_date: entryDate || new Date().toISOString().split('T')[0],
@@ -260,27 +230,38 @@ export default function LinkedPurchasesModal({
     total_amount: 0,
     base_amount: 0,
     vat_amount: 0,
+    idp_amount: 0,
+    batch_reference: "",
     operation_type_id: null,
     expense_account_id: null,
-    nitError: null,
-    duplicateWarning: null,
+    bank_account_id: null,
+    journal_entry_id: null,
+    isNew: true,
   });
 
   const addPurchase = () => {
     setPurchases(prev => [...prev, createEmptyPurchase()]);
+    setEditingIndex(purchases.length); // auto-edit the new one
+    setFocusLastCard(true);
   };
 
-  const removePurchase = (id: string) => {
+  const removePurchase = (index: number) => {
     if (purchases.length <= 1) {
       toast({ title: "Mínimo requerido", description: "Debe haber al menos una factura", variant: "destructive" });
       return;
     }
-    setPurchases(prev => prev.filter(p => p.id !== id));
+    setPurchases(prev => prev.filter((_, i) => i !== index));
+    setDuplicateWarnings(prev => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    if (editingIndex === index) setEditingIndex(null);
   };
 
-  const updatePurchase = (id: string, field: keyof LinkedPurchaseEntry, value: any) => {
-    setPurchases(prev => prev.map(p => {
-      if (p.id !== id) return p;
+  const updatePurchase = (index: number, field: keyof PurchaseEntry, value: any) => {
+    setPurchases(prev => prev.map((p, i) => {
+      if (i !== index) return p;
       const updated = { ...p, [field]: value };
       if (field === 'total_amount') {
         const total = Number(value) || 0;
@@ -291,46 +272,16 @@ export default function LinkedPurchasesModal({
     }));
   };
 
-  // NIT validation on blur
-  const handleNitBlur = async (purchase: LinkedPurchaseEntry) => {
-    const nit = purchase.supplier_nit.trim();
-    if (!nit) {
-      updatePurchase(purchase.id, 'nitError', null);
-      return;
-    }
-    if (!validateNIT(nit)) {
-      updatePurchase(purchase.id, 'nitError', "NIT inválido");
-      return;
-    }
-    updatePurchase(purchase.id, 'nitError', null);
-    await searchSupplierByNit(purchase.id, nit);
+  // Save is a no-op in embedded mode (data stays local until contabilizar)
+  const handleSave = (_index: number) => {
+    // In embedded mode we don't auto-save to DB.
+    // Just clear the editing state.
   };
 
-  const searchSupplierByNit = async (purchaseId: string, nit: string) => {
-    if (!nit || nit.length < 4) return;
-    try {
-      const { data } = await supabase
-        .from("tab_purchase_ledger")
-        .select("supplier_name")
-        .eq("supplier_nit", nit)
-        .order("invoice_date", { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) {
-        setPurchases(prev => prev.map(p => {
-          if (p.id !== purchaseId) return p;
-          if (p.supplier_name.trim()) return p;
-          return { ...p, supplier_name: data[0].supplier_name };
-        }));
-      }
-    } catch (error) {
-      console.error("Error searching supplier:", error);
-    }
-  };
-
-  // Duplicate check on invoice number blur
-  const checkDuplicate = async (purchase: LinkedPurchaseEntry) => {
+  const checkDuplicate = async (index: number) => {
+    const purchase = purchases[index];
     if (!purchase.invoice_number.trim() || !purchase.supplier_nit.trim()) {
-      updatePurchase(purchase.id, 'duplicateWarning', null);
+      setDuplicateWarnings(prev => ({ ...prev, [index]: null }));
       return;
     }
     try {
@@ -348,24 +299,24 @@ export default function LinkedPurchasesModal({
       if (data && data.length > 0) {
         const d = new Date(data[0].invoice_date);
         const mName = d.toLocaleString('es-GT', { month: 'long' });
-        updatePurchase(purchase.id, 'duplicateWarning', `Factura duplicada (${mName} ${d.getFullYear()})`);
+        setDuplicateWarnings(prev => ({ ...prev, [index]: `Factura duplicada (${mName} ${d.getFullYear()})` }));
         return;
       }
 
       // Check in-modal duplicates
-      const siblings = purchases.filter(p =>
-        p.id !== purchase.id &&
+      const siblings = purchases.filter((p, i) =>
+        i !== index &&
         p.supplier_nit === purchase.supplier_nit &&
         p.fel_document_type === purchase.fel_document_type &&
         (p.invoice_series || "") === (purchase.invoice_series || "") &&
         p.invoice_number === purchase.invoice_number
       );
       if (siblings.length > 0) {
-        updatePurchase(purchase.id, 'duplicateWarning', "Factura duplicada en este lote");
+        setDuplicateWarnings(prev => ({ ...prev, [index]: "Factura duplicada en este lote" }));
         return;
       }
 
-      updatePurchase(purchase.id, 'duplicateWarning', null);
+      setDuplicateWarnings(prev => ({ ...prev, [index]: null }));
     } catch (error) {
       console.error("Error checking duplicate:", error);
     }
@@ -384,12 +335,12 @@ export default function LinkedPurchasesModal({
       toast({ title: "Sin facturas", description: "Debe agregar al menos una factura", variant: "destructive" });
       return false;
     }
-    for (const p of purchases) {
+    for (const [i, p] of purchases.entries()) {
       if (!p.supplier_nit.trim()) {
         toast({ title: "NIT requerido", description: "Todas las facturas deben tener NIT del proveedor", variant: "destructive" });
         return false;
       }
-      if (p.nitError) {
+      if (p.supplier_nit.toUpperCase() !== "CF" && !validateNIT(p.supplier_nit)) {
         toast({ title: "NIT inválido", description: "Corrija los NIT marcados como inválidos", variant: "destructive" });
         return false;
       }
@@ -409,7 +360,7 @@ export default function LinkedPurchasesModal({
         toast({ title: "Cuenta de gasto requerida", description: "Todas las facturas deben tener cuenta de gasto asignada", variant: "destructive" });
         return false;
       }
-      if (p.duplicateWarning) {
+      if (duplicateWarnings[i]) {
         toast({ title: "Factura duplicada", description: "Hay facturas duplicadas, revise antes de contabilizar", variant: "destructive" });
         return false;
       }
@@ -418,7 +369,6 @@ export default function LinkedPurchasesModal({
       toast({ title: "Configuración incompleta", description: "Debe configurar la cuenta de IVA Crédito Fiscal en Configuración de Empresa", variant: "destructive" });
       return false;
     }
-    // If no bank account, require suppliers account
     if (!bankAccountId && !config?.suppliers_account_id) {
       toast({ title: "Configuración incompleta", description: "Debe configurar la cuenta de Proveedores en Configuración de Empresa", variant: "destructive" });
       return false;
@@ -433,7 +383,6 @@ export default function LinkedPurchasesModal({
       const totals = getTotals();
       const generatedLines: DetailLine[] = [];
 
-      // Build a source ref for each purchase (will be used after insert to get IDs)
       const purchaseRefs = purchases.map(p =>
         `${p.fel_document_type} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
       );
@@ -480,8 +429,6 @@ export default function LinkedPurchasesModal({
         });
       }
 
-      // When NO bank account is selected, add a suppliers credit line to balance
-      // When bank IS selected, the journal entry's bank auto-line handles the credit side
       if (!bankAccountId && config?.suppliers_account_id) {
         generatedLines.push({
           id: crypto.randomUUID(),
@@ -495,9 +442,8 @@ export default function LinkedPurchasesModal({
           source_ref: purchaseRefs.join(', '),
         });
       }
-      // NOTE: No bank GL line is created here. The bank auto-line invariant handles it.
 
-      // If editing, delete old purchase records first
+      // Delete old purchase records if editing
       if (existingPurchaseIds.length > 0) {
         const { error: deleteError } = await supabase
           .from("tab_purchase_ledger")
@@ -508,7 +454,7 @@ export default function LinkedPurchasesModal({
         }
       }
 
-      // Save purchases to purchase ledger (tab_purchase_ledger)
+      // Save purchases to purchase ledger
       const purchasesToInsert = purchases.map(p => ({
         enterprise_id: enterpriseId,
         invoice_series: p.invoice_series || null,
@@ -538,9 +484,7 @@ export default function LinkedPurchasesModal({
       }
 
       onPurchasesPosted(generatedLines);
-      const balanceNote = bankAccountId
-        ? ""
-        : " Seleccione una cuenta bancaria para balancear la partida.";
+      const balanceNote = bankAccountId ? "" : " Seleccione una cuenta bancaria para balancear la partida.";
       toast({ title: "Facturas importadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
     } catch (error: any) {
@@ -551,8 +495,6 @@ export default function LinkedPurchasesModal({
   };
 
   const totals = getTotals();
-
-  // Determine credit account label for preview
   const creditPreviewLabel = bankAccountId ? "Banco" : "Proveedores";
 
   return (
@@ -587,170 +529,33 @@ export default function LinkedPurchasesModal({
           </div>
         </div>
 
-        {/* Invoices list */}
+        {/* Invoices list using shared component */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <div className="space-y-3 pb-4">
-            <div className="flex justify-between items-center">
-              <h4 className="font-medium text-sm">Facturas ({purchases.length})</h4>
-              <Button onClick={addPurchase} variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar Factura
-              </Button>
-            </div>
-
-            {purchases.map((purchase, idx) => (
-              <div key={purchase.id} className={cn(
-                "border rounded-lg p-3 space-y-2",
-                purchase.duplicateWarning && "border-destructive/50 bg-destructive/5",
-                purchase.nitError && !purchase.duplicateWarning && "border-destructive/30"
-              )}>
-                {/* Row 1: Fecha, Tipo, Serie, Número, NIT, Proveedor */}
-                <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Fecha</label>
-                    <Input
-                      type="date"
-                      value={purchase.invoice_date}
-                      onChange={(e) => updatePurchase(purchase.id, 'invoice_date', e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="text-xs text-muted-foreground">Tipo Doc.</label>
-                    <Select
-                      value={purchase.fel_document_type}
-                      onValueChange={(v) => updatePurchase(purchase.id, 'fel_document_type', v)}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {felDocTypes.map((t) => (
-                          <SelectItem key={t.code} value={t.code}>{t.code}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-1">
-                    <label className="text-xs text-muted-foreground">Serie</label>
-                    <Input
-                      value={purchase.invoice_series}
-                      onChange={(e) => updatePurchase(purchase.id, 'invoice_series', e.target.value)}
-                      placeholder="A"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Número</label>
-                    <Input
-                      value={purchase.invoice_number}
-                      onChange={(e) => updatePurchase(purchase.id, 'invoice_number', e.target.value)}
-                      onBlur={() => checkDuplicate(purchase)}
-                      placeholder="123456"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">NIT</label>
-                    <Input
-                      value={purchase.supplier_nit}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/-/g, "");
-                        updatePurchase(purchase.id, 'supplier_nit', val);
-                        if (purchase.nitError && validateNIT(val)) {
-                          updatePurchase(purchase.id, 'nitError', null);
-                        }
-                      }}
-                      onBlur={() => handleNitBlur(purchase)}
-                      placeholder="12345678"
-                      className={cn("h-8 text-xs", purchase.nitError && "border-destructive")}
-                    />
-                    {purchase.nitError && <p className="text-[10px] text-destructive mt-0.5">{purchase.nitError}</p>}
-                  </div>
-                  <div className="col-span-4">
-                    <label className="text-xs text-muted-foreground">Proveedor</label>
-                    <Input
-                      value={purchase.supplier_name}
-                      onChange={(e) => updatePurchase(purchase.id, 'supplier_name', e.target.value)}
-                      placeholder="Nombre proveedor"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Total, IVA, Tipo Operación, Cuenta Gasto, Warnings, Delete */}
-                <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Total c/IVA</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={purchase.total_amount || ""}
-                      onChange={(e) => updatePurchase(purchase.id, 'total_amount', parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">IVA</label>
-                    <Input
-                      value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
-                      readOnly
-                      className="h-8 text-xs bg-muted"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-muted-foreground">Tipo Operación</label>
-                    <Select
-                      value={purchase.operation_type_id?.toString() || ""}
-                      onValueChange={(v) => updatePurchase(purchase.id, 'operation_type_id', v ? parseInt(v) : null)}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Tipo..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {operationTypes.map((t) => (
-                          <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-3">
-                    <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
-                    <AccountCombobox
-                      accounts={accounts}
-                      value={purchase.expense_account_id}
-                      onValueChange={(v) => updatePurchase(purchase.id, 'expense_account_id', v)}
-                      placeholder="Seleccionar cuenta..."
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="col-span-2 flex items-end gap-1">
-                    {purchase.duplicateWarning && (
-                      <div className="flex items-center gap-1 text-destructive text-[10px] pb-1">
-                        <AlertTriangle className="h-3 w-3 shrink-0" />
-                        <span>{purchase.duplicateWarning}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-span-1 flex items-end justify-end">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removePurchase(purchase.id)}
-                      disabled={purchases.length <= 1}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="pb-4">
+            <PurchaseInvoiceList
+              purchases={purchases}
+              variant="compact"
+              felDocTypes={felDocTypes}
+              operationTypes={operationTypes}
+              expenseAccounts={accounts}
+              bankAccounts={[]}
+              editingIndex={editingIndex}
+              onEditingIndexChange={setEditingIndex}
+              onUpdate={updatePurchase}
+              onSave={handleSave}
+              onDelete={removePurchase}
+              onAdd={addPurchase}
+              addButtonLabel="Agregar Factura"
+              addShortcutHint="Ctrl+Alt++"
+              duplicateWarnings={duplicateWarnings}
+              onCheckDuplicate={checkDuplicate}
+              focusLastCard={focusLastCard}
+              onFocusLastCardDone={() => setFocusLastCard(false)}
+            />
 
             {/* Preview */}
             {purchases.length > 0 && purchases.some(p => p.expense_account_id && p.total_amount > 0) && (
-              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2 mt-4">
                 <h5 className="font-medium text-sm">Vista previa de contabilización:</h5>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">

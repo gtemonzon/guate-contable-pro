@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
-import { PurchaseCard, PurchaseCardRef } from "@/components/compras/PurchaseCard";
+import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
+import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
+import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -31,27 +33,7 @@ interface FELDocumentType {
   name: string;
 }
 
-interface PurchaseEntry {
-  id?: number;
-  invoice_series: string;
-  invoice_number: string;
-  invoice_date: string;
-  fel_document_type: string;
-  supplier_nit: string;
-  supplier_name: string;
-  total_amount: number;
-  base_amount: number;
-  vat_amount: number;
-  idp_amount: number;
-  batch_reference: string;
-  operation_type_id: number | null;
-  expense_account_id: number | null;
-  bank_account_id: number | null;
-  journal_entry_id: number | null;
-  purchase_book_id?: number;
-  isNew?: boolean;
-  _recommendedFields?: string[];
-}
+// PurchaseEntry type is now imported from PurchaseCard
 
 export default function LibroCompras() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
@@ -1196,43 +1178,32 @@ export default function LibroCompras() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <p className="text-center text-muted-foreground py-8">Cargando...</p>
-          ) : purchases.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No hay facturas. Haz clic en "Agregar Línea" para comenzar.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {purchases.map((purchase, index) => (
-                <PurchaseCard
-                  key={purchase.id || `new-${index}`}
-                  ref={index === purchases.length - 1 ? newCardRef : undefined}
-                  purchase={purchase}
-                  index={index}
-                  felDocTypes={felDocTypes}
-                  operationTypes={operationTypes}
-                  expenseAccounts={expenseAccounts}
-                  bankAccounts={bankAccounts}
-                  onUpdate={updateRow}
-                  onSave={(idx) => {
-                    saveRow(idx);
-                    // Clear isNew flag after save
-                    if (purchases[idx].isNew) {
-                      const updated = [...purchases];
-                      updated[idx] = { ...updated[idx], isNew: false };
-                      setPurchases(updated);
-                    }
-                  }}
-                  onDelete={deleteRow}
-                  recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
-                  isEditing={editingIndex === index}
-                  onStartEdit={(idx) => setEditingIndex(idx)}
-                  onCancelEdit={() => setEditingIndex(null)}
-                />
-              ))}
-            </div>
-          )}
+          <PurchaseInvoiceList
+              purchases={purchases}
+              variant="full"
+              felDocTypes={felDocTypes}
+              operationTypes={operationTypes}
+              expenseAccounts={expenseAccounts}
+              bankAccounts={bankAccounts}
+              editingIndex={editingIndex}
+              onEditingIndexChange={setEditingIndex}
+              onUpdate={updateRow}
+              onSave={(idx) => {
+                saveRow(idx);
+                if (purchases[idx]?.isNew) {
+                  const updated = [...purchases];
+                  updated[idx] = { ...updated[idx], isNew: false };
+                  setPurchases(updated);
+                }
+              }}
+              onDelete={deleteRow}
+              onAdd={addNewRow}
+              loading={loading}
+              addButtonLabel="Nueva Factura"
+              addShortcutHint="Alt+N"
+              focusLastCard={focusNewRow}
+              onFocusLastCardDone={() => setFocusNewRow(false)}
+            />
         </CardContent>
       </Card>
 
