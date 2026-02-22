@@ -3,15 +3,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, X } from "lucide-react";
+import { Trash2, Save, X, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-interface PurchaseEntry {
+export interface PurchaseEntry {
   id?: number;
   invoice_series: string;
   invoice_number: string;
@@ -28,10 +29,12 @@ interface PurchaseEntry {
   expense_account_id: number | null;
   bank_account_id: number | null;
   journal_entry_id: number | null;
+  purchase_book_id?: number;
   isNew?: boolean;
+  _recommendedFields?: string[];
 }
 
-interface PurchaseCardProps {
+export interface PurchaseCardProps {
   purchase: PurchaseEntry;
   index: number;
   felDocTypes: { code: string; name: string }[];
@@ -46,6 +49,12 @@ interface PurchaseCardProps {
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
   onCancelEdit?: () => void;
+  /** 'full' shows all fields; 'compact' hides bank, operation, IDP, batch_reference */
+  variant?: 'full' | 'compact';
+  /** External duplicate warning to display */
+  duplicateWarning?: string | null;
+  /** Called on invoice_number blur for external duplicate checking */
+  onCheckDuplicate?: (index: number) => void;
 }
 
 export interface PurchaseCardRef {
@@ -69,7 +78,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   isHighlighted,
   isEditing = false,
   onStartEdit,
-  onCancelEdit
+  onCancelEdit,
+  variant = 'full',
+  duplicateWarning: externalDuplicateWarning,
+  onCheckDuplicate,
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
@@ -78,9 +90,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = purchase.isNew;
+  const isCompact = variant === 'compact';
 
   // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
-  const isFuelOperation = operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
+  const isFuelOperation = !isCompact && operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
@@ -107,6 +120,14 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const searchSupplierByNit = async (nit: string) => {
     if (!nit || nit.length < 3) return;
     
+    // Handle CF
+    if (nit.toUpperCase() === "CF") {
+      if (!purchase.supplier_name.trim()) {
+        onUpdate(index, "supplier_name", "Consumidor Final");
+      }
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
@@ -117,7 +138,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         .maybeSingle();
 
       if (!error && data) {
-        onUpdate(index, "supplier_name", data.supplier_name);
+        if (!purchase.supplier_name.trim()) {
+          onUpdate(index, "supplier_name", data.supplier_name);
+        }
       }
     } catch (error) {
       console.error("Error searching supplier:", error);
@@ -235,8 +258,60 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     return acc ? `${acc.account_code}` : "-";
   };
 
-  // READ-ONLY MODE: Show plain text
+  const dupWarning = externalDuplicateWarning || null;
+
+  // ─── READ-ONLY MODE ──────────────────────────────────────────────────────
   if (!inEditMode) {
+    if (isCompact) {
+      return (
+        <Card 
+          ref={cardRef}
+          className={cn(
+            "hover:bg-muted/50 cursor-pointer transition-colors group",
+            isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
+            dupWarning && "border-destructive/50 bg-destructive/5",
+          )}
+          onClick={() => onStartEdit?.(index)}
+        >
+          <CardContent className="p-2.5">
+            <div className="grid grid-cols-12 gap-2 items-center text-sm">
+              <div className="col-span-1 text-xs text-muted-foreground">
+                {formatDate(purchase.invoice_date)}
+              </div>
+              <div className="col-span-1 text-center">
+                <Badge variant="outline" className="text-[10px]">{purchase.fel_document_type}</Badge>
+              </div>
+              <div className="col-span-1 font-mono text-xs">
+                {purchase.invoice_series ? `${purchase.invoice_series}-` : ""}{purchase.invoice_number}
+              </div>
+              <div className="col-span-1 font-mono text-xs">{purchase.supplier_nit}</div>
+              <div className="col-span-3 truncate text-xs" title={purchase.supplier_name}>
+                {purchase.supplier_name || <span className="text-muted-foreground">Sin proveedor</span>}
+              </div>
+              <div className="col-span-2 text-right font-mono text-xs font-medium">
+                {formatCurrency(purchase.total_amount)}
+              </div>
+              <div className="col-span-1 text-right font-mono text-[11px] text-muted-foreground">
+                {formatCurrency(purchase.vat_amount)}
+              </div>
+              <div className="col-span-2 text-xs truncate" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
+                {getAccountName(purchase.expense_account_id, expenseAccounts)}
+                {dupWarning && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />
+                    </TooltipTrigger>
+                    <TooltipContent>{dupWarning}</TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Full read mode
     return (
       <Card 
         ref={cardRef}
@@ -291,7 +366,171 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     );
   }
 
-  // EDIT MODE: Show inputs
+  // ─── EDIT MODE ────────────────────────────────────────────────────────────
+  if (isCompact) {
+    return (
+      <Card 
+        ref={cardRef}
+        className={cn(
+          "shadow-md transition-all ring-2 ring-primary border-primary",
+          hasChanges && "ring-amber-400 border-amber-400",
+          dupWarning && "border-destructive/50 bg-destructive/5",
+          isHighlighted && "ring-primary border-primary bg-accent/20 animate-pulse"
+        )}
+      >
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            {/* Row 1: Fecha, TipoDoc, Serie, Número, NIT, Proveedor */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Fecha</label>
+                <Input
+                  ref={dateInputRef}
+                  id={`purchase-${index}-invoice_date`}
+                  type="date"
+                  value={purchase.invoice_date}
+                  onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
+                  className="h-8"
+                />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Tipo Doc.</label>
+                <Select
+                  value={purchase.fel_document_type}
+                  onValueChange={(v) => handleFieldChange("fel_document_type", v)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {felDocTypes.map((type) => (
+                      <SelectItem key={type.code} value={type.code}>{type.code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Serie</label>
+                <Input
+                  id={`purchase-${index}-invoice_series`}
+                  value={purchase.invoice_series}
+                  onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
+                  placeholder="A"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Número</label>
+                <Input
+                  id={`purchase-${index}-invoice_number`}
+                  value={purchase.invoice_number}
+                  onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
+                  onBlur={() => onCheckDuplicate?.(index)}
+                  placeholder="123456"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">NIT</label>
+                <Input
+                  value={purchase.supplier_nit}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/-/g, "");
+                    handleFieldChange("supplier_nit", val);
+                    if (nitError && validateNIT(val)) setNitError(null);
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val && !validateNIT(val)) {
+                      setNitError("NIT inválido");
+                    } else {
+                      setNitError(null);
+                    }
+                    searchSupplierByNit(val);
+                  }}
+                  placeholder="123456789"
+                  className={cn("h-8 text-xs", nitError && "border-destructive")}
+                />
+                {nitError && <p className="text-[10px] text-destructive mt-0.5">{nitError}</p>}
+              </div>
+              <div className="col-span-4">
+                <label className="text-xs text-muted-foreground">Proveedor</label>
+                <Input
+                  value={purchase.supplier_name}
+                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                  placeholder="Nombre del proveedor"
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Total, IVA, Cuenta Gasto, Warnings, Delete */}
+            <div className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">Total c/IVA</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={purchase.total_amount || ""}
+                  onChange={(e) => handleFieldChange("total_amount", e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">IVA</label>
+                <Input
+                  value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
+                  readOnly
+                  className="h-8 text-xs bg-muted"
+                />
+              </div>
+              <div className="col-span-4">
+                <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
+                <AccountCombobox
+                  accounts={expenseAccounts}
+                  value={purchase.expense_account_id}
+                  onValueChange={(val) => handleFieldChange("expense_account_id", val)}
+                  placeholder="Seleccionar cuenta..."
+                  className="w-full"
+                />
+              </div>
+              <div className="col-span-3 flex items-end gap-1">
+                {dupWarning && (
+                  <div className="flex items-center gap-1 text-destructive text-[10px] pb-1">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    <span>{dupWarning}</span>
+                  </div>
+                )}
+              </div>
+              <div className="col-span-1 flex items-end justify-end gap-1">
+                <Button
+                  size="sm"
+                  variant={hasChanges ? "default" : "outline"}
+                  onClick={handleSaveClick}
+                  className="h-8 w-8 p-0"
+                  title="Guardar"
+                >
+                  <Save className="h-3 w-3" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => onDelete(index)} 
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                  title="Eliminar"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Full edit mode
   return (
     <Card 
       ref={cardRef}
@@ -303,7 +542,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     >
       <CardContent className="p-4">
         <div className="space-y-3">
-          {/* Primera fila: Fecha, info documento, NIT y proveedor */}
+          {/* Row 1: Fecha, info documento, NIT y proveedor */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Fecha</label>
@@ -332,6 +571,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 id={`purchase-${index}-invoice_number`}
                 value={purchase.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
+                onBlur={() => onCheckDuplicate?.(index)}
                 placeholder="12345"
                 className="h-8"
               />
@@ -393,7 +633,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
           </div>
 
-          {/* Segunda fila: Montos, tipo operación, cuenta y referencia con botones */}
+          {/* Row 2: Montos, tipo operación, cuenta y referencia */}
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Total c/IVA</label>
@@ -415,7 +655,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 className="h-8 bg-muted"
               />
             </div>
-            {/* Show IDP field when operation type is COMBUSTIBLE */}
             {isFuelOperation && (
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">IDP</label>
@@ -509,7 +748,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
           </div>
 
-          {/* Tercera fila condicional: Banco (solo si hay Ref.Pago) */}
+          {/* Row 3 conditional: Bank (only if batch_reference exists) */}
           {purchase.batch_reference && (
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-12">
