@@ -121,11 +121,11 @@ export default function LinkedPurchasesModal({
     }
   }, [open]);
 
-  // Ctrl+Alt+"+" shortcut
+  // Alt+N shortcut — new purchase row
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.altKey && (e.key === '+' || e.key === 'Add')) {
+      if (e.altKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         addPurchase();
         toast({ title: "Nueva factura agregada", description: "Se agregó una nueva fila" });

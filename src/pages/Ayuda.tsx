@@ -101,14 +101,18 @@ const helpSections: HelpSection[] = [
     steps: [
       { title: "Guardar / Contabilizar — Ctrl+Enter (⌘+Enter en Mac)", description: "En el diálogo de Partida Contable, presione Ctrl+Enter para contabilizar la partida. Sin conflictos con el navegador." },
       { title: "Guardar Borrador — Ctrl+Shift+Enter (⌘+Shift+Enter en Mac)", description: "Guarda el formulario como borrador sin contabilizarlo. Útil para pausar el ingreso y continuar después." },
-      { title: "Nuevo Registro — Alt+N", description: "En Libros Fiscales (Compras / Ventas) y formularios compatibles, Alt+N crea un nuevo registro guardando el actual primero. Reemplaza el antiguo Ctrl+Alt++." },
+      { title: "Nuevo Registro — Alt+N", description: "En Libros Fiscales (Compras / Ventas), modal de compras vinculadas y formularios compatibles, Alt+N crea un nuevo registro guardando el actual primero." },
       { title: "Cancelar / Cerrar — Esc", description: "Cierra el diálogo activo cuando no hay cambios pendientes. Si hay cambios, se muestra una confirmación." },
+      { title: "Búsqueda Global — Ctrl+K (⌘+K en Mac)", description: "Abre la paleta de búsqueda global para buscar partidas, cuentas, libros fiscales y movimientos bancarios." },
+      { title: "Inspector de Saldo — F2 / Alt+B", description: "Dentro de la partida contable, muestra el saldo actual de la cuenta seleccionada en la línea activa." },
+      { title: "Ayuda de Atajos — ?", description: "Presione ? en cualquier pantalla (fuera de campos de texto) para ver un resumen de todos los atajos disponibles." },
       { title: "Indicadores de Atajo en Botones", description: "Los botones de acción principal muestran los atajos disponibles junto a las etiquetas (ej: Ctrl+↵, ⌘+Shift+↵)." },
     ],
     tips: [
       "Ctrl+Enter contabiliza si la partida está balanceada; si no, muestra el error de cuadre.",
       "Alt+N reemplaza al antiguo Ctrl+Alt++, eliminado por conflictos con el zoom del navegador.",
-      "Los atajos se suprimen cuando el foco está en un campo de texto multilínea.",
+      "Los atajos se suprimen cuando el foco está en un campo de texto multilínea o cuando un selector está abierto.",
+      "Presione ? para ver un resumen rápido de todos los atajos en cualquier momento.",
     ],
   },
   {
