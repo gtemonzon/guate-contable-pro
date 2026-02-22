@@ -40,7 +40,9 @@ interface LinkedPurchasesModalProps {
   enterpriseId: number;
   bankAccountId?: number | null;
   journalEntryId?: number | null;
-  onPurchasesPosted: (lines: DetailLine[]) => void;
+  onPurchasesPosted: (lines: DetailLine[], purchases: PurchaseEntry[]) => void;
+  externalPurchases?: PurchaseEntry[];
+  onExternalPurchasesChange?: (purchases: PurchaseEntry[]) => void;
 }
 
 interface FelDocumentType {
@@ -65,6 +67,8 @@ export default function LinkedPurchasesModal({
   bankAccountId,
   journalEntryId,
   onPurchasesPosted,
+  externalPurchases,
+  onExternalPurchasesChange,
 }: LinkedPurchasesModalProps) {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [existingPurchaseIds, setExistingPurchaseIds] = useState<number[]>([]);
@@ -83,6 +87,15 @@ export default function LinkedPurchasesModal({
   const entryYear = entryDate ? new Date(entryDate + 'T00:00:00').getFullYear() : new Date().getFullYear();
   const monthName = new Date(entryYear, entryMonth - 1).toLocaleString('es-GT', { month: 'long', year: 'numeric' });
 
+  // Sync local purchases with external state
+  const updatePurchases = (updater: PurchaseEntry[] | ((prev: PurchaseEntry[]) => PurchaseEntry[])) => {
+    setPurchases(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      onExternalPurchasesChange?.(next);
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (open && enterpriseId) {
       loadAccounts();
@@ -90,6 +103,9 @@ export default function LinkedPurchasesModal({
       loadOperationTypes();
       if (journalEntryId) {
         loadExistingPurchases(journalEntryId);
+      } else if (externalPurchases && externalPurchases.length > 0) {
+        // Restore from parent state (unsaved entry)
+        setPurchases(externalPurchases);
       } else if (purchases.length === 0) {
         addPurchase();
       }
@@ -98,7 +114,7 @@ export default function LinkedPurchasesModal({
 
   useEffect(() => {
     if (!open) {
-      setPurchases([]);
+      // Don't clear purchases — parent owns the lifecycle
       setExistingPurchaseIds([]);
       setEditingIndex(null);
       setDuplicateWarnings({});
@@ -526,7 +542,7 @@ export default function LinkedPurchasesModal({
         toast({ title: "Advertencia", description: "Las líneas contables se generaron pero hubo un error al guardar en el libro de compras: " + purchaseError.message, variant: "destructive" });
       }
 
-      onPurchasesPosted(generatedLines);
+      onPurchasesPosted(generatedLines, purchases);
       const balanceNote = bankAccountId ? "" : " Seleccione una cuenta bancaria para balancear la partida.";
       toast({ title: "Facturas importadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
