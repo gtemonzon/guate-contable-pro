@@ -118,14 +118,51 @@ export default function JournalEntryViewDialog({
 
   const fetchLinkedPurchases = async (id: number) => {
     try {
-      const { data, error } = await supabase
+      // 1) Direct link via journal_entry_id
+      const { data: directData, error: directError } = await supabase
         .from("tab_purchase_ledger")
         .select("id, invoice_series, invoice_number, invoice_date, fel_document_type, supplier_nit, supplier_name, total_amount, base_amount, vat_amount")
         .eq("journal_entry_id", id)
         .is("deleted_at", null)
         .order("created_at");
-      if (error) throw error;
-      setLinkedPurchases(data || []);
+      if (directError) throw directError;
+
+      let results = directData || [];
+
+      // 2) If no direct links, try matching via source_ref in journal entry details
+      if (results.length === 0) {
+        const { data: details } = await supabase
+          .from("tab_journal_entry_details")
+          .select("source_ref")
+          .eq("journal_entry_id", id)
+          .eq("source_type", "PURCHASE")
+          .is("deleted_at", null);
+
+        if (details && details.length > 0) {
+          const invoiceNumbers = new Set<string>();
+          details.forEach((d: any) => {
+            if (d.source_ref) {
+              d.source_ref.split(",").forEach((ref: string) => {
+                const cleaned = ref.trim().replace(/^FACT\s+/i, "");
+                if (cleaned) invoiceNumbers.add(cleaned);
+              });
+            }
+          });
+
+          if (invoiceNumbers.size > 0) {
+            const { data: refData, error: refError } = await supabase
+              .from("tab_purchase_ledger")
+              .select("id, invoice_series, invoice_number, invoice_date, fel_document_type, supplier_nit, supplier_name, total_amount, base_amount, vat_amount")
+              .in("invoice_number", Array.from(invoiceNumbers))
+              .is("deleted_at", null)
+              .order("created_at");
+            if (refError) throw refError;
+            results = refData || [];
+          }
+        }
+      }
+
+      setLinkedPurchases(results);
     } catch (error) {
       console.error("Error fetching linked purchases:", error);
     } finally {
