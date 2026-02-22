@@ -335,9 +335,18 @@ export function useJournalEntryForm(
   }, [detailLines, documentReference, entryDate, entryType, headerDescription, periodId, serializeForDirtyCheck]);
 
   const handleCloseAttempt = useCallback((newOpen: boolean) => {
-    if (!newOpen && hasUnsavedChanges()) setShowCloseConfirm(true);
-    else onOpenChange(newOpen);
-  }, [hasUnsavedChanges, onOpenChange]);
+    if (!newOpen && hasUnsavedChanges()) {
+      // If entry is already posted, don't offer "save as draft" — just close
+      const alreadyPosted = entryToEdit?.is_posted || entryToEdit?.status === 'contabilizado';
+      if (alreadyPosted) {
+        onOpenChange(false);
+        return;
+      }
+      setShowCloseConfirm(true);
+    } else {
+      onOpenChange(newOpen);
+    }
+  }, [hasUnsavedChanges, onOpenChange, entryToEdit]);
 
   const getTotalDebit = () => detailLines.reduce((sum, l) => sum + (l.debit_amount || 0), 0);
   const getTotalCredit = () => detailLines.reduce((sum, l) => sum + (l.credit_amount || 0), 0);
@@ -469,17 +478,14 @@ export function useJournalEntryForm(
       const bankDirectionValue = bankAccountId ? bankDirection : null;
 
       if (entryToEdit) {
-        // If the entry is already posted, keep its posted status (DB immutability rule)
-        const alreadyPosted = entryToEdit.is_posted || entryToEdit.status === 'contabilizado';
-        const finalPost = post || alreadyPosted;
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: finalPost, posted_at: finalPost ? undefined : null,
-          updated_by: user.id, updated_at: new Date().toISOString(), status: finalPost ? 'contabilizado' : 'borrador',
+          is_posted: post, posted_at: post ? new Date().toISOString() : null,
+          updated_by: user.id, updated_at: new Date().toISOString(), status: post ? 'contabilizado' : 'borrador',
         } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
