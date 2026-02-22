@@ -2134,6 +2134,54 @@ export type Database = {
           },
         ]
       }
+      tab_journal_entry_metadata_changes: {
+        Row: {
+          after_json: Json
+          before_json: Json
+          changed_at: string
+          changed_by: string
+          enterprise_id: number
+          id: number
+          journal_entry_id: number
+          reason: string
+        }
+        Insert: {
+          after_json: Json
+          before_json: Json
+          changed_at?: string
+          changed_by: string
+          enterprise_id: number
+          id?: never
+          journal_entry_id: number
+          reason: string
+        }
+        Update: {
+          after_json?: Json
+          before_json?: Json
+          changed_at?: string
+          changed_by?: string
+          enterprise_id?: number
+          id?: never
+          journal_entry_id?: number
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_journal_entry_metadata_changes_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entry_metadata_changes_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_journal_entry_prefixes: {
         Row: {
           code: string
@@ -3286,6 +3334,17 @@ export type Database = {
           p_entry_type: string
         }
         Returns: string
+      }
+      update_posted_entry_metadata: {
+        Args: {
+          p_bank_reference?: string
+          p_beneficiary_name?: string
+          p_description?: string
+          p_document_reference?: string
+          p_journal_entry_id: number
+          p_reason?: string
+        }
+        Returns: Json
       }
       user_is_linked_to_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
