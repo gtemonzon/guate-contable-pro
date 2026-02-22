@@ -27,6 +27,9 @@ interface DetailLine {
   cost_center: string;
   debit_amount: number;
   credit_amount: number;
+  source_type?: string | null;
+  source_id?: number | null;
+  source_ref?: string | null;
 }
 
 interface LinkedPurchaseEntry {
@@ -430,16 +433,23 @@ export default function LinkedPurchasesModal({
       const totals = getTotals();
       const generatedLines: DetailLine[] = [];
 
-      const expensesByAccount: Record<number, { total: number; descriptions: string[] }> = {};
-      for (const p of purchases) {
+      // Build a source ref for each purchase (will be used after insert to get IDs)
+      const purchaseRefs = purchases.map(p =>
+        `${p.fel_document_type} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
+      );
+
+      const expensesByAccount: Record<number, { total: number; descriptions: string[]; refs: string[] }> = {};
+      for (let i = 0; i < purchases.length; i++) {
+        const p = purchases[i];
         if (!p.expense_account_id) continue;
         if (!expensesByAccount[p.expense_account_id]) {
-          expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [] };
+          expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
         }
         expensesByAccount[p.expense_account_id].total += p.base_amount;
         expensesByAccount[p.expense_account_id].descriptions.push(
           `${p.supplier_name} - Fact. ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
         );
+        expensesByAccount[p.expense_account_id].refs.push(purchaseRefs[i]);
       }
 
       for (const [accountId, data] of Object.entries(expensesByAccount)) {
@@ -451,6 +461,8 @@ export default function LinkedPurchasesModal({
           cost_center: "",
           debit_amount: Number(data.total.toFixed(2)),
           credit_amount: 0,
+          source_type: 'PURCHASE',
+          source_ref: data.refs.join(', '),
         });
       }
 
@@ -463,26 +475,27 @@ export default function LinkedPurchasesModal({
           cost_center: "",
           debit_amount: Number(totals.vat.toFixed(2)),
           credit_amount: 0,
+          source_type: 'PURCHASE',
+          source_ref: purchaseRefs.join(', '),
         });
       }
 
-      // Credit line: use bank account if selected, otherwise use suppliers account
-      const creditAccountId = bankAccountId || config?.suppliers_account_id;
-      const creditLabel = bankAccountId
-        ? `Banco - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`
-        : `Proveedores - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`;
-
-      if (creditAccountId) {
+      // When NO bank account is selected, add a suppliers credit line to balance
+      // When bank IS selected, the journal entry's bank auto-line handles the credit side
+      if (!bankAccountId && config?.suppliers_account_id) {
         generatedLines.push({
           id: crypto.randomUUID(),
-          account_id: creditAccountId,
-          description: creditLabel,
+          account_id: config.suppliers_account_id,
+          description: `Proveedores - ${purchases.length} factura(s) - Ref: ${documentReference || 'S/N'}`,
           bank_reference: documentReference,
           cost_center: "",
           debit_amount: 0,
           credit_amount: Number(totals.total.toFixed(2)),
+          source_type: 'PURCHASE',
+          source_ref: purchaseRefs.join(', '),
         });
       }
+      // NOTE: No bank GL line is created here. The bank auto-line invariant handles it.
 
       // If editing, delete old purchase records first
       if (existingPurchaseIds.length > 0) {
@@ -525,7 +538,10 @@ export default function LinkedPurchasesModal({
       }
 
       onPurchasesPosted(generatedLines);
-      toast({ title: "Facturas contabilizadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras` });
+      const balanceNote = bankAccountId
+        ? ""
+        : " Seleccione una cuenta bancaria para balancear la partida.";
+      toast({ title: "Facturas importadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Error al contabilizar", description: getSafeErrorMessage(error), variant: "destructive" });

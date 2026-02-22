@@ -6,7 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2, Landmark } from "lucide-react";
+import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2, Landmark, FileText } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Account, DetailLine } from "./useJournalEntryForm";
 
@@ -162,9 +162,30 @@ export function JournalEntryLinesTable({
                     {isBankLine ? (
                       <span className="text-sm px-1 text-muted-foreground italic">{line.description || "Banco (auto)"}</span>
                     ) : isActive ? (
-                      <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9" />
+                      <div className="space-y-1">
+                        <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9" />
+                        {line.source_type === 'PURCHASE' && line.source_ref && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1 font-normal">
+                            <FileText className="h-3 w-3" />
+                            {line.source_ref}
+                          </Badge>
+                        )}
+                      </div>
                     ) : (
-                      <span className="text-sm px-1 truncate block" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm px-1 truncate block" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
+                        {line.source_type === 'PURCHASE' && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0 cursor-help">
+                                <FileText className="h-3 w-3" />
+                                Compra
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{line.source_ref || 'Factura de compra vinculada'}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     )}
                   </TableCell>
 
