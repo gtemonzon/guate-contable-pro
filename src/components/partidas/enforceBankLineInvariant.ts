@@ -1,6 +1,27 @@
 import type { DetailLine } from "./useJournalEntryForm";
 import type { BankDirection } from "./JournalEntryBankSection";
 
+interface BankLineContext {
+  headerDescription?: string;
+  beneficiaryName?: string;
+  bankReference?: string;
+}
+
+/** Build a descriptive label for the auto-managed bank line. */
+function buildBankDescription(ctx?: BankLineContext): string {
+  const parts: string[] = [];
+  if (ctx?.headerDescription) {
+    // Take first ~60 chars of description
+    const short = ctx.headerDescription.length > 60
+      ? ctx.headerDescription.slice(0, 57) + "..."
+      : ctx.headerDescription;
+    parts.push(short);
+  }
+  if (ctx?.beneficiaryName) parts.push(ctx.beneficiaryName);
+  if (ctx?.bankReference) parts.push(`Ref: ${ctx.bankReference}`);
+  return parts.length > 0 ? parts.join(" - ") : "Banco (auto)";
+}
+
 /**
  * Enforces the single-bank-line invariant:
  * - If bankAccountId is set, exactly ONE line must be is_bank_line=true with that account.
@@ -14,6 +35,7 @@ export function enforceBankLineInvariant(
   lines: DetailLine[],
   bankAccountId: number | null,
   bankDirection: BankDirection,
+  context?: BankLineContext,
 ): DetailLine[] {
   // ── No bank account: strip all bank lines ──
   if (!bankAccountId) {
@@ -53,7 +75,7 @@ export function enforceBankLineInvariant(
     primaryBankLine = {
       id: crypto.randomUUID(),
       account_id: bankAccountId,
-      description: "Banco (auto)",
+      description: buildBankDescription(context),
       cost_center: "",
       debit_amount: 0,
       credit_amount: 0,
@@ -66,9 +88,9 @@ export function enforceBankLineInvariant(
       account_id: bankAccountId,
       is_bank_line: true,
     };
-    // Keep a meaningful description if it had one
-    if (!primaryBankLine.description || primaryBankLine.description === "") {
-      primaryBankLine.description = "Banco (auto)";
+    // Update description with context if it was generic or empty
+    if (!primaryBankLine.description || primaryBankLine.description === "" || primaryBankLine.description === "Banco (auto)") {
+      primaryBankLine.description = buildBankDescription(context);
     }
   } else {
     // Multiple candidates → pick the best one, discard/merge others
@@ -88,8 +110,8 @@ export function enforceBankLineInvariant(
       account_id: bankAccountId,
       is_bank_line: true,
     };
-    if (!primaryBankLine.description || primaryBankLine.description === "") {
-      primaryBankLine.description = "Banco (auto)";
+    if (!primaryBankLine.description || primaryBankLine.description === "" || primaryBankLine.description === "Banco (auto)") {
+      primaryBankLine.description = buildBankDescription(context);
     }
   }
 

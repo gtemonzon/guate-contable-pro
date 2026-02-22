@@ -232,7 +232,7 @@ export function useJournalEntryForm(
         lines.push({
           id: crypto.randomUUID(),
           account_id: entry.bank_account_id,
-          description: "Banco (auto)",
+          description: entry.description || "Banco (auto)",
           cost_center: "",
           debit_amount: 0,
           credit_amount: 0,
@@ -302,11 +302,16 @@ export function useJournalEntryForm(
     if (!open || isLoadingEntry) return;
 
     setDetailLines(prev => {
-      const next = enforceBankLineInvariant(prev, bankAccountId, bankDirection);
+      const next = enforceBankLineInvariant(prev, bankAccountId, bankDirection, {
+        headerDescription,
+        beneficiaryName,
+        bankReference,
+      });
       // Cheap identity check to avoid infinite loops
       if (next.length === prev.length && next.every((l, i) =>
         l.id === prev[i].id &&
         l.account_id === prev[i].account_id &&
+        l.description === prev[i].description &&
         l.debit_amount === prev[i].debit_amount &&
         l.credit_amount === prev[i].credit_amount &&
         l.is_bank_line === prev[i].is_bank_line
@@ -315,7 +320,7 @@ export function useJournalEntryForm(
       }
       return next;
     });
-  }, [bankAccountId, bankDirection, open, isLoadingEntry, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}-${l.account_id}`).join(',')]);
+  }, [bankAccountId, bankDirection, open, isLoadingEntry, headerDescription, beneficiaryName, bankReference, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}-${l.account_id}`).join(',')]);
 
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
@@ -402,7 +407,11 @@ export function useJournalEntryForm(
     const merged = otherLines.length === 0 ? filteredNewLines : [...otherLines, ...filteredNewLines];
 
     // Run invariant to ensure exactly one bank line with correct amount
-    const enforced = enforceBankLineInvariant(merged, bankAccountId, bankDirection);
+    const enforced = enforceBankLineInvariant(merged, bankAccountId, bankDirection, {
+      headerDescription,
+      beneficiaryName,
+      bankReference,
+    });
     setDetailLines(enforced);
   };
 
