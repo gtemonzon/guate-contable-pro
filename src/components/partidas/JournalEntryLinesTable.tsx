@@ -77,8 +77,8 @@ export function JournalEntryLinesTable({
         </div>
       </div>
 
-      <div className="border rounded-lg">
-        <Table>
+      <div className="border rounded-lg overflow-hidden">
+        <Table className="table-fixed w-full">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[25%]">Cuenta</TableHead>
@@ -172,8 +172,8 @@ export function JournalEntryLinesTable({
                         )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm px-1 truncate block" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm px-1 truncate block min-w-0" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
                         {line.source_type === 'PURCHASE' && (
                           <Tooltip>
                             <TooltipTrigger asChild>
