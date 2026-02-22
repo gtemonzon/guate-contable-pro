@@ -1766,6 +1766,7 @@ export type Database = {
         Row: {
           accounting_period_id: number | null
           bank_account_id: number | null
+          bank_direction: string | null
           bank_reference: string | null
           beneficiary_name: string | null
           created_at: string | null
@@ -1796,6 +1797,7 @@ export type Database = {
         Insert: {
           accounting_period_id?: number | null
           bank_account_id?: number | null
+          bank_direction?: string | null
           bank_reference?: string | null
           beneficiary_name?: string | null
           created_at?: string | null
@@ -1826,6 +1828,7 @@ export type Database = {
         Update: {
           accounting_period_id?: number | null
           bank_account_id?: number | null
+          bank_direction?: string | null
           bank_reference?: string | null
           beneficiary_name?: string | null
           created_at?: string | null
@@ -1908,6 +1911,7 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           id: number
+          is_bank_line: boolean
           journal_entry_id: number | null
           line_number: number
         }
@@ -1920,6 +1924,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: number
+          is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number: number
         }
@@ -1932,6 +1937,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: number
+          is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number?: number
         }

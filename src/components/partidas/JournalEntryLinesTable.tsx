@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2 } from "lucide-react";
+import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2, Landmark } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Account, DetailLine } from "./useJournalEntryForm";
 
@@ -26,7 +27,6 @@ interface JournalEntryLinesTableProps {
   onRemoveLine: (id: string) => void;
   onUpdateLine: (id: string, field: keyof DetailLine, value: any) => void;
   onOpenPurchasesModal: () => void;
-  /** Opens the Account Balance Inspector for the currently active line's account */
   onOpenBalanceInspector: () => void;
   entryDate: string;
 }
@@ -36,20 +36,18 @@ export function JournalEntryLinesTable({
   accountPopoverOpen, setAccountPopoverOpen, isReadOnly, totalDebit, totalCredit, isBalanced,
   onAddLine, onRemoveLine, onUpdateLine, onOpenPurchasesModal, onOpenBalanceInspector, entryDate,
 }: JournalEntryLinesTableProps) {
-  // Determine active line's account for the inspector button
   const activeLine = activeLineId ? detailLines.find(l => l.id === activeLineId) : null;
   const activeLineHasAccount = !!activeLine?.account_id;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold">Líneas de Detalle</h3>
-          {/* Balance Inspector shortcut hint */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
-                size="sm"
+                variant="ghost" size="sm"
                 className="h-7 px-2 gap-1 text-xs text-muted-foreground"
                 disabled={!activeLineHasAccount}
                 onClick={onOpenBalanceInspector}
@@ -95,15 +93,29 @@ export function JournalEntryLinesTable({
             {detailLines.map((line) => {
               const account = accounts.find(a => a.id === line.account_id);
               const isActive = activeLineId === line.id;
+              const isBankLine = line.is_bank_line === true;
 
               return (
                 <TableRow
                   key={line.id}
-                  className={cn("cursor-pointer transition-colors", isActive ? "bg-primary/5 border-l-4 border-l-primary" : "hover:bg-[hsl(var(--table-row-hover))] border-l-4 border-l-transparent")}
+                  className={cn(
+                    "cursor-pointer transition-colors",
+                    isBankLine && "bg-primary/5 border-l-4 border-l-primary/40",
+                    !isBankLine && isActive && "bg-primary/5 border-l-4 border-l-primary",
+                    !isBankLine && !isActive && "hover:bg-[hsl(var(--table-row-hover))] border-l-4 border-l-transparent",
+                  )}
                   onClick={() => setActiveLineId(line.id)}
                 >
                   <TableCell className="py-1">
-                    {isActive ? (
+                    {isBankLine ? (
+                      <div className="flex items-center gap-2 px-1">
+                        <Landmark className="h-4 w-4 text-primary shrink-0" />
+                        <span className="text-sm truncate max-w-[200px]" title={account ? `${account.account_code} - ${account.account_name}` : ''}>
+                          {account ? `${account.account_code} - ${account.account_name}` : "—"}
+                        </span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Banco (auto)</Badge>
+                      </div>
+                    ) : isActive ? (
                       <Popover
                         open={accountPopoverOpen[line.id] || false}
                         onOpenChange={(open) => {
@@ -147,7 +159,9 @@ export function JournalEntryLinesTable({
                   </TableCell>
 
                   <TableCell className="py-1">
-                    {isActive ? (
+                    {isBankLine ? (
+                      <span className="text-sm px-1 text-muted-foreground italic">{line.description || "Banco (auto)"}</span>
+                    ) : isActive ? (
                       <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9" />
                     ) : (
                       <span className="text-sm px-1 truncate block" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
@@ -155,7 +169,9 @@ export function JournalEntryLinesTable({
                   </TableCell>
 
                   <TableCell className="py-1">
-                    {isActive ? (
+                    {isBankLine ? (
+                      <span className="text-sm px-1 text-muted-foreground">-</span>
+                    ) : isActive ? (
                       <Input value={line.cost_center} onChange={(e) => onUpdateLine(line.id, "cost_center", e.target.value)} placeholder={account?.requires_cost_center ? "Requerido" : "Opcional"} className={cn("h-9", account?.requires_cost_center ? "border-warning" : "")} />
                     ) : (
                       <span className={cn("text-sm px-1", account?.requires_cost_center && !line.cost_center ? "text-warning" : "")}>{line.cost_center || <span className="text-muted-foreground">-</span>}</span>
@@ -163,7 +179,11 @@ export function JournalEntryLinesTable({
                   </TableCell>
 
                   <TableCell className="py-1">
-                    {isActive ? (
+                    {isBankLine ? (
+                      <span className={cn("text-sm font-mono text-right block px-1", line.debit_amount > 0 ? "font-medium" : "text-muted-foreground")}>
+                        {line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}
+                      </span>
+                    ) : isActive ? (
                       <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono" />
                     ) : (
                       <span className={cn("text-sm font-mono text-right block px-1", line.debit_amount > 0 ? "font-medium" : "text-muted-foreground")}>{line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}</span>
@@ -171,12 +191,17 @@ export function JournalEntryLinesTable({
                   </TableCell>
 
                   <TableCell className="py-1">
-                    {isActive ? (
+                    {isBankLine ? (
+                      <span className={cn("text-sm font-mono text-right block px-1", line.credit_amount > 0 ? "font-medium" : "text-muted-foreground")}>
+                        {line.credit_amount > 0 ? formatCurrency(line.credit_amount) : "-"}
+                      </span>
+                    ) : isActive ? (
                       <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
                           if (e.key === 'Tab' && !e.shiftKey) {
-                            const idx = detailLines.findIndex(l => l.id === line.id);
-                            const next = detailLines[idx + 1];
+                            const nonBankLines = detailLines.filter(l => !l.is_bank_line);
+                            const idx = nonBankLines.findIndex(l => l.id === line.id);
+                            const next = nonBankLines[idx + 1];
                             if (next) { e.preventDefault(); setActiveLineId(next.id); setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [next.id]: true })), 50); }
                           }
                         }}
@@ -187,18 +212,29 @@ export function JournalEntryLinesTable({
                   </TableCell>
 
                   <TableCell className="py-1">
-                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemoveLine(line.id); }} disabled={detailLines.length <= 2} className="h-8 w-8 p-0">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    {isBankLine ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex h-8 w-8 items-center justify-center">
+                            <Landmark className="h-4 w-4 text-muted-foreground/50" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>Línea bancaria automática. Para eliminarla, quite la cuenta bancaria del encabezado.</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemoveLine(line.id); }} disabled={detailLines.filter(l => !l.is_bank_line).length <= 1} className="h-8 w-8 p-0">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );
             })}
 
             <TableRow>
-              <TableCell colSpan={4} className="text-right font-semibold">Totales:</TableCell>
-              <TableCell className="font-semibold">{formatCurrency(totalDebit)}</TableCell>
-              <TableCell className="font-semibold">{formatCurrency(totalCredit)}</TableCell>
+              <TableCell colSpan={3} className="text-right font-semibold">Totales:</TableCell>
+              <TableCell className="font-semibold text-right font-mono">{formatCurrency(totalDebit)}</TableCell>
+              <TableCell className="font-semibold text-right font-mono">{formatCurrency(totalCredit)}</TableCell>
               <TableCell></TableCell>
             </TableRow>
           </TableBody>

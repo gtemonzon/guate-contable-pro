@@ -147,6 +147,9 @@ export default function JournalEntryDialog({
                 setBankReference={form.setBankReference}
                 beneficiaryName={form.beneficiaryName}
                 setBeneficiaryName={form.setBeneficiaryName}
+                bankDirection={form.bankDirection}
+                setBankDirection={form.setBankDirection}
+                isReadOnly={form.isReadOnly}
               />
 
               <JournalEntryLinesTable
