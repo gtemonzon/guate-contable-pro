@@ -469,14 +469,17 @@ export function useJournalEntryForm(
       const bankDirectionValue = bankAccountId ? bankDirection : null;
 
       if (entryToEdit) {
+        // If the entry is already posted, keep its posted status (DB immutability rule)
+        const alreadyPosted = entryToEdit.is_posted || entryToEdit.status === 'contabilizado';
+        const finalPost = post || alreadyPosted;
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: post, posted_at: post ? new Date().toISOString() : null,
-          updated_by: user.id, updated_at: new Date().toISOString(), status: post ? 'contabilizado' : 'borrador',
+          is_posted: finalPost, posted_at: finalPost ? undefined : null,
+          updated_by: user.id, updated_at: new Date().toISOString(), status: finalPost ? 'contabilizado' : 'borrador',
         } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
