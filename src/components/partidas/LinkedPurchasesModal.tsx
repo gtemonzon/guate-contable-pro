@@ -265,6 +265,7 @@ export default function LinkedPurchasesModal({
       const updated = { ...p, [field]: value };
       if (field === 'total_amount') {
         const total = Number(value) || 0;
+        updated.total_amount = total;
         updated.base_amount = Number((total / (1 + VAT_RATE)).toFixed(2));
         updated.vat_amount = Number((total - updated.base_amount).toFixed(2));
       }
