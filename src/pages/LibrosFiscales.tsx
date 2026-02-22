@@ -1399,7 +1399,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Alt+Numpad(+)</p>
+                        <p>Alt+N</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1481,7 +1481,7 @@ export default function LibrosFiscales() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Ctrl+Alt+Numpad(+)</p>
+                        <p>Alt+N</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

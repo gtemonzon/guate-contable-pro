@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -23,6 +23,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenantFavicon } from "@/hooks/useTenantFavicon";
 import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
+import { KeyboardShortcutsDialog } from "@/components/shortcuts/KeyboardShortcutsDialog";
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -37,6 +38,22 @@ const MainLayout = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Global "?" shortcut to show keyboard shortcuts help
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -215,6 +232,7 @@ const MainLayout = () => {
           </main>
         </div>
       </div>
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </SidebarProvider>
   );
 };
