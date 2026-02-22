@@ -18,6 +18,7 @@ import {
 import LinkedPurchasesModal from "./LinkedPurchasesModal";
 import { AccountBalanceInspector } from "./AccountBalanceInspector";
 import VoidChequeDialog from "./VoidChequeDialog";
+import { MetadataEditDialog } from "./MetadataEditDialog";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
@@ -57,6 +58,7 @@ export default function JournalEntryDialog({
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
+  const [metadataEditOpen, setMetadataEditOpen] = useState(false);
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
@@ -205,6 +207,7 @@ export default function JournalEntryDialog({
                 onSaveDraft={() => form.saveEntry(false)}
                 onPost={() => form.saveEntry(true)}
                 onVoidCheque={() => setVoidChequeOpen(true)}
+                onEditMetadata={form.entryStatus === 'contabilizado' ? () => setMetadataEditOpen(true) : undefined}
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
@@ -282,6 +285,26 @@ export default function JournalEntryDialog({
         } : undefined}
         onSuccess={onSuccess}
       />
+
+      {/* Metadata Edit Dialog for posted entries */}
+      {entryToEdit && form.entryStatus === 'contabilizado' && (
+        <MetadataEditDialog
+          open={metadataEditOpen}
+          onOpenChange={setMetadataEditOpen}
+          entryId={entryToEdit.id}
+          entryNumber={form.nextEntryNumber || entryToEdit.entry_number}
+          currentValues={{
+            description: form.headerDescription,
+            beneficiary_name: form.beneficiaryName || null,
+            bank_reference: form.bankReference || null,
+            document_reference: form.documentReference || null,
+          }}
+          onSuccess={() => {
+            onSuccess();
+            onOpenChange(false);
+          }}
+        />
+      )}
     </>
   );
 }
