@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import LinkedPurchasesModal from "./LinkedPurchasesModal";
 import { AccountBalanceInspector } from "./AccountBalanceInspector";
+import VoidChequeDialog from "./VoidChequeDialog";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
@@ -54,6 +55,7 @@ export default function JournalEntryDialog({
   const { selectedEnterpriseId } = useEnterprise();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [voidChequeOpen, setVoidChequeOpen] = useState(false);
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
@@ -181,9 +183,13 @@ export default function JournalEntryDialog({
                 isReadOnly={form.isReadOnly}
                 canCreateEntries={form.permissions.canCreateEntries}
                 canPostEntries={form.permissions.canPostEntries}
+                hasBankAccount={!!form.bankAccountId}
+                hasBankReference={!!form.bankReference.trim()}
+                totalDebit={totalDebit}
                 onCancel={() => form.handleCloseAttempt(false)}
                 onSaveDraft={() => form.saveEntry(false)}
                 onPost={() => form.saveEntry(true)}
+                onVoidCheque={() => setVoidChequeOpen(true)}
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
@@ -229,6 +235,36 @@ export default function JournalEntryDialog({
         balanceType={activeAccount?.balance_type ?? null}
         entryDate={form.entryDate}
         enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+      />
+
+      {/* Void Cheque Dialog */}
+      <VoidChequeDialog
+        open={voidChequeOpen}
+        onOpenChange={setVoidChequeOpen}
+        entry={entryToEdit ? {
+          id: entryToEdit.id,
+          entry_number: entryToEdit.entry_number,
+          entry_date: entryToEdit.entry_date,
+          description: entryToEdit.description,
+          total_debit: entryToEdit.total_debit,
+          total_credit: entryToEdit.total_credit,
+          is_posted: entryToEdit.is_posted,
+          enterprise_id: selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0"),
+          bank_account_id: form.bankAccountId,
+          bank_reference: form.bankReference,
+          beneficiary_name: form.beneficiaryName,
+          bank_direction: form.bankDirection,
+        } : null}
+        formValues={!entryToEdit ? {
+          enterpriseId: selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0"),
+          bankAccountId: form.bankAccountId,
+          bankReference: form.bankReference,
+          beneficiaryName: form.beneficiaryName,
+          entryDate: form.entryDate,
+          description: form.headerDescription,
+          bankDirection: form.bankDirection,
+        } : undefined}
+        onSuccess={onSuccess}
       />
     </>
   );

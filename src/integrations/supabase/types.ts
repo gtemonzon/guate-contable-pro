@@ -939,6 +939,92 @@ export type Database = {
           },
         ]
       }
+      tab_bank_documents: {
+        Row: {
+          bank_account_id: number | null
+          beneficiary_name: string | null
+          concept: string | null
+          created_at: string
+          created_by: string | null
+          direction: string
+          document_date: string
+          document_number: string
+          enterprise_id: number
+          id: number
+          journal_entry_id: number | null
+          reversal_journal_entry_id: number | null
+          status: string
+          updated_at: string
+          void_date: string | null
+          void_reason: string | null
+        }
+        Insert: {
+          bank_account_id?: number | null
+          beneficiary_name?: string | null
+          concept?: string | null
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          document_date: string
+          document_number: string
+          enterprise_id: number
+          id?: never
+          journal_entry_id?: number | null
+          reversal_journal_entry_id?: number | null
+          status?: string
+          updated_at?: string
+          void_date?: string | null
+          void_reason?: string | null
+        }
+        Update: {
+          bank_account_id?: number | null
+          beneficiary_name?: string | null
+          concept?: string | null
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          document_date?: string
+          document_number?: string
+          enterprise_id?: number
+          id?: never
+          journal_entry_id?: number | null
+          reversal_journal_entry_id?: number | null
+          status?: string
+          updated_at?: string
+          void_date?: string | null
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_bank_documents_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_bank_documents_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_bank_documents_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_bank_documents_reversal_journal_entry_id_fkey"
+            columns: ["reversal_journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_bank_import_templates: {
         Row: {
           bank_account_id: number | null
