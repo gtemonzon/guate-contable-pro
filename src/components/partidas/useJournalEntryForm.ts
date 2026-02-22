@@ -542,14 +542,15 @@ export function useJournalEntryForm(
         // Atomically allocate the entry number server-side
         let finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
         setNextEntryNumber(finalEntryNumber);
+        // Always insert as draft first, then add lines, then post if needed
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,
           description: headerDescription, bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: post, posted_at: post ? new Date().toISOString() : null, created_by: user.id,
-          status: post ? 'contabilizado' : 'borrador',
+          is_posted: false, posted_at: null, created_by: user.id,
+          status: 'borrador',
         } as any).select().single();
         if (entryError) throw entryError;
         const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(
@@ -561,6 +562,13 @@ export function useJournalEntryForm(
           } as any))
         );
         if (detailsError) throw detailsError;
+        // Now post if requested (triggers validate lines exist and balance)
+        if (post) {
+          const { error: postError } = await supabase.from("tab_journal_entries").update({
+            is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
+          } as any).eq("id", entry.id);
+          if (postError) throw postError;
+        }
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
       }
       onSuccess();
