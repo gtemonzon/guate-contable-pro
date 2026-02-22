@@ -6,21 +6,23 @@ import ReportePartidas from "@/components/reportes/ReportePartidas";
 import ReporteBalanceGeneral from "@/components/reportes/ReporteBalanceGeneral";
 import ReporteEstadoResultados from "@/components/reportes/ReporteEstadoResultados";
 import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
+import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 
 export default function Reportes() {
   return (
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Reportes</h1>
-        <p className="text-muted-foreground">Genera reportes de compras, ventas, partidas y estados financieros</p>
+        <p className="text-muted-foreground">Genera reportes de compras, ventas, partidas, estados financieros y bancos</p>
       </div>
 
       <Tabs defaultValue="compras" className="space-y-6">
-        <TabsList className="grid w-full max-w-4xl grid-cols-6">
+        <TabsList className="grid w-full max-w-5xl grid-cols-7">
           <TabsTrigger value="compras">Compras</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
           <TabsTrigger value="partidas">Partidas</TabsTrigger>
           <TabsTrigger value="mayor">Mayor</TabsTrigger>
+          <TabsTrigger value="bancos">Bancos</TabsTrigger>
           <TabsTrigger value="balance">Balance</TabsTrigger>
           <TabsTrigger value="resultados">Resultados</TabsTrigger>
         </TabsList>
@@ -53,6 +55,14 @@ export default function Reportes() {
           <Card>
             <CardContent className="pt-6">
               <ReporteLibroMayor />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bancos">
+          <Card>
+            <CardContent className="pt-6">
+              <ReporteLibroBancos />
             </CardContent>
           </Card>
         </TabsContent>

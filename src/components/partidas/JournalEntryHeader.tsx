@@ -1,7 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import type { Period } from "./useJournalEntryForm";
 
 interface JournalEntryHeaderProps {
@@ -70,17 +69,6 @@ export function JournalEntryHeader({
         </Select>
       </div>
 
-      <div className="col-span-2 md:col-span-4">
-        <Label htmlFor="headerDesc">Descripción General</Label>
-        <Textarea
-          id="headerDesc"
-          placeholder="Descripción de la partida..."
-          value={headerDescription}
-          onChange={(e) => setHeaderDescription(e.target.value)}
-          onBlur={propagateDescriptionToLines}
-          rows={2}
-        />
-      </div>
     </div>
   );
 }
