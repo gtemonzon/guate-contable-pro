@@ -97,7 +97,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   purchaseRef.current = purchase;
 
   // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
-  const isFuelOperation = !isCompact && operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
+  const isFuelOperation = operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
@@ -469,9 +469,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
             </div>
 
-            {/* Row 2: Total, IVA, Cuenta Gasto, Warnings, Delete */}
+            {/* Row 2: Total, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
             <div className="grid grid-cols-12 gap-2 items-end">
-              <div className="col-span-2">
+              <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
                 <label className="text-xs text-muted-foreground">Total c/IVA</label>
                 <Input
                   type="number"
@@ -482,7 +482,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   className="h-8 text-xs"
                 />
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">IVA</label>
                 <Input
                   value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
@@ -490,7 +490,43 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   className="h-8 text-xs bg-muted"
                 />
               </div>
-              <div className="col-span-4">
+              {isFuelOperation && (
+                <div className="col-span-1">
+                  <label className="text-xs text-muted-foreground">IDP</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={purchase.idp_amount || 0}
+                    onChange={(e) => handleFieldChange("idp_amount", e.target.value)}
+                    className="h-8 text-xs"
+                    title="Impuesto a Distribución de Petróleo"
+                  />
+                </div>
+              )}
+              <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
+                <label className="text-xs text-muted-foreground">
+                  Tipo Op.
+                  {isRecommended("operation_type_id") && (
+                    <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
+                  )}
+                </label>
+                <Select
+                  value={purchase.operation_type_id?.toString() || ""}
+                  onValueChange={(v) => handleFieldChange("operation_type_id", v ? parseInt(v) : null)}
+                >
+                  <SelectTrigger className={cn("h-8 text-xs", isRecommended("operation_type_id") && recommendedStyle)}>
+                    <SelectValue placeholder="Tipo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operationTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id.toString()}>
+                        {type.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-3">
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
                   accounts={expenseAccounts}
@@ -500,33 +536,33 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   className="w-full"
                 />
               </div>
-              <div className="col-span-3 flex items-end gap-1">
+              <div className="col-span-2 flex items-end gap-1">
                 {dupWarning && (
                   <div className="flex items-center gap-1 text-destructive text-[10px] pb-1">
                     <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>{dupWarning}</span>
+                    <span className="truncate">{dupWarning}</span>
                   </div>
                 )}
-              </div>
-              <div className="col-span-1 flex items-end justify-end gap-1">
-                <Button
-                  size="sm"
-                  variant={hasChanges ? "default" : "outline"}
-                  onClick={handleSaveClick}
-                  className="h-8 w-8 p-0"
-                  title="Guardar"
-                >
-                  <Save className="h-3 w-3" />
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => onDelete(index)} 
-                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                  title="Eliminar"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                <div className="ml-auto flex gap-1">
+                  <Button
+                    size="sm"
+                    variant={hasChanges ? "default" : "outline"}
+                    onClick={handleSaveClick}
+                    className="h-8 w-8 p-0"
+                    title="Guardar"
+                  >
+                    <Save className="h-3 w-3" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => onDelete(index)} 
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
