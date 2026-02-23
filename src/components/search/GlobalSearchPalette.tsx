@@ -20,6 +20,10 @@ import {
   Clock,
   X,
   Search,
+  Plus,
+  BarChart3,
+  ArrowRight,
+  CreditCard,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -32,7 +36,7 @@ const getRecentSearchesKey = (enterpriseId: string | null) =>
 
 interface SearchResult {
   id: string;
-  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos";
+  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos" | "documentos_bancarios";
   title: string;
   subtitle: string;
   meta?: string;
@@ -45,7 +49,17 @@ const CATEGORY_CONFIG = {
   compras: { label: "Compras", icon: ShoppingCart, color: "text-orange-600 dark:text-orange-400" },
   ventas: { label: "Ventas", icon: DollarSign, color: "text-violet-600 dark:text-violet-400" },
   bancos: { label: "Movimientos Bancarios", icon: Banknote, color: "text-cyan-600 dark:text-cyan-400" },
+  documentos_bancarios: { label: "Documentos Bancarios", icon: CreditCard, color: "text-pink-600 dark:text-pink-400" },
 };
+
+interface QuickAction {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  action: () => void;
+  keywords: string[];
+}
 
 interface GlobalSearchPaletteProps {
   enterpriseId: string | null;
@@ -59,6 +73,82 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Quick actions
+  const quickActions: QuickAction[] = [
+    {
+      id: "new-entry",
+      label: "Nueva Partida",
+      description: "Crear una nueva partida contable",
+      icon: <Plus className="h-4 w-4" />,
+      action: () => { navigate("/partidas"); setTimeout(() => window.dispatchEvent(new CustomEvent("quick-action:new-entry")), 100); },
+      keywords: ["nueva", "partida", "crear", "new", "entry"],
+    },
+    {
+      id: "go-purchases-book",
+      label: "Libro de Compras",
+      description: "Ir al libro de compras",
+      icon: <ShoppingCart className="h-4 w-4" />,
+      action: () => navigate("/libros-fiscales?tab=compras"),
+      keywords: ["compras", "libro", "purchases", "book"],
+    },
+    {
+      id: "go-sales-book",
+      label: "Libro de Ventas",
+      description: "Ir al libro de ventas",
+      icon: <DollarSign className="h-4 w-4" />,
+      action: () => navigate("/libros-fiscales?tab=ventas"),
+      keywords: ["ventas", "libro", "sales", "book"],
+    },
+    {
+      id: "go-trial-balance",
+      label: "Balance de Saldos",
+      description: "Ver balance de comprobación",
+      icon: <BarChart3 className="h-4 w-4" />,
+      action: () => navigate("/saldos"),
+      keywords: ["balance", "saldos", "trial", "comprobación"],
+    },
+    {
+      id: "go-ledger",
+      label: "Mayor General",
+      description: "Ver libro mayor",
+      icon: <BookOpen className="h-4 w-4" />,
+      action: () => navigate("/mayor"),
+      keywords: ["mayor", "ledger", "general"],
+    },
+    {
+      id: "go-bank-book",
+      label: "Libro de Bancos",
+      description: "Ver conciliación y movimientos bancarios",
+      icon: <Banknote className="h-4 w-4" />,
+      action: () => navigate("/conciliacion"),
+      keywords: ["banco", "bank", "conciliación", "reconcile"],
+    },
+    {
+      id: "go-reports",
+      label: "Reportes",
+      description: "Ver reportes financieros",
+      icon: <BarChart3 className="h-4 w-4" />,
+      action: () => navigate("/reportes"),
+      keywords: ["reportes", "reports", "estados", "financieros"],
+    },
+    {
+      id: "go-accounts",
+      label: "Catálogo de Cuentas",
+      description: "Ver plan de cuentas contables",
+      icon: <BookOpen className="h-4 w-4" />,
+      action: () => navigate("/cuentas"),
+      keywords: ["cuentas", "catálogo", "plan", "accounts"],
+    },
+  ];
+
+  // Filter quick actions by query
+  const filteredActions = query.length >= 1
+    ? quickActions.filter((a) =>
+        a.keywords.some((k) => k.toLowerCase().includes(query.toLowerCase())) ||
+        a.label.toLowerCase().includes(query.toLowerCase())
+      )
+    : quickActions;
 
   // Load recent searches
   useEffect(() => {
@@ -116,14 +206,14 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
       const allResults: SearchResult[] = [];
 
       try {
-        // Search journal entries
+        // Search journal entries (expanded: beneficiary, document_reference, bank_reference)
         const journalPromise = supabase
           .from("tab_journal_entries")
-          .select("id, entry_number, entry_date, description, total_debit, status")
+          .select("id, entry_number, entry_date, description, total_debit, status, beneficiary_name, document_reference, bank_reference")
           .eq("enterprise_id", eid)
           .is("deleted_at", null)
           .or(
-            `entry_number.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`
+            `entry_number.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,beneficiary_name.ilike.%${searchTerm}%,document_reference.ilike.%${searchTerm}%,bank_reference.ilike.%${searchTerm}%`
           )
           .order("entry_date", { ascending: false })
           .limit(8);
@@ -143,11 +233,11 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
         // Search purchases
         const purchasesPromise = supabase
           .from("tab_purchase_ledger")
-          .select("id, invoice_number, invoice_date, supplier_nit, supplier_name, total_amount")
+          .select("id, invoice_number, invoice_series, invoice_date, supplier_nit, supplier_name, total_amount")
           .eq("enterprise_id", eid)
           .is("deleted_at", null)
           .or(
-            `supplier_nit.ilike.%${searchTerm}%,supplier_name.ilike.%${searchTerm}%,invoice_number.ilike.%${searchTerm}%`
+            `supplier_nit.ilike.%${searchTerm}%,supplier_name.ilike.%${searchTerm}%,invoice_number.ilike.%${searchTerm}%,invoice_series.ilike.%${searchTerm}%`
           )
           .order("invoice_date", { ascending: false })
           .limit(8);
@@ -175,12 +265,24 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           .order("movement_date", { ascending: false })
           .limit(8);
 
-        const [journals, accounts, purchases, sales, banks] = await Promise.all([
+        // Search bank documents (cheques, transfers)
+        const bankDocsPromise = supabase
+          .from("tab_bank_documents")
+          .select("id, document_number, document_date, beneficiary_name, concept, direction, status")
+          .eq("enterprise_id", eid)
+          .or(
+            `document_number.ilike.%${searchTerm}%,beneficiary_name.ilike.%${searchTerm}%,concept.ilike.%${searchTerm}%`
+          )
+          .order("document_date", { ascending: false })
+          .limit(8);
+
+        const [journals, accounts, purchases, sales, banks, bankDocs] = await Promise.all([
           journalPromise,
           accountsPromise,
           purchasesPromise,
           salesPromise,
           bankPromise,
+          bankDocsPromise,
         ]);
 
         // Map journal entries
@@ -214,7 +316,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           allResults.push({
             id: `compra-${p.id}`,
             category: "compras",
-            title: `Fact. ${p.invoice_number} - ${p.supplier_name}`,
+            title: `Fact. ${p.invoice_series ? `${p.invoice_series}-` : ""}${p.invoice_number} - ${p.supplier_name}`,
             subtitle: `NIT: ${p.supplier_nit}`,
             meta: `${formatCurrency(p.total_amount)} · ${format(d, "dd/MM/yyyy")}`,
             route: `/libros-fiscales?tab=compras&month=${month}&year=${year}&highlight=${p.id}`,
@@ -249,6 +351,19 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           });
         });
 
+        // Map bank documents
+        bankDocs.data?.forEach((bd) => {
+          const dirLabel = bd.direction === "OUT" ? "Cheque" : "Depósito";
+          allResults.push({
+            id: `doc-banco-${bd.id}`,
+            category: "documentos_bancarios",
+            title: `${dirLabel} #${bd.document_number}`,
+            subtitle: bd.beneficiary_name || bd.concept || "Sin descripción",
+            meta: `${bd.status} · ${format(new Date(bd.document_date), "dd/MM/yyyy")}`,
+            route: `/partidas?viewBankDoc=${bd.id}`,
+          });
+        });
+
         setResults(allResults);
       } catch (error) {
         console.error("Search error:", error);
@@ -276,6 +391,11 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
     navigate(result.route);
   };
 
+  const handleActionSelect = (action: QuickAction) => {
+    setOpen(false);
+    action.action();
+  };
+
   const handleRecentSelect = (term: string) => {
     setQuery(term);
   };
@@ -288,6 +408,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
   }, {});
 
   const totalResults = results.length;
+  const showQuickActions = query.length < 2 || filteredActions.length > 0;
 
   return (
     <>
@@ -305,7 +426,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
 
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
-          placeholder="Buscar partidas, cuentas, facturas, movimientos..."
+          placeholder="Buscar partidas, cuentas, facturas, cheques... o escribir un comando"
           value={query}
           onValueChange={setQuery}
         />
@@ -316,8 +437,34 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
             </div>
           )}
 
-          {!loading && query.length >= 2 && totalResults === 0 && (
+          {!loading && query.length >= 2 && totalResults === 0 && filteredActions.length === 0 && (
             <CommandEmpty>No se encontraron resultados para "{query}"</CommandEmpty>
+          )}
+
+          {/* Quick Actions */}
+          {!loading && showQuickActions && filteredActions.length > 0 && (
+            <>
+              <CommandGroup heading="Acciones rápidas">
+                {(query.length < 2 ? filteredActions.slice(0, 5) : filteredActions).map((action) => (
+                  <CommandItem
+                    key={action.id}
+                    value={action.id}
+                    onSelect={() => handleActionSelect(action)}
+                    className="flex items-center gap-3 py-2"
+                  >
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/10 text-primary">
+                      {action.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium">{action.label}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{action.description}</span>
+                    </div>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              {(totalResults > 0 || recentSearches.length > 0) && <CommandSeparator />}
+            </>
           )}
 
           {/* Recent searches when no query */}
@@ -355,6 +502,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           {/* Grouped results */}
           {Object.entries(grouped).map(([category, items], idx) => {
             const config = CATEGORY_CONFIG[category as keyof typeof CATEGORY_CONFIG];
+            if (!config) return null;
             const Icon = config.icon;
 
             return (
