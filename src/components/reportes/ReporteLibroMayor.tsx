@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ interface AccountLedger {
 }
 
 export default function ReporteLibroMayor() {
+  const [searchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
   const [startDate, setStartDate] = useState<string>("");
@@ -85,12 +87,44 @@ export default function ReporteLibroMayor() {
     if (enterpriseId) {
       fetchAccounts(enterpriseId);
       fetchEnterpriseName(enterpriseId);
-      
-      // Establecer fechas por defecto (año actual)
-      const today = new Date();
-      const firstDay = new Date(today.getFullYear(), 0, 1);
-      setStartDate(firstDay.toISOString().split('T')[0]);
-      setEndDate(today.toISOString().split('T')[0]);
+
+      // Read URL params for date context
+      const accountIdParam = searchParams.get("accountId");
+      const startDateParam = searchParams.get("startDate");
+      const endDateParam = searchParams.get("endDate");
+
+      if (accountIdParam) {
+        setSelectedAccounts([parseInt(accountIdParam)]);
+      }
+
+      if (startDateParam && endDateParam) {
+        setStartDate(startDateParam);
+        setEndDate(endDateParam);
+      } else {
+        // Use active period if available, otherwise current year
+        const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterpriseId}`);
+        if (savedPeriodId) {
+          supabase
+            .from('tab_accounting_periods')
+            .select('start_date, end_date')
+            .eq('id', parseInt(savedPeriodId))
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                setStartDate(data.start_date);
+                setEndDate(data.end_date);
+              } else {
+                const today = new Date();
+                setStartDate(`${today.getFullYear()}-01-01`);
+                setEndDate(today.toISOString().split('T')[0]);
+              }
+            });
+        } else {
+          const today = new Date();
+          setStartDate(`${today.getFullYear()}-01-01`);
+          setEndDate(today.toISOString().split('T')[0]);
+        }
+      }
     }
 
     const handleStorageChange = () => {
@@ -112,7 +146,17 @@ export default function ReporteLibroMayor() {
       window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("enterpriseChanged", handleStorageChange);
     };
-  }, []);
+  }, [searchParams]);
+
+  // Auto-generate when navigated with URL params (account + dates)
+  const urlAccountId = searchParams.get("accountId");
+  const autoTriggered = useState(false);
+  useEffect(() => {
+    if (urlAccountId && selectedAccounts.length > 0 && startDate && endDate && currentEnterpriseId && accounts.length > 0 && !autoTriggered[0]) {
+      autoTriggered[1](true);
+      generateReport();
+    }
+  }, [selectedAccounts, startDate, endDate, accounts]);
 
   const fetchEnterpriseName = async (enterpriseId: string) => {
     try {
