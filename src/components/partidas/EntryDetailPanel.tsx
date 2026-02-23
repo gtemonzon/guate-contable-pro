@@ -11,12 +11,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import EntityLink, { type DateContext } from "@/components/ui/entity-link";
 import ActionBar, { type ActionBarItem } from "@/components/ui/action-bar";
+import { useToast } from "@/hooks/use-toast";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 // --- Types ---
 interface EntryLine {
@@ -48,6 +50,8 @@ interface EntryData {
   bank_reference?: string | null;
   bank_account_id?: number | null;
   accounting_period_id?: number | null;
+  reversal_entry_id?: number | null;
+  reversed_by_entry_id?: number | null;
   details: EntryLine[];
 }
 
@@ -91,7 +95,11 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
   const [linkedPurchases, setLinkedPurchases] = useState<LinkedPurchase[]>([]);
   const [activeTab, setActiveTab] = useState("detalle");
   const [dateContext, setDateContext] = useState<DateContext | null>(null);
+  const [reversalInfo, setReversalInfo] = useState<{ entry_number: string; status: string; id: number } | null>(null);
+  const [reversedByInfo, setReversedByInfo] = useState<{ entry_number: string; id: number } | null>(null);
+  const [postingReversal, setPostingReversal] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (entryId) {
@@ -102,6 +110,8 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
       setEntry(null);
       setLinkedPurchases([]);
       setDateContext(null);
+      setReversalInfo(null);
+      setReversedByInfo(null);
     }
   }, [entryId]);
 
@@ -132,6 +142,8 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
         created_by_name: entryData.creator?.full_name,
         updated_by_name: entryData.modifier?.full_name,
         accounting_period_id: entryData.accounting_period_id,
+        reversal_entry_id: entryData.reversal_entry_id,
+        reversed_by_entry_id: entryData.reversed_by_entry_id,
         details: (details || []).map((d: any) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
@@ -142,6 +154,30 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
           credit_amount: Number(d.credit_amount) || 0,
         })),
       });
+
+      // Fetch linked reversal info
+      if (entryData.reversal_entry_id) {
+        const { data: revData } = await supabase
+          .from("tab_journal_entries")
+          .select("id, entry_number, status")
+          .eq("id", entryData.reversal_entry_id)
+          .single();
+        setReversalInfo(revData ? { entry_number: revData.entry_number, status: revData.status || 'borrador', id: revData.id } : null);
+      } else {
+        setReversalInfo(null);
+      }
+
+      // Fetch "reversed by" info (this is a REV- entry pointing back)
+      if (entryData.reversed_by_entry_id) {
+        const { data: origData } = await supabase
+          .from("tab_journal_entries")
+          .select("id, entry_number")
+          .eq("id", entryData.reversed_by_entry_id)
+          .single();
+        setReversedByInfo(origData ? { entry_number: origData.entry_number, id: origData.id } : null);
+      } else {
+        setReversedByInfo(null);
+      }
 
       // Derive date context from accounting period or entry date
       if (entryData.accounting_period_id) {
@@ -292,6 +328,58 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
 
       {/* Action Bar */}
       <ActionBar items={actionBarItems} />
+
+      {/* Reversal banners */}
+      {reversalInfo && (
+        <div className={`mx-4 mt-2 flex items-center gap-2 p-2.5 rounded-lg border text-xs ${
+          reversalInfo.status === 'contabilizado'
+            ? 'bg-destructive/10 border-destructive/30 text-destructive'
+            : 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400'
+        }`}>
+          <RotateCcw className="h-4 w-4 flex-shrink-0" />
+          <div className="flex-1">
+            {reversalInfo.status === 'contabilizado' ? (
+              <span className="font-medium">Revertida por {reversalInfo.entry_number}</span>
+            ) : (
+              <span>Corrección pendiente: <strong>{reversalInfo.entry_number}</strong> no contabilizada aún.</span>
+            )}
+          </div>
+          {reversalInfo.status !== 'contabilizado' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2 border-amber-400 text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+              disabled={postingReversal}
+              onClick={async () => {
+                try {
+                  setPostingReversal(true);
+                  const { error } = await supabase
+                    .from("tab_journal_entries")
+                    .update({ status: "contabilizado", is_posted: true, posted_at: new Date().toISOString() })
+                    .eq("id", reversalInfo.id);
+                  if (error) throw error;
+                  toast({ title: "Reversión contabilizada", description: `${reversalInfo.entry_number} fue contabilizada.` });
+                  if (entryId) fetchEntry(entryId);
+                } catch (err: any) {
+                  toast({ title: "Error", description: getSafeErrorMessage(err), variant: "destructive" });
+                } finally {
+                  setPostingReversal(false);
+                }
+              }}
+            >
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Contabilizar reversión
+            </Button>
+          )}
+        </div>
+      )}
+
+      {reversedByInfo && (
+        <div className="mx-4 mt-2 flex items-center gap-2 p-2.5 rounded-lg border text-xs bg-muted/50 border-border text-muted-foreground">
+          <RotateCcw className="h-4 w-4 flex-shrink-0" />
+          <span>Esta partida es reversión de <strong>{reversedByInfo.entry_number}</strong></span>
+        </div>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">

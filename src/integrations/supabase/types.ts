@@ -1896,6 +1896,8 @@ export type Database = {
           is_posted: boolean | null
           posted_at: string | null
           rejection_reason: string | null
+          reversal_entry_id: number | null
+          reversed_by_entry_id: number | null
           reviewed_at: string | null
           reviewed_by: string | null
           status: string | null
@@ -1927,6 +1929,8 @@ export type Database = {
           is_posted?: boolean | null
           posted_at?: string | null
           rejection_reason?: string | null
+          reversal_entry_id?: number | null
+          reversed_by_entry_id?: number | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string | null
@@ -1958,6 +1962,8 @@ export type Database = {
           is_posted?: boolean | null
           posted_at?: string | null
           rejection_reason?: string | null
+          reversal_entry_id?: number | null
+          reversed_by_entry_id?: number | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string | null
@@ -2000,6 +2006,20 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entries_reversal_entry_id_fkey"
+            columns: ["reversal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_journal_entries_reversed_by_entry_id_fkey"
+            columns: ["reversed_by_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
             referencedColumns: ["id"]
           },
           {

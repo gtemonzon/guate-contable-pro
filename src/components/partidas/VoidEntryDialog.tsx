@@ -2,7 +2,6 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -10,11 +9,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, Save, CheckCircle } from "lucide-react";
 
 interface VoidEntryDialogProps {
   open: boolean;
@@ -30,6 +30,10 @@ interface VoidEntryDialogProps {
     accounting_period_id?: number | null;
   } | null;
   onSuccess: () => void;
+  /** Whether the entry's period is currently open */
+  periodIsOpen?: boolean;
+  /** Whether the current user has permission to post entries */
+  canPost?: boolean;
 }
 
 export default function VoidEntryDialog({
@@ -37,12 +41,16 @@ export default function VoidEntryDialog({
   onOpenChange,
   entry,
   onSuccess,
+  periodIsOpen = false,
+  canPost = false,
 }: VoidEntryDialogProps) {
   const [loading, setLoading] = useState(false);
   const [reason, setReason] = useState("");
   const { toast } = useToast();
 
-  const handleVoid = async () => {
+  const canPostNow = periodIsOpen && canPost;
+
+  const handleVoid = async (postImmediately: boolean) => {
     if (!entry) return;
 
     if (!reason.trim()) {
@@ -74,8 +82,7 @@ export default function VoidEntryDialog({
       // 2. Generate the reversal entry number
       const today = new Date();
       const datePrefix = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
-      
-      // Get the next reversal number for today
+
       const { data: existingReversals } = await supabase
         .from("tab_journal_entries")
         .select("entry_number")
@@ -95,7 +102,7 @@ export default function VoidEntryDialog({
 
       const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
 
-      // 3. Create the reversal entry (swap debit/credit, inherit original date & period)
+      // 3. Create the reversal entry as draft first (DB trigger requires lines before posting)
       const { data: reversalEntry, error: reversalError } = await supabase
         .from("tab_journal_entries")
         .insert({
@@ -110,6 +117,7 @@ export default function VoidEntryDialog({
           is_posted: false,
           status: "borrador",
           document_reference: `REF: ${entry.entry_number}`,
+          reversed_by_entry_id: entry.id,
         })
         .select()
         .single();
@@ -122,8 +130,8 @@ export default function VoidEntryDialog({
         line_number: index + 1,
         account_id: d.account_id,
         description: `Rev. ${entry.entry_number}: ${d.description || ""}`,
-        debit_amount: d.credit_amount || 0, // Swapped
-        credit_amount: d.debit_amount || 0, // Swapped
+        debit_amount: d.credit_amount || 0,
+        credit_amount: d.debit_amount || 0,
         cost_center: d.cost_center,
         bank_reference: d.bank_reference,
       }));
@@ -134,9 +142,35 @@ export default function VoidEntryDialog({
 
       if (detailsInsertError) throw detailsInsertError;
 
+      // 5. Link original → reversal
+      const { error: linkError } = await supabase
+        .from("tab_journal_entries")
+        .update({ reversal_entry_id: reversalEntry.id })
+        .eq("id", entry.id);
+
+      if (linkError) throw linkError;
+
+      // 6. If post immediately, update reversal to posted
+      if (postImmediately) {
+        const { error: postError } = await supabase
+          .from("tab_journal_entries")
+          .update({
+            status: "contabilizado",
+            is_posted: true,
+            posted_at: new Date().toISOString(),
+          })
+          .eq("id", reversalEntry.id);
+
+        if (postError) throw postError;
+      }
+
+      const statusMsg = postImmediately
+        ? `Reversión ${reversalEntryNumber} creada y contabilizada`
+        : `Reversión ${reversalEntryNumber} creada como borrador — pendiente de contabilizar`;
+
       toast({
-        title: "Partida de reversión creada",
-        description: `Se creó la partida ${reversalEntryNumber} para revertir ${entry.entry_number}`,
+        title: postImmediately ? "Partida revertida" : "Reversión pendiente",
+        description: statusMsg,
       });
 
       setReason("");
@@ -192,21 +226,45 @@ export default function VoidEntryDialog({
                   onChange={(e) => setReason(e.target.value)}
                 />
               </div>
+
+              {!canPostNow && (
+                <div className="flex items-start gap-2 p-2 bg-muted/50 border rounded-lg text-xs text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>
+                    {!periodIsOpen
+                      ? "El período está cerrado. La reversión se creará como borrador."
+                      : "No tienes permiso para contabilizar. La reversión se creará como borrador."}
+                  </span>
+                </div>
+              )}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
           <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault();
-              handleVoid();
-            }}
-            disabled={loading || !reason.trim()}
-            className="bg-amber-600 hover:bg-amber-700"
-          >
-            {loading ? "Creando..." : "Generar Reversión"}
-          </AlertDialogAction>
+          <div className="flex gap-2 sm:ml-auto">
+            {/* Always offer Draft option */}
+            <Button
+              variant="secondary"
+              onClick={() => handleVoid(false)}
+              disabled={loading || !reason.trim()}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {loading ? "Creando..." : "Crear borrador"}
+            </Button>
+
+            {/* Post Now — only if period open + user can post */}
+            {canPostNow && (
+              <Button
+                onClick={() => handleVoid(true)}
+                disabled={loading || !reason.trim()}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                {loading ? "Creando..." : "Revertir y contabilizar"}
+              </Button>
+            )}
+          </div>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
