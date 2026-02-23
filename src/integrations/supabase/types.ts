@@ -3232,6 +3232,7 @@ export type Database = {
           entry_date: string
           entry_description: string
           entry_number: string
+          journal_entry_id: number
           line_description: string
           opening_balance: number
         }[]

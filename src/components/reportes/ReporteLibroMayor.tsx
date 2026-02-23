@@ -30,6 +30,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import EntityLink from "@/components/ui/entity-link";
 
 interface Account {
   id: number;
@@ -40,6 +41,7 @@ interface Account {
 
 interface LedgerEntry {
   id: number;
+  journal_entry_id: number;
   entry_date: string;
   entry_number: string;
   description: string;
@@ -265,6 +267,7 @@ export default function ReporteLibroMayor() {
           runningBalance += debit - credit;
           return {
             id: Number(row.detail_id),
+            journal_entry_id: Number(row.journal_entry_id),
             entry_date: row.entry_date,
             entry_number: row.entry_number,
             description: row.line_description || row.entry_description,
@@ -610,10 +613,15 @@ export default function ReporteLibroMayor() {
                       </TableHeader>
                       <TableBody>
                         {ledger.entries.map((entry) => (
-                          <TableRow key={entry.id}>
+                          <TableRow key={entry.id} className="group">
                             <TableCell>{entry.entry_date}</TableCell>
-                            <TableCell className="font-mono text-sm">
-                              {entry.entry_number}
+                            <TableCell className="text-sm">
+                              <EntityLink
+                                type="journal_entry"
+                                label={entry.entry_number}
+                                id={entry.journal_entry_id}
+                                secondaryLabel={entry.description}
+                              />
                             </TableCell>
                             <TableCell>{entry.description}</TableCell>
                             <TableCell className="text-right font-mono">
