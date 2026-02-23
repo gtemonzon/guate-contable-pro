@@ -289,15 +289,23 @@ export default function LinkedPurchasesModal({
     if (editingIndex === index) setEditingIndex(null);
   };
 
+  const recalcVat = (p: PurchaseEntry): PurchaseEntry => {
+    const total = p.total_amount || 0;
+    const idp = p.idp_amount || 0;
+    const taxable = total - idp;
+    const base = Number((taxable / (1 + VAT_RATE)).toFixed(2));
+    const vat = Number((taxable - base).toFixed(2));
+    return { ...p, base_amount: base, vat_amount: vat };
+  };
+
   const updatePurchase = (index: number, field: keyof PurchaseEntry, value: any) => {
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
       const updated = { ...p, [field]: value };
-      if (field === 'total_amount') {
-        const total = Number(value) || 0;
-        updated.total_amount = total;
-        updated.base_amount = Number((total / (1 + VAT_RATE)).toFixed(2));
-        updated.vat_amount = Number((total - updated.base_amount).toFixed(2));
+      if (field === 'total_amount' || field === 'idp_amount') {
+        if (field === 'total_amount') updated.total_amount = Number(value) || 0;
+        if (field === 'idp_amount') updated.idp_amount = Number(value) || 0;
+        return recalcVat(updated);
       }
       return updated;
     }));
@@ -366,7 +374,8 @@ export default function LinkedPurchasesModal({
       total: acc.total + (p.total_amount || 0),
       base: acc.base + (p.base_amount || 0),
       vat: acc.vat + (p.vat_amount || 0),
-    }), { total: 0, base: 0, vat: 0 });
+      idp: acc.idp + (p.idp_amount || 0),
+    }), { total: 0, base: 0, vat: 0, idp: 0 });
   }, [purchases]);
 
   const validatePurchases = (): boolean => {
@@ -433,7 +442,8 @@ export default function LinkedPurchasesModal({
         if (!expensesByAccount[p.expense_account_id]) {
           expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
         }
-        expensesByAccount[p.expense_account_id].total += p.base_amount;
+        // Expense = base_amount + IDP (fuel tax is part of the cost, not recoverable)
+        expensesByAccount[p.expense_account_id].total += p.base_amount + (p.idp_amount || 0);
         expensesByAccount[p.expense_account_id].descriptions.push(
           `${p.supplier_name} - Fact. ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
         );
@@ -606,7 +616,7 @@ export default function LinkedPurchasesModal({
           <div className="flex items-center gap-4">
             <div className="text-right text-sm">
               <p className="text-muted-foreground">Total: <span className="font-semibold text-foreground">{formatCurrency(totals.total)}</span></p>
-              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)} | IVA: {formatCurrency(totals.vat)}</p>
+              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.idp > 0 ? ` | IDP: ${formatCurrency(totals.idp)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
             </div>
             <Button onClick={handleContabilizar} disabled={loading || purchases.length === 0} className="gap-2">
               <Calculator className="h-4 w-4" />
@@ -645,7 +655,7 @@ export default function LinkedPurchasesModal({
                 <h5 className="font-medium text-sm">Vista previa de contabilización:</h5>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">
-                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base)}) + IVA Crédito ({formatCurrency(totals.vat)})
+                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base + totals.idp)}) + IVA Crédito ({formatCurrency(totals.vat)})
                   </p>
                   <p className="text-muted-foreground">
                     <span className="font-medium">HABER:</span> {creditPreviewLabel} ({formatCurrency(totals.total)})
