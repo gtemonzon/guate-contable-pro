@@ -6,11 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
 import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
+import { MetadataEditDialog } from "@/components/partidas/MetadataEditDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -39,6 +40,9 @@ interface JournalEntry {
   created_at: string;
   enterprise_id?: number;
   accounting_period_id?: number | null;
+  beneficiary_name?: string | null;
+  bank_reference?: string | null;
+  document_reference?: string | null;
 }
 
 interface AccountingPeriod {
@@ -88,6 +92,8 @@ export default function Partidas() {
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [viewingEntryId, setViewingEntryId] = useState<number | null>(null);
   const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
+  const [metadataEntry, setMetadataEntry] = useState<JournalEntry | null>(null);
+  const [showMetadataDialog, setShowMetadataDialog] = useState(false);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [openPeriods, setOpenPeriods] = useState<AccountingPeriod[]>([]);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
@@ -328,8 +334,13 @@ export default function Partidas() {
   const handleEditFromPanel = (entryId: number) => {
     const entry = entries.find(e => e.id === entryId);
     if (entry) {
-      setEditingEntry(entry);
-      setShowEditDialog(true);
+      if (entry.status === 'contabilizado') {
+        setMetadataEntry(entry);
+        setShowMetadataDialog(true);
+      } else {
+        setEditingEntry(entry);
+        setShowEditDialog(true);
+      }
     }
   };
 
@@ -564,15 +575,24 @@ export default function Partidas() {
                             disabled={!isEntryInOpenPeriod(entry)}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingEntry(entry);
-                              setShowEditDialog(true);
+                              if (entry.status === 'contabilizado') {
+                                setMetadataEntry(entry);
+                                setShowMetadataDialog(true);
+                              } else {
+                                setEditingEntry(entry);
+                                setShowEditDialog(true);
+                              }
                             }}
                           >
-                            <Edit className="h-3.5 w-3.5" />
+                            {entry.status === 'contabilizado' ? (
+                              <FileEdit className="h-3.5 w-3.5" />
+                            ) : (
+                              <Edit className="h-3.5 w-3.5" />
+                            )}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          <p>{!isEntryInOpenPeriod(entry) ? 'Período cerrado' : 'Editar'}</p>
+                          <p>{!isEntryInOpenPeriod(entry) ? 'Período cerrado' : entry.status === 'contabilizado' ? 'Editar datos no contables' : 'Editar'}</p>
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -683,6 +703,28 @@ export default function Partidas() {
           if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
         }}
       />
+
+      {metadataEntry && (
+        <MetadataEditDialog
+          open={showMetadataDialog}
+          onOpenChange={(open) => {
+            setShowMetadataDialog(open);
+            if (!open) setMetadataEntry(null);
+          }}
+          entryId={metadataEntry.id}
+          entryNumber={metadataEntry.entry_number}
+          currentValues={{
+            description: metadataEntry.description,
+            beneficiary_name: metadataEntry.beneficiary_name || null,
+            bank_reference: metadataEntry.bank_reference || null,
+            document_reference: metadataEntry.document_reference || null,
+          }}
+          onSuccess={() => {
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+            setSelectedEntryId(metadataEntry.id);
+          }}
+        />
+      )}
     </div>
   );
 }
