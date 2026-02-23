@@ -64,7 +64,7 @@ interface EntryToEdit {
 export function useJournalEntryForm(
   open: boolean,
   entryToEdit: EntryToEdit | null,
-  onSuccess: () => void,
+  onSuccess: (savedEntryId?: number) => void,
   onOpenChange: (open: boolean) => void,
 ) {
   const [loading, setLoading] = useState(false);
@@ -502,6 +502,7 @@ export function useJournalEntryForm(
         );
         if (insertError) throw insertError;
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
+        onSuccess(entryToEdit.id);
       } else {
         // Atomically allocate the entry number server-side
         let finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
@@ -545,8 +546,8 @@ export function useJournalEntryForm(
           }
         }
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
+        onSuccess(entry.id);
       }
-      onSuccess();
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Error al guardar", description: error.message, variant: "destructive" });

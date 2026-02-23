@@ -31,7 +31,7 @@ import { useEnterprise } from "@/contexts/EnterpriseContext";
 interface JournalEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (savedEntryId?: number) => void;
   entryToEdit?: {
     id: number;
     entry_number: string;

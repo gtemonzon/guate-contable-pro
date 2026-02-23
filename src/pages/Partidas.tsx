@@ -199,6 +199,7 @@ export default function Partidas() {
         .from("tab_journal_entries")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
+        .is("deleted_at", null)
         .order("entry_date", { ascending: false })
         .order("entry_number", { ascending: false });
 
@@ -654,8 +655,12 @@ export default function Partidas() {
           setShowEditDialog(open);
           if (!open) setEditingEntry(null);
         }}
-        onSuccess={() => {
+        onSuccess={(savedEntryId?: number) => {
           if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          if (savedEntryId) {
+            setSelectedEntryId(savedEntryId);
+            setSplitViewOpen(true);
+          }
           setEditingEntry(null);
         }}
         entryToEdit={editingEntry}
