@@ -146,11 +146,29 @@ export default function MayorGeneral() {
         setStartDate(startDateParam);
         setEndDate(endDateParam);
       } else {
-        // Establecer fechas por defecto (año actual)
-        const today = new Date();
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        setStartDate(firstDay.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+        // Use active period if available, otherwise fall back to current year
+        const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterpriseId}`);
+        if (savedPeriodId) {
+          supabase
+            .from('tab_accounting_periods')
+            .select('start_date, end_date')
+            .eq('id', parseInt(savedPeriodId))
+            .single()
+            .then(({ data }) => {
+              if (data) {
+                setStartDate(data.start_date);
+                setEndDate(data.end_date);
+              } else {
+                const today = new Date();
+                setStartDate(`${today.getFullYear()}-01-01`);
+                setEndDate(today.toISOString().split('T')[0]);
+              }
+            });
+        } else {
+          const today = new Date();
+          setStartDate(`${today.getFullYear()}-01-01`);
+          setEndDate(today.toISOString().split('T')[0]);
+        }
       }
     } else {
       toast({

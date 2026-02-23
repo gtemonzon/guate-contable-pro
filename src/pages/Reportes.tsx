@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import ReporteCompras from "@/components/reportes/ReporteCompras";
@@ -9,6 +10,17 @@ import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
 import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 
 export default function Reportes() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "compras";
+
+  const handleTabChange = (value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", value);
+      return next;
+    });
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -16,7 +28,7 @@ export default function Reportes() {
         <p className="text-muted-foreground">Genera reportes de compras, ventas, partidas, estados financieros y bancos</p>
       </div>
 
-      <Tabs defaultValue="compras" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="grid w-full max-w-5xl grid-cols-7">
           <TabsTrigger value="compras">Compras</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
@@ -28,59 +40,25 @@ export default function Reportes() {
         </TabsList>
 
         <TabsContent value="compras">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteCompras />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteCompras /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="ventas">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteVentas />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteVentas /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="partidas">
-          <Card>
-            <CardContent className="pt-6">
-              <ReportePartidas />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReportePartidas /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="mayor">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteLibroMayor />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteLibroMayor /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="bancos">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteLibroBancos />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteLibroBancos /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="balance">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteBalanceGeneral />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteBalanceGeneral /></CardContent></Card>
         </TabsContent>
-
         <TabsContent value="resultados">
-          <Card>
-            <CardContent className="pt-6">
-              <ReporteEstadoResultados />
-            </CardContent>
-          </Card>
+          <Card><CardContent className="pt-6"><ReporteEstadoResultados /></CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>

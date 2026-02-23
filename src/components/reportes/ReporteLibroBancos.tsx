@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
@@ -50,15 +51,13 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 };
 
 export default function ReporteLibroBancos() {
+  const [searchParams] = useSearchParams();
   const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState("");
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [openingBalance, setOpeningBalance] = useState(0);
   const [rows, setRows] = useState<BankDocRow[]>([]);
@@ -66,11 +65,23 @@ export default function ReporteLibroBancos() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  // Load enterprise + bank accounts
+  // Load enterprise + bank accounts + URL params
   useEffect(() => {
     const eid = localStorage.getItem("currentEnterpriseId");
     setEnterpriseId(eid);
     if (!eid) return;
+
+    const urlDateFrom = searchParams.get("dateFrom");
+    const urlDateTo = searchParams.get("dateTo");
+    const urlBankId = searchParams.get("bankAccountId");
+
+    if (urlDateFrom) setDateFrom(urlDateFrom);
+    else if (!dateFrom) {
+      const d = new Date();
+      setDateFrom(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+    }
+    if (urlDateTo) setDateTo(urlDateTo);
+    else if (!dateTo) setDateTo(new Date().toISOString().split("T")[0]);
 
     (async () => {
       const [{ data: enterprise }, { data: banks }] = await Promise.all([
@@ -79,8 +90,16 @@ export default function ReporteLibroBancos() {
       ]);
       setEnterpriseName(enterprise?.business_name || "");
       setBankAccounts(banks || []);
+
+      // Pre-select bank from URL param
+      if (urlBankId && banks) {
+        const bankId = parseInt(urlBankId);
+        if (banks.some(b => b.id === bankId)) {
+          setSelectedBankId(bankId);
+        }
+      }
     })();
-  }, []);
+  }, [searchParams]);
 
   const loadReport = async () => {
     if (!enterpriseId || !selectedBankId) {

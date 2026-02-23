@@ -14,7 +14,7 @@ import {
   ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2,
 } from "lucide-react";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
-import EntityLink from "@/components/ui/entity-link";
+import EntityLink, { type DateContext } from "@/components/ui/entity-link";
 import ActionBar, { type ActionBarItem } from "@/components/ui/action-bar";
 
 // --- Types ---
@@ -46,6 +46,7 @@ interface EntryData {
   document_reference?: string | null;
   bank_reference?: string | null;
   bank_account_id?: number | null;
+  accounting_period_id?: number | null;
   details: EntryLine[];
 }
 
@@ -61,6 +62,12 @@ interface LinkedPurchase {
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+
+/** Derive year-based date range from an entry date string */
+function deriveDateContextFromDate(entryDate: string): DateContext {
+  const year = new Date(entryDate + "T00:00:00").getFullYear();
+  return { dateFrom: `${year}-01-01`, dateTo: `${year}-12-31` };
+}
 
 const STATUS_LABELS: Record<string, string> = {
   borrador: "Borrador",
@@ -82,6 +89,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
   const [entry, setEntry] = useState<EntryData | null>(null);
   const [linkedPurchases, setLinkedPurchases] = useState<LinkedPurchase[]>([]);
   const [activeTab, setActiveTab] = useState("detalle");
+  const [dateContext, setDateContext] = useState<DateContext | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -92,6 +100,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
     } else {
       setEntry(null);
       setLinkedPurchases([]);
+      setDateContext(null);
     }
   }, [entryId]);
 
@@ -121,6 +130,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
         ...entryData,
         created_by_name: entryData.creator?.full_name,
         updated_by_name: entryData.modifier?.full_name,
+        accounting_period_id: entryData.accounting_period_id,
         details: (details || []).map((d: any) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
@@ -131,6 +141,22 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
           credit_amount: Number(d.credit_amount) || 0,
         })),
       });
+
+      // Derive date context from accounting period or entry date
+      if (entryData.accounting_period_id) {
+        const { data: period } = await supabase
+          .from("tab_accounting_periods")
+          .select("start_date, end_date")
+          .eq("id", entryData.accounting_period_id)
+          .single();
+        if (period) {
+          setDateContext({ dateFrom: period.start_date, dateTo: period.end_date });
+        } else {
+          setDateContext(deriveDateContextFromDate(entryData.entry_date));
+        }
+      } else {
+        setDateContext(deriveDateContextFromDate(entryData.entry_date));
+      }
     } catch (error) {
       console.error("Error fetching entry:", error);
     } finally {
@@ -181,7 +207,9 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
       icon: <BookOpenCheck className="h-3.5 w-3.5" />,
       onClick: () => {
         const firstAccount = uniqueAccounts[0];
-        navigate(`/mayor?accountId=${firstAccount.account_id}`);
+        let url = `/mayor?accountId=${firstAccount.account_id}`;
+        if (dateContext) url += `&startDate=${dateContext.dateFrom}&endDate=${dateContext.dateTo}`;
+        navigate(url);
       },
     });
   }
@@ -190,7 +218,11 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
     actionBarItems.push({
       label: "Libro Bancos",
       icon: <Landmark className="h-3.5 w-3.5" />,
-      onClick: () => navigate(`/reportes?tab=bancos`),
+      onClick: () => {
+        let url = `/reportes?tab=bancos&bankAccountId=${entry.bank_account_id}`;
+        if (dateContext) url += `&dateFrom=${dateContext.dateFrom}&dateTo=${dateContext.dateTo}`;
+        navigate(url);
+      },
     });
   }
 
@@ -325,6 +357,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                           label={d.account_code}
                           id={d.account_id}
                           secondaryLabel={d.account_name}
+                          dateContext={dateContext ?? undefined}
                         />
                       </TableCell>
                       <TableCell className="text-xs py-1.5">

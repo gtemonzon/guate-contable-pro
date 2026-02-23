@@ -10,6 +10,11 @@ export type EntityType =
   | "bank_document"
   | "supplier";
 
+export interface DateContext {
+  dateFrom: string;
+  dateTo: string;
+}
+
 interface EntityLinkProps {
   type: EntityType;
   /** The primary identifier to display (entry_number, account_code, etc.) */
@@ -22,15 +27,31 @@ interface EntityLinkProps {
   className?: string;
   /** If true, render as plain text (no link behaviour) */
   disabled?: boolean;
+  /** Temporal context derived from the source entry/period */
+  dateContext?: DateContext;
 }
 
-const ENTITY_ROUTES: Record<EntityType, (id?: number) => string> = {
-  journal_entry: (id) => `/partidas?viewEntry=${id}`,
-  account: (id) => `/mayor?accountId=${id}`,
-  purchase: () => `/libros-fiscales`,
-  bank_document: () => `/reportes?tab=bancos`,
-  supplier: () => `/libros-fiscales`,
-};
+function buildRoute(type: EntityType, id: number | undefined, dateContext?: DateContext): string {
+  const dc = dateContext;
+  switch (type) {
+    case "journal_entry":
+      return `/partidas?viewEntry=${id}`;
+    case "account": {
+      let url = `/mayor?accountId=${id}`;
+      if (dc) url += `&startDate=${dc.dateFrom}&endDate=${dc.dateTo}`;
+      return url;
+    }
+    case "purchase":
+      return `/libros-fiscales`;
+    case "bank_document": {
+      let url = `/reportes?tab=bancos`;
+      if (dc) url += `&dateFrom=${dc.dateFrom}&dateTo=${dc.dateTo}`;
+      return url;
+    }
+    case "supplier":
+      return `/libros-fiscales`;
+  }
+}
 
 const ENTITY_TOOLTIPS: Record<EntityType, string> = {
   journal_entry: "Ver partida",
@@ -51,6 +72,7 @@ export default function EntityLink({
   secondaryLabel,
   className,
   disabled,
+  dateContext,
 }: EntityLinkProps) {
   const navigate = useNavigate();
 
@@ -60,8 +82,7 @@ export default function EntityLink({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const route = ENTITY_ROUTES[type](id);
-    // Allow Ctrl/Cmd + click to open in new tab
+    const route = buildRoute(type, id, dateContext);
     if (e.ctrlKey || e.metaKey) {
       window.open(route, "_blank");
       return;
