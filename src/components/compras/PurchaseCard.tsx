@@ -92,6 +92,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const isNewRecord = purchase.isNew;
   const isCompact = variant === 'compact';
 
+  // Keep a ref to the latest purchase props to avoid stale closures in async callbacks
+  const purchaseRef = useRef(purchase);
+  purchaseRef.current = purchase;
+
   // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
   const isFuelOperation = !isCompact && operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
 
@@ -122,7 +126,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     
     // Handle CF
     if (nit.toUpperCase() === "CF") {
-      if (!purchase.supplier_name.trim()) {
+      if (!purchaseRef.current.supplier_name.trim()) {
         onUpdate(index, "supplier_name", "Consumidor Final");
       }
       return;
@@ -138,7 +142,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         .maybeSingle();
 
       if (!error && data) {
-        if (!purchase.supplier_name.trim()) {
+        // Use ref to read latest supplier_name (avoids stale closure)
+        if (!purchaseRef.current.supplier_name.trim()) {
           onUpdate(index, "supplier_name", data.supplier_name);
         }
       }
