@@ -102,12 +102,11 @@ export default function VoidEntryDialog({
           enterprise_id: entry.enterprise_id,
           accounting_period_id: entry.accounting_period_id,
           entry_number: reversalEntryNumber,
-          entry_date: entry.entry_date, // Inherit original date for fiscal consistency
+          entry_date: entry.entry_date,
           entry_type: "ajuste",
           description: `REVERSIÓN: ${entry.entry_number} - ${reason}`,
-          total_debit: entry.total_credit, // Swapped
-          total_credit: entry.total_debit, // Swapped
-          is_balanced: true,
+          total_debit: entry.total_credit,
+          total_credit: entry.total_debit,
           is_posted: false,
           status: "borrador",
           document_reference: `REF: ${entry.entry_number}`,
