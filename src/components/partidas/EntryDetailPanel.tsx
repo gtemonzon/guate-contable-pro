@@ -11,8 +11,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit,
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import EntityLink, { type DateContext } from "@/components/ui/entity-link";
 import ActionBar, { type ActionBarItem } from "@/components/ui/action-bar";
@@ -263,9 +264,20 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {onEdit && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(entry.id)}>
-              <Edit className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onEdit(entry.id)}>
+                  {entry.status === 'contabilizado' ? (
+                    <FileEdit className="h-3.5 w-3.5" />
+                  ) : (
+                    <Edit className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{entry.status === 'contabilizado' ? 'Editar datos no contables' : 'Editar partida'}</p>
+              </TooltipContent>
+            </Tooltip>
           )}
           {onVoid && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => onVoid(entry.id)}>
