@@ -13,6 +13,7 @@ import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FolioExportDialog, type FolioExportOptions } from "./FolioExportDialog";
+import EntityLink from "@/components/ui/entity-link";
 
 interface BankAccount {
   id: number;
@@ -30,6 +31,7 @@ interface BankDocRow {
   credit: number;
   status: string;
   journal_entry_number: string | null;
+  journal_entry_id: number | null;
   source: "document" | "journal";
 }
 
@@ -129,6 +131,7 @@ export default function ReporteLibroBancos() {
             credit: isVoid ? 0 : 0,
             status: doc.status,
             journal_entry_number: doc.journal_entry?.entry_number || null,
+            journal_entry_id: doc.journal_entry_id || null,
             source: "document",
           });
         }
@@ -181,6 +184,7 @@ export default function ReporteLibroBancos() {
             credit: Number(mov.credit_amount) || 0,
             status: "POSTED",
             journal_entry_number: je.entry_number,
+            journal_entry_id: je.id,
             source: "journal",
           });
         }
@@ -382,7 +386,16 @@ export default function ReporteLibroBancos() {
                       {STATUS_LABELS[r.status] || r.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{r.journal_entry_number || "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {r.journal_entry_number ? (
+                      <EntityLink
+                        type="journal_entry"
+                        label={r.journal_entry_number}
+                        id={r.journal_entry_id ?? undefined}
+                        secondaryLabel={r.concept}
+                      />
+                    ) : "—"}
+                  </TableCell>
                 </TableRow>
               ))}
 

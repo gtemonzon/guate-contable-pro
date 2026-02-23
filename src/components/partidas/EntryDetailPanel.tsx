@@ -1,30 +1,23 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart,
-  Edit,
-  RotateCcw,
-  X,
-  ExternalLink,
-  BookOpen,
-  CreditCard,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2,
 } from "lucide-react";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
+import EntityLink from "@/components/ui/entity-link";
+import ActionBar, { type ActionBarItem } from "@/components/ui/action-bar";
 
+// --- Types ---
 interface EntryLine {
   line_number: number;
   account_code: string;
@@ -52,6 +45,7 @@ interface EntryData {
   beneficiary_name?: string | null;
   document_reference?: string | null;
   bank_reference?: string | null;
+  bank_account_id?: number | null;
   details: EntryLine[];
 }
 
@@ -88,6 +82,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
   const [entry, setEntry] = useState<EntryData | null>(null);
   const [linkedPurchases, setLinkedPurchases] = useState<LinkedPurchase[]>([]);
   const [activeTab, setActiveTab] = useState("detalle");
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (entryId) {
@@ -175,6 +170,48 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
 
   if (!entry) return null;
 
+  // Build contextual action bar items
+  const actionBarItems: ActionBarItem[] = [];
+
+  // Unique account IDs from lines - link to ledger
+  const uniqueAccounts = [...new Map(entry.details.map(d => [d.account_id, d])).values()];
+  if (uniqueAccounts.length > 0) {
+    actionBarItems.push({
+      label: "Mayor",
+      icon: <BookOpenCheck className="h-3.5 w-3.5" />,
+      onClick: () => {
+        const firstAccount = uniqueAccounts[0];
+        navigate(`/mayor?accountId=${firstAccount.account_id}`);
+      },
+    });
+  }
+
+  if (entry.bank_account_id) {
+    actionBarItems.push({
+      label: "Libro Bancos",
+      icon: <Landmark className="h-3.5 w-3.5" />,
+      onClick: () => navigate(`/reportes?tab=bancos`),
+    });
+  }
+
+  if (linkedPurchases.length > 0) {
+    actionBarItems.push({
+      label: `Compras (${linkedPurchases.length})`,
+      icon: <ShoppingCart className="h-3.5 w-3.5" />,
+      onClick: () => setActiveTab("compras"),
+    });
+  }
+
+  actionBarItems.push({
+    label: "Copiar enlace",
+    icon: <Link2 className="h-3.5 w-3.5" />,
+    separator: true,
+    onClick: () => {
+      const url = `${window.location.origin}/partidas?viewEntry=${entry.id}`;
+      navigator.clipboard.writeText(url);
+    },
+  });
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -208,6 +245,9 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
           </Button>
         </div>
       </div>
+
+      {/* Action Bar */}
+      <ActionBar items={actionBarItems} />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
@@ -266,7 +306,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                 </div>
               )}
 
-              {/* Lines table */}
+              {/* Lines table with EntityLink */}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -278,8 +318,15 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                 </TableHeader>
                 <TableBody>
                   {entry.details.map((d) => (
-                    <TableRow key={d.line_number}>
-                      <TableCell className="text-xs py-1.5 font-mono">{d.account_code}</TableCell>
+                    <TableRow key={d.line_number} className="group">
+                      <TableCell className="text-xs py-1.5">
+                        <EntityLink
+                          type="account"
+                          label={d.account_code}
+                          id={d.account_id}
+                          secondaryLabel={d.account_name}
+                        />
+                      </TableCell>
                       <TableCell className="text-xs py-1.5">
                         {d.account_name}
                         {d.description && (
@@ -319,7 +366,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                   {linkedPurchases.length} factura(s) vinculada(s)
                 </p>
                 {linkedPurchases.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-2 rounded-md border text-xs">
+                  <div key={p.id} className="flex items-center justify-between p-2 rounded-md border text-xs group">
                     <div>
                       <p className="font-medium">
                         {p.invoice_series ? `${p.invoice_series}-` : ""}{p.invoice_number}
