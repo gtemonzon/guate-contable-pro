@@ -623,7 +623,7 @@ export default function LinkedPurchasesModal({
               onDelete={removePurchase}
               onAdd={addPurchase}
               addButtonLabel="Agregar Factura"
-              addShortcutHint="Ctrl+Alt++"
+              addShortcutHint="Alt+N"
               duplicateWarnings={duplicateWarnings}
               onCheckDuplicate={checkDuplicate}
               focusLastCard={focusLastCard}
