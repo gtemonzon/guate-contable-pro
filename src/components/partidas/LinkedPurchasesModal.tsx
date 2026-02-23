@@ -111,18 +111,27 @@ export default function LinkedPurchasesModal({
         // Also restore saved IDs from external purchases that have DB ids
         const dbIds = externalPurchases.filter(p => p.id != null).map(p => p.id as number);
         if (dbIds.length > 0) setSavedPurchaseIds(dbIds);
-      } else if (purchases.length === 0) {
-        addPurchase();
+      } else {
+        // Always reset to a single empty purchase for a new entry
+        setPurchases([createEmptyPurchase()]);
+        setSavedPurchaseIds([]);
+        setEditingIndex(0);
+        setFocusLastCard(true);
       }
     }
   }, [open, enterpriseId]);
 
   useEffect(() => {
     if (!open) {
-      // Don't clear purchases or savedPurchaseIds — parent owns the lifecycle
+      // Clear all transient state when closing
       setExistingPurchaseIds([]);
       setEditingIndex(null);
       setDuplicateWarnings({});
+      // If there's no parent managing external purchases, fully reset
+      if (!externalPurchases) {
+        setPurchases([]);
+        setSavedPurchaseIds([]);
+      }
     }
   }, [open]);
 
