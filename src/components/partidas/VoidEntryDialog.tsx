@@ -27,6 +27,7 @@ interface VoidEntryDialogProps {
     total_debit: number;
     total_credit: number;
     enterprise_id?: number;
+    accounting_period_id?: number | null;
   } | null;
   onSuccess: () => void;
 }
@@ -94,13 +95,14 @@ export default function VoidEntryDialog({
 
       const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
 
-      // 3. Create the reversal entry (swap debit/credit)
+      // 3. Create the reversal entry (swap debit/credit, inherit original date & period)
       const { data: reversalEntry, error: reversalError } = await supabase
         .from("tab_journal_entries")
         .insert({
           enterprise_id: entry.enterprise_id,
+          accounting_period_id: entry.accounting_period_id,
           entry_number: reversalEntryNumber,
-          entry_date: today.toISOString().split("T")[0],
+          entry_date: entry.entry_date, // Inherit original date for fiscal consistency
           entry_type: "ajuste",
           description: `REVERSIÓN: ${entry.entry_number} - ${reason}`,
           total_debit: entry.total_credit, // Swapped
