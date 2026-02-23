@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +8,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calculator, FileText } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Save, FileText } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -72,7 +73,6 @@ export default function LinkedPurchasesModal({
 }: LinkedPurchasesModalProps) {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [existingPurchaseIds, setExistingPurchaseIds] = useState<number[]>([]);
-  // Track DB-saved purchase IDs from modal contabilizar (for unsaved entries)
   const [savedPurchaseIds, setSavedPurchaseIds] = useState<number[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
@@ -81,7 +81,8 @@ export default function LinkedPurchasesModal({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [focusLastCard, setFocusLastCard] = useState(false);
   const [duplicateWarnings, setDuplicateWarnings] = useState<Record<number, string | null>>({});
-
+  const [isDirty, setIsDirty] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const { toast } = useToast();
   const { config } = useEnterpriseConfig(enterpriseId);
 
@@ -117,6 +118,7 @@ export default function LinkedPurchasesModal({
         setSavedPurchaseIds([]);
         setEditingIndex(0);
         setFocusLastCard(true);
+        setIsDirty(false);
       }
     }
   }, [open, enterpriseId]);
@@ -299,6 +301,7 @@ export default function LinkedPurchasesModal({
   };
 
   const updatePurchase = (index: number, field: keyof PurchaseEntry, value: any) => {
+    setIsDirty(true);
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
       const updated = { ...p, [field]: value };
@@ -579,9 +582,10 @@ export default function LinkedPurchasesModal({
         isNew: false,
       }));
 
+      setIsDirty(false);
       onPurchasesPosted(generatedLines, purchasesWithIds);
       const balanceNote = bankAccountId ? "" : " Seleccione una cuenta bancaria para balancear la partida.";
-      toast({ title: "Facturas importadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
+      toast({ title: "Facturas guardadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Error al contabilizar", description: getSafeErrorMessage(error), variant: "destructive" });
@@ -593,8 +597,17 @@ export default function LinkedPurchasesModal({
   const totals = getTotals();
   const creditPreviewLabel = bankAccountId ? "Banco" : "Proveedores";
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isDirty) {
+      setShowCloseConfirm(true);
+      return;
+    }
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -619,8 +632,8 @@ export default function LinkedPurchasesModal({
               <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.idp > 0 ? ` | IDP: ${formatCurrency(totals.idp)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
             </div>
             <Button onClick={handleContabilizar} disabled={loading || purchases.length === 0} className="gap-2">
-              <Calculator className="h-4 w-4" />
-              Contabilizar
+              <Save className="h-4 w-4" />
+              Guardar Facturas
             </Button>
           </div>
         </div>
@@ -667,5 +680,30 @@ export default function LinkedPurchasesModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Descartar cambios?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Hay facturas sin guardar. Si cierras esta ventana se perderán los datos ingresados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setIsDirty(false);
+              setShowCloseConfirm(false);
+              onOpenChange(false);
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Descartar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
