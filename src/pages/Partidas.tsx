@@ -43,6 +43,8 @@ interface JournalEntry {
   beneficiary_name?: string | null;
   bank_reference?: string | null;
   document_reference?: string | null;
+  reversal_entry_id?: number | null;
+  reversed_by_entry_id?: number | null;
 }
 
 interface AccountingPeriod {
@@ -538,6 +540,25 @@ export default function Partidas() {
                           <span className="ml-1">{statusConfig.label}</span>
                         </Badge>
                         <Badge variant="outline" className="text-[10px] h-5 px-1.5">{entry.entry_type}</Badge>
+                        {/* Show "Revertida" tag if a reversal exists */}
+                        {entry.reversal_entry_id && (() => {
+                          const rev = entries.find(e => e.id === entry.reversal_entry_id);
+                          const isRevPosted = rev?.status === 'contabilizado';
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] h-5 px-1.5",
+                                isRevPosted
+                                  ? "border-destructive/50 text-destructive bg-destructive/10"
+                                  : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+                              )}
+                            >
+                              <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
+                              {isRevPosted ? "Revertida" : "Rev. pendiente"}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
                     </div>
@@ -699,6 +720,8 @@ export default function Partidas() {
           if (!open) setVoidingEntry(null);
         }}
         entry={voidingEntry}
+        periodIsOpen={voidingEntry ? isEntryInOpenPeriod(voidingEntry as JournalEntry) : false}
+        canPost={permissions.canPostEntries}
         onSuccess={() => {
           if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
         }}
