@@ -2,20 +2,26 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
 import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
+import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 
 type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -49,7 +55,7 @@ const STATUS_CONFIG: Record<EntryStatus, { label: string; variant: "default" | "
     icon: <FileText className="h-3 w-3" />,
   },
   pendiente_revision: { 
-    label: "Pendiente Revisión", 
+    label: "Pendiente", 
     variant: "outline", 
     icon: <Clock className="h-3 w-3" />,
     className: "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
@@ -84,6 +90,8 @@ export default function Partidas() {
   const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [openPeriods, setOpenPeriods] = useState<AccountingPeriod[]>([]);
+  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
+  const [splitViewOpen, setSplitViewOpen] = useState(true);
   
   // Filtros
   const [filterNumber, setFilterNumber] = useState("");
@@ -99,11 +107,21 @@ export default function Partidas() {
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [hoveredEntryId, setHoveredEntryId] = useState<number | null>(null);
 
   const { toast } = useToast();
   const permissions = useUserPermissions();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Listen for quick-action from command palette
+  useEffect(() => {
+    const handler = () => {
+      if (permissions.canCreateEntries) {
+        setShowEditDialog(true);
+      }
+    };
+    window.addEventListener("quick-action:new-entry", handler);
+    return () => window.removeEventListener("quick-action:new-entry", handler);
+  }, [permissions.canCreateEntries]);
 
   // Open view dialog from URL params (e.g. from global search)
   useEffect(() => {
@@ -111,10 +129,9 @@ export default function Partidas() {
     if (viewEntryParam) {
       const entryId = parseInt(viewEntryParam);
       if (!isNaN(entryId)) {
-        setViewingEntryId(entryId);
-        setShowViewDialog(true);
+        setSelectedEntryId(entryId);
+        setSplitViewOpen(true);
       }
-      // Clean up the URL param
       searchParams.delete("viewEntry");
       setSearchParams(searchParams, { replace: true });
     }
@@ -175,7 +192,6 @@ export default function Partidas() {
 
       if (error) throw error;
       
-      // Mapear datos con status por defecto para partidas sin status
       const mappedData = (data || []).map(entry => ({
         ...entry,
         status: (entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus,
@@ -209,13 +225,10 @@ export default function Partidas() {
     }
   };
 
-  // Helper to check if an entry is in an open period
   const isEntryInOpenPeriod = (entry: JournalEntry): boolean => {
-    // If entry has accounting_period_id, check if that period is in openPeriods
     if (entry.accounting_period_id) {
       return openPeriods.some(p => p.id === entry.accounting_period_id);
     }
-    // Otherwise check by date range
     const entryDate = new Date(entry.entry_date);
     return openPeriods.some(period => {
       const start = new Date(period.start_date);
@@ -232,21 +245,15 @@ export default function Partidas() {
         e.entry_number.toLowerCase().includes(filterNumber.toLowerCase())
       );
     }
-
     if (filterType !== "all") {
       filtered = filtered.filter(e => e.entry_type === filterType);
     }
-
     if (filterStatus !== "all") {
       filtered = filtered.filter(e => e.status === filterStatus);
     }
-
-    // Filtro por año
     if (filterYear) {
       filtered = filtered.filter(e => e.entry_date.startsWith(filterYear));
     }
-
-    // Filtro por meses (dentro del año seleccionado)
     if (filterYear && filterMonths.length > 0) {
       filtered = filtered.filter(e => {
         const month = parseInt(e.entry_date.substring(5, 7));
@@ -254,7 +261,6 @@ export default function Partidas() {
       });
     }
 
-    // Ordenamiento
     filtered.sort((a, b) => {
       let cmp: number;
       if (sortField === 'date') {
@@ -286,10 +292,7 @@ export default function Partidas() {
     setFilterMonths([]);
   };
 
-  // Contador de partidas pendientes de revisión
   const pendingReviewCount = entries.filter(e => e.status === 'pendiente_revision').length;
-
-  // Paginación
   const totalPages = Math.ceil(filteredEntries.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
@@ -302,6 +305,30 @@ export default function Partidas() {
   const handlePageSizeChange = (newSize: string) => {
     setPageSize(parseInt(newSize));
     setCurrentPage(1);
+  };
+
+  const handleEntryClick = (entry: JournalEntry) => {
+    setSelectedEntryId(entry.id);
+    setSplitViewOpen(true);
+  };
+
+  const handleEditFromPanel = (entryId: number) => {
+    const entry = entries.find(e => e.id === entryId);
+    if (entry) {
+      setEditingEntry(entry);
+      setShowEditDialog(true);
+    }
+  };
+
+  const handleVoidFromPanel = (entryId: number) => {
+    const entry = entries.find(e => e.id === entryId);
+    if (entry) {
+      setVoidingEntry({
+        ...entry,
+        enterprise_id: currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined,
+      });
+      setShowVoidDialog(true);
+    }
   };
 
   if (!currentEnterpriseId) {
@@ -318,26 +345,39 @@ export default function Partidas() {
     );
   }
 
-  return (
+  const entryList = (
     <div className="flex flex-col h-full">
-      {/* Sticky Header — compact */}
-      <div className="sticky top-0 z-20 bg-muted/80 backdrop-blur-sm pt-4 pb-3 px-8 border-b">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-20 bg-muted/80 backdrop-blur-sm pt-4 pb-3 px-4 border-b">
         <div className="flex justify-between items-center mb-3">
           <div>
             <h1 className="text-2xl font-bold leading-tight">Partidas Contables</h1>
             <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {permissions.canApproveEntries && pendingReviewCount > 0 && (
               <Badge variant="outline" className="border-amber-400 text-amber-600 dark:text-amber-400 gap-1">
                 <AlertCircle className="h-3 w-3" />
-                {pendingReviewCount} pendiente{pendingReviewCount > 1 ? 's' : ''}
+                {pendingReviewCount}
               </Badge>
             )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setSplitViewOpen(!splitViewOpen)}
+                >
+                  {splitViewOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{splitViewOpen ? "Cerrar panel" : "Abrir panel de detalle"}</TooltipContent>
+            </Tooltip>
             {permissions.canCreateEntries && (
               <Button size="sm" onClick={() => setShowEditDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />
-                Nueva Partida
+                Nueva
               </Button>
             )}
           </div>
@@ -356,13 +396,13 @@ export default function Partidas() {
           <div className="h-5 w-px bg-border" />
           
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px] h-8 text-xs">
+            <SelectTrigger className="w-[130px] h-8 text-xs">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="borrador">Borrador</SelectItem>
-              <SelectItem value="pendiente_revision">Pendiente Revisión</SelectItem>
+              <SelectItem value="pendiente_revision">Pendiente</SelectItem>
               <SelectItem value="aprobado">Aprobado</SelectItem>
               <SelectItem value="contabilizado">Contabilizado</SelectItem>
               <SelectItem value="rechazado">Rechazado</SelectItem>
@@ -370,7 +410,7 @@ export default function Partidas() {
           </Select>
 
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[120px] h-8 text-xs">
+            <SelectTrigger className="w-[110px] h-8 text-xs">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -383,10 +423,10 @@ export default function Partidas() {
           </Select>
 
           <Input
-            placeholder="Buscar número..."
+            placeholder="Buscar #..."
             value={filterNumber}
             onChange={(e) => setFilterNumber(e.target.value)}
-            className="w-[140px] h-8 text-xs"
+            className="w-[120px] h-8 text-xs"
           />
 
           {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
@@ -397,12 +437,11 @@ export default function Partidas() {
 
           <div className="flex-1" />
 
-          {/* Sort selector */}
           <div className="flex items-center gap-1">
             <Button
               variant={sortField === 'date' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 text-xs px-2 gap-1"
+              className="h-7 text-xs px-2 gap-1"
               onClick={() => toggleSort('date')}
             >
               Fecha
@@ -411,7 +450,7 @@ export default function Partidas() {
             <Button
               variant={sortField === 'number' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 text-xs px-2 gap-1"
+              className="h-7 text-xs px-2 gap-1"
               onClick={() => toggleSort('number')}
             >
               No.
@@ -419,10 +458,8 @@ export default function Partidas() {
             </Button>
           </div>
 
-          <div className="h-5 w-px bg-border" />
-
           <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
-            <SelectTrigger className="w-[60px] h-8 text-xs">
+            <SelectTrigger className="w-[55px] h-7 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -433,202 +470,168 @@ export default function Partidas() {
             </SelectContent>
           </Select>
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {filteredEntries.length} partida{filteredEntries.length !== 1 ? 's' : ''}
+            {filteredEntries.length}
           </span>
         </div>
       </div>
 
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-auto px-8 py-4">
-          {loading ? (
-            <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
-          ) : filteredEntries.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
-              No hay partidas registradas
-            </p>
-          ) : (
-            <>
-              <TooltipProvider delayDuration={100}>
-                <div className="space-y-2">
-                  {paginatedEntries.map((entry) => {
-                    const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
-                    const isHovered = hoveredEntryId === entry.id;
-                    
-                    return (
-                      <Card 
-                        key={entry.id} 
-                        className="border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary transition-colors relative"
-                        onMouseEnter={() => setHoveredEntryId(entry.id)}
-                        onMouseLeave={() => setHoveredEntryId(null)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
-                              <FileText className="h-8 w-8 text-muted-foreground" />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="font-semibold">{entry.entry_number}</h3>
-                                  <Badge 
-                                    variant={statusConfig.variant}
-                                    className={cn("flex items-center gap-1", statusConfig.className)}
-                                  >
-                                    {statusConfig.icon}
-                                    {statusConfig.label}
-                                  </Badge>
-                                  <Badge variant="outline">{entry.entry_type}</Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {entry.description}
-                                </p>
-                                {entry.status === 'rechazado' && entry.rejection_reason && (
-                                  <p className="text-sm text-destructive mt-1">
-                                    <span className="font-medium">Motivo de rechazo:</span> {entry.rejection_reason}
-                                  </p>
-                                )}
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  Fecha: {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} • 
-                                  Debe: Q{entry.total_debit.toFixed(2)} • 
-                                  Haber: Q{entry.total_credit.toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {/* Hover Actions Menu */}
-                            <div className={cn(
-                              "flex items-center gap-2 transition-all duration-150",
-                              isHovered ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"
-                            )}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-3 gap-1.5"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setViewingEntryId(entry.id);
-                                      setShowViewDialog(true);
-                                    }}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                    <span className="text-xs">Ver</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p>Ver detalles de la partida</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-3 gap-1.5"
-                                    disabled={!isEntryInOpenPeriod(entry)}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingEntry(entry);
-                                      setShowEditDialog(true);
-                                    }}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                    <span className="text-xs">Editar</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p>{!isEntryInOpenPeriod(entry) ? 'El período contable está cerrado' : 'Editar partida'}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 px-3 gap-1.5 text-amber-600 hover:text-amber-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setVoidingEntry({
-                                        ...entry,
-                                        enterprise_id: currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined
-                                      });
-                                      setShowVoidDialog(true);
-                                    }}
-                                  >
-                                    <RotateCcw className="h-4 w-4" />
-                                    <span className="text-xs">Anular</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p>Crear partida de reversión</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </TooltipProvider>
+      {/* Scrollable list */}
+      <div className="flex-1 overflow-auto px-4 py-3">
+        {loading ? (
+          <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
+        ) : filteredEntries.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">No hay partidas registradas</p>
+        ) : (
+          <TooltipProvider delayDuration={100}>
+            <div className="space-y-1">
+              {paginatedEntries.map((entry) => {
+                const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
+                const isSelected = selectedEntryId === entry.id;
 
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    Mostrando {startIndex + 1} - {Math.min(endIndex, filteredEntries.length)} de {filteredEntries.length}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Anterior
-                    </Button>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum: number;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        return (
-                          <Button
-                            key={pageNum}
-                            variant={currentPage === pageNum ? "default" : "outline"}
-                            size="sm"
-                            className="w-8 h-8 p-0"
-                            onClick={() => handlePageChange(pageNum)}
-                          >
-                            {pageNum}
-                          </Button>
-                        );
-                      })}
+                return (
+                  <div
+                    key={entry.id}
+                    onClick={() => handleEntryClick(entry)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors group",
+                      isSelected
+                        ? "bg-accent border-primary/30 ring-1 ring-primary/20"
+                        : "hover:bg-accent/50 border-transparent"
+                    )}
+                  >
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{entry.entry_number}</span>
+                        <Badge
+                          variant={statusConfig.variant}
+                          className={cn("text-[10px] h-5 px-1.5", statusConfig.className)}
+                        >
+                          {statusConfig.icon}
+                          <span className="ml-1">{statusConfig.label}</span>
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5">{entry.entry_type}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-mono font-medium">Q{entry.total_debit.toFixed(2)}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}
+                      </p>
+                    </div>
+                    {/* Quick actions on hover */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingEntryId(entry.id);
+                              setShowViewDialog(true);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top"><p>Vista completa</p></TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled={!isEntryInOpenPeriod(entry)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingEntry(entry);
+                              setShowEditDialog(true);
+                            }}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p>{!isEntryInOpenPeriod(entry) ? 'Período cerrado' : 'Editar'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
+                );
+              })}
+            </div>
+          </TooltipProvider>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-3 border-t mt-3">
+            <p className="text-xs text-muted-foreground">
+              {startIndex + 1}-{Math.min(endIndex, filteredEntries.length)} de {filteredEntries.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
+                <ChevronLeft className="h-3 w-3" />
+              </Button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) pageNum = i + 1;
+                else if (currentPage <= 3) pageNum = i + 1;
+                else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                else pageNum = currentPage - 2 + i;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    className="w-7 h-7 p-0 text-xs"
+                    onClick={() => handlePageChange(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+              <Button variant="outline" size="sm" className="h-7" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className="h-[calc(100vh-theme(spacing.16)-theme(spacing.12))]">
+      <TooltipProvider delayDuration={100}>
+        {splitViewOpen && selectedEntryId ? (
+          <ResizablePanelGroup direction="horizontal" className="h-full rounded-lg border">
+            <ResizablePanel defaultSize={55} minSize={35}>
+              {entryList}
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={45} minSize={30}>
+              <EntryDetailPanel
+                entryId={selectedEntryId}
+                onClose={() => {
+                  setSelectedEntryId(null);
+                  setSplitViewOpen(false);
+                }}
+                onEdit={handleEditFromPanel}
+                onVoid={handleVoidFromPanel}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        ) : (
+          <div className="h-full rounded-lg border">
+            {entryList}
+          </div>
+        )}
+      </TooltipProvider>
 
       <JournalEntryDialog
         open={showEditDialog}
@@ -637,9 +640,7 @@ export default function Partidas() {
           if (!open) setEditingEntry(null);
         }}
         onSuccess={() => {
-          if (currentEnterpriseId) {
-            fetchEntries(currentEnterpriseId);
-          }
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
           setEditingEntry(null);
         }}
         entryToEdit={editingEntry}
@@ -659,9 +660,7 @@ export default function Partidas() {
         }}
         entry={voidingEntry}
         onSuccess={() => {
-          if (currentEnterpriseId) {
-            fetchEntries(currentEnterpriseId);
-          }
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
         }}
       />
     </div>
