@@ -123,6 +123,18 @@ export default function Partidas() {
     return () => window.removeEventListener("quick-action:new-entry", handler);
   }, [permissions.canCreateEntries]);
 
+  // Alt+N shortcut — new journal entry
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === 'n' && !showEditDialog && permissions.canCreateEntries) {
+        e.preventDefault();
+        setShowEditDialog(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showEditDialog, permissions.canCreateEntries]);
+
   // Open view dialog from URL params (e.g. from global search)
   useEffect(() => {
     const viewEntryParam = searchParams.get("viewEntry");
@@ -378,6 +390,9 @@ export default function Partidas() {
               <Button size="sm" onClick={() => setShowEditDialog(true)}>
                 <Plus className="mr-1.5 h-4 w-4" />
                 Nueva
+                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                  Alt+N
+                </kbd>
               </Button>
             )}
           </div>
