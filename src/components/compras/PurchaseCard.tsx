@@ -299,8 +299,11 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className="col-span-1 text-right font-mono text-[11px] text-muted-foreground">
                 {formatCurrency(purchase.vat_amount)}
               </div>
-              <div className="col-span-2 text-xs truncate" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
+              <div className="col-span-2 text-xs truncate flex items-center gap-1" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
                 {getAccountName(purchase.expense_account_id, expenseAccounts)}
+                {purchase.journal_entry_id && (
+                  <Badge variant="secondary" className="text-[10px] shrink-0">Póliza</Badge>
+                )}
                 {dupWarning && (
                   <Tooltip>
                     <TooltipTrigger asChild>

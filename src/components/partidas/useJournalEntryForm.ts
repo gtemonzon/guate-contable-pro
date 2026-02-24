@@ -539,10 +539,28 @@ export function useJournalEntryForm(
         if (linkedPurchases.length > 0) {
           const purchaseIds = linkedPurchases.filter(p => p.id != null).map(p => p.id);
           if (purchaseIds.length > 0) {
+            // Update legacy journal_entry_id column
             await supabase
               .from("tab_purchase_ledger")
               .update({ journal_entry_id: entry.id } as any)
               .in("id", purchaseIds);
+
+            // Create links in tab_purchase_journal_links
+            try {
+              const linkRows = purchaseIds.map((pid: number) => ({
+                enterprise_id: parseInt(enterpriseId),
+                purchase_id: pid,
+                journal_entry_id: entry.id,
+                link_source: 'FROM_JOURNAL_MODAL',
+                linked_by: user.id,
+                linked_at: new Date().toISOString(),
+              }));
+              await supabase
+                .from("tab_purchase_journal_links" as any)
+                .upsert(linkRows, { onConflict: "enterprise_id,purchase_id" });
+            } catch (linkError) {
+              console.error("Error creating purchase-journal links:", linkError);
+            }
           }
         }
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });

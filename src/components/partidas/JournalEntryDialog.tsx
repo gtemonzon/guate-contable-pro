@@ -19,6 +19,7 @@ import LinkedPurchasesModal from "./LinkedPurchasesModal";
 import { AccountBalanceInspector } from "./AccountBalanceInspector";
 import VoidChequeDialog from "./VoidChequeDialog";
 import { MetadataEditDialog } from "./MetadataEditDialog";
+import { PurchaseLinkManager } from "./PurchaseLinkManager";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
@@ -59,6 +60,7 @@ export default function JournalEntryDialog({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
   const [metadataEditOpen, setMetadataEditOpen] = useState(false);
+  const [linkManagerOpen, setLinkManagerOpen] = useState(false);
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
@@ -208,6 +210,7 @@ export default function JournalEntryDialog({
                 onPost={() => form.saveEntry(true)}
                 onVoidCheque={() => setVoidChequeOpen(true)}
                 onEditMetadata={form.entryStatus === 'contabilizado' ? () => setMetadataEditOpen(true) : undefined}
+                onLinkPurchases={entryToEdit ? () => setLinkManagerOpen(true) : undefined}
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
@@ -305,6 +308,20 @@ export default function JournalEntryDialog({
             onSuccess();
             onOpenChange(false);
           }}
+        />
+      )}
+
+      {/* Purchase Link Manager */}
+      {entryToEdit && (
+        <PurchaseLinkManager
+          open={linkManagerOpen}
+          onOpenChange={setLinkManagerOpen}
+          enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+          journalEntryId={entryToEdit.id}
+          journalEntryNumber={form.nextEntryNumber || entryToEdit.entry_number}
+          entryMonth={form.entryDate ? new Date(form.entryDate + 'T00:00:00').getMonth() + 1 : undefined}
+          entryYear={form.entryDate ? new Date(form.entryDate + 'T00:00:00').getFullYear() : undefined}
+          onLinksChanged={() => onSuccess(entryToEdit.id)}
         />
       )}
     </>

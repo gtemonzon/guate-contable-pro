@@ -575,6 +575,35 @@ export default function LinkedPurchasesModal({
       const newSavedIds = insertedPurchases?.map(p => p.id) ?? [];
       setSavedPurchaseIds(newSavedIds);
 
+      // Create links in tab_purchase_journal_links if we have a journal entry
+      if (journalEntryId && newSavedIds.length > 0) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            // Remove old links for this entry first (idempotent)
+            await supabase
+              .from("tab_purchase_journal_links" as any)
+              .delete()
+              .eq("enterprise_id", enterpriseId)
+              .eq("journal_entry_id", journalEntryId);
+
+            const linkRows = newSavedIds.map(pid => ({
+              enterprise_id: enterpriseId,
+              purchase_id: pid,
+              journal_entry_id: journalEntryId,
+              link_source: 'FROM_JOURNAL_MODAL',
+              linked_by: user.id,
+              linked_at: new Date().toISOString(),
+            }));
+            await supabase
+              .from("tab_purchase_journal_links" as any)
+              .insert(linkRows);
+          }
+        } catch (linkError) {
+          console.error("Error creating purchase-journal links:", linkError);
+        }
+      }
+
       // Update purchases with their DB ids for parent state
       const purchasesWithIds = purchases.map((p, i) => ({
         ...p,
