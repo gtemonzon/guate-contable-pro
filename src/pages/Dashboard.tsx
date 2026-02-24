@@ -334,7 +334,7 @@ const Dashboard = () => {
       : `Comparativa mensual: ${selectedChartYears.sort((a, b) => b - a).join(', ')}`;
 
   return (
-    <div className="relative space-y-6">
+    <div className="relative min-h-[80vh] space-y-6">
       {/* Loading overlay */}
       <DashboardLoadingOverlay
         modules={modules}

@@ -33,7 +33,7 @@ export function DashboardLoadingOverlay({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-500 ${
+      className={`absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm transition-opacity duration-500 ${
         fadingOut ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
       style={{ backgroundColor: "hsl(var(--background) / 0.75)" }}
