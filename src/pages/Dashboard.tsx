@@ -284,11 +284,11 @@ const Dashboard = () => {
   const dashboardKey = `${currentEntId ?? ''}:${activePeriod?.id ?? ''}`;
   const { modules, readyCount, totalCount, progress, allDone, setModuleStatus } = useDashboardProgress(dashboardKey);
 
-  useEffect(() => { setModuleStatus('kpis', kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [kpiLoading, kpiError, setModuleStatus]);
-  useEffect(() => { setModuleStatus('bookSummaries', bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [bookLoading, bookError, setModuleStatus]);
-  useEffect(() => { setModuleStatus('charts', chartLoading ? 'loading' : chartError ? 'error' : 'ready'); }, [chartLoading, chartError, setModuleStatus]);
-  useEffect(() => { setModuleStatus('recentEntries', recentSuccess ? 'ready' : recentError ? 'error' : 'loading'); }, [recentSuccess, recentError, setModuleStatus]);
-  useEffect(() => { setModuleStatus('taxData', taxData.loading ? 'loading' : 'ready'); }, [taxData.loading, setModuleStatus]);
+  useEffect(() => { setModuleStatus('kpis', kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [kpiLoading, kpiError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('bookSummaries', bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [bookLoading, bookError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('charts', chartLoading ? 'loading' : chartError ? 'error' : 'ready'); }, [chartLoading, chartError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('recentEntries', recentSuccess ? 'ready' : recentError ? 'error' : 'loading'); }, [recentSuccess, recentError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('taxData', taxData.loading ? 'loading' : 'ready'); }, [taxData.loading, setModuleStatus, dashboardKey]);
   // These modules are self-contained components; mark ready after a tick so overlay doesn't stall
   useEffect(() => {
     if (currentEntId) {
@@ -298,8 +298,8 @@ const Dashboard = () => {
       }, 1500);
       return () => clearTimeout(t);
     }
-  }, [currentEntId, setModuleStatus]);
-  useEffect(() => { setModuleStatus('cardConfig', cardConfigDone ? 'ready' : 'loading'); }, [cardConfigDone, setModuleStatus]);
+  }, [currentEntId, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('cardConfig', cardConfigDone ? 'ready' : 'loading'); }, [cardConfigDone, setModuleStatus, dashboardKey]);
 
   // Fetch available years for chart year selector
   useEffect(() => {
