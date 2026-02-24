@@ -33,12 +33,13 @@ export function DashboardLoadingOverlay({
 
   return (
     <div
-      className={`absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm transition-opacity duration-500 ${
+      className={`absolute inset-0 z-30 overflow-hidden transition-opacity duration-500 ${
         fadingOut ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
       style={{ backgroundColor: "hsl(var(--background) / 0.75)" }}
     >
-      <div className="flex flex-col items-center gap-5 max-w-xs w-full px-6">
+      <div className="sticky top-24 flex justify-center pt-12">
+        <div className="flex flex-col items-center gap-5 max-w-xs w-full px-6">
         {/* Spinner */}
         <div className="relative">
           <Loader2 className="h-10 w-10 text-primary animate-spin" />
@@ -73,6 +74,7 @@ export function DashboardLoadingOverlay({
               </span>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>
