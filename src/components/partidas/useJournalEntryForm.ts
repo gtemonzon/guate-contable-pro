@@ -353,6 +353,12 @@ export function useJournalEntryForm(
   const getTotalCredit = () => detailLines.reduce((sum, l) => sum + (l.credit_amount || 0), 0);
   const isBalanced = () => { const d = getTotalDebit(), c = getTotalCredit(); return Math.abs(d - c) < 0.01 && d > 0; };
 
+  // Imbalance amount for draft warnings
+  const getImbalanceAmount = () => {
+    const d = getTotalDebit(), c = getTotalCredit();
+    return Math.round((d - c) * 100) / 100;
+  };
+
   const addLine = () => {
     const newLineId = crypto.randomUUID();
     setDetailLines(prev => {
@@ -373,11 +379,6 @@ export function useJournalEntryForm(
     const line = detailLines.find(l => l.id === id);
     if (line?.is_bank_line) {
       toast({ title: "Línea protegida", description: "La línea bancaria se gestiona automáticamente. Para eliminarla, quite la cuenta bancaria del encabezado.", variant: "destructive" });
-      return;
-    }
-    const nonBankLines = detailLines.filter(l => !l.is_bank_line);
-    if (nonBankLines.length <= 1) {
-      toast({ title: "Mínimo requerido", description: "Debe haber al menos 1 línea de detalle además de la línea bancaria.", variant: "destructive" });
       return;
     }
     setDetailLines(detailLines.filter(l => l.id !== id));
@@ -562,7 +563,18 @@ export function useJournalEntryForm(
     setDetailLines(enforced);
   };
 
-  const validateEntry = () => {
+  /** Minimal validation for draft save — very permissive */
+  const validateDraft = () => {
+    // Only require a period if one is available
+    if (periods.length > 0 && !periodId) {
+      toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" });
+      return false;
+    }
+    return true;
+  };
+
+  /** Strict validation for posting (Contabilizar) */
+  const validateForPosting = () => {
     if (!headerDescription.trim()) { toast({ title: "Descripción requerida", description: "Debes ingresar una descripción general", variant: "destructive" }); return false; }
     if (!periodId) { toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" }); return false; }
 
@@ -574,8 +586,7 @@ export function useJournalEntryForm(
     }
 
     const validLines = detailLines.filter(l => l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
-    setDetailLines(validLines.length >= 2 ? validLines : detailLines);
-    if (validLines.length < 2) { toast({ title: "Líneas insuficientes", description: "Una partida debe tener al menos 2 líneas de detalle", variant: "destructive" }); return false; }
+    if (validLines.length < 2) { toast({ title: "Líneas insuficientes", description: "Una partida debe tener al menos 2 líneas de detalle para contabilizar", variant: "destructive" }); return false; }
     for (const line of validLines) {
       if (!line.account_id && (line.debit_amount > 0 || line.credit_amount > 0)) { toast({ title: "Cuenta requerida", description: "Hay líneas con monto que no tienen cuenta asignada", variant: "destructive" }); return false; }
       if (line.account_id && line.debit_amount === 0 && line.credit_amount === 0 && !line.is_bank_line) { toast({ title: "Monto requerido", description: "Hay líneas con cuenta asignada que no tienen monto", variant: "destructive" }); return false; }
@@ -583,28 +594,50 @@ export function useJournalEntryForm(
       if (acc?.requires_cost_center && !line.cost_center.trim()) { toast({ title: "Centro de costo requerido", description: `La cuenta ${acc.account_code} requiere centro de costo`, variant: "destructive" }); return false; }
       if (line.debit_amount > 0 && line.credit_amount > 0) { toast({ title: "Debe o haber", description: "Una línea no puede tener monto en debe y haber al mismo tiempo", variant: "destructive" }); return false; }
     }
+
+    if (!isBalanced()) {
+      toast({ title: "Partida desbalanceada", description: "El debe y el haber deben ser iguales para contabilizar", variant: "destructive" });
+      return false;
+    }
+
     return true;
   };
 
   const saveEntry = async (post: boolean) => {
-    if (!validateEntry()) return;
-    if (post && !isBalanced()) { toast({ title: "Partida desbalanceada", description: "El debe y el haber deben ser iguales para contabilizar", variant: "destructive" }); return; }
+    // Use permissive validation for drafts, strict for posting
+    if (post) {
+      if (!validateForPosting()) return;
+    } else {
+      if (!validateDraft()) return;
+    }
+
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
 
-    // Overdraft check
-    const validLines = detailLines.filter(l => l.account_id !== null);
-    for (const line of validLines) {
-      const account = accounts.find(a => a.id === line.account_id);
-      if (!account || account.balance_type === 'indiferente') continue;
-      let query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
-      const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
-      if (currentEntryId) query = query.neq("journal_entry_id", currentEntryId);
-      const { data: movements } = await query;
-      const currentBalance = (movements || []).reduce((acc, m) => acc + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0), 0);
-      const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
-      if (account.balance_type === 'deudor' && newBalance < 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
-      if (account.balance_type === 'acreedor' && newBalance > 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
+    // Overdraft check — only on posting
+    if (post) {
+      const validLines = detailLines.filter(l => l.account_id !== null);
+      for (const line of validLines) {
+        const account = accounts.find(a => a.id === line.account_id);
+        if (!account || account.balance_type === 'indiferente') continue;
+        let query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
+        // Only consider posted entries for overdraft check
+        const { data: postedEntryIds } = await supabase.from("tab_journal_entries")
+          .select("id").eq("enterprise_id", parseInt(enterpriseId)).eq("is_posted", true).is("deleted_at", null);
+        const postedIds = (postedEntryIds || []).map(e => e.id);
+        const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
+        if (currentEntryId) {
+          const idx = postedIds.indexOf(currentEntryId);
+          if (idx !== -1) postedIds.splice(idx, 1);
+        }
+        if (postedIds.length === 0) continue;
+        const { data: movements } = await supabase.from("tab_journal_entry_details")
+          .select("debit_amount, credit_amount").eq("account_id", line.account_id).in("journal_entry_id", postedIds);
+        const currentBalance = (movements || []).reduce((acc, m) => acc + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0), 0);
+        const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
+        if (account.balance_type === 'deudor' && newBalance < 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
+        if (account.balance_type === 'acreedor' && newBalance > 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
+      }
     }
 
     try {
@@ -614,14 +647,19 @@ export function useJournalEntryForm(
 
       const bankDirectionValue = bankAccountId ? bankDirection : null;
 
-      const buildLineInserts = (targetEntryId: number) =>
-        detailLines.map((l, i) => ({
+      const buildLineInserts = (targetEntryId: number) => {
+        // For drafts, only insert lines that have meaningful data
+        const meaningfulLines = detailLines.filter(l =>
+          l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0 || l.is_bank_line
+        );
+        return meaningfulLines.map((l, i) => ({
           journal_entry_id: targetEntryId, line_number: i + 1, account_id: l.account_id,
-          description: l.description || headerDescription, cost_center: l.cost_center || null,
+          description: l.description || headerDescription || '', cost_center: l.cost_center || null,
           debit_amount: l.debit_amount, credit_amount: l.credit_amount,
           is_bank_line: l.is_bank_line || false,
           source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
         } as any));
+      };
 
       if (entryToEdit) {
         // ─── Existing entry: update ─────────────────────────────
@@ -636,8 +674,11 @@ export function useJournalEntryForm(
         } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
-        const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(entryToEdit.id));
-        if (insertError) throw insertError;
+        const lineInserts = buildLineInserts(entryToEdit.id);
+        if (lineInserts.length > 0) {
+          const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(lineInserts);
+          if (insertError) throw insertError;
+        }
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
         onSuccess(entryToEdit.id);
 
@@ -655,8 +696,11 @@ export function useJournalEntryForm(
         if (updateError) throw updateError;
 
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", draftId);
-        const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(draftId));
-        if (insertError) throw insertError;
+        const draftLineInserts = buildLineInserts(draftId);
+        if (draftLineInserts.length > 0) {
+          const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(draftLineInserts);
+          if (insertError) throw insertError;
+        }
 
         if (post) {
           const { error: postError } = await supabase.from("tab_journal_entries").update({
@@ -684,8 +728,11 @@ export function useJournalEntryForm(
         } as any).select().single();
         if (entryError) throw entryError;
 
-        const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(entry.id));
-        if (detailsError) throw detailsError;
+        const newLineInserts = buildLineInserts(entry.id);
+        if (newLineInserts.length > 0) {
+          const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(newLineInserts);
+          if (detailsError) throw detailsError;
+        }
 
         if (post) {
           const { error: postError } = await supabase.from("tab_journal_entries").update({
@@ -735,7 +782,7 @@ export function useJournalEntryForm(
     isReadOnly, auditInfo, activeLineId, setActiveLineId,
     showStickyHeader, headerRef,
     // Computed
-    getTotalDebit, getTotalCredit, isBalanced,
+    getTotalDebit, getTotalCredit, isBalanced, getImbalanceAmount,
     // Draft support
     get draftEntryId() { return draftEntryIdRef.current; },
     ensureDraftEntry,

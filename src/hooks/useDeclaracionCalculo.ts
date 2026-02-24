@@ -219,6 +219,7 @@ export function useDeclaracionCalculo(
         `)
         .eq("account_id", vatCreditAccountId)
         .eq("tab_journal_entries.enterprise_id", enterpriseId)
+        .eq("tab_journal_entries.is_posted", true)
         .lt("tab_journal_entries.entry_date", startDate);
 
       if (!journalDetails || journalDetails.length === 0) {
