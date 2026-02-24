@@ -6,7 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Check, ChevronsUpDown, ShoppingCart, BarChart2, Landmark, FileText } from "lucide-react";
+import { Plus, Trash2, Check, ChevronsUpDown, BarChart2, Landmark, FileText } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { Account, DetailLine } from "./useJournalEntryForm";
 
@@ -26,7 +26,6 @@ interface JournalEntryLinesTableProps {
   onAddLine: () => void;
   onRemoveLine: (id: string) => void;
   onUpdateLine: (id: string, field: keyof DetailLine, value: any) => void;
-  onOpenPurchasesModal: () => void;
   onOpenBalanceInspector: () => void;
   entryDate: string;
 }
@@ -34,7 +33,7 @@ interface JournalEntryLinesTableProps {
 export function JournalEntryLinesTable({
   detailLines, accounts, activeLineId, setActiveLineId, accountSearch, setAccountSearch,
   accountPopoverOpen, setAccountPopoverOpen, isReadOnly, totalDebit, totalCredit, isBalanced,
-  onAddLine, onRemoveLine, onUpdateLine, onOpenPurchasesModal, onOpenBalanceInspector, entryDate,
+  onAddLine, onRemoveLine, onUpdateLine, onOpenBalanceInspector, entryDate,
 }: JournalEntryLinesTableProps) {
   const activeLine = activeLineId ? detailLines.find(l => l.id === activeLineId) : null;
   const activeLineHasAccount = !!activeLine?.account_id;
@@ -64,12 +63,6 @@ export function JournalEntryLinesTable({
           </Tooltip>
         </div>
         <div className="flex gap-2">
-          {!isReadOnly && (
-            <Button onClick={onOpenPurchasesModal} variant="outline" size="sm" disabled={!entryDate} title={!entryDate ? "Primero ingrese la fecha de la partida" : "Ver/agregar facturas de compra vinculadas"}>
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Agregar desde Compras
-            </Button>
-          )}
           <Button onClick={onAddLine} variant="outline" size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Agregar Línea

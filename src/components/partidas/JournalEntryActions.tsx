@@ -73,7 +73,7 @@ export function JournalEntryActions({
             </span>
           )}
 
-          {entryToEdit && onLinkPurchases && (
+          {onLinkPurchases && (
             <Button variant="outline" onClick={onLinkPurchases} disabled={loading} size="sm" className="text-primary">
               <Link2 className="mr-2 h-4 w-4" />
               Vincular Facturas

@@ -98,12 +98,13 @@ export function useJournalEntryForm(
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [entryStatus, setEntryStatus] = useState<EntryStatus>('borrador');
-  const [showLinkedPurchasesModal, setShowLinkedPurchasesModal] = useState(false);
-  const [linkedPurchases, setLinkedPurchases] = useState<any[]>([]);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
+
+  // Auto-draft support
+  const draftEntryIdRef = useRef<number | null>(null);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const initialSnapshotRef = useRef<string>("");
@@ -136,7 +137,8 @@ export function useJournalEntryForm(
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
     setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
-    setIsReadOnly(false); setActiveLineId(null); setLinkedPurchases([]);
+    setIsReadOnly(false); setActiveLineId(null);
+    draftEntryIdRef.current = null;
   };
 
   const resetForm = () => {
@@ -154,7 +156,8 @@ export function useJournalEntryForm(
     setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
     setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
-    setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null); setLinkedPurchases([]);
+    setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
+    draftEntryIdRef.current = null;
   };
 
   const loadInitialData = async () => {
@@ -230,7 +233,6 @@ export function useJournalEntryForm(
 
       // Legacy fix: if bank_account_id is set but no bank line exists, create one
       if (entry.bank_account_id && !lines.some(l => l.is_bank_line)) {
-        const dir = (entry as any).bank_direction || 'OUT';
         lines.push({
           id: crypto.randomUUID(),
           account_id: entry.bank_account_id,
@@ -274,8 +276,9 @@ export function useJournalEntryForm(
     return () => observer.disconnect();
   }, [open, isLoadingEntry]);
 
+  // Preview next entry number — skip if draft already allocated a number
   useEffect(() => {
-    if (!open || entryToEdit || !entryDate || !entryType) return;
+    if (!open || entryToEdit || draftEntryIdRef.current || !entryDate || !entryType) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
     previewNextEntryNumber(enterpriseId, entryType, entryDate)
@@ -299,7 +302,6 @@ export function useJournalEntryForm(
   }, [open, bankAccountId]);
 
   // ─── Auto Bank Line Management (single invariant) ──────────────────
-  // Enforce exactly one bank line whenever bankAccountId, bankDirection, or non-bank line amounts change
   useEffect(() => {
     if (!open || isLoadingEntry) return;
 
@@ -309,7 +311,6 @@ export function useJournalEntryForm(
         beneficiaryName,
         bankReference,
       });
-      // Cheap identity check to avoid infinite loops
       if (next.length === prev.length && next.every((l, i) =>
         l.id === prev[i].id &&
         l.account_id === prev[i].account_id &&
@@ -337,7 +338,6 @@ export function useJournalEntryForm(
 
   const handleCloseAttempt = useCallback((newOpen: boolean) => {
     if (!newOpen && hasUnsavedChanges()) {
-      // If entry is already posted, don't offer "save as draft" — just close
       const alreadyPosted = entryToEdit?.is_posted || entryToEdit?.status === 'contabilizado';
       if (alreadyPosted) {
         onOpenChange(false);
@@ -356,7 +356,6 @@ export function useJournalEntryForm(
   const addLine = () => {
     const newLineId = crypto.randomUUID();
     setDetailLines(prev => {
-      // Insert before bank line if it exists
       const bankIdx = prev.findIndex(l => l.is_bank_line);
       const newLine: DetailLine = { id: newLineId, account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 };
       if (bankIdx !== -1) {
@@ -386,14 +385,12 @@ export function useJournalEntryForm(
 
   const updateLine = (id: string, field: keyof DetailLine, value: any) => {
     const line = detailLines.find(l => l.id === id);
-    // Protect bank line from account changes
     if (line?.is_bank_line && field === 'account_id') return;
 
     setDetailLines(lines => {
       const updated = lines.map(l => l.id === id ? { ...l, [field]: value } : l);
       const idx = updated.findIndex(l => l.id === id);
       if (idx === updated.length - 1 && !updated[idx].is_bank_line && (field === "debit_amount" || field === "credit_amount") && value > 0) {
-        // Insert new line before bank line
         const bankIdx = updated.findIndex(l => l.is_bank_line);
         const newLine: DetailLine = { id: crypto.randomUUID(), account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 };
         if (bankIdx !== -1) {
@@ -406,19 +403,157 @@ export function useJournalEntryForm(
     });
   };
 
-  const handlePurchasesPosted = (newLines: DetailLine[], purchases?: any[]) => {
-    if (purchases) setLinkedPurchases(purchases);
-    // Filter out any purchase-generated line that uses the bank GL account
-    const filteredNewLines = bankAccountId
-      ? newLines.filter(l => l.account_id !== bankAccountId)
-      : newLines;
+  // ─── Auto-draft creation ──────────────────────────────────────────
+  const ensureDraftEntry = async (): Promise<number> => {
+    if (draftEntryIdRef.current) return draftEntryIdRef.current;
+    if (entryToEdit) return entryToEdit.id;
 
-    // Remove any previous purchase-sourced lines to avoid duplicates on re-contabilizar
-    const nonPurchaseLines = detailLines.filter(l => l.is_bank_line || l.source_type !== 'PURCHASE');
-    const otherLines = nonPurchaseLines.filter(l => !l.is_bank_line && (l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0));
-    const merged = otherLines.length === 0 ? filteredNewLines : [...otherLines, ...filteredNewLines];
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) throw new Error("Sin empresa seleccionada");
 
-    // Run invariant to ensure exactly one bank line with correct amount
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    // Allocate entry number atomically
+    const finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
+    setNextEntryNumber(finalEntryNumber);
+
+    const bankDirectionValue = bankAccountId ? bankDirection : null;
+
+    const { data: entry, error } = await supabase.from("tab_journal_entries").insert({
+      enterprise_id: parseInt(enterpriseId),
+      entry_number: finalEntryNumber,
+      entry_date: entryDate,
+      entry_type: entryType,
+      accounting_period_id: periodId,
+      description: headerDescription || 'Borrador (sin líneas)',
+      bank_account_id: bankAccountId || null,
+      bank_reference: bankReference || null,
+      beneficiary_name: beneficiaryName || null,
+      bank_direction: bankDirectionValue,
+      total_debit: 0,
+      total_credit: 0,
+      is_posted: false,
+      status: 'borrador',
+      created_by: user.id,
+    } as any).select().single();
+
+    if (error) throw error;
+    draftEntryIdRef.current = entry.id;
+    return entry.id;
+  };
+
+  // ─── Regenerate journal lines from linked purchases ───────────────
+  const regenerateLinesFromLinkedPurchases = async (entryId: number) => {
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+
+    // Fetch linked purchase IDs
+    const { data: links } = await supabase
+      .from("tab_purchase_journal_links" as any)
+      .select("purchase_id")
+      .eq("journal_entry_id", entryId);
+
+    const purchaseIds = (links || []).map((l: any) => l.purchase_id);
+
+    if (purchaseIds.length === 0) {
+      // Remove purchase-sourced lines, ensure minimum lines remain
+      setDetailLines(prev => {
+        const filtered = prev.filter(l => l.source_type !== 'PURCHASE');
+        while (filtered.filter(l => !l.is_bank_line).length < 2) {
+          filtered.push({ id: crypto.randomUUID(), account_id: null, description: "", cost_center: "", debit_amount: 0, credit_amount: 0 });
+        }
+        return filtered;
+      });
+      return;
+    }
+
+    const { data: purchases } = await supabase
+      .from("tab_purchase_ledger")
+      .select("*")
+      .in("id", purchaseIds)
+      .is("deleted_at", null);
+
+    if (!purchases || purchases.length === 0) return;
+
+    // Load enterprise config for VAT and supplier accounts
+    const { data: configData } = await supabase
+      .from("tab_enterprise_config")
+      .select("*")
+      .eq("enterprise_id", parseInt(enterpriseId))
+      .maybeSingle();
+
+    const generatedLines: DetailLine[] = [];
+    const expensesByAccount: Record<number, { total: number; descriptions: string[]; refs: string[] }> = {};
+    let totalVat = 0;
+    let totalAmount = 0;
+
+    for (const p of purchases) {
+      const ref = `${p.fel_document_type} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`;
+      totalVat += p.vat_amount || 0;
+      totalAmount += p.total_amount || 0;
+
+      if (p.expense_account_id) {
+        if (!expensesByAccount[p.expense_account_id]) {
+          expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
+        }
+        const baseAmount = p.base_amount || p.net_amount || (p.total_amount - (p.vat_amount || 0));
+        const idpAmount = p.idp_amount || 0;
+        expensesByAccount[p.expense_account_id].total += baseAmount + idpAmount;
+        expensesByAccount[p.expense_account_id].descriptions.push(`${p.supplier_name} - Fact. ${ref}`);
+        expensesByAccount[p.expense_account_id].refs.push(ref);
+      }
+    }
+
+    // Expense lines (debit)
+    for (const [accountId, data] of Object.entries(expensesByAccount)) {
+      generatedLines.push({
+        id: crypto.randomUUID(),
+        account_id: Number(accountId),
+        description: data.descriptions.join('; '),
+        cost_center: "",
+        debit_amount: Number(data.total.toFixed(2)),
+        credit_amount: 0,
+        source_type: 'PURCHASE',
+        source_ref: data.refs.join(', '),
+      });
+    }
+
+    // IVA line (debit)
+    if (totalVat > 0 && configData?.vat_credit_account_id) {
+      const purchaseRefs = purchases.map(p => `${p.fel_document_type} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`);
+      generatedLines.push({
+        id: crypto.randomUUID(),
+        account_id: configData.vat_credit_account_id,
+        description: `IVA Crédito Fiscal - ${purchases.length} factura(s)`,
+        cost_center: "",
+        debit_amount: Number(totalVat.toFixed(2)),
+        credit_amount: 0,
+        source_type: 'PURCHASE',
+        source_ref: purchaseRefs.join(', '),
+      });
+    }
+
+    // Supplier line (credit) — only if no bank account selected
+    if (!bankAccountId && configData?.suppliers_account_id) {
+      generatedLines.push({
+        id: crypto.randomUUID(),
+        account_id: configData.suppliers_account_id,
+        description: `Proveedores - ${purchases.length} factura(s)`,
+        cost_center: "",
+        debit_amount: 0,
+        credit_amount: Number(totalAmount.toFixed(2)),
+        source_type: 'PURCHASE',
+        source_ref: purchases.map(p => `${p.fel_document_type} ${p.invoice_number}`).join(', '),
+      });
+    }
+
+    // Merge: keep non-purchase, non-bank lines; replace purchase lines
+    const nonPurchaseLines = detailLines.filter(l => l.source_type !== 'PURCHASE' && !l.is_bank_line);
+    const otherLines = nonPurchaseLines.filter(l => l.account_id !== null || l.debit_amount > 0 || l.credit_amount > 0);
+    const merged = otherLines.length === 0 ? generatedLines : [...otherLines, ...generatedLines];
+
+    // Enforce bank line invariant
     const enforced = enforceBankLineInvariant(merged, bankAccountId, bankDirection, {
       headerDescription,
       beneficiaryName,
@@ -431,7 +566,6 @@ export function useJournalEntryForm(
     if (!headerDescription.trim()) { toast({ title: "Descripción requerida", description: "Debes ingresar una descripción general", variant: "destructive" }); return false; }
     if (!periodId) { toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" }); return false; }
 
-    // Bank validation
     if (bankAccountId) {
       const bankLines = detailLines.filter(l => l.is_bank_line);
       if (bankLines.length !== 1) { toast({ title: "Error en línea bancaria", description: "Debe existir exactamente una línea bancaria cuando hay cuenta bancaria seleccionada.", variant: "destructive" }); return false; }
@@ -464,7 +598,8 @@ export function useJournalEntryForm(
       const account = accounts.find(a => a.id === line.account_id);
       if (!account || account.balance_type === 'indiferente') continue;
       let query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
-      if (entryToEdit?.id) query = query.neq("journal_entry_id", entryToEdit.id);
+      const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
+      if (currentEntryId) query = query.neq("journal_entry_id", currentEntryId);
       const { data: movements } = await query;
       const currentBalance = (movements || []).reduce((acc, m) => acc + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0), 0);
       const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
@@ -479,7 +614,17 @@ export function useJournalEntryForm(
 
       const bankDirectionValue = bankAccountId ? bankDirection : null;
 
+      const buildLineInserts = (targetEntryId: number) =>
+        detailLines.map((l, i) => ({
+          journal_entry_id: targetEntryId, line_number: i + 1, account_id: l.account_id,
+          description: l.description || headerDescription, cost_center: l.cost_center || null,
+          debit_amount: l.debit_amount, credit_amount: l.credit_amount,
+          is_bank_line: l.is_bank_line || false,
+          source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
+        } as any));
+
       if (entryToEdit) {
+        // ─── Existing entry: update ─────────────────────────────
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
@@ -491,23 +636,43 @@ export function useJournalEntryForm(
         } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
-        const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(
-          detailLines.map((l, i) => ({
-            journal_entry_id: entryToEdit.id, line_number: i + 1, account_id: l.account_id,
-            description: l.description || headerDescription, cost_center: l.cost_center || null,
-            debit_amount: l.debit_amount, credit_amount: l.credit_amount,
-            is_bank_line: l.is_bank_line || false,
-            source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
-          } as any))
-        );
+        const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(entryToEdit.id));
         if (insertError) throw insertError;
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
         onSuccess(entryToEdit.id);
+
+      } else if (draftEntryIdRef.current) {
+        // ─── Draft entry: update the auto-created draft ─────────
+        const draftId = draftEntryIdRef.current;
+        const { error: updateError } = await supabase.from("tab_journal_entries").update({
+          entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
+          document_reference: documentReference || null, description: headerDescription,
+          bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
+          beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
+          total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          is_posted: false, updated_by: user.id, updated_at: new Date().toISOString(), status: 'borrador',
+        } as any).eq("id", draftId);
+        if (updateError) throw updateError;
+
+        await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", draftId);
+        const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(draftId));
+        if (insertError) throw insertError;
+
+        if (post) {
+          const { error: postError } = await supabase.from("tab_journal_entries").update({
+            is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
+          } as any).eq("id", draftId);
+          if (postError) throw postError;
+        }
+
+        toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${nextEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
+        onSuccess(draftId);
+
       } else {
-        // Atomically allocate the entry number server-side
+        // ─── Brand new entry: insert header → lines → post ──────
         let finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
         setNextEntryNumber(finalEntryNumber);
-        // Always insert as draft first, then add lines, then post if needed
+
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,
@@ -518,60 +683,43 @@ export function useJournalEntryForm(
           status: 'borrador',
         } as any).select().single();
         if (entryError) throw entryError;
-        const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(
-          detailLines.map((l, i) => ({
-            journal_entry_id: entry.id, line_number: i + 1, account_id: l.account_id,
-            description: l.description || headerDescription, cost_center: l.cost_center || null,
-            debit_amount: l.debit_amount, credit_amount: l.credit_amount,
-            is_bank_line: l.is_bank_line || false,
-            source_type: l.source_type || null, source_id: l.source_id || null, source_ref: l.source_ref || null,
-          } as any))
-        );
+
+        const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert(buildLineInserts(entry.id));
         if (detailsError) throw detailsError;
-        // Now post if requested (triggers validate lines exist and balance)
+
         if (post) {
           const { error: postError } = await supabase.from("tab_journal_entries").update({
             is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
           } as any).eq("id", entry.id);
           if (postError) throw postError;
         }
-        // Link any purchases saved by the modal to this new journal entry
-        if (linkedPurchases.length > 0) {
-          const purchaseIds = linkedPurchases.filter(p => p.id != null).map(p => p.id);
-          if (purchaseIds.length > 0) {
-            // Update legacy journal_entry_id column
-            await supabase
-              .from("tab_purchase_ledger")
-              .update({ journal_entry_id: entry.id } as any)
-              .in("id", purchaseIds);
 
-            // Create links in tab_purchase_journal_links
-            try {
-              const linkRows = purchaseIds.map((pid: number) => ({
-                enterprise_id: parseInt(enterpriseId),
-                purchase_id: pid,
-                journal_entry_id: entry.id,
-                link_source: 'FROM_JOURNAL_MODAL',
-                linked_by: user.id,
-                linked_at: new Date().toISOString(),
-              }));
-              await supabase
-                .from("tab_purchase_journal_links" as any)
-                .upsert(linkRows, { onConflict: "enterprise_id,purchase_id" });
-            } catch (linkError) {
-              console.error("Error creating purchase-journal links:", linkError);
-            }
-          }
-        }
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
         onSuccess(entry.id);
       }
+
+      draftEntryIdRef.current = null;
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
+  };
+
+  const cleanupDraftEntry = async () => {
+    if (!draftEntryIdRef.current) return;
+    try {
+      const draftId = draftEntryIdRef.current;
+      await supabase.from("tab_purchase_journal_links" as any).delete().eq("journal_entry_id", draftId);
+      // Also unlink purchases that were linked to this draft
+      await supabase.from("tab_purchase_ledger").update({ journal_entry_id: null } as any).eq("journal_entry_id", draftId);
+      await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", draftId);
+      await supabase.from("tab_journal_entries").delete().eq("id", draftId);
+    } catch (e) {
+      console.error("Error cleaning up draft:", e);
+    }
+    draftEntryIdRef.current = null;
   };
 
   return {
@@ -584,16 +732,24 @@ export function useJournalEntryForm(
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,
     showCloseConfirm, setShowCloseConfirm, showRejectDialog, setShowRejectDialog,
     rejectionReason, setRejectionReason, entryStatus,
-    showLinkedPurchasesModal, setShowLinkedPurchasesModal,
-    linkedPurchases, setLinkedPurchases,
     isReadOnly, auditInfo, activeLineId, setActiveLineId,
     showStickyHeader, headerRef,
     // Computed
     getTotalDebit, getTotalCredit, isBalanced,
+    // Draft support
+    get draftEntryId() { return draftEntryIdRef.current; },
+    ensureDraftEntry,
+    regenerateLinesFromLinkedPurchases,
+    getEntryId: () => entryToEdit?.id || draftEntryIdRef.current,
     // Actions
-    addLine, removeLine, updateLine, handlePurchasesPosted,
+    addLine, removeLine, updateLine,
     handleCloseAttempt, saveEntry, propagateDescriptionToLines,
-    handleDiscardAndClose: () => { setShowCloseConfirm(false); resetForm(); onOpenChange(false); },
+    handleDiscardAndClose: async () => {
+      setShowCloseConfirm(false);
+      await cleanupDraftEntry();
+      resetForm();
+      onOpenChange(false);
+    },
     handleSaveDraftAndClose: async () => { setShowCloseConfirm(false); await saveEntry(false); },
     permissions, formatDateTime,
   };
