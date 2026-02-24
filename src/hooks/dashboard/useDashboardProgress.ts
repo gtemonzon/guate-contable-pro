@@ -1,6 +1,9 @@
 /**
  * useDashboardProgress — tracks loading state of dashboard modules
  * and exposes a progress ratio for the loading overlay.
+ *
+ * Accepts a `resetKey` that, when changed, resets all modules back to
+ * "loading" so the overlay reappears on enterprise / period switches.
  */
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
@@ -23,12 +26,25 @@ const MODULE_DEFS: { id: string; label: string }[] = [
   { id: 'cardConfig',      label: 'Configuración' },
 ];
 
-export function useDashboardProgress() {
-  const [statuses, setStatuses] = useState<Record<string, ModuleStatus>>(() => {
-    const init: Record<string, ModuleStatus> = {};
-    MODULE_DEFS.forEach((m) => { init[m.id] = 'loading'; });
-    return init;
-  });
+function buildInitialStatuses(): Record<string, ModuleStatus> {
+  const init: Record<string, ModuleStatus> = {};
+  MODULE_DEFS.forEach((m) => { init[m.id] = 'loading'; });
+  return init;
+}
+
+export function useDashboardProgress(resetKey?: string) {
+  const [statuses, setStatuses] = useState<Record<string, ModuleStatus>>(buildInitialStatuses);
+
+  // Track the previous resetKey so we can detect changes
+  const prevKeyRef = useRef(resetKey);
+
+  useEffect(() => {
+    if (prevKeyRef.current !== resetKey) {
+      prevKeyRef.current = resetKey;
+      // Reset all modules to loading
+      setStatuses(buildInitialStatuses());
+    }
+  }, [resetKey]);
 
   const setModuleStatus = useCallback((id: string, status: ModuleStatus) => {
     setStatuses((prev) => {
