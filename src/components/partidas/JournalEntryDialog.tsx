@@ -338,7 +338,13 @@ export default function JournalEntryDialog({
           entryDate={form.entryDate}
           entryMonth={currentEntryMonth}
           entryYear={currentEntryYear}
+          bankAccountId={form.bankAccountId}
           onLinksChanged={handleLinksChanged}
+          onApplyToEntry={() => {
+            if (currentEntryId) {
+              form.regenerateLinesFromLinkedPurchases(currentEntryId);
+            }
+          }}
         />
       )}
     </>

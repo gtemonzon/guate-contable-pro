@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,10 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Link2, Unlink, Search, FileText, ArrowRight, Plus } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Link2, Unlink, Search, FileText, ArrowRight, Plus, RefreshCw, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickPurchaseForm } from "./QuickPurchaseForm";
+import { PurchaseLinkSummary } from "./PurchaseLinkSummary";
 
 interface PurchaseLinkManagerProps {
   open: boolean;
@@ -26,10 +28,12 @@ interface PurchaseLinkManagerProps {
   entryDate: string;
   entryMonth?: number;
   entryYear?: number;
+  bankAccountId?: number | null;
   onLinksChanged?: () => void;
+  onApplyToEntry?: () => void;
 }
 
-interface PurchaseRecord {
+export interface PurchaseRecord {
   id: number;
   invoice_date: string;
   invoice_series: string | null;
@@ -46,7 +50,8 @@ interface PurchaseRecord {
 
 export function PurchaseLinkManager({
   open, onOpenChange, enterpriseId, journalEntryId, journalEntryNumber,
-  entryStatus, entryDate, entryMonth, entryYear, onLinksChanged,
+  entryStatus, entryDate, entryMonth, entryYear, bankAccountId,
+  onLinksChanged, onApplyToEntry,
 }: PurchaseLinkManagerProps) {
   const [unlinkedPurchases, setUnlinkedPurchases] = useState<PurchaseRecord[]>([]);
   const [linkedPurchases, setLinkedPurchases] = useState<PurchaseRecord[]>([]);
@@ -62,7 +67,6 @@ export function PurchaseLinkManager({
     if (!open || !enterpriseId || !journalEntryId) return;
     setLoading(true);
     try {
-      // Load linked purchases for this journal entry
       const { data: links } = await supabase
         .from("tab_purchase_journal_links" as any)
         .select("purchase_id")
@@ -71,7 +75,6 @@ export function PurchaseLinkManager({
 
       const linkedIds = (links || []).map((l: any) => l.purchase_id);
 
-      // Also check legacy journal_entry_id
       const { data: legacyLinked } = await supabase
         .from("tab_purchase_ledger")
         .select("id")
@@ -93,7 +96,6 @@ export function PurchaseLinkManager({
         setLinkedPurchases([]);
       }
 
-      // Load unlinked purchases for the enterprise (same month/year if provided)
       let query = supabase
         .from("tab_purchase_ledger")
         .select(selectCols)
@@ -192,10 +194,6 @@ export function PurchaseLinkManager({
       )
     : unlinkedPurchases;
 
-  const statusBadge = entryStatus === 'contabilizado'
-    ? <Badge variant="default" className="text-[10px] ml-2">Póliza: {journalEntryNumber}</Badge>
-    : <Badge variant="secondary" className="text-[10px] ml-2">Borrador</Badge>;
-
   const PurchaseRow = ({ purchase, action, actionIcon, actionLabel }: {
     purchase: PurchaseRecord;
     action: () => void;
@@ -230,10 +228,18 @@ export function PurchaseLinkManager({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
-            Vincular Facturas a {journalEntryNumber}
-            {statusBadge}
+            Vincular Facturas
           </DialogTitle>
         </DialogHeader>
+
+        <PurchaseLinkSummary
+          linkedPurchases={linkedPurchases}
+          entryStatus={entryStatus}
+          journalEntryNumber={journalEntryNumber}
+          bankAccountId={bankAccountId}
+          accounts={accounts}
+          onApplyToEntry={onApplyToEntry}
+        />
 
         <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
           {/* Left: Available + Create */}
@@ -313,11 +319,6 @@ export function PurchaseLinkManager({
                 <FileText className="h-4 w-4 text-primary" />
                 Vinculadas ({linkedPurchases.length})
               </h4>
-              {linkedPurchases.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Total: {formatCurrency(linkedPurchases.reduce((s, p) => s + p.total_amount, 0))}
-                </p>
-              )}
             </div>
             <ScrollArea className="flex-1 p-2">
               {linkedPurchases.length === 0 ? (
