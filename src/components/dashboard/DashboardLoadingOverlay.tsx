@@ -25,14 +25,12 @@ export function DashboardLoadingOverlay({
   const [fadingOut, setFadingOut] = useState(false);
   const prevKeyRef = useRef(resetKey);
 
-  // Reset overlay visibility when the resetKey changes
-  useEffect(() => {
-    if (prevKeyRef.current !== resetKey) {
-      prevKeyRef.current = resetKey;
-      setVisible(true);
-      setFadingOut(false);
-    }
-  }, [resetKey]);
+  // Reset overlay visibility when the resetKey changes (synchronous check)
+  if (prevKeyRef.current !== resetKey) {
+    prevKeyRef.current = resetKey;
+    setVisible(true);
+    setFadingOut(false);
+  }
 
   useEffect(() => {
     if (allDone && !fadingOut) {

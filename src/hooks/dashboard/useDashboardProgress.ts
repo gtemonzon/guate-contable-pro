@@ -5,7 +5,7 @@
  * Accepts a `resetKey` that, when changed, resets all modules back to
  * "loading" so the overlay reappears on enterprise / period switches.
  */
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 
 export type ModuleStatus = 'loading' | 'ready' | 'error';
 
@@ -34,17 +34,13 @@ function buildInitialStatuses(): Record<string, ModuleStatus> {
 
 export function useDashboardProgress(resetKey?: string) {
   const [statuses, setStatuses] = useState<Record<string, ModuleStatus>>(buildInitialStatuses);
-
-  // Track the previous resetKey so we can detect changes
   const prevKeyRef = useRef(resetKey);
 
-  useEffect(() => {
-    if (prevKeyRef.current !== resetKey) {
-      prevKeyRef.current = resetKey;
-      // Reset all modules to loading
-      setStatuses(buildInitialStatuses());
-    }
-  }, [resetKey]);
+  // Synchronous reset during render (no extra useEffect needed)
+  if (prevKeyRef.current !== resetKey) {
+    prevKeyRef.current = resetKey;
+    setStatuses(buildInitialStatuses());
+  }
 
   const setModuleStatus = useCallback((id: string, status: ModuleStatus) => {
     setStatuses((prev) => {
