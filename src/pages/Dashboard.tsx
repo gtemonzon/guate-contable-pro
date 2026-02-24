@@ -13,6 +13,7 @@ import { DashboardISRMensualSummary } from "@/components/dashboard/DashboardISRM
 import { DashboardISRTrimestralProjection } from "@/components/dashboard/DashboardISRTrimestralProjection";
 import { DashboardTaxSummary } from "@/components/dashboard/DashboardTaxSummary";
 import { DashboardCardConfigDialog } from "@/components/dashboard/DashboardCardConfigDialog";
+import { DashboardLoadingOverlay } from "@/components/dashboard/DashboardLoadingOverlay";
 import { useDashboardTaxData } from "@/hooks/useDashboardTaxData";
 import { CARD_REGISTRY, DEFAULT_VISIBLE_CARDS } from "@/constants/dashboardCards";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ import { useRecentEntries } from "@/hooks/dashboard/useRecentEntries";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useInboxItems } from "@/hooks/useInboxItems";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useDashboardProgress } from "@/hooks/dashboard/useDashboardProgress";
 import type { BookSummary } from "@/hooks/dashboard/useBookSummaries";
 
 
@@ -252,14 +254,14 @@ const Dashboard = () => {
 
   // ── Data hooks ──────────────────────────────────────────────────────────
   const { activePeriod } = useActivePeriod(currentEntId);
-  const { data: kpiData, isLoading: kpiLoading } = useKpis(currentEntId, activePeriod);
-  const { data: bookData, isLoading: bookLoading } = useBookSummaries(currentEntId);
-  const { data: chartData, isLoading: chartLoading } = useYearlyCharts(currentEntId, selectedChartYears);
-  const { data: recentEntries } = useRecentEntries(currentEntId);
+  const { data: kpiData, isLoading: kpiLoading, isSuccess: kpiSuccess, isError: kpiError } = useKpis(currentEntId, activePeriod);
+  const { data: bookData, isLoading: bookLoading, isSuccess: bookSuccess, isError: bookError } = useBookSummaries(currentEntId);
+  const { data: chartData, isLoading: chartLoading, isSuccess: chartSuccess, isError: chartError } = useYearlyCharts(currentEntId, selectedChartYears);
+  const { data: recentEntries, isSuccess: recentSuccess, isError: recentError } = useRecentEntries(currentEntId);
   const taxData = useDashboardTaxData(currentEntId);
 
   // Card config
-  const { data: cardConfig } = useQuery({
+  const { data: cardConfig, isSuccess: cardConfigSuccess, isError: cardConfigError } = useQuery({
     queryKey: ["dashboard-card-config", currentEntId],
     queryFn: async () => {
       if (!currentEntId) return null;
@@ -276,6 +278,27 @@ const Dashboard = () => {
     enabled: !!currentEntId,
   });
   const visibleCards: string[] = (cardConfig?.visible_cards as string[]) || DEFAULT_VISIBLE_CARDS;
+  const cardConfigDone = !currentEntId || cardConfigSuccess || cardConfigError;
+
+  // ── Progress tracking ───────────────────────────────────────────────────
+  const { modules, readyCount, totalCount, progress, allDone, setModuleStatus } = useDashboardProgress();
+
+  useEffect(() => { setModuleStatus('kpis', kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [kpiLoading, kpiError, setModuleStatus]);
+  useEffect(() => { setModuleStatus('bookSummaries', bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [bookLoading, bookError, setModuleStatus]);
+  useEffect(() => { setModuleStatus('charts', chartLoading ? 'loading' : chartError ? 'error' : 'ready'); }, [chartLoading, chartError, setModuleStatus]);
+  useEffect(() => { setModuleStatus('recentEntries', recentSuccess ? 'ready' : recentError ? 'error' : 'loading'); }, [recentSuccess, recentError, setModuleStatus]);
+  useEffect(() => { setModuleStatus('taxData', taxData.loading ? 'loading' : 'ready'); }, [taxData.loading, setModuleStatus]);
+  // These modules are self-contained components; mark ready after a tick so overlay doesn't stall
+  useEffect(() => {
+    if (currentEntId) {
+      const t = setTimeout(() => {
+        setModuleStatus('pendingEntries', 'ready');
+        setModuleStatus('bankBalances', 'ready');
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [currentEntId, setModuleStatus]);
+  useEffect(() => { setModuleStatus('cardConfig', cardConfigDone ? 'ready' : 'loading'); }, [cardConfigDone, setModuleStatus]);
 
   // Fetch available years for chart year selector
   useEffect(() => {
@@ -311,7 +334,15 @@ const Dashboard = () => {
       : `Comparativa mensual: ${selectedChartYears.sort((a, b) => b - a).join(', ')}`;
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {/* Loading overlay */}
+      <DashboardLoadingOverlay
+        modules={modules}
+        readyCount={readyCount}
+        totalCount={totalCount}
+        progress={progress}
+        allDone={allDone}
+      />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
