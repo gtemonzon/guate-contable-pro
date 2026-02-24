@@ -2441,6 +2441,58 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_purchase_journal_links: {
+        Row: {
+          enterprise_id: number
+          id: number
+          journal_entry_id: number
+          link_source: string
+          linked_at: string
+          linked_by: string
+          purchase_id: number
+        }
+        Insert: {
+          enterprise_id: number
+          id?: never
+          journal_entry_id: number
+          link_source?: string
+          linked_at?: string
+          linked_by?: string
+          purchase_id: number
+        }
+        Update: {
+          enterprise_id?: number
+          id?: never
+          journal_entry_id?: number
+          link_source?: string
+          linked_at?: string
+          linked_by?: string
+          purchase_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_purchase_journal_links_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_purchase_journal_links_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_purchase_journal_links_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "tab_purchase_ledger"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_purchase_ledger: {
         Row: {
           accounting_period_id: number | null

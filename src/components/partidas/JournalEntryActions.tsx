@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock, Ban, FileEdit } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban, FileEdit, Link2 } from "lucide-react";
 import type { EntryStatus } from "./useJournalEntryForm";
 
 interface JournalEntryActionsProps {
@@ -19,6 +19,7 @@ interface JournalEntryActionsProps {
   onPost: () => void;
   onVoidCheque: () => void;
   onEditMetadata?: () => void;
+  onLinkPurchases?: () => void;
   auditInfo: { createdBy: string | null; createdAt: string | null; updatedBy: string | null; updatedAt: string | null; } | null;
   formatDateTime: (d: string | null) => string;
 }
@@ -37,7 +38,7 @@ const modKey = isMac ? "⌘" : "Ctrl";
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
   hasBankAccount, hasBankReference, totalDebit,
-  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, auditInfo, formatDateTime,
+  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
   // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
   const showVoidCheque = hasBankAccount && hasBankReference;
@@ -70,6 +71,13 @@ export function JournalEntryActions({
                 <><span className="mx-1">·</span><kbd className="px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd> Contabilizar</>
               )}
             </span>
+          )}
+
+          {entryToEdit && onLinkPurchases && (
+            <Button variant="outline" onClick={onLinkPurchases} disabled={loading} size="sm" className="text-primary">
+              <Link2 className="mr-2 h-4 w-4" />
+              Vincular Facturas
+            </Button>
           )}
 
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
