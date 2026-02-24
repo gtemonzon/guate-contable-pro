@@ -281,7 +281,8 @@ const Dashboard = () => {
   const cardConfigDone = !currentEntId || cardConfigSuccess || cardConfigError;
 
   // ── Progress tracking ───────────────────────────────────────────────────
-  const { modules, readyCount, totalCount, progress, allDone, setModuleStatus } = useDashboardProgress();
+  const dashboardKey = `${currentEntId ?? ''}:${activePeriod?.id ?? ''}`;
+  const { modules, readyCount, totalCount, progress, allDone, setModuleStatus } = useDashboardProgress(dashboardKey);
 
   useEffect(() => { setModuleStatus('kpis', kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [kpiLoading, kpiError, setModuleStatus]);
   useEffect(() => { setModuleStatus('bookSummaries', bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [bookLoading, bookError, setModuleStatus]);
@@ -342,6 +343,7 @@ const Dashboard = () => {
         totalCount={totalCount}
         progress={progress}
         allDone={allDone}
+        resetKey={dashboardKey}
       />
       {/* Header */}
       <div className="flex items-center justify-between">

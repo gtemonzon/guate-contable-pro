@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Loader2 } from "lucide-react";
 import type { DashboardModule } from "@/hooks/dashboard/useDashboardProgress";
@@ -9,6 +9,8 @@ interface DashboardLoadingOverlayProps {
   totalCount: number;
   progress: number;
   allDone: boolean;
+  /** When this key changes the overlay resets to visible */
+  resetKey?: string;
 }
 
 export function DashboardLoadingOverlay({
@@ -17,9 +19,20 @@ export function DashboardLoadingOverlay({
   totalCount,
   progress,
   allDone,
+  resetKey,
 }: DashboardLoadingOverlayProps) {
   const [visible, setVisible] = useState(true);
   const [fadingOut, setFadingOut] = useState(false);
+  const prevKeyRef = useRef(resetKey);
+
+  // Reset overlay visibility when the resetKey changes
+  useEffect(() => {
+    if (prevKeyRef.current !== resetKey) {
+      prevKeyRef.current = resetKey;
+      setVisible(true);
+      setFadingOut(false);
+    }
+  }, [resetKey]);
 
   useEffect(() => {
     if (allDone && !fadingOut) {
