@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -157,6 +157,9 @@ export default function Partidas() {
     }
   }, [searchParams]);
 
+  // Track which enterprise we already fetched to avoid redundant loads
+  const fetchedEnterpriseRef = useRef<string | null>(null);
+
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
@@ -164,6 +167,7 @@ export default function Partidas() {
     if (enterpriseId) {
       fetchEntries(enterpriseId);
       fetchOpenPeriods(enterpriseId);
+      fetchedEnterpriseRef.current = enterpriseId;
     } else {
       setLoading(false);
       toast({
@@ -175,14 +179,17 @@ export default function Partidas() {
 
     const handleStorageChange = () => {
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      if (newEnterpriseId === fetchedEnterpriseRef.current) return;
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
         fetchEntries(newEnterpriseId);
         fetchOpenPeriods(newEnterpriseId);
+        fetchedEnterpriseRef.current = newEnterpriseId;
       } else {
         setEntries([]);
         setFilteredEntries([]);
         setOpenPeriods([]);
+        fetchedEnterpriseRef.current = null;
       }
     };
 
