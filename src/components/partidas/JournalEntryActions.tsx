@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock, Ban, FileEdit, Link2 } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import type { EntryStatus } from "./useJournalEntryForm";
 
 interface JournalEntryActionsProps {
@@ -14,6 +15,8 @@ interface JournalEntryActionsProps {
   hasBankAccount: boolean;
   hasBankReference: boolean;
   totalDebit: number;
+  totalCredit: number;
+  imbalanceAmount: number;
   onCancel: () => void;
   onSaveDraft: () => void;
   onPost: () => void;
@@ -37,7 +40,7 @@ const modKey = isMac ? "⌘" : "Ctrl";
 
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
-  hasBankAccount, hasBankReference, totalDebit,
+  hasBankAccount, hasBankReference, totalDebit, totalCredit, imbalanceAmount,
   onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
   // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
@@ -51,14 +54,23 @@ export function JournalEntryActions({
         </div>
       )}
 
-      <div className="flex justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {entryToEdit && (
-            <Badge variant={entryStatus === 'contabilizado' ? 'default' : entryStatus === 'rechazado' ? 'destructive' : 'secondary'}>
-              {STATUS_LABELS[entryStatus]}
-            </Badge>
-          )}
-        </div>
+      <div className="flex flex-col gap-2">
+        {/* Draft warnings (non-blocking) */}
+        {entryStatus !== 'contabilizado' && !isReadOnly && (totalDebit > 0 || totalCredit > 0) && !isBalanced && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>Descuadrada por <span className="font-mono font-medium">{formatCurrency(Math.abs(imbalanceAmount))}</span> — se puede guardar como borrador</span>
+          </div>
+        )}
+
+        <div className="flex justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {entryToEdit && (
+              <Badge variant={entryStatus === 'contabilizado' ? 'default' : entryStatus === 'rechazado' ? 'destructive' : 'secondary'}>
+                {entryStatus === 'borrador' ? 'Borrador (no afecta saldos)' : STATUS_LABELS[entryStatus]}
+              </Badge>
+            )}
+          </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* Shortcut hints */}
@@ -99,7 +111,7 @@ export function JournalEntryActions({
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
               <Save className="mr-2 h-4 w-4" />
-              Guardar
+              Guardar borrador
             </Button>
           )}
 
@@ -118,6 +130,7 @@ export function JournalEntryActions({
           )}
         </div>
       </div>
+    </div>
     </>
   );
 }

@@ -233,6 +233,8 @@ export default function JournalEntryDialog({
                 hasBankAccount={!!form.bankAccountId}
                 hasBankReference={!!form.bankReference.trim()}
                 totalDebit={totalDebit}
+                totalCredit={totalCredit}
+                imbalanceAmount={form.getImbalanceAmount()}
                 onCancel={() => form.handleCloseAttempt(false)}
                 onSaveDraft={() => form.saveEntry(false)}
                 onPost={() => form.saveEntry(true)}

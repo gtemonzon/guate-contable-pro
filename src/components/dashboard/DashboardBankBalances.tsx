@@ -41,9 +41,10 @@ export function DashboardBankBalances({ enterpriseId }: DashboardBankBalancesPro
               .select(`
                 debit_amount,
                 credit_amount,
-                tab_journal_entries!inner(enterprise_id)
+                tab_journal_entries!inner(enterprise_id, is_posted)
               `)
               .eq("tab_journal_entries.enterprise_id", enterpriseId)
+              .eq("tab_journal_entries.is_posted", true)
               .eq("account_id", ba.account_id);
 
             const movements = await fetchAllRecords<any>(movQuery);
