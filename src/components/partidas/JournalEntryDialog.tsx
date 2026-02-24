@@ -15,7 +15,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import LinkedPurchasesModal from "./LinkedPurchasesModal";
 import { AccountBalanceInspector } from "./AccountBalanceInspector";
 import VoidChequeDialog from "./VoidChequeDialog";
 import { MetadataEditDialog } from "./MetadataEditDialog";
@@ -28,6 +27,7 @@ import { JournalEntryTotalsBar } from "./JournalEntryTotalsBar";
 import { JournalEntryActions } from "./JournalEntryActions";
 import { useFormShortcuts } from "@/hooks/useFormShortcuts";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface JournalEntryDialogProps {
   open: boolean;
@@ -56,6 +56,7 @@ export default function JournalEntryDialog({
 }: JournalEntryDialogProps) {
   const form = useJournalEntryForm(open, entryToEdit ?? null, onSuccess, onOpenChange);
   const { selectedEnterpriseId } = useEnterprise();
+  const { toast } = useToast();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
@@ -69,7 +70,6 @@ export default function JournalEntryDialog({
   const canSaveDraft = form.entryStatus !== 'contabilizado' && form.permissions.canCreateEntries && !form.isReadOnly;
   const canPost = form.entryStatus !== 'contabilizado' && form.permissions.canPostEntries && !form.isReadOnly;
 
-  // Determine the currently active line's account (for Balance Inspector)
   const activeLine = form.activeLineId
     ? form.detailLines.find(l => l.id === form.activeLineId)
     : null;
@@ -77,11 +77,11 @@ export default function JournalEntryDialog({
     ? form.accounts.find(a => a.id === activeLine.account_id)
     : null;
 
-  // F2 / Alt+B → open Balance Inspector for active account
+  // F2 / Alt+B → open Balance Inspector
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (inspectorOpen) return; // let inspector handle its own keys
+      if (inspectorOpen) return;
       const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
       const isAltB = e.key === "b"   && e.altKey   && !e.ctrlKey && !e.metaKey;
       if (isF2 || isAltB) {
@@ -96,14 +96,43 @@ export default function JournalEntryDialog({
     return () => window.removeEventListener("keydown", handler, true);
   }, [open, activeAccount, inspectorOpen]);
 
-  // Keyboard shortcuts: Ctrl+Enter → Post, Ctrl+Shift+Enter → Save Draft
+  // Keyboard shortcuts
   useFormShortcuts({
     isEnabled: open && !form.isLoadingEntry && !inspectorOpen,
     onSave: canPost ? () => form.saveEntry(true) : undefined,
     onSaveDraft: canSaveDraft ? () => form.saveEntry(false) : undefined,
     onCancel: () => form.handleCloseAttempt(false),
-    isDirty: false, // ESC always allowed from dialog
+    isDirty: false,
   });
+
+  const enterpriseId = selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0");
+
+  // Handle "Vincular Facturas" click — auto-creates draft if needed
+  const handleOpenLinkManager = async () => {
+    try {
+      await form.ensureDraftEntry();
+      setLinkManagerOpen(true);
+    } catch (err: any) {
+      toast({ title: "Error al preparar vinculación", description: err.message, variant: "destructive" });
+    }
+  };
+
+  // Handle links changed — regenerate journal lines
+  const handleLinksChanged = async () => {
+    const entryId = form.getEntryId();
+    if (entryId) {
+      await form.regenerateLinesFromLinkedPurchases(entryId);
+    }
+    // Also notify parent to refresh list if editing
+    if (entryToEdit) {
+      onSuccess(entryToEdit.id);
+    }
+  };
+
+  const currentEntryId = form.getEntryId();
+  const currentEntryNumber = form.nextEntryNumber || entryToEdit?.entry_number || '(borrador)';
+  const currentEntryMonth = form.entryDate ? new Date(form.entryDate + 'T00:00:00').getMonth() + 1 : undefined;
+  const currentEntryYear = form.entryDate ? new Date(form.entryDate + 'T00:00:00').getFullYear() : undefined;
 
   return (
     <>
@@ -159,7 +188,7 @@ export default function JournalEntryDialog({
                 isReadOnly={form.isReadOnly}
               />
 
-              {/* Descripción General — after bank section for better flow */}
+              {/* Descripción General */}
               <div>
                 <label htmlFor="headerDesc" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Descripción General</label>
                 <textarea
@@ -189,7 +218,6 @@ export default function JournalEntryDialog({
                 onAddLine={form.addLine}
                 onRemoveLine={form.removeLine}
                 onUpdateLine={form.updateLine}
-                onOpenPurchasesModal={() => form.setShowLinkedPurchasesModal(true)}
                 onOpenBalanceInspector={() => setInspectorOpen(true)}
                 entryDate={form.entryDate}
               />
@@ -210,7 +238,7 @@ export default function JournalEntryDialog({
                 onPost={() => form.saveEntry(true)}
                 onVoidCheque={() => setVoidChequeOpen(true)}
                 onEditMetadata={form.entryStatus === 'contabilizado' ? () => setMetadataEditOpen(true) : undefined}
-                onLinkPurchases={entryToEdit ? () => setLinkManagerOpen(true) : undefined}
+                onLinkPurchases={!form.isReadOnly ? handleOpenLinkManager : undefined}
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
@@ -235,19 +263,6 @@ export default function JournalEntryDialog({
         </AlertDialogContent>
       </AlertDialog>
 
-      <LinkedPurchasesModal
-        open={form.showLinkedPurchasesModal}
-        onOpenChange={form.setShowLinkedPurchasesModal}
-        entryDate={form.entryDate}
-        documentReference={form.bankReference}
-        enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
-        bankAccountId={form.bankAccountId}
-        journalEntryId={entryToEdit?.id || null}
-        onPurchasesPosted={form.handlePurchasesPosted}
-        externalPurchases={form.linkedPurchases}
-        onExternalPurchasesChange={form.setLinkedPurchases}
-      />
-
       {/* Account Balance Inspector — F2 / Alt+B */}
       <AccountBalanceInspector
         open={inspectorOpen}
@@ -257,7 +272,7 @@ export default function JournalEntryDialog({
         accountName={activeAccount?.account_name ?? ""}
         balanceType={activeAccount?.balance_type ?? null}
         entryDate={form.entryDate}
-        enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
+        enterpriseId={enterpriseId}
       />
 
       {/* Void Cheque Dialog */}
@@ -273,14 +288,14 @@ export default function JournalEntryDialog({
           total_credit: entryToEdit.total_credit,
           is_posted: entryToEdit.is_posted,
           accounting_period_id: entryToEdit.accounting_period_id,
-          enterprise_id: selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0"),
+          enterprise_id: enterpriseId,
           bank_account_id: form.bankAccountId,
           bank_reference: form.bankReference,
           beneficiary_name: form.beneficiaryName,
           bank_direction: form.bankDirection,
         } : null}
         formValues={!entryToEdit ? {
-          enterpriseId: selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0"),
+          enterpriseId,
           bankAccountId: form.bankAccountId,
           bankReference: form.bankReference,
           beneficiaryName: form.beneficiaryName,
@@ -311,20 +326,21 @@ export default function JournalEntryDialog({
         />
       )}
 
-      {/* Purchase Link Manager */}
-      {entryToEdit && (
+      {/* Purchase Link Manager — unified single flow */}
+      {currentEntryId && (
         <PurchaseLinkManager
           open={linkManagerOpen}
           onOpenChange={setLinkManagerOpen}
-          enterpriseId={selectedEnterpriseId ?? parseInt(localStorage.getItem("currentEnterpriseId") || "0")}
-          journalEntryId={entryToEdit.id}
-          journalEntryNumber={form.nextEntryNumber || entryToEdit.entry_number}
-          entryMonth={form.entryDate ? new Date(form.entryDate + 'T00:00:00').getMonth() + 1 : undefined}
-          entryYear={form.entryDate ? new Date(form.entryDate + 'T00:00:00').getFullYear() : undefined}
-          onLinksChanged={() => onSuccess(entryToEdit.id)}
+          enterpriseId={enterpriseId}
+          journalEntryId={currentEntryId}
+          journalEntryNumber={currentEntryNumber}
+          entryStatus={form.entryStatus}
+          entryDate={form.entryDate}
+          entryMonth={currentEntryMonth}
+          entryYear={currentEntryYear}
+          onLinksChanged={handleLinksChanged}
         />
       )}
     </>
   );
 }
-

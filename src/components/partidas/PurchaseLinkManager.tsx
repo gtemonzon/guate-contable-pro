@@ -10,9 +10,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link2, Unlink, Search, FileText, ArrowRight } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link2, Unlink, Search, FileText, ArrowRight, Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { QuickPurchaseForm } from "./QuickPurchaseForm";
 
 interface PurchaseLinkManagerProps {
   open: boolean;
@@ -20,6 +22,8 @@ interface PurchaseLinkManagerProps {
   enterpriseId: number;
   journalEntryId: number;
   journalEntryNumber: string;
+  entryStatus: string;
+  entryDate: string;
   entryMonth?: number;
   entryYear?: number;
   onLinksChanged?: () => void;
@@ -37,23 +41,22 @@ interface PurchaseRecord {
   vat_amount: number;
   batch_reference: string | null;
   bank_account_id: number | null;
+  expense_account_id: number | null;
 }
 
 export function PurchaseLinkManager({
-  open,
-  onOpenChange,
-  enterpriseId,
-  journalEntryId,
-  journalEntryNumber,
-  entryMonth,
-  entryYear,
-  onLinksChanged,
+  open, onOpenChange, enterpriseId, journalEntryId, journalEntryNumber,
+  entryStatus, entryDate, entryMonth, entryYear, onLinksChanged,
 }: PurchaseLinkManagerProps) {
   const [unlinkedPurchases, setUnlinkedPurchases] = useState<PurchaseRecord[]>([]);
   const [linkedPurchases, setLinkedPurchases] = useState<PurchaseRecord[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [accounts, setAccounts] = useState<Array<{ id: number; account_code: string; account_name: string }>>([]);
+  const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string }>>([]);
   const { toast } = useToast();
+
+  const selectCols = "id, invoice_date, invoice_series, invoice_number, fel_document_type, supplier_nit, supplier_name, total_amount, vat_amount, batch_reference, bank_account_id, expense_account_id";
 
   const loadData = useCallback(async () => {
     if (!open || !enterpriseId || !journalEntryId) return;
@@ -81,7 +84,7 @@ export function PurchaseLinkManager({
       if (allLinkedIds.length > 0) {
         const { data: linkedData } = await supabase
           .from("tab_purchase_ledger")
-          .select("id, invoice_date, invoice_series, invoice_number, fel_document_type, supplier_nit, supplier_name, total_amount, vat_amount, batch_reference, bank_account_id")
+          .select(selectCols)
           .in("id", allLinkedIds)
           .is("deleted_at", null)
           .order("invoice_date");
@@ -93,7 +96,7 @@ export function PurchaseLinkManager({
       // Load unlinked purchases for the enterprise (same month/year if provided)
       let query = supabase
         .from("tab_purchase_ledger")
-        .select("id, invoice_date, invoice_series, invoice_number, fel_document_type, supplier_nit, supplier_name, total_amount, vat_amount, batch_reference, bank_account_id")
+        .select(selectCols)
         .eq("enterprise_id", enterpriseId)
         .is("deleted_at", null)
         .is("journal_entry_id", null)
@@ -107,7 +110,6 @@ export function PurchaseLinkManager({
       }
 
       const { data: unlinked } = await query;
-      // Filter out any that are in links table but not via journal_entry_id
       const filteredUnlinked = (unlinked || []).filter(p => !allLinkedIds.includes(p.id));
       setUnlinkedPurchases(filteredUnlinked);
     } catch (err) {
@@ -117,7 +119,23 @@ export function PurchaseLinkManager({
     }
   }, [open, enterpriseId, journalEntryId, entryMonth, entryYear]);
 
+  const loadReferenceData = useCallback(async () => {
+    if (!open || !enterpriseId) return;
+    try {
+      const [{ data: accts }, { data: docTypes }] = await Promise.all([
+        supabase.from("tab_accounts").select("id, account_code, account_name")
+          .eq("enterprise_id", enterpriseId).eq("allows_movement", true).eq("is_active", true).order("account_code"),
+        supabase.from("tab_fel_document_types").select("code, name").eq("is_active", true).order("name"),
+      ]);
+      setAccounts(accts || []);
+      setFelDocTypes(docTypes || []);
+    } catch (err) {
+      console.error("Error loading reference data:", err);
+    }
+  }, [open, enterpriseId]);
+
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadReferenceData(); }, [loadReferenceData]);
 
   const handleLink = async (purchase: PurchaseRecord) => {
     try {
@@ -134,8 +152,6 @@ export function PurchaseLinkManager({
           linked_by: user.id,
           linked_at: new Date().toISOString(),
         }, { onConflict: "enterprise_id,purchase_id" });
-
-      // The trigger syncs journal_entry_id automatically
 
       setUnlinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
       setLinkedPurchases(prev => [...prev, purchase]);
@@ -154,8 +170,6 @@ export function PurchaseLinkManager({
         .eq("enterprise_id", enterpriseId)
         .eq("purchase_id", purchase.id);
 
-      // The trigger clears journal_entry_id automatically
-
       setLinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
       setUnlinkedPurchases(prev => [...prev, purchase].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)));
       onLinksChanged?.();
@@ -165,6 +179,11 @@ export function PurchaseLinkManager({
     }
   };
 
+  const handleInvoiceCreated = () => {
+    loadData();
+    onLinksChanged?.();
+  };
+
   const filteredUnlinked = search
     ? unlinkedPurchases.filter(p =>
         p.supplier_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -172,6 +191,10 @@ export function PurchaseLinkManager({
         p.invoice_number.toLowerCase().includes(search.toLowerCase())
       )
     : unlinkedPurchases;
+
+  const statusBadge = entryStatus === 'contabilizado'
+    ? <Badge variant="default" className="text-[10px] ml-2">Póliza: {journalEntryNumber}</Badge>
+    : <Badge variant="secondary" className="text-[10px] ml-2">Borrador</Badge>;
 
   const PurchaseRow = ({ purchase, action, actionIcon, actionLabel }: {
     purchase: PurchaseRecord;
@@ -208,52 +231,79 @@ export function PurchaseLinkManager({
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
             Vincular Facturas a {journalEntryNumber}
+            {statusBadge}
           </DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-          {/* Left: Available (unlinked) */}
+          {/* Left: Available + Create */}
           <div className="flex flex-col border rounded-lg overflow-hidden">
-            <div className="p-3 border-b bg-muted/30">
-              <h4 className="text-sm font-medium mb-2">
-                Disponibles ({filteredUnlinked.length})
-                {entryMonth && entryYear && (
-                  <span className="text-muted-foreground font-normal ml-1">
-                    — {new Date(entryYear, entryMonth - 1).toLocaleString('es-GT', { month: 'long', year: 'numeric' })}
-                  </span>
-                )}
-              </h4>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar proveedor, NIT, número..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-8 text-xs"
-                />
+            <Tabs defaultValue="disponibles" className="flex flex-col flex-1 min-h-0">
+              <div className="p-2 border-b bg-muted/30">
+                <TabsList className="w-full">
+                  <TabsTrigger value="disponibles" className="flex-1 text-xs">
+                    Disponibles ({filteredUnlinked.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="crear" className="flex-1 text-xs">
+                    <Plus className="h-3 w-3 mr-1" />
+                    Crear Nueva
+                  </TabsTrigger>
+                </TabsList>
               </div>
-            </div>
-            <ScrollArea className="flex-1 p-2">
-              {loading ? (
-                <p className="text-center text-muted-foreground py-8 text-sm">Cargando...</p>
-              ) : filteredUnlinked.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8 text-sm">
-                  {search ? "Sin resultados" : "No hay facturas sin póliza"}
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {filteredUnlinked.map(p => (
-                    <PurchaseRow
-                      key={p.id}
-                      purchase={p}
-                      action={() => handleLink(p)}
-                      actionIcon={<ArrowRight className="h-4 w-4 text-primary" />}
-                      actionLabel="Vincular a esta póliza"
+
+              <TabsContent value="disponibles" className="flex-1 flex flex-col mt-0 min-h-0 data-[state=inactive]:hidden">
+                <div className="p-3 border-b">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar proveedor, NIT, número..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-8 h-8 text-xs"
                     />
-                  ))}
+                  </div>
+                  {entryMonth && entryYear && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {new Date(entryYear, entryMonth - 1).toLocaleString('es-GT', { month: 'long', year: 'numeric' })}
+                    </p>
+                  )}
                 </div>
-              )}
-            </ScrollArea>
+                <ScrollArea className="flex-1 p-2">
+                  {loading ? (
+                    <p className="text-center text-muted-foreground py-8 text-sm">Cargando...</p>
+                  ) : filteredUnlinked.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8 text-sm">
+                      {search ? "Sin resultados" : "No hay facturas sin póliza en este período"}
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {filteredUnlinked.map(p => (
+                        <PurchaseRow
+                          key={p.id}
+                          purchase={p}
+                          action={() => handleLink(p)}
+                          actionIcon={<ArrowRight className="h-4 w-4 text-primary" />}
+                          actionLabel="Vincular a esta póliza"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="crear" className="flex-1 mt-0 min-h-0 overflow-y-auto data-[state=inactive]:hidden">
+                <QuickPurchaseForm
+                  enterpriseId={enterpriseId}
+                  journalEntryId={journalEntryId}
+                  entryDate={entryDate}
+                  entryMonth={entryMonth || new Date().getMonth() + 1}
+                  entryYear={entryYear || new Date().getFullYear()}
+                  accounts={accounts}
+                  felDocTypes={felDocTypes}
+                  onCreated={handleInvoiceCreated}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
 
           {/* Right: Linked */}
@@ -261,7 +311,7 @@ export function PurchaseLinkManager({
             <div className="p-3 border-b bg-primary/5">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
-                Vinculadas a {journalEntryNumber} ({linkedPurchases.length})
+                Vinculadas ({linkedPurchases.length})
               </h4>
               {linkedPurchases.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
