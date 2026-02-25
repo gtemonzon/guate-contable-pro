@@ -130,7 +130,7 @@ export default function JournalEntryDialog({
   };
 
   const currentEntryId = form.getEntryId();
-  const currentEntryNumber = form.nextEntryNumber || entryToEdit?.entry_number || '(borrador)';
+  const currentEntryNumber = form.nextEntryNumber || entryToEdit?.entry_number || '(sin asignar)';
   const currentEntryMonth = form.entryDate ? new Date(form.entryDate + 'T00:00:00').getMonth() + 1 : undefined;
   const currentEntryYear = form.entryDate ? new Date(form.entryDate + 'T00:00:00').getFullYear() : undefined;
 

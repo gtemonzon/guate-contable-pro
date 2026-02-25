@@ -21,7 +21,7 @@ export function JournalEntryTotalsBar({
     <div className="sticky top-0 z-50 bg-muted/80 backdrop-blur-sm border-b shadow-sm py-2 px-4 -mx-6 -mt-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Badge variant="outline" className="font-mono text-xs">{nextEntryNumber || 'Nueva'}</Badge>
+          <Badge variant="outline" className="font-mono text-xs">{nextEntryNumber || 'Sin asignar'}</Badge>
           <span className="text-muted-foreground">•</span>
           <span className="text-muted-foreground">
             {entryDate ? new Date(entryDate + 'T00:00:00').toLocaleDateString('es-GT') : 'Sin fecha'}
