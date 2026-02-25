@@ -26,7 +26,7 @@ export function JournalEntryHeader({
     <div ref={headerRef} className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div>
         <Label>Número de Partida</Label>
-        <Input value={nextEntryNumber || '(se asignará al guardar)'} disabled className="font-mono" />
+        <Input value={nextEntryNumber || 'Sin asignar (se asignará al guardar)'} disabled className="font-mono" />
       </div>
 
       <div>

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { previewNextEntryNumber, allocateEntryNumber } from "@/utils/journalEntryNumbering";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
@@ -183,8 +183,8 @@ export function useJournalEntryForm(
         const match = periodsData.find(p => defaultDate >= p.start_date && defaultDate <= p.end_date);
         setPeriodId(match ? match.id : periodsData[0].id);
       }
-      const nextNumber = await previewNextEntryNumber(enterpriseId, entryType, entryDate);
-      setNextEntryNumber(nextNumber);
+      // Don't preview/allocate a number on open — show "Sin asignar" until save
+      setNextEntryNumber("");
     } catch (error: any) {
       toast({ title: "Error al cargar datos", description: getSafeErrorMessage(error), variant: "destructive" });
     }
@@ -276,15 +276,7 @@ export function useJournalEntryForm(
     return () => observer.disconnect();
   }, [open, isLoadingEntry]);
 
-  // Preview next entry number — skip if draft already allocated a number
-  useEffect(() => {
-    if (!open || entryToEdit || draftEntryIdRef.current || !entryDate || !entryType) return;
-    const enterpriseId = localStorage.getItem("currentEnterpriseId");
-    if (!enterpriseId) return;
-    previewNextEntryNumber(enterpriseId, entryType, entryDate)
-      .then(setNextEntryNumber)
-      .catch(console.error);
-  }, [open, entryToEdit, entryType, entryDate]);
+  // No longer preview entry numbers on open — numbers are assigned only at save time
 
   useEffect(() => {
     if (!open || !bankAccountId || bankReference) return;
@@ -415,15 +407,14 @@ export function useJournalEntryForm(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("No autenticado");
 
-    // Allocate entry number atomically
-    const finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
-    setNextEntryNumber(finalEntryNumber);
+    // Use a temporary non-sequential number for auto-drafts (number assigned on save)
+    const tempNumber = `DRAFT-${Date.now()}`;
 
     const bankDirectionValue = bankAccountId ? bankDirection : null;
 
     const { data: entry, error } = await supabase.from("tab_journal_entries").insert({
       enterprise_id: parseInt(enterpriseId),
-      entry_number: finalEntryNumber,
+      entry_number: tempNumber,
       entry_date: entryDate,
       entry_type: entryType,
       accounting_period_id: periodId,
@@ -683,15 +674,21 @@ export function useJournalEntryForm(
         onSuccess(entryToEdit.id);
 
       } else if (draftEntryIdRef.current) {
-        // ─── Draft entry: update the auto-created draft ─────────
+        // ─── Draft entry: allocate real number now and update ─────────
         const draftId = draftEntryIdRef.current;
+        const finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
+        setNextEntryNumber(finalEntryNumber);
+
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
+          entry_number: finalEntryNumber,
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: false, updated_by: user.id, updated_at: new Date().toISOString(), status: 'borrador',
+          is_posted: post, posted_at: post ? new Date().toISOString() : null,
+          updated_by: user.id, updated_at: new Date().toISOString(),
+          status: post ? 'contabilizado' : 'borrador',
         } as any).eq("id", draftId);
         if (updateError) throw updateError;
 
@@ -702,14 +699,7 @@ export function useJournalEntryForm(
           if (insertError) throw insertError;
         }
 
-        if (post) {
-          const { error: postError } = await supabase.from("tab_journal_entries").update({
-            is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
-          } as any).eq("id", draftId);
-          if (postError) throw postError;
-        }
-
-        toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${nextEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
+        toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
         onSuccess(draftId);
 
       } else {
