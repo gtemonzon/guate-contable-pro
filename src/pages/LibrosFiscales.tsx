@@ -416,6 +416,29 @@ export default function LibrosFiscales() {
     };
   }, []);
 
+  // Re-fetch data when the tab becomes visible again after being idle
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return;
+      const eid = localStorage.getItem("currentEnterpriseId");
+      if (!eid) return;
+
+      // Refresh the auth session first to avoid stale-token empty results
+      try {
+        await supabase.auth.getSession();
+      } catch (_) {
+        // ignore — autoRefreshToken will handle it
+      }
+
+      // Re-fetch current data
+      fetchOrCreateBook(eid, selectedMonth, selectedYear);
+      fetchSales(eid, selectedMonth, selectedYear);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [selectedMonth, selectedYear, currentEnterpriseId]);
+
   useEffect(() => {
     if (currentEnterpriseId) {
       fetchAccounts(currentEnterpriseId);
