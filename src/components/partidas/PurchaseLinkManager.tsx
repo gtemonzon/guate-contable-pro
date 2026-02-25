@@ -199,28 +199,40 @@ export function PurchaseLinkManager({
     action: () => void;
     actionIcon: React.ReactNode;
     actionLabel: string;
-  }) => (
-    <div className="flex items-center gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors overflow-visible">
-      <div className="flex-1 min-w-0 overflow-hidden">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium truncate">{purchase.supplier_name}</span>
-          {purchase.batch_reference && (
-            <Badge variant="outline" className="text-[10px] shrink-0">CH: {purchase.batch_reference}</Badge>
-          )}
+  }) => {
+    const isUnlinkAction = actionLabel.toLowerCase().includes("desvincular");
+
+    return (
+      <div className="flex items-center gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium truncate">{purchase.supplier_name}</span>
+            {purchase.batch_reference && (
+              <Badge variant="outline" className="text-[10px] shrink-0">CH: {purchase.batch_reference}</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 truncate">
+            <span>{purchase.invoice_date}</span>
+            <span>•</span>
+            <span className="truncate">{purchase.fel_document_type} {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}</span>
+            <span>•</span>
+            <span className="font-mono whitespace-nowrap">{formatCurrency(purchase.total_amount)}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 truncate">
-          <span>{purchase.invoice_date}</span>
-          <span>•</span>
-          <span className="truncate">{purchase.fel_document_type} {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}</span>
-          <span>•</span>
-          <span className="font-mono whitespace-nowrap">{formatCurrency(purchase.total_amount)}</span>
-        </div>
+
+        <Button
+          size="sm"
+          variant={isUnlinkAction ? "outline" : "secondary"}
+          onClick={action}
+          title={actionLabel}
+          className="shrink-0 min-w-[112px] h-8 px-2 text-xs gap-1"
+        >
+          {actionIcon}
+          <span>{isUnlinkAction ? "Desvincular" : "Vincular"}</span>
+        </Button>
       </div>
-      <Button size="icon" variant="outline" onClick={action} title={actionLabel} className="shrink-0 h-8 w-8">
-        {actionIcon}
-      </Button>
-    </div>
-  );
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
