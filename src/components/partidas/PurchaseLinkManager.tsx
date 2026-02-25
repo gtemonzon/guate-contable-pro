@@ -200,23 +200,23 @@ export function PurchaseLinkManager({
     actionIcon: React.ReactNode;
     actionLabel: string;
   }) => (
-    <div className="flex items-center gap-3 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors">
-      <div className="flex-1 min-w-0">
+    <div className="flex items-center gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors overflow-visible">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-2 text-sm">
           <span className="font-medium truncate">{purchase.supplier_name}</span>
           {purchase.batch_reference && (
             <Badge variant="outline" className="text-[10px] shrink-0">CH: {purchase.batch_reference}</Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 truncate">
           <span>{purchase.invoice_date}</span>
           <span>•</span>
-          <span>{purchase.fel_document_type} {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}</span>
+          <span className="truncate">{purchase.fel_document_type} {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}</span>
           <span>•</span>
-          <span className="font-mono">{formatCurrency(purchase.total_amount)}</span>
+          <span className="font-mono whitespace-nowrap">{formatCurrency(purchase.total_amount)}</span>
         </div>
       </div>
-      <Button size="sm" variant="ghost" onClick={action} title={actionLabel} className="shrink-0">
+      <Button size="icon" variant="outline" onClick={action} title={actionLabel} className="shrink-0 h-8 w-8">
         {actionIcon}
       </Button>
     </div>
