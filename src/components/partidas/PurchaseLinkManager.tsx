@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Link2, Unlink, Search, FileText, ArrowRight, Plus, RefreshCw, Eye } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Link2, Unlink, Search, FileText, ArrowRight, Plus, CheckSquare } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickPurchaseForm } from "./QuickPurchaseForm";
@@ -59,6 +59,8 @@ export function PurchaseLinkManager({
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: number; account_code: string; account_name: string }>>([]);
   const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string }>>([]);
+  const [selectedUnlinked, setSelectedUnlinked] = useState<Set<number>>(new Set());
+  const [selectedLinked, setSelectedLinked] = useState<Set<number>>(new Set());
   const { toast } = useToast();
 
   const selectCols = "id, invoice_date, invoice_series, invoice_number, fel_document_type, supplier_nit, supplier_name, total_amount, vat_amount, batch_reference, bank_account_id, expense_account_id";
@@ -114,6 +116,8 @@ export function PurchaseLinkManager({
       const { data: unlinked } = await query;
       const filteredUnlinked = (unlinked || []).filter(p => !allLinkedIds.includes(p.id));
       setUnlinkedPurchases(filteredUnlinked);
+      setSelectedUnlinked(new Set());
+      setSelectedLinked(new Set());
     } catch (err) {
       console.error("Error loading purchase links:", err);
     } finally {
@@ -157,6 +161,7 @@ export function PurchaseLinkManager({
 
       setUnlinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
       setLinkedPurchases(prev => [...prev, purchase]);
+      setSelectedUnlinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
       onLinksChanged?.();
       toast({ title: "Factura vinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
     } catch (err: any) {
@@ -174,10 +179,25 @@ export function PurchaseLinkManager({
 
       setLinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
       setUnlinkedPurchases(prev => [...prev, purchase].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)));
+      setSelectedLinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
       onLinksChanged?.();
       toast({ title: "Factura desvinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
     } catch (err: any) {
       toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleBulkLink = async () => {
+    const toLink = unlinkedPurchases.filter(p => selectedUnlinked.has(p.id));
+    for (const p of toLink) {
+      await handleLink(p);
+    }
+  };
+
+  const handleBulkUnlink = async () => {
+    const toUnlink = linkedPurchases.filter(p => selectedLinked.has(p.id));
+    for (const p of toUnlink) {
+      await handleUnlink(p);
     }
   };
 
@@ -194,49 +214,17 @@ export function PurchaseLinkManager({
       )
     : unlinkedPurchases;
 
-  const PurchaseRow = ({ purchase, action, actionIcon, actionLabel }: {
-    purchase: PurchaseRecord;
-    action: () => void;
-    actionIcon: React.ReactNode;
-    actionLabel: string;
-  }) => {
-    const isUnlinkAction = actionLabel.toLowerCase().includes("desvincular");
-
-    return (
-      <div className="flex items-center gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors">
-        <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium truncate">{purchase.supplier_name}</span>
-            {purchase.batch_reference && (
-              <Badge variant="outline" className="text-[10px] shrink-0">CH: {purchase.batch_reference}</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 truncate">
-            <span>{purchase.invoice_date}</span>
-            <span>•</span>
-            <span className="truncate">{purchase.fel_document_type} {purchase.invoice_series ? `${purchase.invoice_series}-` : ''}{purchase.invoice_number}</span>
-            <span>•</span>
-            <span className="font-mono whitespace-nowrap">{formatCurrency(purchase.total_amount)}</span>
-          </div>
-        </div>
-
-        <Button
-          size="sm"
-          variant={isUnlinkAction ? "outline" : "secondary"}
-          onClick={action}
-          title={actionLabel}
-          className="shrink-0 min-w-[112px] h-8 px-2 text-xs gap-1"
-        >
-          {actionIcon}
-          <span>{isUnlinkAction ? "Desvincular" : "Vincular"}</span>
-        </Button>
-      </div>
-    );
+  const toggleSelect = (set: Set<number>, setFn: React.Dispatch<React.SetStateAction<Set<number>>>, id: number) => {
+    setFn(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
@@ -253,9 +241,9 @@ export function PurchaseLinkManager({
           onApplyToEntry={onApplyToEntry}
         />
 
-        <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-          {/* Left: Available + Create */}
-          <div className="flex flex-col border rounded-lg overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
+          {/* ═══ Left: Available + Create ═══ */}
+          <div className="flex flex-col border rounded-lg min-h-0">
             <Tabs defaultValue="disponibles" className="flex flex-col flex-1 min-h-0">
               <div className="p-2 border-b bg-muted/30">
                 <TabsList className="w-full">
@@ -286,26 +274,62 @@ export function PurchaseLinkManager({
                     </p>
                   )}
                 </div>
-                <ScrollArea className="flex-1 p-2">
-                  {loading ? (
-                    <p className="text-center text-muted-foreground py-8 text-sm">Cargando...</p>
-                  ) : filteredUnlinked.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8 text-sm">
-                      {search ? "Sin resultados" : "No hay facturas sin póliza en este período"}
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {filteredUnlinked.map(p => (
-                        <PurchaseRow
+
+                {/* Bulk action bar */}
+                {selectedUnlinked.size > 0 && (
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-primary/5">
+                    <span className="text-xs text-muted-foreground">{selectedUnlinked.size} seleccionada(s)</span>
+                    <Button size="sm" variant="default" onClick={handleBulkLink} className="h-7 text-xs gap-1">
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Vincular seleccionadas
+                    </Button>
+                  </div>
+                )}
+
+                <ScrollArea className="flex-1">
+                  <div className="p-2 space-y-1">
+                    {loading ? (
+                      <p className="text-center text-muted-foreground py-8 text-sm">Cargando...</p>
+                    ) : filteredUnlinked.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8 text-sm">
+                        {search ? "Sin resultados" : "No hay facturas sin póliza en este período"}
+                      </p>
+                    ) : (
+                      filteredUnlinked.map(p => (
+                        <div
                           key={p.id}
-                          purchase={p}
-                          action={() => handleLink(p)}
-                          actionIcon={<ArrowRight className="h-4 w-4 text-primary" />}
-                          actionLabel="Vincular a esta póliza"
-                        />
-                      ))}
-                    </div>
-                  )}
+                          data-testid={`link-row-${p.id}`}
+                          className="flex items-center justify-between gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors"
+                        >
+                          {/* Checkbox */}
+                          <Checkbox
+                            checked={selectedUnlinked.has(p.id)}
+                            onCheckedChange={() => toggleSelect(selectedUnlinked, setSelectedUnlinked, p.id)}
+                            className="shrink-0"
+                          />
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.supplier_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {p.invoice_date} • {p.fel_document_type} {p.invoice_series ? `${p.invoice_series}-` : ''}{p.invoice_number} • <span className="font-mono">{formatCurrency(p.total_amount)}</span>
+                            </p>
+                          </div>
+                          {/* Action — ALWAYS visible */}
+                          <div data-testid={`link-btn-${p.id}`} className="shrink-0" style={{ minWidth: '100px' }}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={(e) => { e.stopPropagation(); handleLink(p); }}
+                              className="w-full h-8 text-xs gap-1"
+                            >
+                              <ArrowRight className="h-3.5 w-3.5" />
+                              Vincular
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </ScrollArea>
               </TabsContent>
 
@@ -324,32 +348,68 @@ export function PurchaseLinkManager({
             </Tabs>
           </div>
 
-          {/* Right: Linked */}
-          <div className="flex flex-col border rounded-lg overflow-hidden">
+          {/* ═══ Right: Linked ═══ */}
+          <div className="flex flex-col border rounded-lg min-h-0">
             <div className="p-3 border-b bg-primary/5">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
                 Vinculadas ({linkedPurchases.length})
               </h4>
             </div>
-            <ScrollArea className="flex-1 p-2">
-              {linkedPurchases.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8 text-sm">
-                  Sin facturas vinculadas
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {linkedPurchases.map(p => (
-                    <PurchaseRow
+
+            {/* Bulk unlink bar */}
+            {selectedLinked.size > 0 && (
+              <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
+                <span className="text-xs text-muted-foreground">{selectedLinked.size} seleccionada(s)</span>
+                <Button size="sm" variant="outline" onClick={handleBulkUnlink} className="h-7 text-xs gap-1 border-destructive/30 text-destructive hover:bg-destructive/10">
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Desvincular seleccionadas
+                </Button>
+              </div>
+            )}
+
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-1">
+                {linkedPurchases.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8 text-sm">
+                    Sin facturas vinculadas
+                  </p>
+                ) : (
+                  linkedPurchases.map(p => (
+                    <div
                       key={p.id}
-                      purchase={p}
-                      action={() => handleUnlink(p)}
-                      actionIcon={<Unlink className="h-4 w-4 text-destructive" />}
-                      actionLabel="Desvincular"
-                    />
-                  ))}
-                </div>
-              )}
+                      data-testid={`unlink-row-${p.id}`}
+                      className="flex items-center justify-between gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors"
+                    >
+                      {/* Checkbox */}
+                      <Checkbox
+                        checked={selectedLinked.has(p.id)}
+                        onCheckedChange={() => toggleSelect(selectedLinked, setSelectedLinked, p.id)}
+                        className="shrink-0"
+                      />
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.supplier_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.invoice_date} • {p.fel_document_type} {p.invoice_series ? `${p.invoice_series}-` : ''}{p.invoice_number} • <span className="font-mono">{formatCurrency(p.total_amount)}</span>
+                        </p>
+                      </div>
+                      {/* Action — ALWAYS visible */}
+                      <div data-testid={`unlink-btn-${p.id}`} className="shrink-0" style={{ minWidth: '110px' }}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => { e.stopPropagation(); handleUnlink(p); }}
+                          className="w-full h-8 text-xs gap-1 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        >
+                          <Unlink className="h-3.5 w-3.5" />
+                          Desvincular
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </ScrollArea>
           </div>
         </div>
