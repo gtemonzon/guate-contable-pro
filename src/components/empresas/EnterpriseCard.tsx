@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Edit, Mail, Phone, MapPin, CheckCircle2, Trash2, FileText, Calendar, Receipt, ClipboardList, Wand2, Download, Loader2 } from "lucide-react";
+import { Building2, Edit, Mail, Phone, MapPin, Pin, Trash2, FileText, Calendar, Receipt, ClipboardList, Wand2, Download, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
@@ -461,17 +461,17 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
               className="flex-1"
               onClick={handleSelectEnterprise}
             >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
+              <Pin className="mr-2 h-4 w-4" />
               Seleccionar
             </Button>
           ) : (
             <Button 
               variant="outline" 
-              className="flex-1"
+              className="flex-1 border-primary/30 text-primary"
               disabled
             >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Empresa Seleccionada
+              <Pin className="mr-2 h-4 w-4" />
+              Empresa Actual
             </Button>
           )}
           <TooltipProvider>

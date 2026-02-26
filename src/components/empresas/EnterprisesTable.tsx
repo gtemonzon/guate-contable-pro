@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Check, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Wand2, Download, Loader2 } from "lucide-react";
+import { Pin, Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Wand2, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -347,15 +347,15 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
             return (
               <TableRow 
                 key={enterprise.id}
-                className={`${isSelected ? "bg-primary/10 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
+                className={`${isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
               >
                 <TableCell className="font-mono">{enterprise.nit}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{enterprise.business_name}</span>
                     {isSelected && (
-                      <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                        Seleccionada
+                      <span className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full font-medium">
+                        Actual
                       </span>
                     )}
                     {isInactive && (
@@ -379,23 +379,34 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    {/* Botón Seleccionar */}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={isSelected ? "default" : "ghost"}
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleSelect(enterprise)}
-                          disabled={isSelected || isInactive}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {isSelected ? "Empresa seleccionada" : isInactive ? "Empresa inactiva" : "Seleccionar"}
-                      </TooltipContent>
-                    </Tooltip>
+                    {/* Indicador / Botón Seleccionar */}
+                    {isSelected ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center justify-center h-8 w-8">
+                            <Pin className="h-4 w-4 text-primary" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>Empresa actual</TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleSelect(enterprise)}
+                            disabled={isInactive}
+                          >
+                            <Pin className="h-4 w-4 opacity-40" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isInactive ? "Empresa inactiva" : "Seleccionar como actual"}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
 
                     {/* Botón Editar */}
                     <Tooltip>
