@@ -9,31 +9,47 @@ import { EnterpriseProvider } from "@/contexts/EnterpriseContext";
 import Login from "./pages/Login";
 import MainLayout from "./components/layout/MainLayout";
 
-// Lazy load pages for code splitting
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Usuarios = lazy(() => import("./pages/Usuarios"));
-const Empresas = lazy(() => import("./pages/Empresas"));
-const Cuentas = lazy(() => import("./pages/Cuentas"));
-const PeriodosContables = lazy(() => import("./pages/PeriodosContables"));
-const Partidas = lazy(() => import("./pages/Partidas"));
-const LibrosFiscales = lazy(() => import("./pages/LibrosFiscales"));
-const BalanceSaldos = lazy(() => import("./pages/BalanceSaldos"));
-const SaldosMensuales = lazy(() => import("./pages/SaldosMensuales"));
-const MayorGeneral = lazy(() => import("./pages/MayorGeneral"));
-const ConciliacionBancaria = lazy(() => import("./pages/ConciliacionBancaria"));
-const FormulariosImpuestos = lazy(() => import("./pages/FormulariosImpuestos"));
-const GenerarDeclaracion = lazy(() => import("./pages/GenerarDeclaracion"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Reportes = lazy(() => import("./pages/Reportes"));
-const Configuracion = lazy(() => import("./pages/Configuracion"));
-const Ayuda = lazy(() => import("./pages/Ayuda"));
-const Notificaciones = lazy(() => import("./pages/Notificaciones"));
-const Propuesta = lazy(() => import("./pages/Propuesta"));
-const Tenants = lazy(() => import("./pages/Tenants"));
-const Bitacora = lazy(() => import("./pages/Bitacora"));
-const ActivosFijos = lazy(() => import("./pages/ActivosFijos"));
-const Inbox = lazy(() => import("./pages/Inbox"));
+// Retry wrapper for dynamic imports (handles transient network failures)
+function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>, retries = 2) {
+  return lazy(() =>
+    factory().catch((err) => {
+      if (retries > 0) {
+        return new Promise<{ default: React.ComponentType<any> }>((resolve) =>
+          setTimeout(() => resolve(lazyRetry(factory, retries - 1) as any), 1000)
+        );
+      }
+      // After retries exhausted, reload to get fresh asset URLs
+      window.location.reload();
+      return factory(); // won't resolve, page reloads
+    })
+  );
+}
+
+// Lazy load pages for code splitting (with retry)
+const ResetPassword = lazyRetry(() => import("./pages/ResetPassword"));
+const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
+const Usuarios = lazyRetry(() => import("./pages/Usuarios"));
+const Empresas = lazyRetry(() => import("./pages/Empresas"));
+const Cuentas = lazyRetry(() => import("./pages/Cuentas"));
+const PeriodosContables = lazyRetry(() => import("./pages/PeriodosContables"));
+const Partidas = lazyRetry(() => import("./pages/Partidas"));
+const LibrosFiscales = lazyRetry(() => import("./pages/LibrosFiscales"));
+const BalanceSaldos = lazyRetry(() => import("./pages/BalanceSaldos"));
+const SaldosMensuales = lazyRetry(() => import("./pages/SaldosMensuales"));
+const MayorGeneral = lazyRetry(() => import("./pages/MayorGeneral"));
+const ConciliacionBancaria = lazyRetry(() => import("./pages/ConciliacionBancaria"));
+const FormulariosImpuestos = lazyRetry(() => import("./pages/FormulariosImpuestos"));
+const GenerarDeclaracion = lazyRetry(() => import("./pages/GenerarDeclaracion"));
+const NotFound = lazyRetry(() => import("./pages/NotFound"));
+const Reportes = lazyRetry(() => import("./pages/Reportes"));
+const Configuracion = lazyRetry(() => import("./pages/Configuracion"));
+const Ayuda = lazyRetry(() => import("./pages/Ayuda"));
+const Notificaciones = lazyRetry(() => import("./pages/Notificaciones"));
+const Propuesta = lazyRetry(() => import("./pages/Propuesta"));
+const Tenants = lazyRetry(() => import("./pages/Tenants"));
+const Bitacora = lazyRetry(() => import("./pages/Bitacora"));
+const ActivosFijos = lazyRetry(() => import("./pages/ActivosFijos"));
+const Inbox = lazyRetry(() => import("./pages/Inbox"));
 
 // Loading fallback component
 const PageLoader = () => (
