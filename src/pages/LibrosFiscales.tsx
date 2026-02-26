@@ -82,6 +82,8 @@ export default function LibrosFiscales() {
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const selectedMonthRef = useRef(selectedMonth);
+  const selectedYearRef = useRef(selectedYear);
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
@@ -188,6 +190,11 @@ export default function LibrosFiscales() {
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
+
+  useEffect(() => {
+    selectedMonthRef.current = selectedMonth;
+    selectedYearRef.current = selectedYear;
+  }, [selectedMonth, selectedYear]);
 
   const purchaseTotals = useMemo(() => {
     // Calculate totals considering affects_total from document type
@@ -366,8 +373,8 @@ export default function LibrosFiscales() {
     if (enterpriseId) {
       fetchFELDocTypes();
       fetchAccounts(enterpriseId);
-      fetchOrCreateBook(enterpriseId, selectedMonth, selectedYear);
-      fetchSales(enterpriseId, selectedMonth, selectedYear);
+      fetchOrCreateBook(enterpriseId, selectedMonthRef.current, selectedYearRef.current);
+      fetchSales(enterpriseId, selectedMonthRef.current, selectedYearRef.current);
       fetchEnterpriseNit(enterpriseId);
       
       // Cargar última cuenta usada desde localStorage
@@ -386,14 +393,21 @@ export default function LibrosFiscales() {
       setLoading(false);
     }
 
-    const handleStorageChange = async () => {
+    const handleStorageChange = async (event?: StorageEvent | Event) => {
+      // Ignorar cambios de otras keys (ej. refresh de sesión) que antes disparaban recargas con mes/año obsoletos
+      if (event instanceof StorageEvent && event.key && event.key !== "currentEnterpriseId") {
+        return;
+      }
+
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
+        const month = selectedMonthRef.current;
+        const year = selectedYearRef.current;
         fetchFELDocTypes();
         fetchAccounts(newEnterpriseId);
-        fetchOrCreateBook(newEnterpriseId, selectedMonth, selectedYear);
-        fetchSales(newEnterpriseId, selectedMonth, selectedYear);
+        fetchOrCreateBook(newEnterpriseId, month, year);
+        fetchSales(newEnterpriseId, month, year);
         const { data } = await supabase
           .from("tab_enterprises")
           .select("nit")
