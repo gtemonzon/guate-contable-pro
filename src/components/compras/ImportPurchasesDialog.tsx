@@ -1040,7 +1040,7 @@ export function ImportPurchasesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {/* Initial State - File Upload */}
           {dialogState === "initial" && (
             <div className="space-y-4">
@@ -1124,7 +1124,7 @@ export function ImportPurchasesDialog({
 
           {/* Options State - Account and Operation Type Selection */}
           {dialogState === "options" && validationResult && (
-            <ScrollArea className="max-h-[60vh] pr-4">
+            <ScrollArea className="h-[60vh] pr-4">
             <div className="space-y-6">
               {/* Summary of records found */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
