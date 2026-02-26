@@ -1124,6 +1124,7 @@ export function ImportPurchasesDialog({
 
           {/* Options State - Account and Operation Type Selection */}
           {dialogState === "options" && validationResult && (
+            <ScrollArea className="max-h-[60vh] pr-4">
             <div className="space-y-6">
               {/* Summary of records found */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
@@ -1337,6 +1338,7 @@ export function ImportPurchasesDialog({
                 </Button>
               </div>
             </div>
+            </ScrollArea>
           )}
 
           {/* Summary State - Validation Results */}
