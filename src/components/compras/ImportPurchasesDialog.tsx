@@ -1369,8 +1369,13 @@ export function ImportPurchasesDialog({
                     <span className="text-sm font-medium text-green-800 dark:text-green-200">Nuevos</span>
                   </div>
                   <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
-                    {validationResult.validRecords.length}
+                    {selectedIndices.size}
                   </p>
+                  {validationResult.validRecords.length - selectedIndices.size > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      de {validationResult.validRecords.length} válidos
+                    </p>
+                  )}
                 </div>
                 
                 <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
