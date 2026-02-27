@@ -104,6 +104,19 @@ interface ValidationResult {
 
 type DialogState = "initial" | "validating" | "options" | "summary";
 
+/** Document types that subtract from totals (affects_total = -1) */
+const NEGATIVE_DOC_TYPES = new Set(["NCRE", "NABN"]);
+
+function computeSelectedTotal(records: ValidPurchaseWithSourceRow[], selectedIndices: Set<number>): number {
+  let total = 0;
+  records.forEach((r, i) => {
+    if (!selectedIndices.has(i)) return;
+    const sign = NEGATIVE_DOC_TYPES.has(r.fel_document_type) ? -1 : 1;
+    total += r.total_amount * sign;
+  });
+  return total;
+}
+
 // Helper function to find or create purchase book for a given month/year
 async function findOrCreatePurchaseBook(
   enterpriseId: number,
@@ -1235,6 +1248,9 @@ export function ImportPurchasesDialog({
                         <span className="text-sm font-medium">
                           {selectedIndices.size} registros seleccionados a importar
                         </span>
+                        <span className="text-sm font-semibold font-mono text-primary">
+                          Q{formatCurrency(computeSelectedTotal(validationResult.validRecords, selectedIndices))}
+                        </span>
                         {validationResult.validRecords.length - selectedIndices.size > 0 && (
                           <span className="text-xs text-muted-foreground">
                             · {validationResult.validRecords.length - selectedIndices.size} no seleccionados
@@ -1470,6 +1486,9 @@ export function ImportPurchasesDialog({
                         <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                         <span className="text-sm font-medium">
                           {selectedIndices.size} registros seleccionados a importar
+                        </span>
+                        <span className="text-sm font-semibold font-mono text-primary">
+                          Q{formatCurrency(computeSelectedTotal(validationResult.validRecords, selectedIndices))}
                         </span>
                         {validationResult.validRecords.length - selectedIndices.size > 0 && (
                           <span className="text-xs text-muted-foreground">
