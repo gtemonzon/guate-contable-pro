@@ -51,17 +51,24 @@ export const SAT_SALES_MAPPING: Record<string, string[]> = {
 // Find a SAT column index from headers
 export function findSATColumnIndex(
   normalizedHeaders: string[],
-  possibleNames: string[]
+  possibleNames: string[],
+  excludeTerms?: string[]
 ): number {
+  const normalizedExclude = (excludeTerms || []).map(t => normalizeHeader(t));
+
   for (const name of possibleNames) {
     const normalizedName = normalizeHeader(name);
     // First try exact match
     const exactIndex = normalizedHeaders.findIndex(h => h === normalizedName);
     if (exactIndex !== -1) return exactIndex;
     // Then try partial match (header contains name or name contains header)
-    const partialIndex = normalizedHeaders.findIndex(h => 
-      h.includes(normalizedName) || normalizedName.includes(h)
-    );
+    const partialIndex = normalizedHeaders.findIndex(h => {
+      const matches = h.includes(normalizedName) || normalizedName.includes(h);
+      if (!matches) return false;
+      // Reject if header contains an excluded term
+      if (normalizedExclude.some(ex => h.includes(ex))) return false;
+      return true;
+    });
     if (partialIndex !== -1) return partialIndex;
   }
   return -1;
