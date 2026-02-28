@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AccountCombobox, type Account } from "@/components/ui/account-combobox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, CheckCircle2, XCircle, Loader2, RotateCcw, Fuel } from "lucide-react";
+import { Plus, CheckCircle2, XCircle, Loader2, RotateCcw, Fuel, AlertTriangle, Link2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
@@ -25,6 +25,14 @@ interface OperationType {
   id: number;
   code: string;
   name: string;
+}
+
+interface DuplicateInfo {
+  id: number;
+  supplier_name: string;
+  total_amount: number;
+  invoice_date: string;
+  journal_entry_id: number | null;
 }
 
 const VAT_RATE = 0.12;
@@ -49,6 +57,11 @@ export function QuickPurchaseForm({
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
 
+  // Duplicate detection state
+  const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  const [dupChecking, setDupChecking] = useState(false);
+  const [linkingExisting, setLinkingExisting] = useState(false);
+
   // Track which fields user has manually changed (to avoid overriding)
   const touchedFields = useRef<Set<string>>(new Set());
   const [suggestedOpTypeId, setSuggestedOpTypeId] = useState<number | null>(null);
@@ -72,6 +85,94 @@ export function QuickPurchaseForm({
   // Detect fuel operation
   const isFuelOperation = operationTypes.find(t => t.id === operationTypeId)?.code === "COMBUSTIBLE";
 
+  // ─── Duplicate check ───
+  const checkDuplicate = useCallback(async () => {
+    const cleanedNit = nit.trim();
+    const cleanedNumber = number.trim();
+    if (!cleanedNit || !cleanedNumber || !docType) {
+      setDuplicate(null);
+      return;
+    }
+
+    setDupChecking(true);
+    try {
+      let query = supabase
+        .from("tab_purchase_ledger")
+        .select("id, supplier_name, total_amount, invoice_date, journal_entry_id")
+        .eq("enterprise_id", enterpriseId)
+        .eq("supplier_nit", cleanedNit)
+        .eq("fel_document_type", docType)
+        .eq("invoice_number", cleanedNumber)
+        .is("deleted_at", null);
+
+      // Match series (empty string = no series)
+      if (series.trim()) {
+        query = query.eq("invoice_series", series.trim());
+      } else {
+        query = query.or("invoice_series.is.null,invoice_series.eq.");
+      }
+
+      const { data } = await query.limit(1).maybeSingle();
+      setDuplicate(data as DuplicateInfo | null);
+    } catch {
+      // Ignore errors in duplicate check
+    } finally {
+      setDupChecking(false);
+    }
+  }, [enterpriseId, nit, docType, series, number]);
+
+  // Run duplicate check when key fields change (debounced via blur)
+  const handleNumberBlur = () => {
+    checkDuplicate();
+  };
+
+  // Also recheck when docType or series change (if number is already filled)
+  useEffect(() => {
+    if (number.trim() && nit.trim()) {
+      checkDuplicate();
+    } else {
+      setDuplicate(null);
+    }
+  }, [docType, series]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Is the duplicate already linked to THIS journal entry?
+  const dupAlreadyLinked = duplicate?.journal_entry_id === journalEntryId;
+
+  // ─── Link existing duplicate ───
+  const handleLinkExisting = async () => {
+    if (!duplicate) return;
+    setLinkingExisting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+
+      await supabase
+        .from("tab_purchase_journal_links" as any)
+        .upsert({
+          enterprise_id: enterpriseId,
+          purchase_id: duplicate.id,
+          journal_entry_id: journalEntryId,
+          link_source: 'FROM_JOURNAL_MODAL',
+          linked_by: user.id,
+          linked_at: new Date().toISOString(),
+        }, { onConflict: "enterprise_id,purchase_id" });
+
+      toast({ title: "Factura existente vinculada", description: `${duplicate.supplier_name} - ${number}` });
+      // Reset form
+      setNumber("");
+      setNit("");
+      setNitValid(null);
+      setSupplier("");
+      setTotal(0);
+      setDuplicate(null);
+      onCreated();
+    } catch (err: any) {
+      toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
+    } finally {
+      setLinkingExisting(false);
+    }
+  };
+
   // NIT validation on change
   const handleNitChange = (value: string) => {
     const cleaned = sanitizeNIT(value);
@@ -87,6 +188,9 @@ export function QuickPurchaseForm({
   const handleNitBlur = async () => {
     const cleaned = nit.trim();
     if (!cleaned || !validateNIT(cleaned)) return;
+
+    // Also trigger duplicate check if number is filled
+    if (number.trim()) checkDuplicate();
 
     setSuggestLoading(true);
     try {
@@ -142,7 +246,6 @@ export function QuickPurchaseForm({
   const calculateAmounts = () => {
     if (total <= 0) return { base: 0, vat: 0 };
     if (isFuelOperation && idpAmount > 0) {
-      // Fuel: IVA = (Total - IDP) / 1.12 * 0.12
       const netAfterIdp = total - idpAmount;
       const base = Number((netAfterIdp / (1 + VAT_RATE)).toFixed(2));
       const vat = Number((netAfterIdp - base).toFixed(2));
@@ -155,11 +258,18 @@ export function QuickPurchaseForm({
 
   const { base, vat } = calculateAmounts();
 
-  const canSubmit = nitValid === true && number.trim() && total > 0 && operationTypeId && expenseAccountId;
+  const canSubmit = nitValid === true && number.trim() && total > 0 && operationTypeId && expenseAccountId && !duplicate;
 
   const handleSave = async () => {
     if (!canSubmit) {
       toast({ title: "Campos requeridos", description: "Complete NIT válido, número, monto, tipo de operación y cuenta de gasto", variant: "destructive" });
+      return;
+    }
+
+    // Final duplicate check before insert
+    await checkDuplicate();
+    if (duplicate) {
+      toast({ title: "Factura duplicada", description: "Ya existe una factura con estos datos. Vincule la existente.", variant: "destructive" });
       return;
     }
 
@@ -208,7 +318,15 @@ export function QuickPurchaseForm({
         })
         .select("id").single();
 
-      if (pErr) throw pErr;
+      if (pErr) {
+        // Catch unique constraint violation
+        if (pErr.code === '23505' || pErr.message?.includes('duplicate') || pErr.message?.includes('unique')) {
+          toast({ title: "Factura duplicada", description: "Ya existe una factura con estos datos. Vincule la existente.", variant: "destructive" });
+          await checkDuplicate(); // Refresh duplicate info
+          return;
+        }
+        throw pErr;
+      }
 
       await supabase
         .from("tab_purchase_journal_links" as any)
@@ -236,6 +354,7 @@ export function QuickPurchaseForm({
       setHasSuggestion(false);
       setSuggestedOpTypeId(null);
       setSuggestedAccountId(null);
+      setDuplicate(null);
       touchedFields.current.clear();
 
       onCreated();
@@ -286,9 +405,55 @@ export function QuickPurchaseForm({
         </div>
         <div className="col-span-2">
           <label className="text-xs font-medium text-muted-foreground">Número</label>
-          <Input value={number} onChange={e => setNumber(e.target.value)} className="h-8 text-xs mt-1" placeholder="No. factura" />
+          <div className="relative mt-1">
+            <Input
+              value={number}
+              onChange={e => setNumber(e.target.value)}
+              onBlur={handleNumberBlur}
+              className={`h-8 text-xs ${duplicate ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+              placeholder="No. factura"
+            />
+            {dupChecking && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Duplicate warning */}
+      {duplicate && (
+        <div className="rounded-md border border-destructive/50 bg-destructive/5 p-2.5 space-y-2">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <div className="text-xs space-y-0.5">
+              {dupAlreadyLinked ? (
+                <p className="font-medium text-destructive">Esta factura ya existe y está vinculada a esta partida.</p>
+              ) : (
+                <>
+                  <p className="font-medium text-destructive">Factura duplicada detectada</p>
+                  <p className="text-muted-foreground">
+                    {duplicate.supplier_name} · {duplicate.invoice_date} · {formatCurrency(duplicate.total_amount)}
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+          {!dupAlreadyLinked && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-7 text-xs gap-1.5"
+              onClick={handleLinkExisting}
+              disabled={linkingExisting}
+            >
+              {linkingExisting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+              Vincular factura existente
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Row 3: NIT + Supplier */}
       <div className="grid grid-cols-2 gap-2">
