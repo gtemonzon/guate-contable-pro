@@ -3285,9 +3285,27 @@ export type Database = {
           total_debit: number
         }[]
       }
+      get_batch_purchase_mappings: {
+        Args: { p_enterprise_id: number; p_supplier_nits: string[] }
+        Returns: {
+          expense_account_id: number
+          operation_type_id: number
+          source_date: string
+          supplier_nit: string
+        }[]
+      }
       get_enterprise_tenant_id: {
         Args: { _enterprise_id: number }
         Returns: number
+      }
+      get_last_purchase_mapping: {
+        Args: { p_enterprise_id: number; p_supplier_nit: string }
+        Returns: {
+          expense_account_id: number
+          operation_type_id: number
+          source_date: string
+          source_invoice_id: number
+        }[]
       }
       get_ledger_detail: {
         Args: {

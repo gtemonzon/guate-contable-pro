@@ -430,12 +430,27 @@ export default function LibrosFiscales() {
     };
   }, []);
 
-  // Re-fetch data when the tab becomes visible again after being idle
+  // Throttled visibility-change: only refetch if data is older than 60 seconds
+  const lastFetchTimestamp = useRef<number>(Date.now());
+  const REFETCH_THROTTLE_MS = 60_000; // 60 seconds
+
+  const handleManualRefresh = useCallback(() => {
+    const eid = localStorage.getItem("currentEnterpriseId");
+    if (!eid) return;
+    lastFetchTimestamp.current = Date.now();
+    fetchOrCreateBook(eid, selectedMonthRef.current, selectedYearRef.current);
+    fetchSales(eid, selectedMonthRef.current, selectedYearRef.current);
+  }, []);
+
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return;
       const eid = localStorage.getItem("currentEnterpriseId");
       if (!eid) return;
+
+      // Throttle: skip if data was fetched less than 60s ago
+      const elapsed = Date.now() - lastFetchTimestamp.current;
+      if (elapsed < REFETCH_THROTTLE_MS) return;
 
       // Refresh the auth session first to avoid stale-token empty results
       try {
@@ -444,17 +459,53 @@ export default function LibrosFiscales() {
         // ignore — autoRefreshToken will handle it
       }
 
-      // Re-fetch current data
-      fetchOrCreateBook(eid, selectedMonth, selectedYear);
-      fetchSales(eid, selectedMonth, selectedYear);
+      lastFetchTimestamp.current = Date.now();
+      // Silently refetch WITHOUT clearing existing data (no setLoading(true))
+      const month = selectedMonthRef.current;
+      const year = selectedYearRef.current;
+      try {
+        const { data: book } = await supabase
+          .from("tab_purchase_books")
+          .select("id")
+          .eq("enterprise_id", parseInt(eid))
+          .eq("month", month)
+          .eq("year", year)
+          .maybeSingle();
+        if (book) {
+          const { data: freshPurchases } = await supabase
+            .from("tab_purchase_ledger")
+            .select("*")
+            .eq("purchase_book_id", book.id)
+            .order("invoice_date", { ascending: false })
+            .order("invoice_number", { ascending: false });
+          if (freshPurchases) setPurchases(freshPurchases);
+        }
+      } catch (_) { /* silent */ }
+
+      try {
+        const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        const { data: freshSales } = await supabase
+          .from("tab_sales_ledger")
+          .select("*")
+          .eq("enterprise_id", parseInt(eid))
+          .gte("invoice_date", startDate)
+          .lte("invoice_date", endDate)
+          .order("invoice_date", { ascending: false })
+          .order("invoice_number", { ascending: false });
+        if (freshSales) {
+          setSales(freshSales.map((row: any) => ({ ...row, client_id: `db-${row.id}` })));
+        }
+      } catch (_) { /* silent */ }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [selectedMonth, selectedYear, currentEnterpriseId]);
+  }, []);
 
   useEffect(() => {
     if (currentEnterpriseId) {
+      lastFetchTimestamp.current = Date.now();
       fetchAccounts(currentEnterpriseId);
       fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
       fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
@@ -1415,6 +1466,16 @@ export default function LibrosFiscales() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleManualRefresh}>
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Actualizar datos</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Estadísticas
@@ -1497,6 +1558,16 @@ export default function LibrosFiscales() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={handleManualRefresh}>
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Actualizar datos</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Estadísticas
