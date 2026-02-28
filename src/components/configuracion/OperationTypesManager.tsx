@@ -29,7 +29,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Power } from "lucide-react";
+import { Plus, Edit } from "lucide-react";
+import { StatusActionButton, StatusBadge } from "@/components/ui/status-action-button";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 interface OperationType {
@@ -363,9 +364,7 @@ export function OperationTypesManager() {
               <TableCell>{type.name}</TableCell>
               <TableCell>{getAppliesLabel(type.applies_to)}</TableCell>
               <TableCell>
-                <Badge variant={type.is_active ? "default" : "secondary"}>
-                  {type.is_active ? "Activo" : "Inactivo"}
-                </Badge>
+                <StatusBadge isActive={type.is_active} />
               </TableCell>
               <TableCell>
                 {type.is_system ? (
@@ -384,17 +383,10 @@ export function OperationTypesManager() {
                     <Edit className="h-4 w-4" />
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleToggleActive(type)}
-                >
-                  <Power
-                    className={`h-4 w-4 ${
-                      type.is_active ? "text-green-600" : "text-muted-foreground"
-                    }`}
-                  />
-                </Button>
+                <StatusActionButton
+                  isActive={type.is_active}
+                  onToggle={() => handleToggleActive(type)}
+                />
               </TableCell>
             </TableRow>
           ))}

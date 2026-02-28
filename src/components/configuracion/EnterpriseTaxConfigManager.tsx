@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { StatusActionButton, StatusBadge } from "@/components/ui/status-action-button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -213,11 +213,11 @@ export function EnterpriseTaxConfigManager() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Switch
-                checked={config.is_active}
-                onCheckedChange={(checked) => updateConfig(index, 'is_active', checked)}
+              <StatusBadge isActive={config.is_active} />
+              <StatusActionButton
+                isActive={config.is_active}
+                onToggle={() => updateConfig(index, 'is_active', !config.is_active)}
               />
-              <Label className="text-sm">Activo</Label>
             </div>
 
             <Button
