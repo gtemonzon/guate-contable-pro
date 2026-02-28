@@ -456,7 +456,7 @@ export function ImportPurchasesDialog({
           numero: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.numero),
           tipo_documento: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.tipo_documento),
           nit: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nit),
-          nombre: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nombre),
+          nombre: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nombre, ["establecimiento"]),
           total: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.total),
           iva: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.iva),
           anulado: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.anulado),
