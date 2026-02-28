@@ -117,15 +117,11 @@ export default function JournalEntryDialog({
     }
   };
 
-  // Handle links changed — regenerate journal lines
-  const handleLinksChanged = async () => {
+  // Handle explicit "Aplicar a póliza" — regenerate journal lines
+  const handleApplyToEntry = async () => {
     const entryId = form.getEntryId();
     if (entryId) {
       await form.regenerateLinesFromLinkedPurchases(entryId);
-    }
-    // Also notify parent to refresh list if editing
-    if (entryToEdit) {
-      onSuccess(entryToEdit.id);
     }
   };
 
@@ -341,12 +337,8 @@ export default function JournalEntryDialog({
           entryMonth={currentEntryMonth}
           entryYear={currentEntryYear}
           bankAccountId={form.bankAccountId}
-          onLinksChanged={handleLinksChanged}
-          onApplyToEntry={() => {
-            if (currentEntryId) {
-              form.regenerateLinesFromLinkedPurchases(currentEntryId);
-            }
-          }}
+          onLinksChanged={() => {}} 
+          onApplyToEntry={handleApplyToEntry}
         />
       )}
     </>

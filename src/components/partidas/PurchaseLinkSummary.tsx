@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Eye, EyeOff, FileText } from "lucide-react";
+import { RefreshCw, Eye, EyeOff, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { PurchaseRecord } from "./PurchaseLinkManager";
 
@@ -12,7 +12,9 @@ interface PurchaseLinkSummaryProps {
   journalEntryNumber: string;
   bankAccountId?: number | null;
   accounts: Array<{ id: number; account_code: string; account_name: string }>;
-  onApplyToEntry?: () => void;
+  onApplyToEntry?: () => Promise<void> | void;
+  applying?: boolean;
+  hasPendingChanges?: boolean;
 }
 
 interface PreviewLine {
@@ -28,6 +30,8 @@ export function PurchaseLinkSummary({
   bankAccountId,
   accounts,
   onApplyToEntry,
+  applying = false,
+  hasPendingChanges = false,
 }: PurchaseLinkSummaryProps) {
   const [showPreview, setShowPreview] = useState(false);
 
@@ -38,7 +42,6 @@ export function PurchaseLinkSummary({
     return { base: totalBase, iva: totalIva, total: totalAmount };
   }, [linkedPurchases]);
 
-  // Group base amounts by expense account
   const previewLines = useMemo<PreviewLine[]>(() => {
     if (linkedPurchases.length === 0) return [];
 
@@ -54,7 +57,6 @@ export function PurchaseLinkSummary({
 
     const lines: PreviewLine[] = [];
 
-    // Expense/asset lines (DEBE)
     for (const [acctId, amount] of expenseMap) {
       const acct = acctId ? accounts.find(a => a.id === acctId) : null;
       lines.push({
@@ -64,30 +66,16 @@ export function PurchaseLinkSummary({
       });
     }
 
-    // IVA Crédito (DEBE)
     if (totalIva > 0) {
-      lines.push({
-        account: "IVA Crédito Fiscal",
-        debit: totalIva,
-        credit: 0,
-      });
+      lines.push({ account: "IVA Crédito Fiscal", debit: totalIva, credit: 0 });
     }
 
-    // HABER
     const totalHaber = totals.total;
     if (bankAccountId) {
       const bankAcct = accounts.find(a => a.id === bankAccountId);
-      lines.push({
-        account: bankAcct ? `${bankAcct.account_code} ${bankAcct.account_name}` : "Banco",
-        debit: 0,
-        credit: totalHaber,
-      });
+      lines.push({ account: bankAcct ? `${bankAcct.account_code} ${bankAcct.account_name}` : "Banco", debit: 0, credit: totalHaber });
     } else {
-      lines.push({
-        account: "Cuentas por Pagar",
-        debit: 0,
-        credit: totalHaber,
-      });
+      lines.push({ account: "Cuentas por Pagar", debit: 0, credit: totalHaber });
     }
 
     return lines;
@@ -102,8 +90,7 @@ export function PurchaseLinkSummary({
   const statusVariant = entryStatus === 'contabilizado' ? 'default' as const : 'secondary' as const;
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-      {/* Row 1: Status + counts + totals */}
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-2 shrink-0">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <Badge variant={statusVariant} className="text-[10px]">{statusLabel}</Badge>
@@ -122,7 +109,6 @@ export function PurchaseLinkSummary({
         )}
       </div>
 
-      {/* Row 2: Actions */}
       {linkedPurchases.length > 0 && (
         <div className="flex items-center gap-2">
           <Button
@@ -138,18 +124,18 @@ export function PurchaseLinkSummary({
           {onApplyToEntry && entryStatus !== 'contabilizado' && (
             <Button
               size="sm"
-              variant="outline"
+              variant={hasPendingChanges ? "default" : "outline"}
               className="h-7 text-xs gap-1.5"
               onClick={onApplyToEntry}
+              disabled={applying}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               Aplicar a póliza
             </Button>
           )}
         </div>
       )}
 
-      {/* Row 3: Ledger preview table */}
       {showPreview && previewLines.length > 0 && (
         <div className="rounded-md border bg-card overflow-hidden">
           <table className="w-full text-xs">
@@ -164,24 +150,16 @@ export function PurchaseLinkSummary({
               {previewLines.map((line, i) => (
                 <tr key={i} className="border-b last:border-b-0">
                   <td className="py-1.5 px-2 truncate max-w-[200px]">{line.account}</td>
-                  <td className="py-1.5 px-2 text-right font-mono">
-                    {line.debit > 0 ? formatCurrency(line.debit) : ''}
-                  </td>
-                  <td className="py-1.5 px-2 text-right font-mono">
-                    {line.credit > 0 ? formatCurrency(line.credit) : ''}
-                  </td>
+                  <td className="py-1.5 px-2 text-right font-mono">{line.debit > 0 ? formatCurrency(line.debit) : ''}</td>
+                  <td className="py-1.5 px-2 text-right font-mono">{line.credit > 0 ? formatCurrency(line.credit) : ''}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="bg-muted/30 font-medium">
                 <td className="py-1.5 px-2">Totales</td>
-                <td className="py-1.5 px-2 text-right font-mono">
-                  {formatCurrency(previewLines.reduce((s, l) => s + l.debit, 0))}
-                </td>
-                <td className="py-1.5 px-2 text-right font-mono">
-                  {formatCurrency(previewLines.reduce((s, l) => s + l.credit, 0))}
-                </td>
+                <td className="py-1.5 px-2 text-right font-mono">{formatCurrency(previewLines.reduce((s, l) => s + l.debit, 0))}</td>
+                <td className="py-1.5 px-2 text-right font-mono">{formatCurrency(previewLines.reduce((s, l) => s + l.credit, 0))}</td>
               </tr>
             </tfoot>
           </table>

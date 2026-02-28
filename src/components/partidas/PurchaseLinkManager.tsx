@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Link2, Unlink, Search, FileText, ArrowRight, Plus, CheckSquare } from "lucide-react";
+import { Link2, Unlink, Search, FileText, ArrowRight, Plus, CheckSquare, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickPurchaseForm } from "./QuickPurchaseForm";
@@ -30,7 +30,7 @@ interface PurchaseLinkManagerProps {
   entryYear?: number;
   bankAccountId?: number | null;
   onLinksChanged?: () => void;
-  onApplyToEntry?: () => void;
+  onApplyToEntry?: () => Promise<void> | void;
 }
 
 export interface PurchaseRecord {
@@ -57,10 +57,13 @@ export function PurchaseLinkManager({
   const [linkedPurchases, setLinkedPurchases] = useState<PurchaseRecord[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: number; account_code: string; account_name: string }>>([]);
   const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string }>>([]);
   const [selectedUnlinked, setSelectedUnlinked] = useState<Set<number>>(new Set());
   const [selectedLinked, setSelectedLinked] = useState<Set<number>>(new Set());
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const initialLinkedRef = useRef<Set<number>>(new Set());
   const { toast } = useToast();
 
   const selectCols = "id, invoice_date, invoice_series, invoice_number, fel_document_type, supplier_nit, supplier_name, total_amount, vat_amount, batch_reference, bank_account_id, expense_account_id";
@@ -98,6 +101,9 @@ export function PurchaseLinkManager({
         setLinkedPurchases([]);
       }
 
+      // Store initial state for pending-changes tracking
+      initialLinkedRef.current = new Set(allLinkedIds);
+
       let query = supabase
         .from("tab_purchase_ledger")
         .select(selectCols)
@@ -118,6 +124,7 @@ export function PurchaseLinkManager({
       setUnlinkedPurchases(filteredUnlinked);
       setSelectedUnlinked(new Set());
       setSelectedLinked(new Set());
+      setHasPendingChanges(false);
     } catch (err) {
       console.error("Error loading purchase links:", err);
     } finally {
@@ -143,6 +150,14 @@ export function PurchaseLinkManager({
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadReferenceData(); }, [loadReferenceData]);
 
+  // Track pending changes by comparing current linked set to initial
+  const updatePendingFlag = useCallback((newLinkedList: PurchaseRecord[]) => {
+    const currentIds = new Set(newLinkedList.map(p => p.id));
+    const initial = initialLinkedRef.current;
+    const changed = currentIds.size !== initial.size || [...currentIds].some(id => !initial.has(id));
+    setHasPendingChanges(changed);
+  }, []);
+
   const handleLink = async (purchase: PurchaseRecord) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -160,9 +175,13 @@ export function PurchaseLinkManager({
         }, { onConflict: "enterprise_id,purchase_id" });
 
       setUnlinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
-      setLinkedPurchases(prev => [...prev, purchase]);
+      setLinkedPurchases(prev => {
+        const next = [...prev, purchase];
+        updatePendingFlag(next);
+        return next;
+      });
       setSelectedUnlinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      onLinksChanged?.();
+      // Do NOT call onLinksChanged — lines only update on explicit apply
       toast({ title: "Factura vinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
     } catch (err: any) {
       toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
@@ -177,10 +196,14 @@ export function PurchaseLinkManager({
         .eq("enterprise_id", enterpriseId)
         .eq("purchase_id", purchase.id);
 
-      setLinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
+      setLinkedPurchases(prev => {
+        const next = prev.filter(p => p.id !== purchase.id);
+        updatePendingFlag(next);
+        return next;
+      });
       setUnlinkedPurchases(prev => [...prev, purchase].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)));
       setSelectedLinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      onLinksChanged?.();
+      // Do NOT call onLinksChanged — lines only update on explicit apply
       toast({ title: "Factura desvinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
     } catch (err: any) {
       toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
@@ -201,9 +224,26 @@ export function PurchaseLinkManager({
     }
   };
 
+  const handleApplyToEntry = async () => {
+    if (!onApplyToEntry) return;
+    setApplying(true);
+    try {
+      await onApplyToEntry();
+      setHasPendingChanges(false);
+      initialLinkedRef.current = new Set(linkedPurchases.map(p => p.id));
+      toast({
+        title: "Póliza actualizada",
+        description: `Líneas regeneradas con ${linkedPurchases.length} factura${linkedPurchases.length !== 1 ? 's' : ''}`,
+      });
+    } catch (err: any) {
+      toast({ title: "Error al aplicar", description: err.message, variant: "destructive" });
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const handleInvoiceCreated = () => {
     loadData();
-    onLinksChanged?.();
   };
 
   const filteredUnlinked = search
@@ -222,15 +262,55 @@ export function PurchaseLinkManager({
     });
   };
 
+  const allUnlinkedSelected = filteredUnlinked.length > 0 && filteredUnlinked.every(p => selectedUnlinked.has(p.id));
+  const allLinkedSelected = linkedPurchases.length > 0 && linkedPurchases.every(p => selectedLinked.has(p.id));
+
+  const toggleSelectAllUnlinked = () => {
+    if (allUnlinkedSelected) {
+      setSelectedUnlinked(new Set());
+    } else {
+      setSelectedUnlinked(new Set(filteredUnlinked.map(p => p.id)));
+    }
+  };
+
+  const toggleSelectAllLinked = () => {
+    if (allLinkedSelected) {
+      setSelectedLinked(new Set());
+    } else {
+      setSelectedLinked(new Set(linkedPurchases.map(p => p.id)));
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange} modal>
+      <DialogContent
+        className="max-w-4xl max-h-[85vh] flex flex-col"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
             Vincular Facturas
           </DialogTitle>
         </DialogHeader>
+
+        {/* Pending changes banner */}
+        {hasPendingChanges && entryStatus !== 'contabilizado' && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300 shrink-0">
+            <span>⚠ Cambios pendientes: aplique a póliza para actualizar las líneas contables.</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1.5 border-amber-400 dark:border-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+              onClick={handleApplyToEntry}
+              disabled={applying}
+            >
+              {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
+              Aplicar a póliza
+            </Button>
+          </div>
+        )}
 
         <PurchaseLinkSummary
           linkedPurchases={linkedPurchases}
@@ -238,7 +318,9 @@ export function PurchaseLinkManager({
           journalEntryNumber={journalEntryNumber}
           bankAccountId={bankAccountId}
           accounts={accounts}
-          onApplyToEntry={onApplyToEntry}
+          onApplyToEntry={handleApplyToEntry}
+          applying={applying}
+          hasPendingChanges={hasPendingChanges}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
@@ -275,14 +357,25 @@ export function PurchaseLinkManager({
                   )}
                 </div>
 
-                {/* Bulk action bar */}
-                {selectedUnlinked.size > 0 && (
-                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-primary/5">
-                    <span className="text-xs text-muted-foreground">{selectedUnlinked.size} seleccionada(s)</span>
-                    <Button size="sm" variant="default" onClick={handleBulkLink} className="h-7 text-xs gap-1">
-                      <CheckSquare className="h-3.5 w-3.5" />
-                      Vincular seleccionadas
-                    </Button>
+                {/* Select all + Bulk action bar */}
+                {filteredUnlinked.length > 0 && (
+                  <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/20">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={allUnlinkedSelected}
+                        onCheckedChange={toggleSelectAllUnlinked}
+                        className="shrink-0"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {selectedUnlinked.size > 0 ? `${selectedUnlinked.size} seleccionada(s)` : 'Seleccionar todo'}
+                      </span>
+                    </div>
+                    {selectedUnlinked.size > 0 && (
+                      <Button size="sm" variant="default" onClick={handleBulkLink} className="h-7 text-xs gap-1">
+                        <CheckSquare className="h-3.5 w-3.5" />
+                        Vincular seleccionadas
+                      </Button>
+                    )}
                   </div>
                 )}
 
@@ -301,20 +394,17 @@ export function PurchaseLinkManager({
                           data-testid={`link-row-${p.id}`}
                           className="flex items-center justify-between gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors"
                         >
-                          {/* Checkbox */}
                           <Checkbox
                             checked={selectedUnlinked.has(p.id)}
                             onCheckedChange={() => toggleSelect(selectedUnlinked, setSelectedUnlinked, p.id)}
                             className="shrink-0"
                           />
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{p.supplier_name}</p>
                             <p className="text-xs text-muted-foreground truncate">
                               {p.invoice_date} • {p.fel_document_type} {p.invoice_series ? `${p.invoice_series}-` : ''}{p.invoice_number} • <span className="font-mono">{formatCurrency(p.total_amount)}</span>
                             </p>
                           </div>
-                          {/* Action — ALWAYS visible */}
                           <div data-testid={`link-btn-${p.id}`} className="shrink-0" style={{ minWidth: '100px' }}>
                             <Button
                               size="sm"
@@ -357,14 +447,25 @@ export function PurchaseLinkManager({
               </h4>
             </div>
 
-            {/* Bulk unlink bar */}
-            {selectedLinked.size > 0 && (
-              <div className="flex items-center justify-between px-3 py-1.5 border-b bg-destructive/5">
-                <span className="text-xs text-muted-foreground">{selectedLinked.size} seleccionada(s)</span>
-                <Button size="sm" variant="outline" onClick={handleBulkUnlink} className="h-7 text-xs gap-1 border-destructive/30 text-destructive hover:bg-destructive/10">
-                  <CheckSquare className="h-3.5 w-3.5" />
-                  Desvincular seleccionadas
-                </Button>
+            {/* Select all + Bulk unlink bar */}
+            {linkedPurchases.length > 0 && (
+              <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allLinkedSelected}
+                    onCheckedChange={toggleSelectAllLinked}
+                    className="shrink-0"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {selectedLinked.size > 0 ? `${selectedLinked.size} seleccionada(s)` : 'Seleccionar todo'}
+                  </span>
+                </div>
+                {selectedLinked.size > 0 && (
+                  <Button size="sm" variant="outline" onClick={handleBulkUnlink} className="h-7 text-xs gap-1 border-destructive/30 text-destructive hover:bg-destructive/10">
+                    <CheckSquare className="h-3.5 w-3.5" />
+                    Desvincular seleccionadas
+                  </Button>
+                )}
               </div>
             )}
 
@@ -381,20 +482,17 @@ export function PurchaseLinkManager({
                       data-testid={`unlink-row-${p.id}`}
                       className="flex items-center justify-between gap-2 py-2 px-3 rounded-md border bg-card hover:bg-accent/50 transition-colors"
                     >
-                      {/* Checkbox */}
                       <Checkbox
                         checked={selectedLinked.has(p.id)}
                         onCheckedChange={() => toggleSelect(selectedLinked, setSelectedLinked, p.id)}
                         className="shrink-0"
                       />
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{p.supplier_name}</p>
                         <p className="text-xs text-muted-foreground truncate">
                           {p.invoice_date} • {p.fel_document_type} {p.invoice_series ? `${p.invoice_series}-` : ''}{p.invoice_number} • <span className="font-mono">{formatCurrency(p.total_amount)}</span>
                         </p>
                       </div>
-                      {/* Action — ALWAYS visible */}
                       <div data-testid={`unlink-btn-${p.id}`} className="shrink-0" style={{ minWidth: '110px' }}>
                         <Button
                           size="sm"
