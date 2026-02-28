@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { PurchaseRecord } from "./PurchaseLinkManager";
 
@@ -120,19 +120,6 @@ export function PurchaseLinkSummary({
             {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             {showPreview ? "Ocultar preview" : "Preview asiento"}
           </Button>
-
-          {onApplyToEntry && entryStatus !== 'contabilizado' && (
-            <Button
-              size="sm"
-              variant={hasPendingChanges ? "default" : "outline"}
-              className="h-7 text-xs gap-1.5"
-              onClick={onApplyToEntry}
-              disabled={applying}
-            >
-              {applying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Aplicar a póliza
-            </Button>
-          )}
         </div>
       )}
 
