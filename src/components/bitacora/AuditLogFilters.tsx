@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import { CalendarIcon, X } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { getTableLabel, ACTION_LABELS } from "@/constants/auditFieldRules";
 
 export interface AuditLogFiltersState {
   dateFrom: Date | null;
@@ -24,6 +26,7 @@ export interface AuditLogFiltersState {
   action: string | null;
   tableName: string | null;
   search: string;
+  userActionsOnly: boolean;
 }
 
 interface AuditLogFiltersProps {
@@ -31,23 +34,6 @@ interface AuditLogFiltersProps {
   onFiltersChange: (filters: AuditLogFiltersState) => void;
   isSuperAdmin: boolean;
 }
-
-const TABLE_NAME_LABELS: Record<string, string> = {
-  tab_enterprises: "Empresas",
-  tab_users: "Usuarios",
-  tab_accounts: "Cuentas Contables",
-  tab_journal_entries: "Partidas",
-  tab_sales_ledger: "Libro de Ventas",
-  tab_purchase_ledger: "Libro de Compras",
-  tab_accounting_periods: "Períodos Contables",
-  tab_user_enterprises: "Asignaciones Usuario-Empresa",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  INSERT: "Creación",
-  UPDATE: "Modificación",
-  DELETE: "Eliminación",
-};
 
 export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: AuditLogFiltersProps) {
   const [users, setUsers] = useState<{ id: string; full_name: string; email: string }[]>([]);
@@ -63,7 +49,6 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
       .from("tab_users")
       .select("id, full_name, email")
       .order("full_name");
-    
     if (data) setUsers(data);
   };
 
@@ -72,16 +57,15 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
       .from("tab_audit_log")
       .select("table_name")
       .limit(1000);
-    
     if (data) {
-      const uniqueTables = [...new Set(data.map(d => d.table_name))];
+      const uniqueTables = [...new Set(data.map((d) => d.table_name))];
       setTables(uniqueTables.sort());
     }
   };
 
   const updateFilter = <K extends keyof AuditLogFiltersState>(
     key: K,
-    value: AuditLogFiltersState[K]
+    value: AuditLogFiltersState[K],
   ) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -94,16 +78,18 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
       action: null,
       tableName: null,
       search: "",
+      userActionsOnly: true,
     });
   };
 
-  const hasActiveFilters = 
-    filters.dateFrom || 
-    filters.dateTo || 
-    filters.userId || 
-    filters.action || 
-    filters.tableName || 
-    filters.search;
+  const hasActiveFilters =
+    filters.dateFrom ||
+    filters.dateTo ||
+    filters.userId ||
+    filters.action ||
+    filters.tableName ||
+    filters.search ||
+    !filters.userActionsOnly;
 
   return (
     <div className="space-y-4">
@@ -117,11 +103,13 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
                 variant="outline"
                 className={cn(
                   "w-full justify-start text-left font-normal",
-                  !filters.dateFrom && "text-muted-foreground"
+                  !filters.dateFrom && "text-muted-foreground",
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {filters.dateFrom ? format(filters.dateFrom, "PPP", { locale: es }) : "Seleccionar fecha"}
+                {filters.dateFrom
+                  ? format(filters.dateFrom, "PPP", { locale: es })
+                  : "Seleccionar fecha"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -144,11 +132,13 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
                 variant="outline"
                 className={cn(
                   "w-full justify-start text-left font-normal",
-                  !filters.dateTo && "text-muted-foreground"
+                  !filters.dateTo && "text-muted-foreground",
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {filters.dateTo ? format(filters.dateTo, "PPP", { locale: es }) : "Seleccionar fecha"}
+                {filters.dateTo
+                  ? format(filters.dateTo, "PPP", { locale: es })
+                  : "Seleccionar fecha"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -206,19 +196,19 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
 
         {/* Table Name */}
         <div className="space-y-2">
-          <Label>Tabla</Label>
+          <Label>Entidad</Label>
           <Select
             value={filters.tableName || "all"}
             onValueChange={(value) => updateFilter("tableName", value === "all" ? null : value)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Todas las tablas" />
+              <SelectValue placeholder="Todas las entidades" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas las tablas</SelectItem>
+              <SelectItem value="all">Todas las entidades</SelectItem>
               {tables.map((table) => (
                 <SelectItem key={table} value={table}>
-                  {TABLE_NAME_LABELS[table] || table}
+                  {getTableLabel(table)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -226,13 +216,27 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
         </div>
 
         {/* Search */}
-        <div className="space-y-2 md:col-span-2 lg:col-span-3">
+        <div className="space-y-2 lg:col-span-2">
           <Label>Búsqueda</Label>
           <Input
             placeholder="Buscar en registros..."
             value={filters.search}
             onChange={(e) => updateFilter("search", e.target.value)}
           />
+        </div>
+
+        {/* User actions only toggle */}
+        <div className="flex items-end pb-1">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="userActionsOnly"
+              checked={filters.userActionsOnly}
+              onCheckedChange={(checked) => updateFilter("userActionsOnly", checked)}
+            />
+            <Label htmlFor="userActionsOnly" className="text-sm cursor-pointer">
+              Solo acciones de usuario
+            </Label>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { AuditLogFilters, AuditLogFiltersState } from "@/components/bitacora/Aud
 import { AuditLogTable } from "@/components/bitacora/AuditLogTable";
 import { AuditLogDetailDialog } from "@/components/bitacora/AuditLogDetailDialog";
 import { Shield } from "lucide-react";
+import { isUserAction } from "@/constants/auditFieldRules";
 
 export interface AuditLogEntry {
   id: number;
@@ -24,7 +25,6 @@ export interface AuditLogEntry {
   enterprise_name?: string;
 }
 
-// Type guard to ensure JSON is a Record
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 };
@@ -41,6 +41,7 @@ const Bitacora = () => {
     action: null,
     tableName: null,
     search: "",
+    userActionsOnly: true,
   });
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -48,7 +49,7 @@ const Bitacora = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [filters, page, currentTenant]);
+  }, [filters.dateFrom, filters.dateTo, filters.userId, filters.action, filters.tableName, page, currentTenant]);
 
   const fetchLogs = async () => {
     if (!isSuperAdmin && !isTenantAdmin) {
@@ -58,13 +59,15 @@ const Bitacora = () => {
 
     setLoading(true);
     try {
+      // Fetch more rows when client-side filtering is active
+      const fetchSize = filters.userActionsOnly ? pageSize * 3 : pageSize;
+
       let query = supabase
         .from("tab_audit_log")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
-        .range((page - 1) * pageSize, page * pageSize - 1);
+        .range((page - 1) * fetchSize, page * fetchSize - 1);
 
-      // Apply filters
       if (filters.dateFrom) {
         query = query.gte("created_at", filters.dateFrom.toISOString());
       }
@@ -84,17 +87,14 @@ const Bitacora = () => {
       }
 
       const { data, error, count } = await query;
-
       if (error) throw error;
 
-      // Transform data to match our interface
       const transformedData: AuditLogEntry[] = (data || []).map((item) => ({
         ...item,
         old_values: isRecord(item.old_values) ? item.old_values : null,
         new_values: isRecord(item.new_values) ? item.new_values : null,
       }));
 
-      // Enrich with user and enterprise data
       const enrichedLogs = await enrichLogsWithDetails(transformedData);
       setLogs(enrichedLogs);
       setTotalCount(count || 0);
@@ -106,48 +106,82 @@ const Bitacora = () => {
   };
 
   const enrichLogsWithDetails = async (logs: AuditLogEntry[]): Promise<AuditLogEntry[]> => {
-    const userIds = [...new Set(logs.filter(l => l.user_id).map(l => l.user_id!))];
-    const enterpriseIds = [...new Set(logs.filter(l => l.enterprise_id).map(l => l.enterprise_id!))];
+    const userIds = [...new Set(logs.filter((l) => l.user_id).map((l) => l.user_id!))];
+    const enterpriseIds = [...new Set(logs.filter((l) => l.enterprise_id).map((l) => l.enterprise_id!))];
 
-    // Fetch users
     let usersMap: Record<string, { email: string; full_name: string }> = {};
     if (userIds.length > 0) {
       const { data: users } = await supabase
         .from("tab_users")
         .select("id, email, full_name")
         .in("id", userIds);
-      
       if (users) {
-        usersMap = users.reduce((acc, u) => {
-          acc[u.id] = { email: u.email, full_name: u.full_name };
-          return acc;
-        }, {} as Record<string, { email: string; full_name: string }>);
+        usersMap = users.reduce(
+          (acc, u) => {
+            acc[u.id] = { email: u.email, full_name: u.full_name };
+            return acc;
+          },
+          {} as Record<string, { email: string; full_name: string }>,
+        );
       }
     }
 
-    // Fetch enterprises
     let enterprisesMap: Record<number, string> = {};
     if (enterpriseIds.length > 0) {
       const { data: enterprises } = await supabase
         .from("tab_enterprises")
         .select("id, business_name")
         .in("id", enterpriseIds);
-      
       if (enterprises) {
-        enterprisesMap = enterprises.reduce((acc, e) => {
-          acc[e.id] = e.business_name;
-          return acc;
-        }, {} as Record<number, string>);
+        enterprisesMap = enterprises.reduce(
+          (acc, e) => {
+            acc[e.id] = e.business_name;
+            return acc;
+          },
+          {} as Record<number, string>,
+        );
       }
     }
 
-    return logs.map(log => ({
+    return logs.map((log) => ({
       ...log,
       user_email: log.user_id ? usersMap[log.user_id]?.email : undefined,
       user_name: log.user_id ? usersMap[log.user_id]?.full_name : undefined,
       enterprise_name: log.enterprise_id ? enterprisesMap[log.enterprise_id] : undefined,
     }));
   };
+
+  // Client-side filtering for user-actions-only and search
+  const filteredLogs = useMemo(() => {
+    let result = logs;
+
+    if (filters.userActionsOnly) {
+      result = result.filter((log) =>
+        isUserAction(log.action, log.table_name, log.old_values, log.new_values),
+      );
+    }
+
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter((log) => {
+        const haystack = [
+          log.user_name,
+          log.user_email,
+          log.enterprise_name,
+          log.table_name,
+          log.action,
+          JSON.stringify(log.new_values),
+          JSON.stringify(log.old_values),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+
+    return result;
+  }, [logs, filters.userActionsOnly, filters.search]);
 
   if (!isSuperAdmin && !isTenantAdmin) {
     return (
@@ -164,7 +198,7 @@ const Bitacora = () => {
       <div>
         <h1 className="text-3xl font-bold">Bitácora del Sistema</h1>
         <p className="text-muted-foreground">
-          Registro de todas las acciones realizadas en el sistema
+          Registro de acciones realizadas por los usuarios en el sistema
         </p>
       </div>
 
@@ -189,21 +223,25 @@ const Bitacora = () => {
         <CardHeader>
           <CardTitle>
             Registros de Auditoría
-            {totalCount > 0 && (
+            {filteredLogs.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({totalCount} registros)
+                ({filteredLogs.length} registros
+                {filters.userActionsOnly && totalCount > filteredLogs.length
+                  ? ` de ${totalCount} totales`
+                  : ""}
+                )
               </span>
             )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <AuditLogTable
-            logs={logs}
+            logs={filteredLogs}
             loading={loading}
             onViewDetails={setSelectedLog}
             page={page}
             pageSize={pageSize}
-            totalCount={totalCount}
+            totalCount={filters.userActionsOnly ? filteredLogs.length : totalCount}
             onPageChange={setPage}
           />
         </CardContent>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -8,10 +9,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Minus, Plus, Equal } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Minus, Plus, Equal, ChevronDown, Settings2 } from "lucide-react";
 import type { AuditLogEntry } from "@/pages/Bitacora";
+import {
+  categoriseChanges,
+  getTableLabel,
+  buildChangeSummary,
+  ACTION_LABELS,
+  type AuditFieldChange,
+} from "@/constants/auditFieldRules";
 
 interface AuditLogDetailDialogProps {
   log: AuditLogEntry | null;
@@ -19,109 +33,65 @@ interface AuditLogDetailDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const TABLE_NAME_LABELS: Record<string, string> = {
-  tab_enterprises: "Empresas",
-  tab_users: "Usuarios",
-  tab_accounts: "Cuentas Contables",
-  tab_journal_entries: "Partidas",
-  tab_sales_ledger: "Libro de Ventas",
-  tab_purchase_ledger: "Libro de Compras",
-  tab_accounting_periods: "Períodos Contables",
-  tab_user_enterprises: "Asignaciones Usuario-Empresa",
+const formatValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  return String(value);
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  INSERT: "Creación",
-  UPDATE: "Modificación",
-  DELETE: "Eliminación",
-};
+function FieldChangeCard({ change, action }: { change: AuditFieldChange; action: string }) {
+  const isAdded = action === "INSERT" || (action === "UPDATE" && change.oldValue === null);
+  const isRemoved = action === "DELETE";
 
-const FIELD_LABELS: Record<string, string> = {
-  id: "ID",
-  enterprise_id: "ID Empresa",
-  user_id: "ID Usuario",
-  created_at: "Fecha de Creación",
-  updated_at: "Fecha de Actualización",
-  business_name: "Razón Social",
-  trade_name: "Nombre Comercial",
-  nit: "NIT",
-  is_active: "Activo",
-  full_name: "Nombre Completo",
-  email: "Correo Electrónico",
-  account_code: "Código de Cuenta",
-  account_name: "Nombre de Cuenta",
-  account_type: "Tipo de Cuenta",
-  balance_type: "Tipo de Saldo",
-  description: "Descripción",
-  entry_date: "Fecha de Partida",
-  entry_number: "Número de Partida",
-  total_debit: "Total Débito",
-  total_credit: "Total Crédito",
-  status: "Estado",
-  invoice_date: "Fecha de Factura",
-  invoice_number: "Número de Factura",
-  supplier_name: "Nombre del Proveedor",
-  customer_name: "Nombre del Cliente",
-  total_amount: "Monto Total",
-  vat_amount: "IVA",
-  net_amount: "Monto Neto",
-  deleted_at: "Fecha de Eliminación",
-  deleted_by: "Eliminado por",
-  role: "Rol",
-  tenant_id: "ID Tenant",
-};
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        {isAdded && <Plus className="h-4 w-4 text-green-600" />}
+        {isRemoved && <Minus className="h-4 w-4 text-destructive" />}
+        {!isAdded && !isRemoved && <Equal className="h-4 w-4 text-yellow-600" />}
+        <span className="font-medium text-sm">{change.label}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-2 text-xs">
+        {change.oldValue !== null && (
+          <div className="bg-destructive/10 rounded p-2">
+            <span className="text-muted-foreground">Anterior: </span>
+            <pre className="whitespace-pre-wrap break-all mt-1 text-destructive">
+              {formatValue(change.oldValue)}
+            </pre>
+          </div>
+        )}
+        {change.newValue !== null && (
+          <div className="bg-green-500/10 rounded p-2">
+            <span className="text-muted-foreground">Nuevo: </span>
+            <pre className="whitespace-pre-wrap break-all mt-1 text-green-700 dark:text-green-400">
+              {formatValue(change.newValue)}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetailDialogProps) {
+  const [systemOpen, setSystemOpen] = useState(false);
+
   if (!log) return null;
 
-  const getChangedFields = () => {
-    if (log.action === "INSERT") {
-      return Object.entries(log.new_values || {}).map(([key, value]) => ({
-        field: key,
-        oldValue: null,
-        newValue: value,
-        type: "added" as const,
-      }));
-    }
+  const { meaningful, system } = categoriseChanges(
+    log.action,
+    log.table_name,
+    log.old_values,
+    log.new_values,
+  );
 
-    if (log.action === "DELETE") {
-      return Object.entries(log.old_values || {}).map(([key, value]) => ({
-        field: key,
-        oldValue: value,
-        newValue: null,
-        type: "removed" as const,
-      }));
-    }
-
-    // UPDATE - show differences
-    const oldValues = log.old_values || {};
-    const newValues = log.new_values || {};
-    const allKeys = new Set([...Object.keys(oldValues), ...Object.keys(newValues)]);
-
-    return Array.from(allKeys)
-      .map((key) => {
-        const oldVal = oldValues[key];
-        const newVal = newValues[key];
-        const changed = JSON.stringify(oldVal) !== JSON.stringify(newVal);
-
-        return {
-          field: key,
-          oldValue: oldVal,
-          newValue: newVal,
-          type: changed ? ("changed" as const) : ("unchanged" as const),
-        };
-      })
-      .filter((f) => f.type === "changed"); // Only show changed fields for UPDATE
-  };
-
-  const formatValue = (value: unknown): string => {
-    if (value === null || value === undefined) return "—";
-    if (typeof value === "boolean") return value ? "Sí" : "No";
-    if (typeof value === "object") return JSON.stringify(value, null, 2);
-    return String(value);
-  };
-
-  const changedFields = getChangedFields();
+  const summary = buildChangeSummary(
+    log.action,
+    log.table_name,
+    log.old_values,
+    log.new_values,
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -134,10 +104,17 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
             </Badge>
           </DialogTitle>
           <DialogDescription>
-            {TABLE_NAME_LABELS[log.table_name] || log.table_name} • 
-            {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", { locale: es })}
+            {getTableLabel(log.table_name)} •{" "}
+            {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", {
+              locale: es,
+            })}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Summary */}
+        <div className="bg-muted/50 rounded-lg p-3 text-sm font-medium">
+          {summary}
+        </div>
 
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
@@ -167,62 +144,59 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
 
         <Separator />
 
-        <div>
-          <h4 className="font-semibold mb-3">
-            {log.action === "INSERT" && "Campos creados"}
-            {log.action === "UPDATE" && "Campos modificados"}
-            {log.action === "DELETE" && "Campos eliminados"}
-          </h4>
+        <ScrollArea className="h-[300px] pr-4">
+          {/* Meaningful changes */}
+          <div className="space-y-3">
+            <h4 className="font-semibold text-sm">
+              {log.action === "INSERT" && "Campos creados"}
+              {log.action === "UPDATE" && "Campos modificados"}
+              {log.action === "DELETE" && "Campos eliminados"}
+              {meaningful.length > 0 && (
+                <span className="ml-1 text-muted-foreground font-normal">
+                  ({meaningful.length})
+                </span>
+              )}
+            </h4>
 
-          <ScrollArea className="h-[300px] pr-4">
-            {changedFields.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No hay cambios registrados.</p>
+            {meaningful.length === 0 ? (
+              <p className="text-muted-foreground text-sm py-2">
+                Solo se modificaron campos del sistema.
+              </p>
             ) : (
-              <div className="space-y-3">
-                {changedFields.map((change) => (
-                  <div
-                    key={change.field}
-                    className="rounded-lg border p-3 space-y-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      {change.type === "added" && (
-                        <Plus className="h-4 w-4 text-green-600" />
-                      )}
-                      {change.type === "removed" && (
-                        <Minus className="h-4 w-4 text-destructive" />
-                      )}
-                      {change.type === "changed" && (
-                        <Equal className="h-4 w-4 text-yellow-600" />
-                      )}
-                      <span className="font-medium text-sm">
-                        {FIELD_LABELS[change.field] || change.field}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2 text-xs">
-                      {change.oldValue !== null && (
-                        <div className="bg-destructive/10 rounded p-2">
-                          <span className="text-muted-foreground">Anterior: </span>
-                          <pre className="whitespace-pre-wrap break-all mt-1 text-destructive">
-                            {formatValue(change.oldValue)}
-                          </pre>
-                        </div>
-                      )}
-                      {change.newValue !== null && (
-                        <div className="bg-green-500/10 rounded p-2">
-                          <span className="text-muted-foreground">Nuevo: </span>
-                          <pre className="whitespace-pre-wrap break-all mt-1 text-green-700 dark:text-green-400">
-                            {formatValue(change.newValue)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              meaningful.map((change) => (
+                <FieldChangeCard key={change.field} change={change} action={log.action} />
+              ))
             )}
-          </ScrollArea>
-        </div>
+          </div>
+
+          {/* System changes — collapsible */}
+          {system.length > 0 && (
+            <Collapsible open={systemOpen} onOpenChange={setSystemOpen} className="mt-4">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-between text-muted-foreground"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    Cambios del sistema ({system.length})
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      systemOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 mt-2">
+                {system.map((change) => (
+                  <FieldChangeCard key={change.field} change={change} action={log.action} />
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
