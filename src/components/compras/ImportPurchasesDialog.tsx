@@ -118,6 +118,19 @@ function computeSelectedTotal(records: ValidPurchaseWithSourceRow[], selectedInd
   return total;
 }
 
+const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function computeSelectedPeriodSummary(records: ValidPurchaseWithSourceRow[], selectedIndices: Set<number>): { period: string; count: number }[] {
+  const map = new Map<string, number>();
+  records.forEach((r, i) => {
+    if (!selectedIndices.has(i)) return;
+    const d = new Date(r.invoice_date + "T00:00:00");
+    const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  return Array.from(map.entries()).map(([period, count]) => ({ period, count }));
+}
+
 // Helper function to find or create purchase book for a given month/year
 async function findOrCreatePurchaseBook(
   enterpriseId: number,
@@ -1469,19 +1482,22 @@ export function ImportPurchasesDialog({
                 </div>
               )}
 
-              {/* Period Summary */}
-              {validationResult.periodSummary.length > 0 && (
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-sm font-medium mb-2">Distribución por período:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {validationResult.periodSummary.map((ps) => (
-                      <span key={ps.period} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
-                        {ps.count} en {ps.period}
-                      </span>
-                    ))}
+              {/* Period Summary — based on selected records */}
+              {(() => {
+                const selPeriods = computeSelectedPeriodSummary(validationResult.validRecords, selectedIndices);
+                return selPeriods.length > 0 ? (
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-sm font-medium mb-2">Distribución por período:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selPeriods.map((ps) => (
+                        <span key={ps.period} className="bg-primary/10 text-primary text-xs px-2 py-1 rounded">
+                          {ps.count} en {ps.period}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Collapsible Valid Records List */}
               {validationResult.validRecords.length > 0 && (
