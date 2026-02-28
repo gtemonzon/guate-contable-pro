@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   Collapsible,
   CollapsibleContent,
@@ -87,58 +85,60 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className="w-full max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
         {log ? (
           <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                Detalle de Auditoría
-                <Badge variant={log.action === "DELETE" ? "destructive" : "secondary"}>
-                  {ACTION_LABELS[log.action] || log.action}
-                </Badge>
-              </DialogTitle>
-              <DialogDescription>
-                {getTableLabel(log.table_name)} •{" "}
-                {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", {
-                  locale: es,
-                })}
-              </DialogDescription>
-            </DialogHeader>
+            {/* Fixed header */}
+            <div className="shrink-0 px-6 pt-6 pb-4 border-b border-border/40 space-y-3">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  Detalle de Auditoría
+                  <Badge variant={log.action === "DELETE" ? "destructive" : "secondary"}>
+                    {ACTION_LABELS[log.action] || log.action}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription>
+                  {getTableLabel(log.table_name)} •{" "}
+                  {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", {
+                    locale: es,
+                  })}
+                </DialogDescription>
+              </DialogHeader>
 
-            {/* Summary */}
-            <div className="bg-muted/50 rounded-lg p-3 text-sm font-medium">
-              {summary}
-            </div>
+              {/* Summary */}
+              <div className="bg-muted/50 rounded-lg p-3 text-sm font-medium">
+                {summary}
+              </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Usuario:</span>
-                <p className="font-medium">{log.user_name || "Sistema"}</p>
-                {log.user_email && (
-                  <p className="text-xs text-muted-foreground">{log.user_email}</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Usuario:</span>
+                  <p className="font-medium">{log.user_name || "Sistema"}</p>
+                  {log.user_email && (
+                    <p className="text-xs text-muted-foreground">{log.user_email}</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Empresa:</span>
+                  <p className="font-medium">{log.enterprise_name || "N/A"}</p>
+                </div>
+                {log.record_id && (
+                  <div>
+                    <span className="text-muted-foreground">ID Registro:</span>
+                    <p className="font-mono">{log.record_id}</p>
+                  </div>
+                )}
+                {log.ip_address && (
+                  <div>
+                    <span className="text-muted-foreground">Dirección IP:</span>
+                    <p className="font-mono">{log.ip_address}</p>
+                  </div>
                 )}
               </div>
-              <div>
-                <span className="text-muted-foreground">Empresa:</span>
-                <p className="font-medium">{log.enterprise_name || "N/A"}</p>
-              </div>
-              {log.record_id && (
-                <div>
-                  <span className="text-muted-foreground">ID Registro:</span>
-                  <p className="font-mono">{log.record_id}</p>
-                </div>
-              )}
-              {log.ip_address && (
-                <div>
-                  <span className="text-muted-foreground">Dirección IP:</span>
-                  <p className="font-mono">{log.ip_address}</p>
-                </div>
-              )}
             </div>
 
-            <Separator />
-
-            <ScrollArea className="h-[300px] pr-4">
+            {/* Scrollable body */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
               {/* Meaningful changes */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-sm">
@@ -190,13 +190,15 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
                   </CollapsibleContent>
                 </Collapsible>
               )}
-            </ScrollArea>
+            </div>
           </>
         ) : (
-          <DialogHeader>
-            <DialogTitle>Detalle de Auditoría</DialogTitle>
-            <DialogDescription>Cargando...</DialogDescription>
-          </DialogHeader>
+          <div className="p-6">
+            <DialogHeader>
+              <DialogTitle>Detalle de Auditoría</DialogTitle>
+              <DialogDescription>Cargando...</DialogDescription>
+            </DialogHeader>
+          </div>
         )}
       </DialogContent>
     </Dialog>
