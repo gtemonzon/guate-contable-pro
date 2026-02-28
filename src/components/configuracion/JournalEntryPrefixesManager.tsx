@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Pencil, Plus, ToggleLeft, ToggleRight } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
+import { StatusActionButton, StatusBadge } from "@/components/ui/status-action-button";
 
 interface JournalEntryPrefix {
   id: number;
@@ -197,18 +198,17 @@ export function JournalEntryPrefixesManager() {
               <TableCell className="font-mono font-bold">{prefix.prefix}</TableCell>
               <TableCell className="text-muted-foreground">{prefix.description}</TableCell>
               <TableCell>
-                <span className={`px-2 py-1 rounded-full text-xs ${prefix.is_active ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"}`}>
-                  {prefix.is_active ? "Activo" : "Inactivo"}
-                </span>
+                <StatusBadge isActive={prefix.is_active} />
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(prefix)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleToggleActive(prefix)}>
-                    {prefix.is_active ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
-                  </Button>
+                  <StatusActionButton
+                    isActive={prefix.is_active}
+                    onToggle={() => handleToggleActive(prefix)}
+                  />
                 </div>
               </TableCell>
             </TableRow>

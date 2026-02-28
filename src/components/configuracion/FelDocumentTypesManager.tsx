@@ -21,7 +21,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Power, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
+import { StatusActionButton, StatusBadge } from "@/components/ui/status-action-button";
 import { toast } from "sonner";
 
 interface FelDocumentType {
@@ -250,9 +251,7 @@ export function FelDocumentTypesManager() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={type.is_active ? "default" : "secondary"}>
-                      {type.is_active ? "Activo" : "Inactivo"}
-                    </Badge>
+                    <StatusBadge isActive={type.is_active} />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -263,13 +262,10 @@ export function FelDocumentTypesManager() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleActive(type)}
-                      >
-                        <Power className={`h-4 w-4 ${type.is_active ? 'text-green-600' : 'text-gray-400'}`} />
-                      </Button>
+                      <StatusActionButton
+                        isActive={type.is_active}
+                        onToggle={() => handleToggleActive(type)}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
