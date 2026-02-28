@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
 import {
@@ -92,6 +93,14 @@ interface PurchaseDuplicateRecord {
   fel_document_type: string;
   total_amount: number;
   invoice_date: string;
+}
+
+/** Mapping returned by RPC get_batch_purchase_mappings */
+interface SupplierMapping {
+  supplier_nit: string;
+  expense_account_id: number | null;
+  operation_type_id: number | null;
+  source_date: string | null;
 }
 
 interface ValidationResult {
@@ -295,6 +304,10 @@ export function ImportPurchasesDialog({
   const [selectedExpenseAccount, setSelectedExpenseAccount] = useState<number | null>(null);
   const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
   
+  // Supplier mapping suggestions
+  const [supplierMappings, setSupplierMappings] = useState<Map<string, SupplierMapping>>(new Map());
+  const [autoSuggestMode, setAutoSuggestMode] = useState<"none" | "auto">("none");
+  
   // Option to overwrite duplicates
   const [overwriteDuplicates, setOverwriteDuplicates] = useState(false);
 
@@ -315,6 +328,34 @@ export function ImportPurchasesDialog({
     disabled: dialogState !== "initial",
   });
 
+  // Fetch supplier mappings for all unique NITs in validation result
+  const fetchSupplierMappings = async (records: ValidPurchaseWithSourceRow[]) => {
+    if (!enterpriseId) return;
+    const uniqueNits = [...new Set(records.map(r => r.supplier_nit).filter(n => n && n.toUpperCase() !== "CF"))];
+    if (uniqueNits.length === 0) return;
+
+    try {
+      const { data, error } = await supabase.rpc("get_batch_purchase_mappings", {
+        p_enterprise_id: enterpriseId,
+        p_supplier_nits: uniqueNits,
+      });
+      if (error) throw error;
+      const map = new Map<string, SupplierMapping>();
+      if (data) {
+        for (const row of data as SupplierMapping[]) {
+          map.set(row.supplier_nit, row);
+        }
+      }
+      setSupplierMappings(map);
+      // If we got any suggestions, default to auto-suggest mode
+      if (map.size > 0) {
+        setAutoSuggestMode("auto");
+      }
+    } catch (err) {
+      console.warn("Could not fetch supplier mappings:", err);
+    }
+  };
+
   const resetDialog = () => {
     setDialogState("initial");
     setValidationResult(null);
@@ -327,6 +368,8 @@ export function ImportPurchasesDialog({
     setOverwriteDuplicates(false);
     setSelectedIndices(new Set());
     setRecordSearchFilter("");
+    setSupplierMappings(new Map());
+    setAutoSuggestMode("none");
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -676,6 +719,10 @@ export function ImportPurchasesDialog({
       
       // Select all valid records by default
       setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+
+      // Fetch supplier mappings for auto-suggest
+      const allValidAndDup = [...validRecords, ...duplicateRecords];
+      await fetchSupplierMappings(allValidAndDup);
       
       // If we have expense accounts or operation types available, show options dialog
       if (expenseAccounts.length > 0 || operationTypes.length > 0) {
@@ -917,6 +964,10 @@ export function ImportPurchasesDialog({
       
       // Select all valid records by default
       setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+
+      // Fetch supplier mappings for auto-suggest
+      const allValidAndDup = [...validRecords, ...duplicateRecords];
+      await fetchSupplierMappings(allValidAndDup);
       
       if (expenseAccounts.length > 0 || operationTypes.length > 0) {
         setDialogState("options");
@@ -938,19 +989,34 @@ export function ImportPurchasesDialog({
     }
   };
 
+  const applyMappingToRecord = (record: ValidPurchaseWithSourceRow): ValidPurchaseWithSourceRow => {
+    // If bulk override is on, always use bulk values
+    if (applyBulkOptions) {
+      return {
+        ...record,
+        expense_account_id: selectedExpenseAccount,
+        operation_type_id: selectedOperationType,
+      };
+    }
+    // If auto-suggest mode, apply per-NIT mapping (only if record doesn't already have values)
+    if (autoSuggestMode === "auto") {
+      const normalizedNit = record.supplier_nit?.replace(/[-\s]/g, "").toUpperCase();
+      const mapping = supplierMappings.get(normalizedNit);
+      if (mapping) {
+        return {
+          ...record,
+          expense_account_id: record.expense_account_id ?? mapping.expense_account_id,
+          operation_type_id: record.operation_type_id ?? mapping.operation_type_id,
+        };
+      }
+    }
+    return record;
+  };
+
   const handleProceedToSummary = () => {
-    if (validationResult && applyBulkOptions) {
-      // Apply selected account and operation type to all records (both valid and duplicates)
-      const updatedValidRecords = validationResult.validRecords.map(record => ({
-        ...record,
-        expense_account_id: selectedExpenseAccount,
-        operation_type_id: selectedOperationType,
-      }));
-      const updatedDuplicateRecords = validationResult.duplicateRecords.map(record => ({
-        ...record,
-        expense_account_id: selectedExpenseAccount,
-        operation_type_id: selectedOperationType,
-      }));
+    if (validationResult) {
+      const updatedValidRecords = validationResult.validRecords.map(applyMappingToRecord);
+      const updatedDuplicateRecords = validationResult.duplicateRecords.map(applyMappingToRecord);
       setValidationResult({
         ...validationResult,
         validRecords: updatedValidRecords,
@@ -1188,20 +1254,69 @@ export function ImportPurchasesDialog({
                 )}
               </div>
 
+              {/* Auto-suggest per supplier */}
+              {supplierMappings.size > 0 && (
+                <div className="border rounded-lg p-4 space-y-3 bg-primary/5 border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-base font-medium flex items-center gap-2">
+                        ✨ Auto-sugerir por proveedor (NIT)
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Se encontraron sugerencias históricas para <strong>{supplierMappings.size}</strong> proveedor(es).
+                        Se asignará automáticamente la cuenta y tipo de operación usados la última vez.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoSuggestMode === "auto"}
+                      onCheckedChange={(checked) => {
+                        setAutoSuggestMode(checked ? "auto" : "none");
+                        if (checked) setApplyBulkOptions(false);
+                      }}
+                    />
+                  </div>
+                  {autoSuggestMode === "auto" && (
+                    <div className="space-y-1 text-xs">
+                      {[...supplierMappings.entries()].map(([nit, mapping]) => {
+                        const acct = expenseAccounts.find(a => a.id === mapping.expense_account_id);
+                        const opType = operationTypes.find(o => o.id === mapping.operation_type_id);
+                        const dateStr = mapping.source_date
+                          ? new Date(mapping.source_date + "T00:00:00").toLocaleDateString("es-GT", { month: "short", year: "numeric" })
+                          : "";
+                        return (
+                          <div key={nit} className="flex items-center gap-2 text-muted-foreground">
+                            <span className="font-mono w-[100px] shrink-0">{nit}</span>
+                            <span className="text-foreground">→</span>
+                            {acct && <span className="truncate">{acct.account_code}</span>}
+                            {opType && <Badge variant="secondary" className="text-[10px] h-4 px-1">{opType.code}</Badge>}
+                            {dateStr && <span className="ml-auto text-muted-foreground/70">(últ: {dateStr})</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <Label htmlFor="apply-bulk-purchases" className="text-base font-medium">
-                      ¿Aplicar cuenta y tipo de operación a todos los documentos?
+                      Aplicar misma cuenta/tipo a TODOS
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Si activas esta opción, todos los documentos importados tendrán la misma cuenta contable y tipo de operación.
+                      {supplierMappings.size > 0
+                        ? "Sobreescribe las sugerencias por proveedor con un valor único."
+                        : "Todos los documentos importados tendrán la misma cuenta contable y tipo de operación."}
                     </p>
                   </div>
                   <Switch
                     id="apply-bulk-purchases"
                     checked={applyBulkOptions}
-                    onCheckedChange={setApplyBulkOptions}
+                    onCheckedChange={(checked) => {
+                      setApplyBulkOptions(checked);
+                      if (checked) setAutoSuggestMode("none");
+                    }}
                   />
                 </div>
 
@@ -1592,6 +1707,16 @@ export function ImportPurchasesDialog({
                                 <span className="flex-1 truncate" title={record.supplier_name}>
                                   {record.supplier_name}
                                 </span>
+                                {record.expense_account_id && (
+                                  <span className="text-[10px] text-primary/70 shrink-0" title="Cuenta asignada">
+                                    {expenseAccounts.find(a => a.id === record.expense_account_id)?.account_code || ""}
+                                  </span>
+                                )}
+                                {record.operation_type_id && (
+                                  <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0">
+                                    {operationTypes.find(o => o.id === record.operation_type_id)?.code || ""}
+                                  </Badge>
+                                )}
                               </div>
                             );
                           })}
