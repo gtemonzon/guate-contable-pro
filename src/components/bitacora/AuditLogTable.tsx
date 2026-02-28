@@ -12,6 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Eye, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import type { AuditLogEntry } from "@/pages/Bitacora";
+import {
+  getTableLabel,
+  buildChangeSummary,
+  ACTION_LABELS,
+} from "@/constants/auditFieldRules";
+
+const ACTION_VARIANTS: Record<string, "default" | "secondary" | "destructive"> = {
+  INSERT: "default",
+  UPDATE: "secondary",
+  DELETE: "destructive",
+};
 
 interface AuditLogTableProps {
   logs: AuditLogEntry[];
@@ -23,29 +34,6 @@ interface AuditLogTableProps {
   onPageChange: (page: number) => void;
 }
 
-const TABLE_NAME_LABELS: Record<string, string> = {
-  tab_enterprises: "Empresas",
-  tab_users: "Usuarios",
-  tab_accounts: "Cuentas Contables",
-  tab_journal_entries: "Partidas",
-  tab_sales_ledger: "Libro de Ventas",
-  tab_purchase_ledger: "Libro de Compras",
-  tab_accounting_periods: "Períodos Contables",
-  tab_user_enterprises: "Asignaciones",
-};
-
-const ACTION_VARIANTS: Record<string, "default" | "secondary" | "destructive"> = {
-  INSERT: "default",
-  UPDATE: "secondary",
-  DELETE: "destructive",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  INSERT: "Creación",
-  UPDATE: "Modificación",
-  DELETE: "Eliminación",
-};
-
 export function AuditLogTable({
   logs,
   loading,
@@ -56,24 +44,6 @@ export function AuditLogTable({
   onPageChange,
 }: AuditLogTableProps) {
   const totalPages = Math.ceil(totalCount / pageSize);
-
-  const getDescription = (log: AuditLogEntry): string => {
-    const tableName = TABLE_NAME_LABELS[log.table_name] || log.table_name;
-    const actionLabel = ACTION_LABELS[log.action] || log.action;
-    
-    // Try to get a meaningful identifier from the record
-    let identifier = "";
-    const data = log.new_values || log.old_values;
-    if (data) {
-      if ("business_name" in data) identifier = ` - ${data.business_name}`;
-      else if ("account_name" in data) identifier = ` - ${data.account_name}`;
-      else if ("description" in data) identifier = ` - ${String(data.description).substring(0, 30)}...`;
-      else if ("full_name" in data) identifier = ` - ${data.full_name}`;
-      else if ("email" in data) identifier = ` - ${data.email}`;
-    }
-
-    return `${actionLabel} en ${tableName}${identifier}`;
-  };
 
   if (loading) {
     return (
@@ -100,51 +70,62 @@ export function AuditLogTable({
               <TableHead className="w-[180px]">Fecha/Hora</TableHead>
               <TableHead className="w-[200px]">Usuario</TableHead>
               <TableHead className="w-[120px]">Acción</TableHead>
-              <TableHead className="w-[150px]">Tabla</TableHead>
-              <TableHead>Descripción</TableHead>
+              <TableHead className="w-[150px]">Entidad</TableHead>
+              <TableHead>Resumen</TableHead>
               <TableHead className="w-[80px]">Detalles</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {logs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell className="font-mono text-sm">
-                  {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", { locale: es })}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm">
-                      {log.user_name || "Sistema"}
-                    </span>
-                    {log.user_email && (
-                      <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                        {log.user_email}
+            {logs.map((log) => {
+              const summary = buildChangeSummary(
+                log.action,
+                log.table_name,
+                log.old_values,
+                log.new_values,
+              );
+
+              return (
+                <TableRow key={log.id}>
+                  <TableCell className="font-mono text-sm">
+                    {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", {
+                      locale: es,
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">
+                        {log.user_name || "Sistema"}
                       </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={ACTION_VARIANTS[log.action] || "secondary"}>
-                    {ACTION_LABELS[log.action] || log.action}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm">
-                  {TABLE_NAME_LABELS[log.table_name] || log.table_name}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
-                  {getDescription(log)}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onViewDetails(log)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                      {log.user_email && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                          {log.user_email}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={ACTION_VARIANTS[log.action] || "secondary"}>
+                      {ACTION_LABELS[log.action] || log.action}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {getTableLabel(log.table_name)}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
+                    {summary}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewDetails(log)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -152,7 +133,8 @@ export function AuditLogTable({
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Mostrando {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalCount)} de {totalCount}
+          Mostrando {(page - 1) * pageSize + 1} -{" "}
+          {Math.min(page * pageSize, totalCount)} de {totalCount}
         </p>
         <div className="flex items-center gap-2">
           <Button
