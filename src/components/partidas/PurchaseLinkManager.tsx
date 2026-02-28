@@ -379,7 +379,7 @@ export function PurchaseLinkManager({
                   </div>
                 )}
 
-                <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1" style={{ scrollbarGutter: 'stable' }}>
                   <div className="p-2 space-y-1">
                     {loading ? (
                       <p className="text-center text-muted-foreground py-8 text-sm">Cargando...</p>
@@ -469,7 +469,7 @@ export function PurchaseLinkManager({
               </div>
             )}
 
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1" style={{ scrollbarGutter: 'stable' }}>
               <div className="p-2 space-y-1">
                 {linkedPurchases.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8 text-sm">

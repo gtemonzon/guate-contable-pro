@@ -170,12 +170,16 @@ export function JournalEntryLinesTable({
                         {line.source_type === 'PURCHASE' && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0 cursor-help">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0 cursor-default">
                                 <FileText className="h-3 w-3" />
                                 Compra
                               </Badge>
                             </TooltipTrigger>
-                            <TooltipContent>{line.source_ref || 'Factura de compra vinculada'}</TooltipContent>
+                            <TooltipContent side="top" className="max-w-[260px] text-xs">
+                              <p>Línea generada desde facturas vinculadas.</p>
+                              <p className="text-muted-foreground mt-0.5">Use "Vincular Facturas" y luego "Aplicar a póliza" para actualizar.</p>
+                              {line.source_ref && <p className="mt-1 font-mono text-[10px]">{line.source_ref}</p>}
+                            </TooltipContent>
                           </Tooltip>
                         )}
                       </div>
