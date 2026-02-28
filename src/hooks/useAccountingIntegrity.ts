@@ -144,12 +144,7 @@ export function useAccountingIntegrity() {
           const debit = Number(det.debit_amount || 0);
           const credit = Number(det.credit_amount || 0);
 
-          if (debit === 0 && credit === 0) {
-            results.push({ code: 'A4', severity: 'WARNING', category: 'A',
-              message: `Línea ${det.line_number} de ${entry.entry_number} con monto cero`,
-              details: 'Tanto el débito como el crédito son 0.',
-              affectedRecords: [{ id: entry.id, label: entry.entry_number }] });
-          }
+          // A4 omitido: las líneas con monto cero se previenen al contabilizar
           if (debit > 0 && credit > 0) {
             results.push({ code: 'A5', severity: 'ERROR', category: 'A',
               message: `Línea ${det.line_number} de ${entry.entry_number} con débito Y crédito`,
