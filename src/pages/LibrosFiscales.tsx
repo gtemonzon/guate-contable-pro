@@ -78,6 +78,8 @@ export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasDataRef = useRef(false);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -438,6 +440,7 @@ export default function LibrosFiscales() {
     const eid = localStorage.getItem("currentEnterpriseId");
     if (!eid) return;
     lastFetchTimestamp.current = Date.now();
+    setIsRefreshing(true);
     fetchOrCreateBook(eid, selectedMonthRef.current, selectedYearRef.current);
     fetchSales(eid, selectedMonthRef.current, selectedYearRef.current);
   }, []);
@@ -588,7 +591,12 @@ export default function LibrosFiscales() {
 
   const fetchOrCreateBook = async (enterpriseId: string, month: number, year: number) => {
     try {
-      setLoading(true);
+      // Only show full loading placeholder on first load (no cached data)
+      if (!hasDataRef.current) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       
       let { data: book, error: fetchError } = await supabase
         .from("tab_purchase_books")
@@ -621,6 +629,7 @@ export default function LibrosFiscales() {
 
       setCurrentBookId(book.id);
       await fetchPurchases(book.id);
+      hasDataRef.current = true;
     } catch (error: any) {
       toast({
         title: "Error al cargar libro",
@@ -629,6 +638,7 @@ export default function LibrosFiscales() {
       });
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -1469,8 +1479,8 @@ export default function LibrosFiscales() {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleManualRefresh}>
-                          <RefreshCw className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
+                          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Actualizar datos</p></TooltipContent>
@@ -1561,8 +1571,8 @@ export default function LibrosFiscales() {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleManualRefresh}>
-                          <RefreshCw className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
+                          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Actualizar datos</p></TooltipContent>
@@ -1631,9 +1641,9 @@ export default function LibrosFiscales() {
         <Card>
           <CardContent className="pt-6">
             {activeTab === "compras" ? (
-              loading ? (
+              loading && purchases.length === 0 ? (
                 <p className="text-center text-muted-foreground">Cargando...</p>
-              ) : purchases.length === 0 ? (
+              ) : purchases.length === 0 && !loading ? (
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
@@ -1663,9 +1673,9 @@ export default function LibrosFiscales() {
                 </div>
               )
             ) : (
-              loading ? (
+              loading && sales.length === 0 ? (
                 <p className="text-center text-muted-foreground">Cargando...</p>
-              ) : sales.length === 0 ? (
+              ) : sales.length === 0 && !loading ? (
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
