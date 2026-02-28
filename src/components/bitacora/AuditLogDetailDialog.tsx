@@ -77,126 +77,127 @@ function FieldChangeCard({ change, action }: { change: AuditFieldChange; action:
 export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetailDialogProps) {
   const [systemOpen, setSystemOpen] = useState(false);
 
-  if (!log) return null;
+  const { meaningful, system } = log
+    ? categoriseChanges(log.action, log.table_name, log.old_values, log.new_values)
+    : { meaningful: [], system: [] };
 
-  const { meaningful, system } = categoriseChanges(
-    log.action,
-    log.table_name,
-    log.old_values,
-    log.new_values,
-  );
-
-  const summary = buildChangeSummary(
-    log.action,
-    log.table_name,
-    log.old_values,
-    log.new_values,
-  );
+  const summary = log
+    ? buildChangeSummary(log.action, log.table_name, log.old_values, log.new_values)
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            Detalle de Auditoría
-            <Badge variant={log.action === "DELETE" ? "destructive" : "secondary"}>
-              {ACTION_LABELS[log.action] || log.action}
-            </Badge>
-          </DialogTitle>
-          <DialogDescription>
-            {getTableLabel(log.table_name)} •{" "}
-            {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", {
-              locale: es,
-            })}
-          </DialogDescription>
-        </DialogHeader>
+        {log ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                Detalle de Auditoría
+                <Badge variant={log.action === "DELETE" ? "destructive" : "secondary"}>
+                  {ACTION_LABELS[log.action] || log.action}
+                </Badge>
+              </DialogTitle>
+              <DialogDescription>
+                {getTableLabel(log.table_name)} •{" "}
+                {format(new Date(log.created_at), " dd 'de' MMMM 'de' yyyy, HH:mm:ss", {
+                  locale: es,
+                })}
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* Summary */}
-        <div className="bg-muted/50 rounded-lg p-3 text-sm font-medium">
-          {summary}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Usuario:</span>
-            <p className="font-medium">{log.user_name || "Sistema"}</p>
-            {log.user_email && (
-              <p className="text-xs text-muted-foreground">{log.user_email}</p>
-            )}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Empresa:</span>
-            <p className="font-medium">{log.enterprise_name || "N/A"}</p>
-          </div>
-          {log.record_id && (
-            <div>
-              <span className="text-muted-foreground">ID Registro:</span>
-              <p className="font-mono">{log.record_id}</p>
+            {/* Summary */}
+            <div className="bg-muted/50 rounded-lg p-3 text-sm font-medium">
+              {summary}
             </div>
-          )}
-          {log.ip_address && (
-            <div>
-              <span className="text-muted-foreground">Dirección IP:</span>
-              <p className="font-mono">{log.ip_address}</p>
-            </div>
-          )}
-        </div>
 
-        <Separator />
-
-        <ScrollArea className="h-[300px] pr-4">
-          {/* Meaningful changes */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm">
-              {log.action === "INSERT" && "Campos creados"}
-              {log.action === "UPDATE" && "Campos modificados"}
-              {log.action === "DELETE" && "Campos eliminados"}
-              {meaningful.length > 0 && (
-                <span className="ml-1 text-muted-foreground font-normal">
-                  ({meaningful.length})
-                </span>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Usuario:</span>
+                <p className="font-medium">{log.user_name || "Sistema"}</p>
+                {log.user_email && (
+                  <p className="text-xs text-muted-foreground">{log.user_email}</p>
+                )}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Empresa:</span>
+                <p className="font-medium">{log.enterprise_name || "N/A"}</p>
+              </div>
+              {log.record_id && (
+                <div>
+                  <span className="text-muted-foreground">ID Registro:</span>
+                  <p className="font-mono">{log.record_id}</p>
+                </div>
               )}
-            </h4>
+              {log.ip_address && (
+                <div>
+                  <span className="text-muted-foreground">Dirección IP:</span>
+                  <p className="font-mono">{log.ip_address}</p>
+                </div>
+              )}
+            </div>
 
-            {meaningful.length === 0 ? (
-              <p className="text-muted-foreground text-sm py-2">
-                Solo se modificaron campos del sistema.
-              </p>
-            ) : (
-              meaningful.map((change) => (
-                <FieldChangeCard key={change.field} change={change} action={log.action} />
-              ))
-            )}
-          </div>
+            <Separator />
 
-          {/* System changes — collapsible */}
-          {system.length > 0 && (
-            <Collapsible open={systemOpen} onOpenChange={setSystemOpen} className="mt-4">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-between text-muted-foreground"
-                >
-                  <span className="flex items-center gap-2">
-                    <Settings2 className="h-4 w-4" />
-                    Cambios del sistema ({system.length})
-                  </span>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${
-                      systemOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 mt-2">
-                {system.map((change) => (
-                  <FieldChangeCard key={change.field} change={change} action={log.action} />
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-        </ScrollArea>
+            <ScrollArea className="h-[300px] pr-4">
+              {/* Meaningful changes */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm">
+                  {log.action === "INSERT" && "Campos creados"}
+                  {log.action === "UPDATE" && "Campos modificados"}
+                  {log.action === "DELETE" && "Campos eliminados"}
+                  {meaningful.length > 0 && (
+                    <span className="ml-1 text-muted-foreground font-normal">
+                      ({meaningful.length})
+                    </span>
+                  )}
+                </h4>
+
+                {meaningful.length === 0 ? (
+                  <p className="text-muted-foreground text-sm py-2">
+                    Solo se modificaron campos del sistema.
+                  </p>
+                ) : (
+                  meaningful.map((change) => (
+                    <FieldChangeCard key={change.field} change={change} action={log.action} />
+                  ))
+                )}
+              </div>
+
+              {/* System changes — collapsible */}
+              {system.length > 0 && (
+                <Collapsible open={systemOpen} onOpenChange={setSystemOpen} className="mt-4">
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-between text-muted-foreground"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings2 className="h-4 w-4" />
+                        Cambios del sistema ({system.length})
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          systemOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 mt-2">
+                    {system.map((change) => (
+                      <FieldChangeCard key={change.field} change={change} action={log.action} />
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </ScrollArea>
+          </>
+        ) : (
+          <DialogHeader>
+            <DialogTitle>Detalle de Auditoría</DialogTitle>
+            <DialogDescription>Cargando...</DialogDescription>
+          </DialogHeader>
+        )}
       </DialogContent>
     </Dialog>
   );
