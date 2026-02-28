@@ -240,16 +240,7 @@ export function useAccountingIntegrity() {
           }
         }
 
-        // B4: Unused accounts with allows_movement
-        const movementAccounts = accounts.filter((a: any) => a.allows_movement && a.is_active);
-        for (const acc of movementAccounts) {
-          if (!usedAccountIds.has(acc.id)) {
-            results.push({ code: 'B4', severity: 'INFO', category: 'B',
-              message: `Cuenta ${acc.account_code} sin movimientos`,
-              details: `${acc.account_name} permite movimiento pero nunca ha sido utilizada.`,
-              affectedRecords: [{ id: acc.id, label: acc.account_code }] });
-          }
-        }
+        // B4 omitido: cuentas sin movimientos no representa un problema de integridad
 
         // B5: Account code format consistency
         const codePatterns = new Map<number, Set<string>>();
