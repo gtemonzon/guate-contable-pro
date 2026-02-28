@@ -64,6 +64,8 @@ export function QuickPurchaseForm({
 
   // Track which fields user has manually changed (to avoid overriding)
   const touchedFields = useRef<Set<string>>(new Set());
+  const nitInputRef = useRef<HTMLInputElement>(null);
+  const opTypeSelectRef = useRef<HTMLButtonElement>(null);
   const [suggestedOpTypeId, setSuggestedOpTypeId] = useState<number | null>(null);
   const [suggestedAccountId, setSuggestedAccountId] = useState<number | null>(null);
   const [hasSuggestion, setHasSuggestion] = useState(false);
@@ -187,7 +189,13 @@ export function QuickPurchaseForm({
   // On NIT blur: lookup supplier name + auto-suggest
   const handleNitBlur = async () => {
     const cleaned = nit.trim();
-    if (!cleaned || !validateNIT(cleaned)) return;
+    if (!cleaned || !validateNIT(cleaned)) {
+      // Invalid NIT — keep focus on NIT input
+      if (cleaned.length > 0) {
+        nitInputRef.current?.focus();
+      }
+      return;
+    }
 
     // Also trigger duplicate check if number is filled
     if (number.trim()) checkDuplicate();
@@ -231,6 +239,11 @@ export function QuickPurchaseForm({
         setSuggestedOpTypeId(null);
         setSuggestedAccountId(null);
       }
+
+      // Move focus to operation type after successful validation
+      requestAnimationFrame(() => {
+        opTypeSelectRef.current?.focus();
+      });
     } catch { /* ignore */ }
     finally { setSuggestLoading(false); }
   };
@@ -461,6 +474,7 @@ export function QuickPurchaseForm({
           <label className="text-xs font-medium text-muted-foreground">NIT</label>
           <div className="relative mt-1">
             <Input
+              ref={nitInputRef}
               value={nit}
               onChange={e => handleNitChange(e.target.value)}
               onBlur={handleNitBlur}
@@ -502,7 +516,7 @@ export function QuickPurchaseForm({
             setOperationTypeId(v ? parseInt(v) : null);
           }}
         >
-          <SelectTrigger className="h-8 text-xs mt-1">
+          <SelectTrigger ref={opTypeSelectRef} className="h-8 text-xs mt-1">
             <SelectValue placeholder="Seleccionar tipo..." />
           </SelectTrigger>
           <SelectContent>
