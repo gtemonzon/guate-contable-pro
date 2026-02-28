@@ -1265,6 +1265,7 @@ export function ImportPurchasesDialog({
                       <p className="text-sm text-muted-foreground">
                         Se encontraron sugerencias históricas para <strong>{supplierMappings.size}</strong> proveedor(es).
                         Se asignará automáticamente la cuenta y tipo de operación usados la última vez.
+                        La lista muestra solo los proveedores de las facturas seleccionadas.
                       </p>
                     </div>
                     <Switch
@@ -1275,26 +1276,44 @@ export function ImportPurchasesDialog({
                       }}
                     />
                   </div>
-                  {autoSuggestMode === "auto" && (
-                    <div className="space-y-1 text-xs">
-                      {[...supplierMappings.entries()].map(([nit, mapping]) => {
-                        const acct = expenseAccounts.find(a => a.id === mapping.expense_account_id);
-                        const opType = operationTypes.find(o => o.id === mapping.operation_type_id);
-                        const dateStr = mapping.source_date
-                          ? new Date(mapping.source_date + "T00:00:00").toLocaleDateString("es-GT", { month: "short", year: "numeric" })
-                          : "";
-                        return (
-                          <div key={nit} className="flex items-center gap-2 text-muted-foreground">
-                            <span className="font-mono w-[100px] shrink-0">{nit}</span>
-                            <span className="text-foreground">→</span>
-                            {acct && <span className="truncate">{acct.account_code}</span>}
-                            {opType && <Badge variant="secondary" className="text-[10px] h-4 px-1">{opType.code}</Badge>}
-                            {dateStr && <span className="ml-auto text-muted-foreground/70">(últ: {dateStr})</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {autoSuggestMode === "auto" && (() => {
+                    // Filter mappings to only show suppliers present in selected invoices
+                    const selectedNits = new Set<string>();
+                    validationResult.validRecords.forEach((r, i) => {
+                      if (selectedIndices.has(i)) {
+                        const normalized = r.supplier_nit?.replace(/[-\s]/g, "").toUpperCase();
+                        if (normalized) selectedNits.add(normalized);
+                      }
+                    });
+                    const filteredEntries = [...supplierMappings.entries()].filter(([nit]) => selectedNits.has(nit));
+                    if (filteredEntries.length === 0) {
+                      return (
+                        <p className="text-xs text-muted-foreground italic">
+                          No hay sugerencias para las facturas seleccionadas.
+                        </p>
+                      );
+                    }
+                    return (
+                      <div className="space-y-1 text-xs">
+                        {filteredEntries.map(([nit, mapping]) => {
+                          const acct = expenseAccounts.find(a => a.id === mapping.expense_account_id);
+                          const opType = operationTypes.find(o => o.id === mapping.operation_type_id);
+                          const dateStr = mapping.source_date
+                            ? new Date(mapping.source_date + "T00:00:00").toLocaleDateString("es-GT", { month: "short", year: "numeric" })
+                            : "";
+                          return (
+                            <div key={nit} className="flex items-center gap-2 text-muted-foreground">
+                              <span className="font-mono w-[100px] shrink-0">{nit}</span>
+                              <span className="text-foreground">→</span>
+                              {acct && <span className="truncate">{acct.account_code}</span>}
+                              {opType && <Badge variant="secondary" className="text-[10px] h-4 px-1">{opType.code}</Badge>}
+                              {dateStr && <span className="ml-auto text-muted-foreground/70">(últ: {dateStr})</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
