@@ -216,23 +216,54 @@ export function QuickPurchaseForm({
         if (data?.supplier_name) setSupplier(data.supplier_name);
       }
 
-      // Auto-suggest operation type + expense account
-      const { data: mapping } = await supabase.rpc("get_batch_purchase_mappings", {
-        p_enterprise_id: enterpriseId,
-        p_supplier_nits: [cleaned],
-      });
+      // Auto-suggest operation type + expense account from last purchase
+      let sugOpType: number | null = null;
+      let sugAccount: number | null = null;
 
-      if (mapping && mapping.length > 0) {
-        const m = mapping[0] as any;
-        setSuggestedOpTypeId(m.operation_type_id);
-        setSuggestedAccountId(m.expense_account_id);
+      // Try RPC first, fallback to direct query
+      try {
+        const { data: mapping } = await supabase.rpc("get_batch_purchase_mappings", {
+          p_enterprise_id: enterpriseId,
+          p_supplier_nits: [cleaned],
+        });
+        if (mapping && mapping.length > 0) {
+          const m = mapping[0] as any;
+          sugOpType = m.operation_type_id ?? null;
+          sugAccount = m.expense_account_id ?? null;
+        }
+      } catch {
+        // RPC not available, ignore
+      }
+
+      // Fallback: direct query to tab_purchase_ledger
+      if (!sugOpType && !sugAccount) {
+        const { data: lastPurchase } = await supabase
+          .from("tab_purchase_ledger")
+          .select("operation_type_id, expense_account_id")
+          .eq("enterprise_id", enterpriseId)
+          .eq("supplier_nit", cleaned)
+          .is("deleted_at", null)
+          .order("invoice_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastPurchase) {
+          sugOpType = lastPurchase.operation_type_id ?? null;
+          sugAccount = lastPurchase.expense_account_id ?? null;
+        }
+      }
+
+      if (sugOpType || sugAccount) {
+        setSuggestedOpTypeId(sugOpType);
+        setSuggestedAccountId(sugAccount);
         setHasSuggestion(true);
 
-        if (!touchedFields.current.has("operationTypeId") && m.operation_type_id) {
-          setOperationTypeId(m.operation_type_id);
+        if (!touchedFields.current.has("operationTypeId") && sugOpType) {
+          setOperationTypeId(sugOpType);
         }
-        if (!touchedFields.current.has("expenseAccountId") && m.expense_account_id) {
-          setExpenseAccountId(m.expense_account_id);
+        if (!touchedFields.current.has("expenseAccountId") && sugAccount) {
+          setExpenseAccountId(sugAccount);
         }
       } else {
         setHasSuggestion(false);
