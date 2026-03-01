@@ -84,8 +84,10 @@ export function QuickPurchaseForm({
     load();
   }, []);
 
-  // Detect fuel operation
-  const isFuelOperation = operationTypes.find(t => t.id === operationTypeId)?.code === "COMBUSTIBLE";
+  // Detect special operation types
+  const selectedOpType = operationTypes.find(t => t.id === operationTypeId);
+  const isFuelOperation = selectedOpType?.code === "COMBUSTIBLE";
+  const isExemptOperation = selectedOpType?.code === "EXENTAS";
 
   // ─── Duplicate check ───
   const checkDuplicate = useCallback(async () => {
@@ -289,6 +291,10 @@ export function QuickPurchaseForm({
   // Calculate base/VAT with fuel (IDP) logic
   const calculateAmounts = () => {
     if (total <= 0) return { base: 0, vat: 0 };
+    // Exempt operations: no VAT
+    if (isExemptOperation) {
+      return { base: total, vat: 0 };
+    }
     if (isFuelOperation && idpAmount > 0) {
       const netAfterIdp = total - idpAmount;
       const base = Number((netAfterIdp / (1 + VAT_RATE)).toFixed(2));
