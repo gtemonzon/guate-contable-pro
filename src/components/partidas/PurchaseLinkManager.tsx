@@ -511,6 +511,22 @@ export function PurchaseLinkManager({
             </ScrollArea>
           </div>
         </div>
+
+        {/* Always-visible footer with "Actualizar Póliza" for draft entries */}
+        {entryStatus !== 'contabilizado' && onApplyToEntry && linkedPurchases.length > 0 && (
+          <div className="flex items-center justify-end gap-2 pt-2 border-t shrink-0">
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleApplyToEntry}
+              disabled={applying || !hasPendingChanges}
+            >
+              {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              Actualizar Póliza
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
