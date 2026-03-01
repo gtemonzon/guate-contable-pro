@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, ChevronDown, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -239,7 +239,7 @@ export function AccountBalanceInspector({
               ))}
             </div>
           ) : (
-            <ScrollArea className="h-full max-h-[52vh]">
+            <div className="h-full overflow-y-auto">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
@@ -327,7 +327,7 @@ export function AccountBalanceInspector({
                   </Button>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           )}
         </div>
 
