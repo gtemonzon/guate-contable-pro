@@ -520,7 +520,7 @@ export function PurchaseLinkManager({
               size="sm"
               className="gap-1.5"
               onClick={handleApplyToEntry}
-              disabled={applying || !hasPendingChanges}
+              disabled={applying}
             >
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Actualizar Póliza
