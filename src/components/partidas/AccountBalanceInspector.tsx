@@ -162,7 +162,7 @@ export function AccountBalanceInspector({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[1100px] max-h-[90vh] flex flex-col p-0 gap-0">
+      <DialogContent className="w-[98vw] max-w-[1100px] h-[90vh] max-h-[90vh] flex flex-col p-0 gap-0">
         {/* Header */}
         <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -226,7 +226,7 @@ export function AccountBalanceInspector({
         </div>
 
         {/* Body */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {error ? (
             <div className="flex items-center gap-2 p-6 text-destructive">
               <AlertCircle className="h-4 w-4" />
@@ -239,7 +239,7 @@ export function AccountBalanceInspector({
               ))}
             </div>
           ) : (
-            <div className="h-full overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
