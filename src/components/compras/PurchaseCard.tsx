@@ -474,7 +474,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
             {/* Row 2: Total, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
             <div className="grid grid-cols-12 gap-2 items-end">
-              <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
+              <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Total c/IVA</label>
                 <Input
                   type="number"
@@ -506,7 +506,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   />
                 </div>
               )}
-              <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
+              <div className="col-span-2 min-w-0">
                 <label className="text-xs text-muted-foreground">
                   Tipo Op.
                   {isRecommended("operation_type_id") && (
@@ -529,7 +529,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-3 min-w-0">
+              <div className={cn(isFuelOperation ? "col-span-3" : "col-span-5", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
                   accounts={expenseAccounts}
@@ -712,7 +712,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 />
               </div>
             )}
-            <div className={isFuelOperation ? "col-span-1" : "col-span-2"}>
+            <div className="col-span-2 min-w-0">
               <label className="text-xs text-muted-foreground">
                 Tipo Operación
                 {isRecommended("operation_type_id") && (
@@ -735,21 +735,21 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-3 min-w-0">
-                <label className="text-xs text-muted-foreground">
-                  Cuenta
-                  {isRecommended("expense_account_id") && (
-                    <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
-                  )}
-                </label>
-                <AccountCombobox
-                  accounts={expenseAccounts}
-                  value={purchase.expense_account_id}
-                  onValueChange={(val) => handleFieldChange("expense_account_id", val)}
-                  placeholder="Cuenta de gasto..."
-                  className={cn("w-full", isRecommended("expense_account_id") && recommendedStyle)}
-                />
-              </div>
+            <div className={cn(isFuelOperation ? "col-span-3" : "col-span-4", "min-w-0")}>
+              <label className="text-xs text-muted-foreground">
+                Cuenta
+                {isRecommended("expense_account_id") && (
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                )}
+              </label>
+              <AccountCombobox
+                accounts={expenseAccounts}
+                value={purchase.expense_account_id}
+                onValueChange={(val) => handleFieldChange("expense_account_id", val)}
+                placeholder="Cuenta de gasto..."
+                className={cn("w-full", isRecommended("expense_account_id") && recommendedStyle)}
+              />
+            </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Ref. Pago</label>
               <Input
