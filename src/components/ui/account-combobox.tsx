@@ -50,12 +50,14 @@ export function AccountCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("justify-between h-8 text-xs", className)}
+          className={cn("justify-between h-8 text-xs min-w-0 w-full", className)}
           disabled={disabled}
         >
-          {selectedAccount
-            ? `${selectedAccount.account_code} - ${selectedAccount.account_name}`
-            : placeholder}
+          <span className="truncate">
+            {selectedAccount
+              ? `${selectedAccount.account_code} - ${selectedAccount.account_name}`
+              : placeholder}
+          </span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

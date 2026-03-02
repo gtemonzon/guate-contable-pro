@@ -529,7 +529,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-3">
+              <div className="col-span-3 min-w-0">
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
                   accounts={expenseAccounts}
@@ -735,21 +735,21 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-3">
-              <label className="text-xs text-muted-foreground">
-                Cuenta
-                {isRecommended("expense_account_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
-                )}
-              </label>
-              <AccountCombobox
-                accounts={expenseAccounts}
-                value={purchase.expense_account_id}
-                onValueChange={(val) => handleFieldChange("expense_account_id", val)}
-                placeholder="Cuenta de gasto..."
-                className={cn("w-full", isRecommended("expense_account_id") && recommendedStyle)}
-              />
-            </div>
+            <div className="col-span-3 min-w-0">
+                <label className="text-xs text-muted-foreground">
+                  Cuenta
+                  {isRecommended("expense_account_id") && (
+                    <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                  )}
+                </label>
+                <AccountCombobox
+                  accounts={expenseAccounts}
+                  value={purchase.expense_account_id}
+                  onValueChange={(val) => handleFieldChange("expense_account_id", val)}
+                  placeholder="Cuenta de gasto..."
+                  className={cn("w-full", isRecommended("expense_account_id") && recommendedStyle)}
+                />
+              </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Ref. Pago</label>
               <Input
