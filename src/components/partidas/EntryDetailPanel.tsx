@@ -16,7 +16,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import EntityLink, { type DateContext } from "@/components/ui/entity-link";
-import ActionBar, { type ActionBarItem } from "@/components/ui/action-bar";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
@@ -233,53 +232,29 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
 
   if (!entry) return null;
 
-  // Build contextual action bar items
-  const actionBarItems: ActionBarItem[] = [];
+  const handleCopyLink = () => {
+    if (!entry) return;
+    const url = `${window.location.origin}/partidas?viewEntry=${entry.id}`;
+    navigator.clipboard.writeText(url);
+    toast({ title: "Enlace copiado" });
+  };
 
-  // Unique account IDs from lines - link to ledger
-  const uniqueAccounts = [...new Map(entry.details.map(d => [d.account_id, d])).values()];
-  if (uniqueAccounts.length > 0) {
-    actionBarItems.push({
-      label: "Mayor",
-      icon: <BookOpenCheck className="h-3.5 w-3.5" />,
-      onClick: () => {
-        const firstAccount = uniqueAccounts[0];
-        let url = `/mayor?accountId=${firstAccount.account_id}`;
-        if (dateContext) url += `&startDate=${dateContext.dateFrom}&endDate=${dateContext.dateTo}`;
-        navigate(url);
-      },
-    });
-  }
+  const handleNavigateToMayor = () => {
+    if (!entry) return;
+    const uniqueAccounts = [...new Map(entry.details.map(d => [d.account_id, d])).values()];
+    if (uniqueAccounts.length === 0) return;
+    const firstAccount = uniqueAccounts[0];
+    let url = `/mayor?accountId=${firstAccount.account_id}`;
+    if (dateContext) url += `&startDate=${dateContext.dateFrom}&endDate=${dateContext.dateTo}`;
+    navigate(url);
+  };
 
-  if (entry.bank_account_id) {
-    actionBarItems.push({
-      label: "Libro Bancos",
-      icon: <Landmark className="h-3.5 w-3.5" />,
-      onClick: () => {
-        let url = `/reportes?tab=bancos&bankAccountId=${entry.bank_account_id}`;
-        if (dateContext) url += `&dateFrom=${dateContext.dateFrom}&dateTo=${dateContext.dateTo}`;
-        navigate(url);
-      },
-    });
-  }
-
-  if (linkedPurchases.length > 0) {
-    actionBarItems.push({
-      label: `Compras (${linkedPurchases.length})`,
-      icon: <ShoppingCart className="h-3.5 w-3.5" />,
-      onClick: () => setActiveTab("compras"),
-    });
-  }
-
-  actionBarItems.push({
-    label: "Copiar enlace",
-    icon: <Link2 className="h-3.5 w-3.5" />,
-    separator: true,
-    onClick: () => {
-      const url = `${window.location.origin}/partidas?viewEntry=${entry.id}`;
-      navigator.clipboard.writeText(url);
-    },
-  });
+  const handleNavigateToBancos = () => {
+    if (!entry) return;
+    let url = `/reportes?tab=bancos&bankAccountId=${entry.bank_account_id}`;
+    if (dateContext) url += `&dateFrom=${dateContext.dateFrom}&dateTo=${dateContext.dateTo}`;
+    navigate(url);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -326,8 +301,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
         </div>
       </div>
 
-      {/* Action Bar */}
-      <ActionBar items={actionBarItems} />
+      {/* Action Bar removed — merged into unified tabs below */}
 
       {/* Reversal banners */}
       {reversalInfo && (
@@ -382,17 +356,41 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
       )}
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <TabsList className="mx-4 mt-2 shrink-0">
-          <TabsTrigger value="detalle" className="text-xs">Detalle</TabsTrigger>
-          {linkedPurchases.length > 0 && (
-            <TabsTrigger value="compras" className="text-xs gap-1">
-              <ShoppingCart className="h-3 w-3" />
-              Compras ({linkedPurchases.length})
+      <Tabs value={activeTab} onValueChange={(val) => {
+        if (val === "mayor") { handleNavigateToMayor(); return; }
+        if (val === "bancos") { handleNavigateToBancos(); return; }
+        setActiveTab(val);
+      }} className="flex-1 flex flex-col min-h-0">
+        <div className="mx-4 mt-2 shrink-0 flex items-center gap-1">
+          <TabsList className="flex-1">
+            <TabsTrigger value="detalle" className="text-xs">Detalle</TabsTrigger>
+            {linkedPurchases.length > 0 && (
+              <TabsTrigger value="compras" className="text-xs gap-1">
+                <ShoppingCart className="h-3 w-3" />
+                Compras ({linkedPurchases.length})
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="mayor" className="text-xs gap-1">
+              <BookOpenCheck className="h-3 w-3" />
+              Mayor
             </TabsTrigger>
-          )}
-          <TabsTrigger value="auditoria" className="text-xs">Auditoría</TabsTrigger>
-        </TabsList>
+            {entry.bank_account_id && (
+              <TabsTrigger value="bancos" className="text-xs gap-1">
+                <Landmark className="h-3 w-3" />
+                Bancos
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="auditoria" className="text-xs">Auditoría</TabsTrigger>
+          </TabsList>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={handleCopyLink}>
+                <Link2 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">Copiar enlace</TooltipContent>
+          </Tooltip>
+        </div>
 
         <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-3">
