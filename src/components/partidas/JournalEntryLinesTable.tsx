@@ -156,7 +156,17 @@ export function JournalEntryLinesTable({
                       <span className="text-sm px-1 text-muted-foreground italic">{line.description || "Banco (auto)"}</span>
                     ) : isActive ? (
                       <div className="space-y-1">
-                        <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9" />
+                        <Input value={line.description} onChange={(e) => onUpdateLine(line.id, "description", e.target.value)} placeholder="Descripción" className="h-9"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              // Focus cost_center input in same row
+                              const row = (e.target as HTMLElement).closest('tr');
+                              const ccInput = row?.querySelector<HTMLInputElement>('td:nth-child(3) input');
+                              if (ccInput) ccInput.focus();
+                            }
+                          }}
+                        />
                         {line.source_type === 'PURCHASE' && line.source_ref && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-1 font-normal">
                             <FileText className="h-3 w-3" />
@@ -190,7 +200,19 @@ export function JournalEntryLinesTable({
                     {isBankLine ? (
                       <span className="text-sm px-1 text-muted-foreground">-</span>
                     ) : isActive ? (
-                      <Input value={line.cost_center} onChange={(e) => onUpdateLine(line.id, "cost_center", e.target.value)} placeholder={account?.requires_cost_center ? "Requerido" : "Opcional"} className={cn("h-9", account?.requires_cost_center ? "border-warning" : "")} />
+                      <Input value={line.cost_center} onChange={(e) => onUpdateLine(line.id, "cost_center", e.target.value)} placeholder={account?.requires_cost_center ? "Requerido" : "Opcional"} className={cn("h-9", account?.requires_cost_center ? "border-warning" : "")}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+                            e.preventDefault();
+                            // Focus the debit or credit input in same row
+                            const row = (e.target as HTMLElement).closest('tr');
+                            const debitInput = row?.querySelector<HTMLInputElement>('td:nth-child(4) input:not(:disabled)');
+                            const creditInput = row?.querySelector<HTMLInputElement>('td:nth-child(5) input:not(:disabled)');
+                            if (debitInput) debitInput.focus();
+                            else if (creditInput) creditInput.focus();
+                          }
+                        }}
+                      />
                     ) : (
                       <span className={cn("text-sm px-1", account?.requires_cost_center && !line.cost_center ? "text-warning" : "")}>{line.cost_center || <span className="text-muted-foreground">-</span>}</span>
                     )}
@@ -204,7 +226,7 @@ export function JournalEntryLinesTable({
                     ) : isActive ? (
                       <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
-                          if (e.key === 'Tab' && !e.shiftKey && line.debit_amount > 0) {
+                          if ((e.key === 'Tab' && !e.shiftKey || e.key === 'Enter') && line.debit_amount > 0) {
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
                             const idx = nonBankLines.findIndex(l => l.id === line.id);
                             const next = nonBankLines[idx + 1];
@@ -232,7 +254,7 @@ export function JournalEntryLinesTable({
                     ) : isActive ? (
                       <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
-                          if (e.key === 'Tab' && !e.shiftKey && line.credit_amount > 0) {
+                          if ((e.key === 'Tab' && !e.shiftKey || e.key === 'Enter') && line.credit_amount > 0) {
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
                             const idx = nonBankLines.findIndex(l => l.id === line.id);
                             const next = nonBankLines[idx + 1];
