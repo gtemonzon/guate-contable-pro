@@ -351,7 +351,20 @@ export function useJournalEntryForm(
     return Math.round((d - c) * 100) / 100;
   };
 
+  const isLineComplete = (line: DetailLine) =>
+    !!line.account_id && (line.debit_amount > 0 || line.credit_amount > 0);
+
   const addLine = () => {
+    // Find an existing incomplete non-bank line
+    const incompleteLine = detailLines.find(l => !l.is_bank_line && !isLineComplete(l));
+    if (incompleteLine) {
+      // Focus the incomplete line instead of creating a new one
+      setActiveLineId(incompleteLine.id);
+      setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [incompleteLine.id]: true })), 50);
+      toast({ title: "Completa la línea actual", description: "Selecciona cuenta e ingresa monto antes de agregar otra línea." });
+      return;
+    }
+
     const newLineId = crypto.randomUUID();
     setDetailLines(prev => {
       const bankIdx = prev.findIndex(l => l.is_bank_line);
@@ -371,6 +384,15 @@ export function useJournalEntryForm(
     const line = detailLines.find(l => l.id === id);
     if (line?.is_bank_line) {
       toast({ title: "Línea protegida", description: "La línea bancaria se gestiona automáticamente. Para eliminarla, quite la cuenta bancaria del encabezado.", variant: "destructive" });
+      return;
+    }
+    const nonBankLines = detailLines.filter(l => !l.is_bank_line);
+    if (nonBankLines.length <= 1) {
+      // Reset line instead of removing it
+      const newLineId = crypto.randomUUID();
+      setDetailLines(prev => prev.map(l => l.id === id ? { id: newLineId, account_id: null, description: headerDescription, cost_center: "", debit_amount: 0, credit_amount: 0 } : l));
+      setActiveLineId(newLineId);
+      setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [newLineId]: true })), 50);
       return;
     }
     setDetailLines(detailLines.filter(l => l.id !== id));

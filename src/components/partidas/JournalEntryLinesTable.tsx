@@ -232,7 +232,7 @@ export function JournalEntryLinesTable({
                     ) : isActive ? (
                       <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
-                          if (e.key === 'Tab' && !e.shiftKey) {
+                          if (e.key === 'Tab' && !e.shiftKey && line.credit_amount > 0) {
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
                             const idx = nonBankLines.findIndex(l => l.id === line.id);
                             const next = nonBankLines[idx + 1];
