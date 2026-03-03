@@ -269,8 +269,13 @@ export default function Partidas() {
     let filtered = [...entries];
 
     if (filterNumber) {
+      const q = filterNumber.toLowerCase();
       filtered = filtered.filter(e => 
-        e.entry_number.toLowerCase().includes(filterNumber.toLowerCase())
+        e.entry_number.toLowerCase().includes(q) ||
+        (e.description && e.description.toLowerCase().includes(q)) ||
+        (e.beneficiary_name && e.beneficiary_name.toLowerCase().includes(q)) ||
+        (e.bank_reference && e.bank_reference.toLowerCase().includes(q)) ||
+        (e.document_reference && e.document_reference.toLowerCase().includes(q))
       );
     }
     if (filterType !== "all") {
@@ -459,7 +464,7 @@ export default function Partidas() {
           </Select>
 
           <Input
-            placeholder="Buscar #..."
+            placeholder="Buscar #, ref, cheque..."
             value={filterNumber}
             onChange={(e) => setFilterNumber(e.target.value)}
             className="w-[120px] h-8 text-xs"
