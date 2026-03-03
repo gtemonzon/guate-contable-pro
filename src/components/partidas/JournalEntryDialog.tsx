@@ -77,10 +77,23 @@ export default function JournalEntryDialog({
     ? form.accounts.find(a => a.id === activeLine.account_id)
     : null;
 
-  // F2 / Alt+B → open Balance Inspector
+  // F2 / Alt+B → open Balance Inspector; Ctrl/Cmd+Shift+V → open Vincular Facturas
   useEffect(() => {
     if (!open || linkManagerOpen) return;
     const handler = (e: KeyboardEvent) => {
+      // Skip if focus is in text input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      // Ctrl/Cmd+Shift+V → Vincular Facturas
+      const isLinkShortcut = e.key === 'V' && e.shiftKey && (e.ctrlKey || e.metaKey);
+      if (isLinkShortcut && !form.isReadOnly) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleOpenLinkManager();
+        return;
+      }
+
       if (inspectorOpen) return;
       const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
       const isAltB = e.key === "b"   && e.altKey   && !e.ctrlKey && !e.metaKey;
@@ -94,7 +107,7 @@ export default function JournalEntryDialog({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [open, activeAccount, inspectorOpen, linkManagerOpen]);
+  }, [open, activeAccount, inspectorOpen, linkManagerOpen, form.isReadOnly]);
 
   // Keyboard shortcuts
   useFormShortcuts({
