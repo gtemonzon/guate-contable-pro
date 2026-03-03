@@ -676,21 +676,32 @@ export function useJournalEntryForm(
 
       if (entryToEdit) {
         // ─── Existing entry: update ─────────────────────────────
+        // Step 1: Update header as draft first (avoid trigger rejecting empty lines)
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: post, posted_at: post ? new Date().toISOString() : null,
-          updated_by: user.id, updated_at: new Date().toISOString(), status: post ? 'contabilizado' : 'borrador',
+          is_posted: false, posted_at: null,
+          updated_by: user.id, updated_at: new Date().toISOString(), status: 'borrador',
         } as any).eq("id", entryToEdit.id);
         if (updateError) throw updateError;
+
+        // Step 2: Replace lines
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", entryToEdit.id);
         const lineInserts = buildLineInserts(entryToEdit.id);
         if (lineInserts.length > 0) {
           const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(lineInserts);
           if (insertError) throw insertError;
+        }
+
+        // Step 3: Post if requested (lines exist now)
+        if (post) {
+          const { error: postError } = await supabase.from("tab_journal_entries").update({
+            is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
+          } as any).eq("id", entryToEdit.id);
+          if (postError) throw postError;
         }
         toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
         onSuccess(entryToEdit.id);
@@ -701,6 +712,7 @@ export function useJournalEntryForm(
         const finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
         setNextEntryNumber(finalEntryNumber);
 
+        // Step 1: Update header as draft (without posting yet)
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_number: finalEntryNumber,
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
@@ -708,17 +720,26 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
-          is_posted: post, posted_at: post ? new Date().toISOString() : null,
+          is_posted: false, posted_at: null,
           updated_by: user.id, updated_at: new Date().toISOString(),
-          status: post ? 'contabilizado' : 'borrador',
+          status: 'borrador',
         } as any).eq("id", draftId);
         if (updateError) throw updateError;
 
+        // Step 2: Delete old lines and insert new ones
         await supabase.from("tab_journal_entry_details").delete().eq("journal_entry_id", draftId);
         const draftLineInserts = buildLineInserts(draftId);
         if (draftLineInserts.length > 0) {
           const { error: insertError } = await supabase.from("tab_journal_entry_details").insert(draftLineInserts);
           if (insertError) throw insertError;
+        }
+
+        // Step 3: Now post if requested (lines exist at this point)
+        if (post) {
+          const { error: postError } = await supabase.from("tab_journal_entries").update({
+            is_posted: true, posted_at: new Date().toISOString(), status: 'contabilizado',
+          } as any).eq("id", draftId);
+          if (postError) throw postError;
         }
 
         toast({ title: post ? "Partida contabilizada" : "Borrador guardado", description: `Partida ${finalEntryNumber} ${post ? 'contabilizada' : 'guardada'} exitosamente` });
