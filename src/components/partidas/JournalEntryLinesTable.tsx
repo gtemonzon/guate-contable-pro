@@ -202,7 +202,23 @@ export function JournalEntryLinesTable({
                         {line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}
                       </span>
                     ) : isActive ? (
-                      <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono" />
+                      <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab' && !e.shiftKey && line.debit_amount > 0) {
+                            const nonBankLines = detailLines.filter(l => !l.is_bank_line);
+                            const idx = nonBankLines.findIndex(l => l.id === line.id);
+                            const next = nonBankLines[idx + 1];
+                            if (next) {
+                              e.preventDefault();
+                              setActiveLineId(next.id);
+                              setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [next.id]: true })), 50);
+                            } else {
+                              e.preventDefault();
+                              onAddLine();
+                            }
+                          }
+                        }}
+                      />
                     ) : (
                       <span className={cn("text-sm font-mono text-right block px-1", line.debit_amount > 0 ? "font-medium" : "text-muted-foreground")}>{line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}</span>
                     )}
