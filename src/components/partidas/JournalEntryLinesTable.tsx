@@ -63,9 +63,10 @@ export function JournalEntryLinesTable({
           </Tooltip>
         </div>
         <div className="flex gap-2">
-          <Button onClick={onAddLine} variant="outline" size="sm">
+          <Button onClick={onAddLine} variant="outline" size="sm" title="Agregar Línea (Alt+A)">
             <Plus className="mr-2 h-4 w-4" />
             Agregar Línea
+            <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">Alt+A</kbd>
           </Button>
         </div>
       </div>
