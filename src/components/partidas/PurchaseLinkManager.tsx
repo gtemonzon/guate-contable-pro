@@ -303,14 +303,14 @@ export function PurchaseLinkManager({
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal>
       <DialogContent
-        className="max-w-4xl max-h-[85vh] flex flex-col relative"
+        className="max-w-4xl max-h-[85vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.stopPropagation()}
       >
         {/* Applying overlay */}
         {applying && (
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+          <div className="fixed inset-0 z-[60] bg-background/60 backdrop-blur-sm flex items-center justify-center">
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
               <span className="text-sm text-muted-foreground">Actualizando póliza...</span>
