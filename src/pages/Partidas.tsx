@@ -100,6 +100,7 @@ export default function Partidas() {
   const [openPeriods, setOpenPeriods] = useState<AccountingPeriod[]>([]);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [splitViewOpen, setSplitViewOpen] = useState(true);
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   
   // Filtros
   const [filterNumber, setFilterNumber] = useState("");
@@ -685,6 +686,7 @@ export default function Partidas() {
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={45} minSize={30}>
               <EntryDetailPanel
+                key={detailRefreshKey}
                 entryId={selectedEntryId}
                 onClose={() => {
                   setSelectedEntryId(null);
@@ -714,6 +716,7 @@ export default function Partidas() {
             setSelectedEntryId(savedEntryId);
             setSplitViewOpen(true);
           }
+          setDetailRefreshKey(k => k + 1);
           setEditingEntry(null);
         }}
         entryToEdit={editingEntry}
@@ -736,6 +739,7 @@ export default function Partidas() {
         canPost={permissions.canPostEntries}
         onSuccess={() => {
           if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          setDetailRefreshKey(k => k + 1);
         }}
       />
 
@@ -757,6 +761,7 @@ export default function Partidas() {
           onSuccess={() => {
             if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
             setSelectedEntryId(metadataEntry.id);
+            setDetailRefreshKey(k => k + 1);
           }}
         />
       )}
