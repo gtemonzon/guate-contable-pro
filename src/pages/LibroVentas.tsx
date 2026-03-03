@@ -804,7 +804,7 @@ export default function LibroVentas() {
             enterprise_id: parseInt(currentEnterpriseId),
             accounting_period_id: period.id,
             entry_number: entryNumber,
-            entry_date: new Date().toISOString().split('T')[0],
+            entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
             entry_type: "diario",
             description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
             total_debit: totalAmount,
