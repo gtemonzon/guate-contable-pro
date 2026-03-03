@@ -182,8 +182,9 @@ export function PurchaseLinkManager({
         return next;
       });
       setSelectedUnlinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      // Do NOT call onLinksChanged — lines only update on explicit apply
-      toast({ title: "Factura vinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
+      const newLinked = [...linkedPurchases.filter(p => p.id !== purchase.id), purchase];
+      // Auto-rebuild journal lines
+      await autoApply(newLinked);
     } catch (err: any) {
       toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
     }
@@ -204,8 +205,9 @@ export function PurchaseLinkManager({
       });
       setUnlinkedPurchases(prev => [...prev, purchase].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)));
       setSelectedLinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      // Do NOT call onLinksChanged — lines only update on explicit apply
-      toast({ title: "Factura desvinculada", description: `${purchase.supplier_name} - ${purchase.invoice_number}` });
+      const newLinked = linkedPurchases.filter(p => p.id !== purchase.id);
+      // Auto-rebuild journal lines
+      await autoApply(newLinked);
     } catch (err: any) {
       toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
     }
@@ -225,26 +227,42 @@ export function PurchaseLinkManager({
     }
   };
 
-  const handleApplyToEntry = async () => {
-    if (!onApplyToEntry) return;
+  const autoApply = useCallback(async (linkedList?: PurchaseRecord[]) => {
+    if (!onApplyToEntry || entryStatus === 'contabilizado') return;
     setApplying(true);
     try {
       await onApplyToEntry();
+      const list = linkedList ?? linkedPurchases;
       setHasPendingChanges(false);
-      initialLinkedRef.current = new Set(linkedPurchases.map(p => p.id));
+      initialLinkedRef.current = new Set(list.map(p => p.id));
       toast({
-        title: "Póliza actualizada",
-        description: `Líneas regeneradas con ${linkedPurchases.length} factura${linkedPurchases.length !== 1 ? 's' : ''}`,
+        title: "Póliza actualizada automáticamente",
+        description: `Líneas regeneradas con ${list.length} factura${list.length !== 1 ? 's' : ''}`,
       });
     } catch (err: any) {
       toast({ title: "Error al aplicar", description: err.message, variant: "destructive" });
     } finally {
       setApplying(false);
     }
+  }, [onApplyToEntry, entryStatus, linkedPurchases, toast]);
+
+  const handleApplyToEntry = async () => {
+    await autoApply();
   };
+
+  const [autoApplyAfterLoad, setAutoApplyAfterLoad] = useState(false);
+
+  // After loadData finishes and we have linked purchases, auto-apply if flagged
+  useEffect(() => {
+    if (autoApplyAfterLoad && !loading && linkedPurchases.length > 0) {
+      setAutoApplyAfterLoad(false);
+      autoApply(linkedPurchases);
+    }
+  }, [autoApplyAfterLoad, loading, linkedPurchases, autoApply]);
 
   const handleInvoiceCreated = () => {
     loadData();
+    setAutoApplyAfterLoad(true);
   };
 
   const filteredUnlinked = search
@@ -285,11 +303,20 @@ export function PurchaseLinkManager({
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal>
       <DialogContent
-        className="max-w-4xl max-h-[85vh] flex flex-col"
+        className="max-w-4xl max-h-[85vh] flex flex-col relative"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.stopPropagation()}
       >
+        {/* Applying overlay */}
+        {applying && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Actualizando póliza...</span>
+            </div>
+          </div>
+        )}
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
