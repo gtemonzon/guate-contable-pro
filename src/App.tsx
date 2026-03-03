@@ -11,18 +11,20 @@ import MainLayout from "./components/layout/MainLayout";
 
 // Retry wrapper for dynamic imports (handles transient network failures)
 function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>, retries = 2) {
-  return lazy(() =>
-    factory().catch((err) => {
-      if (retries > 0) {
-        return new Promise<{ default: React.ComponentType<any> }>((resolve) =>
-          setTimeout(() => resolve(lazyRetry(factory, retries - 1) as any), 1000)
-        );
-      }
-      // After retries exhausted, reload to get fresh asset URLs
-      window.location.reload();
-      return factory(); // won't resolve, page reloads
-    })
-  );
+  return lazy(() => {
+    const attempt = (remaining: number): Promise<{ default: React.ComponentType<any> }> =>
+      factory().catch((err) => {
+        if (remaining > 0) {
+          return new Promise<{ default: React.ComponentType<any> }>((resolve) =>
+            setTimeout(() => resolve(attempt(remaining - 1)), 1000)
+          );
+        }
+        // After retries exhausted, reload to get fresh asset URLs
+        window.location.reload();
+        return factory(); // won't resolve, page reloads
+      });
+    return attempt(retries);
+  });
 }
 
 // Lazy load pages for code splitting (with retry)
