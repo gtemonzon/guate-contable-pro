@@ -86,9 +86,10 @@ export function JournalEntryActions({
           )}
 
           {onLinkPurchases && (
-            <Button variant="outline" onClick={onLinkPurchases} disabled={loading} size="sm" className="text-primary">
+            <Button variant="outline" onClick={onLinkPurchases} disabled={loading} size="sm" className="text-primary" title={`Vincular Facturas (${modKey}+Shift+V)`}>
               <Link2 className="mr-2 h-4 w-4" />
               Vincular Facturas
+              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧V</kbd>
             </Button>
           )}
 
