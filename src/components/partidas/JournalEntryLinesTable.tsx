@@ -220,7 +220,15 @@ export function JournalEntryLinesTable({
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
                             const idx = nonBankLines.findIndex(l => l.id === line.id);
                             const next = nonBankLines[idx + 1];
-                            if (next) { e.preventDefault(); setActiveLineId(next.id); setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [next.id]: true })), 50); }
+                            if (next) {
+                              e.preventDefault();
+                              setActiveLineId(next.id);
+                              setTimeout(() => setAccountPopoverOpen(prev => ({ ...prev, [next.id]: true })), 50);
+                            } else {
+                              // Last line — auto-add a new line and focus it
+                              e.preventDefault();
+                              onAddLine();
+                            }
                           }
                         }}
                       />
@@ -240,7 +248,7 @@ export function JournalEntryLinesTable({
                         <TooltipContent>Línea bancaria automática. Para eliminarla, quite la cuenta bancaria del encabezado.</TooltipContent>
                       </Tooltip>
                     ) : (
-                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemoveLine(line.id); }} disabled={detailLines.filter(l => !l.is_bank_line).length <= 1} className="h-8 w-8 p-0">
+                      <Button variant="ghost" size="sm" tabIndex={-1} onClick={(e) => { e.stopPropagation(); onRemoveLine(line.id); }} disabled={detailLines.filter(l => !l.is_bank_line).length <= 1} className="h-8 w-8 p-0">
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
