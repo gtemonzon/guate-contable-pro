@@ -79,7 +79,7 @@ export default function JournalEntryDialog({
 
   // F2 / Alt+B → open Balance Inspector
   useEffect(() => {
-    if (!open) return;
+    if (!open || linkManagerOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (inspectorOpen) return;
       const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
@@ -94,11 +94,11 @@ export default function JournalEntryDialog({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [open, activeAccount, inspectorOpen]);
+  }, [open, activeAccount, inspectorOpen, linkManagerOpen]);
 
   // Keyboard shortcuts
   useFormShortcuts({
-    isEnabled: open && !form.isLoadingEntry && !inspectorOpen,
+    isEnabled: open && !form.isLoadingEntry && !inspectorOpen && !linkManagerOpen,
     onSave: canPost ? () => form.saveEntry(true) : undefined,
     onSaveDraft: canSaveDraft ? () => form.saveEntry(false) : undefined,
     onCancel: () => form.handleCloseAttempt(false),
