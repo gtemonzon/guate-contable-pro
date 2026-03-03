@@ -77,22 +77,22 @@ export default function JournalEntryDialog({
     ? form.accounts.find(a => a.id === activeLine.account_id)
     : null;
 
-  // F2 / Alt+B → open Balance Inspector; Ctrl/Cmd+Shift+V → open Vincular Facturas
+  // F2 / Alt+B → open Balance Inspector; Alt+V → open Vincular Facturas
   useEffect(() => {
     if (!open || linkManagerOpen) return;
     const handler = (e: KeyboardEvent) => {
-      // Skip if focus is in text input
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
-
-      // Ctrl/Cmd+Shift+V → Vincular Facturas
-      const isLinkShortcut = e.key === 'V' && e.shiftKey && (e.ctrlKey || e.metaKey);
+      // Alt+V → Vincular Facturas (works even in inputs)
+      const isLinkShortcut = e.altKey && (e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.shiftKey;
       if (isLinkShortcut && !form.isReadOnly) {
         e.preventDefault();
         e.stopPropagation();
         handleOpenLinkManager();
         return;
       }
+
+      // Skip remaining shortcuts if focus is in text input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
 
       if (inspectorOpen) return;
       const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
