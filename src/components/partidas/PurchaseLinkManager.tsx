@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link2, Unlink, Search, FileText, ArrowRight, Plus, CheckSquare, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickPurchaseForm } from "./QuickPurchaseForm";
@@ -287,6 +288,7 @@ export function PurchaseLinkManager({
         className="max-w-4xl max-h-[85vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.stopPropagation()}
       >
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -515,16 +517,34 @@ export function PurchaseLinkManager({
         {/* Always-visible footer with "Actualizar Póliza" for draft entries */}
         {entryStatus !== 'contabilizado' && onApplyToEntry && linkedPurchases.length > 0 && (
           <div className="flex items-center justify-end gap-2 pt-2 border-t shrink-0">
-            <Button
-              variant="default"
-              size="sm"
-              className="gap-1.5"
-              onClick={handleApplyToEntry}
-              disabled={applying}
-            >
-              {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              Actualizar Póliza
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      variant={hasPendingChanges ? "default" : "secondary"}
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleApplyToEntry}
+                      disabled={applying || !hasPendingChanges}
+                    >
+                      {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                      Actualizar Póliza
+                      {hasPendingChanges && (
+                        <Badge variant="outline" className="ml-1 text-[10px] px-1.5 py-0 h-4 border-primary/40">
+                          Pendiente
+                        </Badge>
+                      )}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {hasPendingChanges
+                    ? "Hay cambios pendientes — haga clic para regenerar las líneas contables"
+                    : "No hay cambios pendientes"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
       </DialogContent>
