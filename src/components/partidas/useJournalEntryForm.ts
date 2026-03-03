@@ -102,6 +102,8 @@ export function useJournalEntryForm(
   const [auditInfo, setAuditInfo] = useState<AuditInfo | null>(null);
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
+  const [bankRefDuplicate, setBankRefDuplicate] = useState<{ entryNumber: string; entryId: number } | null>(null);
+  const [bankRefChecking, setBankRefChecking] = useState(false);
 
   // Auto-draft support
   const draftEntryIdRef = useRef<number | null>(null);
@@ -316,6 +318,46 @@ export function useJournalEntryForm(
       return next;
     });
   }, [bankAccountId, bankDirection, open, isLoadingEntry, headerDescription, beneficiaryName, bankReference, detailLines.filter(l => !l.is_bank_line).map(l => `${l.debit_amount}-${l.credit_amount}-${l.account_id}`).join(',')]);
+
+  // ─── Duplicate bank reference check ──────────────────────────────
+  const checkDuplicateBankRef = useCallback(async () => {
+    if (!bankAccountId || !bankReference.trim()) {
+      setBankRefDuplicate(null);
+      return;
+    }
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+
+    setBankRefChecking(true);
+    try {
+      let query = supabase.from("tab_journal_entries")
+        .select("id, entry_number")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("bank_account_id", bankAccountId)
+        .eq("bank_reference", bankReference.trim())
+        .neq("status", "anulado")
+        .is("deleted_at", null)
+        .not("entry_number", "like", "REV-%")
+        .limit(1);
+
+      const currentId = entryToEdit?.id || draftEntryIdRef.current;
+      if (currentId) {
+        query = query.neq("id", currentId);
+      }
+
+      const { data } = await query.maybeSingle();
+      setBankRefDuplicate(data ? { entryNumber: data.entry_number, entryId: data.id } : null);
+    } catch {
+      setBankRefDuplicate(null);
+    } finally {
+      setBankRefChecking(false);
+    }
+  }, [bankAccountId, bankReference, entryToEdit]);
+
+  // Clear duplicate when bank account changes
+  useEffect(() => {
+    setBankRefDuplicate(null);
+  }, [bankAccountId]);
 
   const propagateDescriptionToLines = useCallback(() => {
     if (headerDescription && !entryToEdit) {
@@ -583,6 +625,10 @@ export function useJournalEntryForm(
       toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" });
       return false;
     }
+    if (bankRefDuplicate) {
+      toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${bankRefDuplicate.entryNumber} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
+      return false;
+    }
     return true;
   };
 
@@ -590,6 +636,11 @@ export function useJournalEntryForm(
   const validateForPosting = () => {
     if (!headerDescription.trim()) { toast({ title: "Descripción requerida", description: "Debes ingresar una descripción general", variant: "destructive" }); return false; }
     if (!periodId) { toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" }); return false; }
+
+    if (bankRefDuplicate) {
+      toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${bankRefDuplicate.entryNumber} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
+      return false;
+    }
 
     if (bankAccountId) {
       const bankLines = detailLines.filter(l => l.is_bank_line);
@@ -814,6 +865,7 @@ export function useJournalEntryForm(
     rejectionReason, setRejectionReason, entryStatus,
     isReadOnly, auditInfo, activeLineId, setActiveLineId,
     showStickyHeader, headerRef,
+    bankRefDuplicate, bankRefChecking, checkDuplicateBankRef,
     // Computed
     getTotalDebit, getTotalCredit, isBalanced, getImbalanceAmount,
     // Draft support

@@ -2,7 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, AlertTriangle, Loader2 } from "lucide-react";
 import type { Account } from "./useJournalEntryForm";
 
 export type BankDirection = 'OUT' | 'IN';
@@ -18,11 +18,15 @@ interface JournalEntryBankSectionProps {
   bankDirection: BankDirection;
   setBankDirection: (v: BankDirection) => void;
   isReadOnly?: boolean;
+  bankRefDuplicate?: { entryNumber: string; entryId: number } | null;
+  bankRefChecking?: boolean;
+  onBankRefBlur?: () => void;
 }
 
 export function JournalEntryBankSection({
   accounts, bankAccountId, setBankAccountId, bankReference, setBankReference,
   beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, isReadOnly,
+  bankRefDuplicate, bankRefChecking, onBankRefBlur,
 }: JournalEntryBankSectionProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border border-dashed">
@@ -80,7 +84,26 @@ export function JournalEntryBankSection({
 
           <div>
             <Label htmlFor="bankRef">Número de Documento</Label>
-            <Input id="bankRef" placeholder="# cheque, transferencia, etc." value={bankReference} onChange={(e) => setBankReference(e.target.value)} disabled={isReadOnly} />
+            <div className="relative">
+              <Input
+                id="bankRef"
+                placeholder="# cheque, transferencia, etc."
+                value={bankReference}
+                onChange={(e) => setBankReference(e.target.value)}
+                onBlur={onBankRefBlur}
+                disabled={isReadOnly}
+                className={bankRefDuplicate ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {bankRefChecking && (
+                <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            {bankRefDuplicate && (
+              <p className="flex items-center gap-1 mt-1 text-xs text-destructive">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                Ya existe una póliza ({bankRefDuplicate.entryNumber}) con esta referencia para esta cuenta.
+              </p>
+            )}
           </div>
 
           <div className="md:col-span-2">

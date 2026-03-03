@@ -195,6 +195,9 @@ export default function JournalEntryDialog({
                 bankDirection={form.bankDirection}
                 setBankDirection={form.setBankDirection}
                 isReadOnly={form.isReadOnly}
+                bankRefDuplicate={form.bankRefDuplicate}
+                bankRefChecking={form.bankRefChecking}
+                onBankRefBlur={form.checkDuplicateBankRef}
               />
 
               {/* Descripción General */}
