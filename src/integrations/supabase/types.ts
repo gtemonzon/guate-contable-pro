@@ -602,6 +602,7 @@ export type Database = {
         Row: {
           enterprise_id: number
           last_number: number
+          month: number
           prefix: string
           updated_at: string
           year: number
@@ -609,6 +610,7 @@ export type Database = {
         Insert: {
           enterprise_id: number
           last_number?: number
+          month?: number
           prefix: string
           updated_at?: string
           year: number
@@ -616,6 +618,7 @@ export type Database = {
         Update: {
           enterprise_id?: number
           last_number?: number
+          month?: number
           prefix?: string
           updated_at?: string
           year?: number
