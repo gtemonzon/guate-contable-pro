@@ -50,13 +50,25 @@ export async function allocateEntryNumber(
  * @param entryNumber - El número de partida (ej: PART-2025-001)
  * @returns Objeto con prefix, year y sequence, o null si no se puede parsear
  */
-export function parseEntryNumber(entryNumber: string): { prefix: string; year: number; sequence: number } | null {
-  const match = entryNumber.match(/^([A-Z]+)-(\d{4})-(\d+)$/);
-  if (match) {
+export function parseEntryNumber(entryNumber: string): { prefix: string; year: number; month?: number; sequence: number } | null {
+  // New format: PREFIX-YYYY-MM-####
+  const match4 = entryNumber.match(/^([A-Z]+)-(\d{4})-(\d{2})-(\d+)$/);
+  if (match4) {
     return {
-      prefix: match[1],
-      year: parseInt(match[2]),
-      sequence: parseInt(match[3]),
+      prefix: match4[1],
+      year: parseInt(match4[2]),
+      month: parseInt(match4[3]),
+      sequence: parseInt(match4[4]),
+    };
+  }
+
+  // Legacy format: PREFIX-YYYY-###
+  const match3 = entryNumber.match(/^([A-Z]+)-(\d{4})-(\d+)$/);
+  if (match3) {
+    return {
+      prefix: match3[1],
+      year: parseInt(match3[2]),
+      sequence: parseInt(match3[3]),
     };
   }
 
@@ -82,12 +94,14 @@ export function parseEntryNumber(entryNumber: string): { prefix: string; year: n
 /**
  * Formatea un número de partida con formato PREFIJO-YYYY-###
  */
-export function formatEntryNumber(prefix: string, year: number, sequenceNumber: number): string {
-  const paddedNumber = sequenceNumber < 1000
-    ? String(sequenceNumber).padStart(3, "0")
-    : String(sequenceNumber);
-
-  return `${prefix}-${year}-${paddedNumber}`;
+export function formatEntryNumber(prefix: string, year: number, sequenceNumber: number, month?: number): string {
+  const paddedSeq = String(sequenceNumber).padStart(4, "0");
+  if (month != null) {
+    const paddedMonth = String(month).padStart(2, "0");
+    return `${prefix}-${year}-${paddedMonth}-${paddedSeq}`;
+  }
+  // Legacy fallback (no month)
+  return `${prefix}-${year}-${paddedSeq}`;
 }
 
 // Legacy exports for backward compatibility (other modules like LibroVentas, etc.)
