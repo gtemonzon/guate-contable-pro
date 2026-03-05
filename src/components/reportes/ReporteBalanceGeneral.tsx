@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
+import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
+import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 
 interface ReportLine {
   type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
@@ -38,6 +40,7 @@ export default function ReporteBalanceGeneral() {
   const [reportLines, setReportLines] = useState<ReportLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [displayLevel, setDisplayLevel] = useState<number>(0); // 0 = all levels
+  const [layout, setLayout] = useState<ReportLayout>('hierarchical');
   const { toast } = useToast();
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
@@ -311,11 +314,20 @@ export default function ReporteBalanceGeneral() {
   };
 
   const handleExportExcel = () => {
-    const headers = ["Concepto", "Monto"];
-    const data = reportLines.map(line => [
-      line.type === 'account' ? `  ${line.label}` : line.label,
-      line.amount.toFixed(2),
-    ]);
+    let headers: string[];
+    let data: string[][];
+
+    if (layout === 'columnar') {
+      const result = toColumnarExcelData(filteredReportLines);
+      headers = result.headers;
+      data = result.data;
+    } else {
+      headers = ["Concepto", "Monto"];
+      data = filteredReportLines.map(line => [
+        line.type === 'account' ? `  ${line.label}` : line.label,
+        line.amount.toFixed(2),
+      ]);
+    }
 
     exportToExcel({
       filename: `Balance_General_${reportDate}`,
@@ -385,7 +397,7 @@ export default function ReporteBalanceGeneral() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <Label htmlFor="reportDate">Fecha del Balance</Label>
           <Input
@@ -412,6 +424,8 @@ export default function ReporteBalanceGeneral() {
             </SelectContent>
           </Select>
         </div>
+
+        <ReportLayoutToggle value={layout} onChange={setLayout} />
 
         <div className="flex items-end">
           <Button onClick={generateReport} disabled={loading || formatLoading} className="w-full">
@@ -448,20 +462,24 @@ export default function ReporteBalanceGeneral() {
               Balance General al {new Date(reportDate + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
           </div>
-          <div className="space-y-1 font-mono text-sm">
-            {filteredReportLines.map((line, idx) => (
-              <div
-                key={idx}
-                className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
-                style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
-              >
-                <div>{line.label}</div>
-                <div className="text-right">
-                  {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+          {layout === 'columnar' ? (
+            <ColumnarReportView lines={filteredReportLines} />
+          ) : (
+            <div className="space-y-1 font-mono text-sm">
+              {filteredReportLines.map((line, idx) => (
+                <div
+                  key={idx}
+                  className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
+                  style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
+                >
+                  <div>{line.label}</div>
+                  <div className="text-right">
+                    {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
