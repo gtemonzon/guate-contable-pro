@@ -1,8 +1,8 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { List, Columns3 } from "lucide-react";
+import { List, Columns3, BarChart3 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
-export type ReportLayout = 'hierarchical' | 'columnar';
+export type ReportLayout = 'hierarchical' | 'columnar' | 'stepped';
 
 interface ReportLayoutToggleProps {
   value: ReportLayout;
@@ -26,6 +26,10 @@ export default function ReportLayoutToggle({ value, onChange }: ReportLayoutTogg
         <ToggleGroupItem value="columnar" aria-label="Columnar" className="gap-1.5 text-xs px-3">
           <Columns3 className="h-3.5 w-3.5" />
           Columnar
+        </ToggleGroupItem>
+        <ToggleGroupItem value="stepped" aria-label="Escalonado" className="gap-1.5 text-xs px-3">
+          <BarChart3 className="h-3.5 w-3.5" />
+          Escalonado
         </ToggleGroupItem>
       </ToggleGroup>
     </div>
