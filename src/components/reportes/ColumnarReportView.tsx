@@ -1,8 +1,11 @@
+import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 
 interface ColumnarReportViewProps {
   lines: ReportLine[];
   maxLevel?: number;
+  expanded: Set<number>;
+  toggleExpand: (accountId: number) => void;
   onAccountClick?: (line: ReportLine) => void;
 }
 
@@ -10,7 +13,7 @@ interface ColumnarReportViewProps {
  * Displays financial report lines in a columnar layout where each account level
  * occupies its own column, instead of using indentation.
  */
-export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, onAccountClick }: ColumnarReportViewProps) {
+export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick }: ColumnarReportViewProps) {
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
@@ -43,7 +46,9 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, onAc
             const isSummary = line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated';
             const isAccount = line.type === 'account';
             const acctLevel = line.accountLevel ?? 1;
+            const hasChildren = isAccount && line.hasChildren;
             const isClickable = isAccount && !!onAccountClick && !!line.accountId;
+            const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
 
             return (
               <tr
@@ -55,7 +60,10 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, onAc
                   isSummary ? 'bg-muted/30' : '',
                   isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
                 ].join(' ')}
-                onClick={isClickable ? () => onAccountClick(line) : undefined}
+                onClick={() => {
+                  if (hasChildren && line.accountId) toggleExpand(line.accountId);
+                  if (isClickable) onAccountClick!(line);
+                }}
               >
                 {isSection && (
                   <>
@@ -92,7 +100,19 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, onAc
                           ].join(' ')}
                           title={showHere ? line.label : undefined}
                         >
-                          {showHere ? line.label : ''}
+                          {showHere ? (
+                            <span className="flex items-center gap-1">
+                              {hasChildren && (
+                                <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                                  {isExpanded
+                                    ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                                    : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                  }
+                                </span>
+                              )}
+                              <span className="truncate">{line.label}</span>
+                            </span>
+                          ) : ''}
                         </td>
                       );
                     })}
