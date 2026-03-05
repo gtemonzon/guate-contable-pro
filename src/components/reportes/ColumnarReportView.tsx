@@ -1,4 +1,5 @@
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 
 interface ColumnarReportViewProps {
@@ -9,11 +10,9 @@ interface ColumnarReportViewProps {
   onAccountClick?: (line: ReportLine) => void;
 }
 
-/**
- * Displays financial report lines in a columnar layout where each account level
- * occupies its own column, instead of using indentation.
- */
 export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick }: ColumnarReportViewProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
@@ -49,21 +48,19 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expa
             const hasChildren = isAccount && line.hasChildren;
             const isClickable = isAccount && !!onAccountClick && !!line.accountId;
             const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
+            const isSelected = isAccount && line.accountId === selectedId;
 
             return (
               <tr
                 key={idx}
                 className={[
+                  'group',
                   line.showLine ? 'border-t-2 border-border' : 'border-b border-border/20',
                   line.isBold ? 'font-bold' : '',
                   isSection ? 'bg-muted/40' : '',
                   isSummary ? 'bg-muted/30' : '',
-                  isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
+                  isSelected ? 'bg-accent/50' : '',
                 ].join(' ')}
-                onClick={() => {
-                  if (hasChildren && line.accountId) toggleExpand(line.accountId);
-                  if (isClickable) onAccountClick!(line);
-                }}
               >
                 {isSection && (
                   <>
@@ -96,21 +93,50 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expa
                           className={[
                             'px-2 py-1 border-r border-r-border/20 truncate max-w-[200px]',
                             showHere ? (line.isBold ? 'font-semibold' : '') : 'text-muted-foreground/30',
-                            isClickable && showHere ? 'text-primary hover:underline' : '',
                           ].join(' ')}
                           title={showHere ? line.label : undefined}
                         >
                           {showHere ? (
                             <span className="flex items-center gap-1">
                               {hasChildren && (
-                                <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                                <button
+                                  type="button"
+                                  className="w-4 h-4 flex items-center justify-center shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (line.accountId) toggleExpand(line.accountId);
+                                  }}
+                                >
                                   {isExpanded
                                     ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                                     : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                                   }
-                                </span>
+                                </button>
                               )}
-                              <span className="truncate">{line.label}</span>
+                              <span
+                                className={[
+                                  'truncate select-none',
+                                  isClickable ? 'cursor-pointer hover:text-primary' : '',
+                                  isSelected ? 'text-primary' : '',
+                                ].join(' ')}
+                                onClick={() => { if (line.accountId) setSelectedId(line.accountId); }}
+                                onDoubleClick={() => { if (isClickable) onAccountClick!(line); }}
+                              >
+                                {line.label}
+                              </span>
+                              {isClickable && (
+                                <button
+                                  type="button"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-accent"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAccountClick!(line);
+                                  }}
+                                  title="Ver Mayor"
+                                >
+                                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              )}
                             </span>
                           ) : ''}
                         </td>
