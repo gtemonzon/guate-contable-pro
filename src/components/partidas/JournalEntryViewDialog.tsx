@@ -256,15 +256,15 @@ export default function JournalEntryViewDialog({
             <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3">
               <TabsList>
                 <TabsTrigger value="detalle">Detalle</TabsTrigger>
-                {purchasesLoaded && linkedPurchases.length > 0 && (
-                  <TabsTrigger value="compras" className="gap-1.5">
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Compras
+                <TabsTrigger value="compras" className="gap-1.5">
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  Compras
+                  {linkedPurchases.length > 0 && (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
                       {linkedPurchases.length}
                     </Badge>
-                  </TabsTrigger>
-                )}
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="auditoria">Auditoría</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -390,8 +390,8 @@ export default function JournalEntryViewDialog({
                 </div>
               </TabsContent>
 
-              {linkedPurchases.length > 0 && (
-                <TabsContent value="compras">
+              <TabsContent value="compras">
+                {linkedPurchases.length > 0 ? (
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
                       {linkedPurchases.length} factura(s) de compra vinculada(s) a esta partida.
@@ -449,8 +449,13 @@ export default function JournalEntryViewDialog({
                       </TableBody>
                     </Table>
                   </div>
-                </TabsContent>
-              )}
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground text-sm">
+                    <ShoppingCart className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                    <p>No hay facturas de compra vinculadas a esta partida.</p>
+                  </div>
+                )}
+              </TabsContent>
 
               <TabsContent value="auditoria">
                 <EntityAuditLog
