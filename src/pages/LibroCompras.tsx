@@ -800,14 +800,15 @@ export default function LibroCompras() {
 
       if (journalType === "mes") {
         // Póliza consolidada del mes
-        const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        const entryDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", entryDate);
         const { data: journalEntry, error: journalError } = await supabase
           .from("tab_journal_entries")
           .insert({
             enterprise_id: parseInt(currentEnterpriseId),
             accounting_period_id: period.id,
             entry_number: entryNumber,
-            entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+            entry_date: entryDate,
             entry_type: "diario",
             description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
             total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
