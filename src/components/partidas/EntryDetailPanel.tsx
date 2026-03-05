@@ -511,7 +511,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
             )}
 
             <TabsContent value="auditoria" className="mt-0">
-              <EntityAuditLog entityType="journal_entry" entityId={entry.id} />
+              <EntityAuditLog entityType="tab_journal_entries" entityId={entry.id} />
             </TabsContent>
           </div>
         </ScrollArea>
