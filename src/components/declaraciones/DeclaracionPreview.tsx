@@ -108,7 +108,7 @@ export function DeclaracionPreview({
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Two-column layout: Bases | Impuestos */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* LEFT COLUMN: Base amounts */}
             <div className="space-y-6">
               <div>
