@@ -1,8 +1,11 @@
+import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 
 interface SteppedReportViewProps {
   lines: ReportLine[];
   maxLevel?: number;
+  expanded: Set<number>;
+  toggleExpand: (accountId: number) => void;
   onAccountClick?: (line: ReportLine) => void;
 }
 
@@ -13,7 +16,7 @@ const formatAmount = (amount: number) =>
  * Stepped Financial Layout: single "Concepto" column with balance placed
  * in the column matching the account level (Nivel 5 → Nivel 1, right to left).
  */
-export default function SteppedReportView({ lines, maxLevel: maxLevelProp, onAccountClick }: SteppedReportViewProps) {
+export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick }: SteppedReportViewProps) {
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
@@ -46,7 +49,9 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, onAcc
             const isSummary = line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated';
             const isAccount = line.type === 'account';
             const acctLevel = line.accountLevel ?? 1;
+            const hasChildren = isAccount && line.hasChildren;
             const isClickable = isAccount && !!onAccountClick && !!line.accountId;
+            const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
 
             return (
               <tr
@@ -58,7 +63,10 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, onAcc
                   isSummary ? 'bg-muted/30' : '',
                   isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
                 ].join(' ')}
-                onClick={isClickable ? () => onAccountClick(line) : undefined}
+                onClick={() => {
+                  if (hasChildren && line.accountId) toggleExpand(line.accountId);
+                  if (isClickable) onAccountClick!(line);
+                }}
               >
                 <td
                   className={[
@@ -70,7 +78,22 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, onAcc
                     paddingLeft: isAccount ? `${Math.min(48, (line.level ?? 1) * 12 + 12)}px` : undefined,
                   }}
                 >
-                  {line.label}
+                  <span className="flex items-center gap-1">
+                    {isAccount && hasChildren && (
+                      <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                        {isExpanded
+                          ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        }
+                      </span>
+                    )}
+                    {isAccount && !hasChildren && (
+                      <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                      </span>
+                    )}
+                    <span className="truncate">{line.label}</span>
+                  </span>
                 </td>
 
                 {Array.from({ length: maxLevel }, (_, i) => {

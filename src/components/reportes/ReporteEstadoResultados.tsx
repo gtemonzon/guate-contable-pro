@@ -19,6 +19,7 @@ import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
 import type { ReportLine } from "./reportTypes";
 import { collectDescendantIds } from "./collectDescendantIds";
+import { useReportTreeState } from "./useReportTreeState";
 
 interface CdvBreakdown {
   initialInventory: number;
@@ -536,6 +537,8 @@ export default function ReporteEstadoResultados() {
         : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
     );
 
+  const { expanded, toggleExpand, visibleLines } = useReportTreeState(filteredReportLines);
+
   const handleAccountClick = (line: ReportLine) => {
     if (!line.accountId || !line.accountCode) return;
     const parts = line.label.split(' - ');
@@ -622,11 +625,11 @@ export default function ReporteEstadoResultados() {
             </p>
           </div>
           {layout === 'columnar' ? (
-            <ColumnarReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
+            <ColumnarReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : layout === 'stepped' ? (
-            <SteppedReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
+            <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
-            <HierarchicalReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
+            <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           )}
 
           {/* CDV Breakdown Section */}

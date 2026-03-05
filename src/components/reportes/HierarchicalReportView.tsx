@@ -1,102 +1,23 @@
-import { useState, useMemo } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 
 interface HierarchicalReportViewProps {
   lines: ReportLine[];
+  expanded: Set<number>;
+  toggleExpand: (accountId: number) => void;
   onAccountClick?: (line: ReportLine) => void;
 }
 
 /**
  * Collapsible hierarchical view for Balance Sheet / Income Statement.
- * - Parent accounts show expand/collapse toggles.
- * - Only leaf accounts (no children) are clickable for drill-down.
- * - Level 1 accounts default to expanded.
+ * Receives pre-filtered visible lines and expansion state from parent.
  */
-export default function HierarchicalReportView({ lines, onAccountClick }: HierarchicalReportViewProps) {
-  // Default: expand all level-1 accounts (so level 2 children are visible)
-  const defaultExpanded = useMemo(() => {
-    const set = new Set<number>();
-    for (const line of lines) {
-      if (line.type === 'account' && line.accountLevel === 1 && line.accountId && line.hasChildren) {
-        set.add(line.accountId);
-      }
-    }
-    return set;
-  }, [lines]);
-
-  const [expanded, setExpanded] = useState<Set<number>>(defaultExpanded);
-
-  // Reset expanded when lines change (new report generated)
-  const [prevLinesRef, setPrevLinesRef] = useState(lines);
-  if (lines !== prevLinesRef) {
-    setPrevLinesRef(lines);
-    const newDefault = new Set<number>();
-    for (const line of lines) {
-      if (line.type === 'account' && line.accountLevel === 1 && line.accountId && line.hasChildren) {
-        newDefault.add(line.accountId);
-      }
-    }
-    setExpanded(newDefault);
-  }
-
-  const toggleExpand = (accountId: number) => {
-    setExpanded(prev => {
-      const next = new Set(prev);
-      if (next.has(accountId)) {
-        next.delete(accountId);
-      } else {
-        next.add(accountId);
-      }
-      return next;
-    });
-  };
-
-  // Determine visible lines based on expansion state
-  const visibleLines = useMemo(() => {
-    const result: ReportLine[] = [];
-    // Track collapsed ancestors: if any ancestor is collapsed, hide the line
-    const ancestorStack: { accountId: number; expanded: boolean }[] = [];
-
-    for (const line of lines) {
-      if (line.type !== 'account') {
-        // Section/subtotal/total/calculated lines are always visible
-        ancestorStack.length = 0; // reset stack at non-account boundaries
-        result.push(line);
-        continue;
-      }
-
-      const level = line.level ?? 0;
-
-      // Pop stack to find our parent level
-      while (ancestorStack.length > 0 && ancestorStack.length >= level) {
-        ancestorStack.pop();
-      }
-
-      // Check if any ancestor is collapsed
-      const hidden = ancestorStack.some(a => !a.expanded);
-      if (!hidden) {
-        result.push(line);
-      }
-
-      // Push ourselves onto the stack if we have children
-      if (line.hasChildren && line.accountId) {
-        ancestorStack.push({
-          accountId: line.accountId,
-          expanded: expanded.has(line.accountId),
-        });
-      }
-    }
-
-    return result;
-  }, [lines, expanded]);
-
+export default function HierarchicalReportView({ lines, expanded, toggleExpand, onAccountClick }: HierarchicalReportViewProps) {
   return (
     <div className="space-y-0 font-mono text-sm">
-      {visibleLines.map((line, idx) => {
+      {lines.map((line, idx) => {
         const isAccount = line.type === 'account';
         const hasChildren = isAccount && line.hasChildren;
-        const isLeaf = isAccount && !line.hasChildren;
         const isClickable = isAccount && !!line.accountId && !!onAccountClick;
         const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
 
