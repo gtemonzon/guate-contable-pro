@@ -94,12 +94,14 @@ export function parseEntryNumber(entryNumber: string): { prefix: string; year: n
 /**
  * Formatea un número de partida con formato PREFIJO-YYYY-###
  */
-export function formatEntryNumber(prefix: string, year: number, sequenceNumber: number): string {
-  const paddedNumber = sequenceNumber < 1000
-    ? String(sequenceNumber).padStart(3, "0")
-    : String(sequenceNumber);
-
-  return `${prefix}-${year}-${paddedNumber}`;
+export function formatEntryNumber(prefix: string, year: number, sequenceNumber: number, month?: number): string {
+  const paddedSeq = String(sequenceNumber).padStart(4, "0");
+  if (month != null) {
+    const paddedMonth = String(month).padStart(2, "0");
+    return `${prefix}-${year}-${paddedMonth}-${paddedSeq}`;
+  }
+  // Legacy fallback (no month)
+  return `${prefix}-${year}-${paddedSeq}`;
 }
 
 // Legacy exports for backward compatibility (other modules like LibroVentas, etc.)
