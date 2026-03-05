@@ -112,6 +112,15 @@ export default function AccountLedgerDrawer({
     }
   };
 
+  const safeFmt = (d: string | undefined) => {
+    if (!d) return '';
+    try {
+      const date = new Date(d + 'T00:00:00');
+      if (isNaN(date.getTime())) return d;
+      return format(date, 'dd/MM/yyyy', { locale: es });
+    } catch { return d; }
+  };
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -122,8 +131,8 @@ export default function AccountLedgerDrawer({
               <span className="ml-2">{accountName}</span>
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
-              Mayor de cuenta {startDate ? `del ${format(new Date(startDate + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })} ` : ''}
-              al {format(new Date(endDate + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })}
+              Mayor de cuenta {startDate ? `del ${safeFmt(startDate)} ` : ''}
+              al {safeFmt(endDate)}
             </p>
           </SheetHeader>
 
@@ -152,7 +161,7 @@ export default function AccountLedgerDrawer({
                   {rows.map((row, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-mono text-xs whitespace-nowrap">
-                        {format(new Date(row.entry_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: es })}
+                        {safeFmt(row.entry_date)}
                       </TableCell>
                       <TableCell>
                         <button
