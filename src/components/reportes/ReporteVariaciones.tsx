@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { FileSpreadsheet, FileText, Loader2, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { FileSpreadsheet, FileText, Loader2, ChevronRight, ChevronDown, TrendingUp, TrendingDown, Minus, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -78,6 +78,7 @@ export default function ReporteVariaciones() {
   const [lines, setLines] = useState<VariationLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filterSignificant, setFilterSignificant] = useState(false);
   const [threshold, setThreshold] = useState("5");
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
@@ -513,34 +514,56 @@ export default function ReporteVariaciones() {
           {/* Rows */}
           <div className="font-mono text-sm">
             {visibleLines.map(line => {
-              const isClickable = true;
               const isExpanded = line.hasChildren ? expanded.has(line.id) : false;
+              const isSelected = line.id === selectedId;
 
               return (
                 <div
                   key={line.id}
                   className={[
-                    "grid grid-cols-[1fr_repeat(4,_auto)] gap-2 py-1.5 items-center",
-                    isClickable ? "cursor-pointer hover:bg-accent/40 transition-colors rounded" : "",
-                    line.hasChildren ? "cursor-pointer font-semibold" : "",
+                    "grid grid-cols-[1fr_repeat(4,_auto)] gap-2 py-1.5 items-center group",
+                    line.hasChildren ? "font-semibold" : "",
+                    isSelected ? "bg-accent/50 rounded" : "",
                   ].join(" ")}
                   style={{ paddingLeft: `${Math.min(52, (line.level - 1) * 16 + 4)}px` }}
-                  onClick={() => {
-                    if (line.hasChildren) toggleExpand(line.id);
-                    handleAccountClick(line);
-                  }}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                    <button
+                      type="button"
+                      className="w-4 h-4 flex items-center justify-center shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (line.hasChildren) toggleExpand(line.id);
+                      }}
+                    >
                       {line.hasChildren ? (
                         isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                       ) : (
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
                       )}
-                    </span>
-                    <span className={`truncate ${isClickable ? "text-primary hover:underline" : ""}`}>
+                    </button>
+                    <span
+                      className={[
+                        "truncate select-none cursor-pointer hover:text-primary",
+                        isSelected ? "text-primary" : "",
+                      ].join(" ")}
+                      onClick={() => setSelectedId(line.id)}
+                      onDoubleClick={() => handleAccountClick(line)}
+                    >
                       {line.code} - {line.name}
                     </span>
+                    <button
+                      type="button"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-accent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAccountClick(line);
+                      }}
+                      title="Ver Mayor"
+                      aria-label="Abrir libro mayor"
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
                   </div>
                   <div className="text-right w-28 whitespace-nowrap">{fmtQ(line.currentBalance)}</div>
                   <div className="text-right w-28 whitespace-nowrap">{fmtQ(line.comparedBalance)}</div>
