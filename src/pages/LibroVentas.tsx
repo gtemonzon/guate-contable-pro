@@ -12,6 +12,7 @@ import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -315,12 +316,13 @@ export default function LibroVentas() {
 
   const checkExistingJournalEntry = async (enterpriseId: string, month: number, year: number) => {
     try {
-      const entryNumber = `VENT-${year}-${String(month).padStart(2, '0')}`;
+      const descPattern = `Libro de Ventas ${monthNames[month - 1]} ${year}`;
       const { data, error } = await supabase
         .from("tab_journal_entries")
         .select("id")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", entryNumber)
+        .eq("description", descPattern)
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -762,7 +764,8 @@ export default function LibroVentas() {
 
       if (journalType === "mes") {
         // Póliza consolidada del mes
-        const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        const entryDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", entryDate);
         
         // Filtrar facturas anuladas y calcular totales con multiplicador affects_total
         const validSales = sales.filter(s => !s.is_annulled);
@@ -804,7 +807,7 @@ export default function LibroVentas() {
             enterprise_id: parseInt(currentEnterpriseId),
             accounting_period_id: period.id,
             entry_number: entryNumber,
-            entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+            entry_date: entryDate,
             entry_type: "diario",
             description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
             total_debit: totalAmount,
@@ -912,7 +915,7 @@ export default function LibroVentas() {
         for (const s of sales) {
           if (!s.id) continue;
           
-          const entryNumber = `VENT-DOC-${s.invoice_series}-${s.invoice_number}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", s.invoice_date);
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
             .insert({

@@ -14,6 +14,7 @@ import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -341,12 +342,13 @@ export default function LibroCompras() {
 
   const checkExistingJournalEntry = async (enterpriseId: string, month: number, year: number) => {
     try {
-      const entryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+      const descPattern = `Libro de Compras ${monthNames[month - 1]} ${year}`;
       const { data, error } = await supabase
         .from("tab_journal_entries")
         .select("id")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", entryNumber)
+        .eq("description", descPattern)
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -799,14 +801,15 @@ export default function LibroCompras() {
 
       if (journalType === "mes") {
         // Póliza consolidada del mes
-        const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+        const entryDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", entryDate);
         const { data: journalEntry, error: journalError } = await supabase
           .from("tab_journal_entries")
           .insert({
             enterprise_id: parseInt(currentEnterpriseId),
             accounting_period_id: period.id,
             entry_number: entryNumber,
-            entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+            entry_date: entryDate,
             entry_type: "diario",
             description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
             total_debit: parseFloat(totals.totalWithVAT.replace(/,/g, '')),
@@ -851,8 +854,9 @@ export default function LibroCompras() {
         let totalLines = 0;
 
         for (const [ref, items] of Object.entries(byBank)) {
-          const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${ref}`;
           const batchTotal = items.reduce((sum, p) => sum + p.total_amount, 0);
+          const batchEntryDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", batchEntryDate);
 
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
@@ -860,7 +864,7 @@ export default function LibroCompras() {
               enterprise_id: parseInt(currentEnterpriseId),
               accounting_period_id: period.id,
               entry_number: entryNumber,
-              entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+              entry_date: batchEntryDate,
               entry_type: "diario",
               description: `Compras ${ref} - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
               total_debit: batchTotal,
@@ -901,7 +905,7 @@ export default function LibroCompras() {
         for (const p of purchases) {
           if (!p.id) continue;
           
-          const entryNumber = `COMP-DOC-${p.invoice_series || 'S'}-${p.invoice_number}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", p.invoice_date);
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
             .insert({
