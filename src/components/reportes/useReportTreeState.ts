@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import type { ReportLine } from "./reportTypes";
 
 /**
@@ -6,23 +6,19 @@ import type { ReportLine } from "./reportTypes";
  * Returns the expanded set, a toggle function, and the filtered visible lines.
  */
 export function useReportTreeState(lines: ReportLine[]) {
-  // Default: expand all level-1 accounts
-  const defaultExpanded = useMemo(() => {
-    const set = new Set<number>();
-    for (const line of lines) {
-      if (line.type === 'account' && line.accountLevel === 1 && line.accountId && line.hasChildren) {
-        set.add(line.accountId);
-      }
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const prevLinesLenRef = useRef(-1);
+  const prevFirstIdRef = useRef<number | null>(null);
+
+  // Reset expanded when the underlying report data changes (not on every render)
+  useEffect(() => {
+    const firstAccountId = lines.find(l => l.type === 'account')?.accountId ?? null;
+    if (lines.length === prevLinesLenRef.current && firstAccountId === prevFirstIdRef.current) {
+      return; // same data, skip
     }
-    return set;
-  }, [lines]);
+    prevLinesLenRef.current = lines.length;
+    prevFirstIdRef.current = firstAccountId;
 
-  const [expanded, setExpanded] = useState<Set<number>>(defaultExpanded);
-
-  // Reset expanded when lines change (new report generated)
-  const [prevLinesRef, setPrevLinesRef] = useState(lines);
-  if (lines !== prevLinesRef) {
-    setPrevLinesRef(lines);
     const newDefault = new Set<number>();
     for (const line of lines) {
       if (line.type === 'account' && line.accountLevel === 1 && line.accountId && line.hasChildren) {
@@ -30,7 +26,7 @@ export function useReportTreeState(lines: ReportLine[]) {
       }
     }
     setExpanded(newDefault);
-  }
+  }, [lines]);
 
   const toggleExpand = (accountId: number) => {
     setExpanded(prev => {
