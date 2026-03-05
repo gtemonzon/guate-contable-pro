@@ -853,8 +853,9 @@ export default function LibroCompras() {
         let totalLines = 0;
 
         for (const [ref, items] of Object.entries(byBank)) {
-          const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${ref}`;
           const batchTotal = items.reduce((sum, p) => sum + p.total_amount, 0);
+          const batchEntryDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", batchEntryDate);
 
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
@@ -862,7 +863,7 @@ export default function LibroCompras() {
               enterprise_id: parseInt(currentEnterpriseId),
               accounting_period_id: period.id,
               entry_number: entryNumber,
-              entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+              entry_date: batchEntryDate,
               entry_type: "diario",
               description: `Compras ${ref} - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
               total_debit: batchTotal,
