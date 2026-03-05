@@ -310,7 +310,7 @@ export function QuickPurchaseForm({
 
   const canSubmit = nitValid === true && number.trim() && total > 0 && operationTypeId && expenseAccountId && !duplicate;
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!canSubmit) {
       toast({ title: "Campos requeridos", description: "Complete NIT válido, número, monto, tipo de operación y cuenta de gasto", variant: "destructive" });
       return;
@@ -413,7 +413,20 @@ export function QuickPurchaseForm({
     } finally {
       setLoading(false);
     }
-  };
+  }, [canSubmit, nit, number, docType, series, date, supplier, total, base, vat, idpAmount, isFuelOperation, expenseAccountId, operationTypeId, enterpriseId, journalEntryId, entryMonth, entryYear, duplicate, checkDuplicate, toast, onCreated]);
+
+  // ─── Alt+N shortcut ───
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.altKey || !(e.key === 'n' || e.key === 'N') || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canSubmit) return;
+      handleSave();
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [canSubmit, handleSave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const effectiveDocTypes = felDocTypes.length > 0 ? felDocTypes : [
     { code: "FACT", name: "Factura" },
@@ -644,9 +657,10 @@ export function QuickPurchaseForm({
         </div>
       )}
 
-      <Button onClick={handleSave} disabled={loading || !canSubmit} size="sm" className="w-full">
+      <Button onClick={handleSave} disabled={loading || !canSubmit} size="sm" className="w-full" title="Crear y Vincular (Alt+N)">
         {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
         Crear y Vincular
+        <kbd className="ml-1.5 pointer-events-none hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">Alt+N</kbd>
       </Button>
     </div>
   );
