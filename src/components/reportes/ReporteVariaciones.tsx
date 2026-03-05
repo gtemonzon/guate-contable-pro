@@ -36,27 +36,32 @@ interface VariationLine {
 
 type CompareOption = "prev_month" | "prev_quarter" | "prev_year" | "same_month_last_year" | "fiscal_start" | "custom";
 
+function endOfPreviousMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 0); // day 0 = last day of prev month
+}
+
 function computeCompareDate(baseDate: string, option: CompareOption): string {
   const d = new Date(baseDate + "T00:00:00");
   switch (option) {
-    case "prev_month":
-      d.setMonth(d.getMonth() - 1);
-      break;
-    case "prev_quarter":
-      d.setMonth(d.getMonth() - 3);
-      break;
+    case "prev_month": {
+      const eom = endOfPreviousMonth(d);
+      return eom.toISOString().split("T")[0];
+    }
+    case "prev_quarter": {
+      // Go back 3 months, then end of that month
+      const q = new Date(d.getFullYear(), d.getMonth() - 2, 0);
+      return q.toISOString().split("T")[0];
+    }
     case "prev_year":
       d.setFullYear(d.getFullYear() - 1);
       break;
     case "same_month_last_year":
       d.setFullYear(d.getFullYear() - 1);
       break;
-    case "fiscal_start": {
-      // Beginning of fiscal year (Jan 1 of same year)
+    case "fiscal_start":
       return `${d.getFullYear()}-01-01`;
-    }
     case "custom":
-      return baseDate; // handled externally
+      return baseDate;
   }
   return d.toISOString().split("T")[0];
 }
