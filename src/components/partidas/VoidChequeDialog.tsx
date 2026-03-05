@@ -167,23 +167,25 @@ export default function VoidChequeDialog({
         if (detailsError) throw detailsError;
         if (!details || details.length === 0) throw new Error("La partida no tiene líneas de detalle");
 
-        // Generate reversal entry number using original entry date
+        // Generate reversal entry number (REV-YYYY-MM-####)
         const originalDate = new Date(entry!.entry_date + "T00:00:00");
-        const datePrefix = `${originalDate.getFullYear()}${String(originalDate.getMonth() + 1).padStart(2, "0")}${String(originalDate.getDate()).padStart(2, "0")}`;
+        const revYear = originalDate.getFullYear();
+        const revMonth = String(originalDate.getMonth() + 1).padStart(2, "0");
+        const revPrefix = `REV-${revYear}-${revMonth}-`;
         const { data: existingReversals } = await supabase
           .from("tab_journal_entries")
           .select("entry_number")
           .eq("enterprise_id", enterpriseId)
-          .like("entry_number", `REV-${datePrefix}%`)
+          .like("entry_number", `${revPrefix}%`)
           .order("entry_number", { ascending: false })
           .limit(1);
 
         let nextNumber = 1;
         if (existingReversals?.length) {
-          const match = existingReversals[0].entry_number.match(/REV-\d{8}-(\d+)/);
+          const match = existingReversals[0].entry_number.match(/REV-\d{4}-\d{2}-(\d+)/);
           if (match) nextNumber = parseInt(match[1]) + 1;
         }
-        const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+        const reversalEntryNumber = `REV-${revYear}-${revMonth}-${String(nextNumber).padStart(4, "0")}`;
 
         // Create reversal entry as draft first
         const { data: reversalEntry, error: reversalError } = await supabase
