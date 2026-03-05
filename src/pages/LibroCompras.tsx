@@ -904,7 +904,7 @@ export default function LibroCompras() {
         for (const p of purchases) {
           if (!p.id) continue;
           
-          const entryNumber = `COMP-DOC-${p.invoice_series || 'S'}-${p.invoice_number}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", p.invoice_date);
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
             .insert({

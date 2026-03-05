@@ -914,7 +914,7 @@ export default function LibroVentas() {
         for (const s of sales) {
           if (!s.id) continue;
           
-          const entryNumber = `VENT-DOC-${s.invoice_series}-${s.invoice_number}`;
+          const entryNumber = await allocateEntryNumber(currentEnterpriseId, "diario", s.invoice_date);
           const { data: journalEntry, error: journalError } = await supabase
             .from("tab_journal_entries")
             .insert({
