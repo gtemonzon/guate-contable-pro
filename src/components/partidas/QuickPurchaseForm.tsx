@@ -64,6 +64,7 @@ export function QuickPurchaseForm({
 
   // Track which fields user has manually changed (to avoid overriding)
   const touchedFields = useRef<Set<string>>(new Set());
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const nitInputRef = useRef<HTMLInputElement>(null);
   const opTypeSelectRef = useRef<HTMLButtonElement>(null);
   const [suggestedOpTypeId, setSuggestedOpTypeId] = useState<number | null>(null);
@@ -408,6 +409,7 @@ export function QuickPurchaseForm({
       touchedFields.current.clear();
 
       onCreated();
+      setTimeout(() => dateInputRef.current?.focus(), 50);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -443,7 +445,7 @@ export function QuickPurchaseForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-xs font-medium text-muted-foreground">Fecha</label>
-          <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 text-xs mt-1" />
+          <Input ref={dateInputRef} type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 text-xs mt-1" />
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Tipo Doc.</label>
