@@ -58,8 +58,8 @@ export function JournalEntryBankSection({
       {bankAccountId && (
         <>
           <div>
-            <div className="flex items-center gap-1">
-              <Label htmlFor="bankDirection">Movimiento Bancario</Label>
+            <Label htmlFor="bankDirection" className="inline-flex items-center gap-1">
+              Movimiento Bancario
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
