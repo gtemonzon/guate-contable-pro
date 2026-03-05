@@ -79,28 +79,30 @@ export default function VoidEntryDialog({
         throw new Error("La partida no tiene líneas de detalle");
       }
 
-      // 2. Generate the reversal entry number
-      const today = new Date();
-      const datePrefix = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+      // 2. Generate the reversal entry number (REV-YYYY-MM-####)
+      const entryDate = new Date(entry.entry_date + "T00:00:00");
+      const revYear = entryDate.getFullYear();
+      const revMonth = String(entryDate.getMonth() + 1).padStart(2, "0");
+      const revPrefix = `REV-${revYear}-${revMonth}-`;
 
       const { data: existingReversals } = await supabase
         .from("tab_journal_entries")
         .select("entry_number")
         .eq("enterprise_id", entry.enterprise_id)
-        .like("entry_number", `REV-${datePrefix}%`)
+        .like("entry_number", `${revPrefix}%`)
         .order("entry_number", { ascending: false })
         .limit(1);
 
       let nextNumber = 1;
       if (existingReversals && existingReversals.length > 0) {
         const lastNumber = existingReversals[0].entry_number;
-        const match = lastNumber.match(/REV-\d{8}-(\d+)/);
+        const match = lastNumber.match(/REV-\d{4}-\d{2}-(\d+)/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
         }
       }
 
-      const reversalEntryNumber = `REV-${datePrefix}-${String(nextNumber).padStart(3, "0")}`;
+      const reversalEntryNumber = `REV-${revYear}-${revMonth}-${String(nextNumber).padStart(4, "0")}`;
 
       // 3. Create the reversal entry as draft first (DB trigger requires lines before posting)
       const { data: reversalEntry, error: reversalError } = await supabase
