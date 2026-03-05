@@ -58,8 +58,8 @@ export function JournalEntryBankSection({
       {bankAccountId && (
         <>
           <div>
-            <div className="flex items-center gap-1">
-              <Label htmlFor="bankDirection">Movimiento Bancario</Label>
+            <Label htmlFor="bankDirection" className="inline-flex items-center gap-1">
+              Movimiento Bancario
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
@@ -70,7 +70,7 @@ export function JournalEntryBankSection({
                   <p className="text-xs"><strong>Entrada:</strong> Depósitos, reembolsos y transferencias entrantes.</p>
                 </TooltipContent>
               </Tooltip>
-            </div>
+            </Label>
             <Select value={bankDirection} onValueChange={(v) => setBankDirection(v as BankDirection)} disabled={isReadOnly}>
               <SelectTrigger id="bankDirection">
                 <SelectValue />
