@@ -21,6 +21,8 @@ interface AccountLedgerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accountId: number | null;
+  /** When provided, query all these IDs (for consolidated/parent account view) */
+  accountIds?: number[];
   accountCode: string;
   accountName: string;
   enterpriseId: number | null;
@@ -36,6 +38,7 @@ export default function AccountLedgerDrawer({
   open,
   onOpenChange,
   accountId,
+  accountIds,
   accountCode,
   accountName,
   enterpriseId,
@@ -46,18 +49,21 @@ export default function AccountLedgerDrawer({
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [viewEntryId, setViewEntryId] = useState<number | null>(null);
 
+  const resolvedIds = accountIds && accountIds.length > 0 ? accountIds : (accountId ? [accountId] : []);
+  const isConsolidated = resolvedIds.length > 1;
+
   useEffect(() => {
-    if (open && accountId && enterpriseId) {
+    if (open && resolvedIds.length > 0 && enterpriseId) {
       fetchLedger();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, accountId, enterpriseId, startDate, endDate]);
+  }, [open, accountId, JSON.stringify(accountIds), enterpriseId, startDate, endDate]);
 
   const fetchLedger = async () => {
-    if (!accountId || !enterpriseId) return;
+    if (resolvedIds.length === 0 || !enterpriseId) return;
     setLoading(true);
     try {
-      // Get all detail lines for this account within the date range, from posted entries only
+      // Get all detail lines for the account(s) within the date range, from posted entries only
       const query = supabase
         .from("tab_journal_entry_details")
         .select(`
@@ -65,6 +71,7 @@ export default function AccountLedgerDrawer({
           credit_amount,
           description,
           journal_entry_id,
+          account_id,
           tab_journal_entries!inner (
             id,
             entry_number,
@@ -74,7 +81,7 @@ export default function AccountLedgerDrawer({
             is_posted
           )
         `)
-        .eq("account_id", accountId)
+        .in("account_id", resolvedIds)
         .eq("tab_journal_entries.is_posted", true)
         .eq("tab_journal_entries.enterprise_id", enterpriseId)
         .lte("tab_journal_entries.entry_date", endDate)
@@ -131,7 +138,8 @@ export default function AccountLedgerDrawer({
               <span className="ml-2">{accountName}</span>
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
-              Mayor de cuenta {startDate ? `del ${safeFmt(startDate)} ` : ''}
+              {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
+              {startDate ? `del ${safeFmt(startDate)} ` : ''}
               al {safeFmt(endDate)}
             </p>
           </SheetHeader>

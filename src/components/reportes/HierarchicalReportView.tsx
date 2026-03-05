@@ -97,7 +97,7 @@ export default function HierarchicalReportView({ lines, onAccountClick }: Hierar
         const isAccount = line.type === 'account';
         const hasChildren = isAccount && line.hasChildren;
         const isLeaf = isAccount && !line.hasChildren;
-        const isClickable = isLeaf && !!line.accountId && !!onAccountClick;
+        const isClickable = isAccount && !!line.accountId && !!onAccountClick;
         const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
 
         return (
@@ -108,13 +108,13 @@ export default function HierarchicalReportView({ lines, onAccountClick }: Hierar
               line.isBold ? 'font-bold' : '',
               line.showLine ? 'border-t border-border' : '',
               isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors rounded' : '',
-              hasChildren ? 'cursor-pointer' : '',
             ].join(' ')}
             style={{ paddingLeft: isAccount ? `${Math.min(52, (line.level ?? 0) * 16 + 4)}px` : '4px' }}
             onClick={() => {
               if (hasChildren && line.accountId) {
                 toggleExpand(line.accountId);
-              } else if (isClickable) {
+              }
+              if (isClickable) {
                 onAccountClick!(line);
               }
             }}
