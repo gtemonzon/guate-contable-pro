@@ -15,6 +15,8 @@ import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
+import AccountLedgerDrawer from "./AccountLedgerDrawer";
+import type { ReportLine } from "./reportTypes";
 
 interface CdvBreakdown {
   initialInventory: number;
@@ -22,16 +24,6 @@ interface CdvBreakdown {
   availableForSale: number;
   finalInventory: number;
   costOfSales: number;
-}
-
-interface ReportLine {
-  type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
-  label: string;
-  amount: number;
-  level?: number;
-  accountLevel?: number;
-  isBold?: boolean;
-  showLine?: boolean;
 }
 
 interface AccountBalance {
@@ -54,6 +46,7 @@ export default function ReporteEstadoResultados() {
   const [displayLevel, setDisplayLevel] = useState<number>(0);
   const [cdvBreakdown, setCdvBreakdown] = useState<CdvBreakdown | null>(null);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
+  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
   const { toast } = useToast();
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
@@ -195,6 +188,8 @@ export default function ReporteEstadoResultados() {
             label: `${a.account_code} - ${a.account_name}`,
             amount: a.balance,
             level: a.level,
+            accountId: a.id,
+            accountCode: a.account_code,
           }));
         setReportLines(simpleLines);
       }
@@ -251,6 +246,8 @@ export default function ReporteEstadoResultados() {
         amount,
         level: depth,
         accountLevel: root.level,
+        accountId: root.id,
+        accountCode: root.account_code,
       });
 
       const children = (childrenByParent.get(root.id) || []).slice().sort((a, b) => a.account_code.localeCompare(b.account_code));
@@ -289,6 +286,8 @@ export default function ReporteEstadoResultados() {
               amount,
               level: 1,
               accountLevel: account.level,
+              accountId: account.id,
+              accountCode: account.account_code,
             });
           }
         }
@@ -533,6 +532,13 @@ export default function ReporteEstadoResultados() {
         : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
     );
 
+  const handleAccountClick = (line: ReportLine) => {
+    if (!line.accountId || !line.accountCode) return;
+    const parts = line.label.split(' - ');
+    const name = parts.length > 1 ? parts.slice(1).join(' - ') : line.label;
+    setDrawerAccount({ id: line.accountId, code: line.accountCode, name });
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -611,23 +617,27 @@ export default function ReporteEstadoResultados() {
             </p>
           </div>
           {layout === 'columnar' ? (
-            <ColumnarReportView lines={filteredReportLines} />
+            <ColumnarReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           ) : layout === 'stepped' ? (
-            <SteppedReportView lines={filteredReportLines} />
+            <SteppedReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           ) : (
             <div className="space-y-1 font-mono text-sm">
-              {filteredReportLines.map((line, idx) => (
-                <div
-                  key={idx}
-                  className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
-                  style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
-                >
-                  <div>{line.label}</div>
-                  <div className="text-right">
-                    {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+              {filteredReportLines.map((line, idx) => {
+                const isClickable = line.type === 'account' && !!line.accountId;
+                return (
+                  <div
+                    key={idx}
+                    className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''} ${isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors rounded' : ''}`}
+                    style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
+                    onClick={isClickable ? () => handleAccountClick(line) : undefined}
+                  >
+                    <div className={isClickable ? 'text-primary hover:underline' : ''}>{line.label}</div>
+                    <div className="text-right">
+                      {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -675,6 +685,17 @@ export default function ReporteEstadoResultados() {
           )}
         </div>
       )}
+
+      <AccountLedgerDrawer
+        open={drawerAccount !== null}
+        onOpenChange={(o) => { if (!o) setDrawerAccount(null); }}
+        accountId={drawerAccount?.id ?? null}
+        accountCode={drawerAccount?.code ?? ''}
+        accountName={drawerAccount?.name ?? ''}
+        enterpriseId={currentEnterpriseId}
+        startDate={dateFrom}
+        endDate={dateTo}
+      />
     </div>
   );
 }

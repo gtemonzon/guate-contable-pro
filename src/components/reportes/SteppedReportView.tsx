@@ -1,16 +1,9 @@
-interface ReportLine {
-  type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
-  label: string;
-  amount: number;
-  level?: number;
-  accountLevel?: number;
-  isBold?: boolean;
-  showLine?: boolean;
-}
+import type { ReportLine } from "./reportTypes";
 
 interface SteppedReportViewProps {
   lines: ReportLine[];
   maxLevel?: number;
+  onAccountClick?: (line: ReportLine) => void;
 }
 
 const formatAmount = (amount: number) =>
@@ -20,14 +13,13 @@ const formatAmount = (amount: number) =>
  * Stepped Financial Layout: single "Concepto" column with balance placed
  * in the column matching the account level (Nivel 5 → Nivel 1, right to left).
  */
-export default function SteppedReportView({ lines, maxLevel: maxLevelProp }: SteppedReportViewProps) {
+export default function SteppedReportView({ lines, maxLevel: maxLevelProp, onAccountClick }: SteppedReportViewProps) {
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
     : 1;
   const maxLevel = Math.min(maxLevelProp ?? computedMax, 5);
 
-  // Headers: Concepto | Nivel5 | Nivel4 | ... | Nivel1 (deepest first)
   const levelHeaders = Array.from({ length: maxLevel }, (_, i) => `Nivel ${maxLevel - i}`);
 
   return (
@@ -54,6 +46,7 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp }: Ste
             const isSummary = line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated';
             const isAccount = line.type === 'account';
             const acctLevel = line.accountLevel ?? 1;
+            const isClickable = isAccount && !!onAccountClick && !!line.accountId;
 
             return (
               <tr
@@ -63,11 +56,16 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp }: Ste
                   line.isBold ? 'font-bold' : '',
                   isSection ? 'bg-muted/40' : '',
                   isSummary ? 'bg-muted/30' : '',
+                  isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
                 ].join(' ')}
+                onClick={isClickable ? () => onAccountClick(line) : undefined}
               >
-                {/* Concepto column – always present */}
                 <td
-                  className={`px-3 py-1.5 ${isSection || isSummary ? 'font-bold' : ''}`}
+                  className={[
+                    'px-3 py-1.5',
+                    isSection || isSummary ? 'font-bold' : '',
+                    isClickable ? 'text-primary hover:underline' : '',
+                  ].join(' ')}
                   style={{
                     paddingLeft: isAccount ? `${Math.min(48, (line.level ?? 1) * 12 + 12)}px` : undefined,
                   }}
@@ -75,15 +73,13 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp }: Ste
                   {line.label}
                 </td>
 
-                {/* Level columns (deepest first: Nivel5, Nivel4, ..., Nivel1) */}
                 {Array.from({ length: maxLevel }, (_, i) => {
-                  const colLevel = maxLevel - i; // e.g. 5,4,3,2,1
+                  const colLevel = maxLevel - i;
 
                   let cellValue = '';
                   if (isAccount && acctLevel === colLevel) {
                     cellValue = formatAmount(line.amount);
                   } else if (isSummary && colLevel === 1) {
-                    // Summary values always go in the Nivel 1 column (rightmost)
                     cellValue = formatAmount(line.amount);
                   }
 
@@ -126,13 +122,10 @@ export function toSteppedExcelData(lines: ReportLine[], maxLevel?: number): { he
     const row: string[] = [];
     const isAccount = line.type === 'account';
     const isSummary = line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated';
-    const isSection = line.type === 'section';
     const acctLevel = line.accountLevel ?? 1;
 
-    // Concepto
     row.push(isAccount ? `  ${line.label}` : line.label);
 
-    // Level columns (deepest first)
     for (let i = 0; i < levels; i++) {
       const colLevel = levels - i;
       if (isAccount && acctLevel === colLevel) {
