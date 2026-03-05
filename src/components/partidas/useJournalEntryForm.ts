@@ -678,6 +678,10 @@ export function useJournalEntryForm(
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
 
+    // Set loading immediately for instant UI feedback
+    setLoading(true);
+
+    try {
     // Overdraft check — only on posting
     if (post) {
       const validLines = detailLines.filter(l => l.account_id !== null);
@@ -699,13 +703,11 @@ export function useJournalEntryForm(
           .select("debit_amount, credit_amount").eq("account_id", line.account_id).in("journal_entry_id", postedIds);
         const currentBalance = (movements || []).reduce((acc, m) => acc + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0), 0);
         const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
-        if (account.balance_type === 'deudor' && newBalance < 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
-        if (account.balance_type === 'acreedor' && newBalance > 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
+        if (account.balance_type === 'deudor' && newBalance < 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
+        if (account.balance_type === 'acreedor' && newBalance > 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
       }
     }
 
-    try {
-      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
