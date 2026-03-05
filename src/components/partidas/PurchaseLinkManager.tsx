@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +19,14 @@ import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickPurchaseForm } from "./QuickPurchaseForm";
 import { PurchaseLinkSummary } from "./PurchaseLinkSummary";
+
+interface BatchProgress {
+  active: boolean;
+  action: 'linking' | 'unlinking';
+  current: number;
+  total: number;
+  currentInvoice?: string;
+}
 
 interface PurchaseLinkManagerProps {
   open: boolean;
@@ -64,6 +73,7 @@ export function PurchaseLinkManager({
   const [selectedUnlinked, setSelectedUnlinked] = useState<Set<number>>(new Set());
   const [selectedLinked, setSelectedLinked] = useState<Set<number>>(new Set());
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>({ active: false, action: 'linking', current: 0, total: 0 });
   const initialLinkedRef = useRef<Set<number>>(new Set());
   const { toast } = useToast();
 
@@ -159,74 +169,6 @@ export function PurchaseLinkManager({
     setHasPendingChanges(changed);
   }, []);
 
-  const handleLink = async (purchase: PurchaseRecord) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
-
-      await supabase
-        .from("tab_purchase_journal_links" as any)
-        .upsert({
-          enterprise_id: enterpriseId,
-          purchase_id: purchase.id,
-          journal_entry_id: journalEntryId,
-          link_source: 'MANUAL_LINK',
-          linked_by: user.id,
-          linked_at: new Date().toISOString(),
-        }, { onConflict: "enterprise_id,purchase_id" });
-
-      setUnlinkedPurchases(prev => prev.filter(p => p.id !== purchase.id));
-      setLinkedPurchases(prev => {
-        const next = [...prev, purchase];
-        updatePendingFlag(next);
-        return next;
-      });
-      setSelectedUnlinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      const newLinked = [...linkedPurchases.filter(p => p.id !== purchase.id), purchase];
-      // Auto-rebuild journal lines
-      await autoApply(newLinked);
-    } catch (err: any) {
-      toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
-    }
-  };
-
-  const handleUnlink = async (purchase: PurchaseRecord) => {
-    try {
-      await supabase
-        .from("tab_purchase_journal_links" as any)
-        .delete()
-        .eq("enterprise_id", enterpriseId)
-        .eq("purchase_id", purchase.id);
-
-      setLinkedPurchases(prev => {
-        const next = prev.filter(p => p.id !== purchase.id);
-        updatePendingFlag(next);
-        return next;
-      });
-      setUnlinkedPurchases(prev => [...prev, purchase].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)));
-      setSelectedLinked(prev => { const n = new Set(prev); n.delete(purchase.id); return n; });
-      const newLinked = linkedPurchases.filter(p => p.id !== purchase.id);
-      // Auto-rebuild journal lines
-      await autoApply(newLinked);
-    } catch (err: any) {
-      toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
-    }
-  };
-
-  const handleBulkLink = async () => {
-    const toLink = unlinkedPurchases.filter(p => selectedUnlinked.has(p.id));
-    for (const p of toLink) {
-      await handleLink(p);
-    }
-  };
-
-  const handleBulkUnlink = async () => {
-    const toUnlink = linkedPurchases.filter(p => selectedLinked.has(p.id));
-    for (const p of toUnlink) {
-      await handleUnlink(p);
-    }
-  };
-
   const autoApply = useCallback(async (linkedList?: PurchaseRecord[]) => {
     if (!onApplyToEntry || entryStatus === 'contabilizado') return;
     setApplying(true);
@@ -236,7 +178,7 @@ export function PurchaseLinkManager({
       setHasPendingChanges(false);
       initialLinkedRef.current = new Set(list.map(p => p.id));
       toast({
-        title: "Póliza actualizada automáticamente",
+        title: "Póliza actualizada correctamente",
         description: `Líneas regeneradas con ${list.length} factura${list.length !== 1 ? 's' : ''}`,
       });
     } catch (err: any) {
@@ -246,6 +188,162 @@ export function PurchaseLinkManager({
     }
   }, [onApplyToEntry, entryStatus, linkedPurchases, toast]);
 
+  /**
+   * Batch link: insert all links, update UI state once, regenerate policy once.
+   */
+  const batchLink = useCallback(async (purchases: PurchaseRecord[]) => {
+    if (purchases.length === 0) return;
+    const isBatch = purchases.length > 1;
+    if (isBatch) {
+      setBatchProgress({ active: true, action: 'linking', current: 0, total: purchases.length });
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+
+      const errors: string[] = [];
+      const successPurchases: PurchaseRecord[] = [];
+
+      for (let i = 0; i < purchases.length; i++) {
+        const p = purchases[i];
+        if (isBatch) {
+          setBatchProgress(prev => ({
+            ...prev,
+            current: i + 1,
+            currentInvoice: `${p.supplier_name} - ${p.invoice_number}`,
+          }));
+        }
+        try {
+          const { error } = await supabase
+            .from("tab_purchase_journal_links" as any)
+            .upsert({
+              enterprise_id: enterpriseId,
+              purchase_id: p.id,
+              journal_entry_id: journalEntryId,
+              link_source: 'MANUAL_LINK',
+              linked_by: user.id,
+              linked_at: new Date().toISOString(),
+            }, { onConflict: "enterprise_id,purchase_id" });
+          if (error) throw error;
+          successPurchases.push(p);
+        } catch (err: any) {
+          errors.push(`${p.invoice_number}: ${err.message}`);
+        }
+      }
+
+      if (successPurchases.length > 0) {
+        const successIds = new Set(successPurchases.map(p => p.id));
+        setUnlinkedPurchases(prev => prev.filter(p => !successIds.has(p.id)));
+        setLinkedPurchases(prev => {
+          const next = [...prev, ...successPurchases];
+          updatePendingFlag(next);
+          return next;
+        });
+        setSelectedUnlinked(prev => {
+          const n = new Set(prev);
+          successIds.forEach(id => n.delete(id));
+          return n;
+        });
+
+        const newLinked = [...linkedPurchases.filter(p => !successIds.has(p.id)), ...successPurchases];
+        await autoApply(newLinked);
+      }
+
+      if (errors.length > 0) {
+        toast({
+          title: `${errors.length} factura(s) no se pudieron vincular`,
+          description: errors.join('\n'),
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
+    } finally {
+      if (isBatch) setBatchProgress({ active: false, action: 'linking', current: 0, total: 0 });
+    }
+  }, [enterpriseId, journalEntryId, linkedPurchases, updatePendingFlag, autoApply, toast]);
+
+  /**
+   * Batch unlink: delete all links, update UI state once, regenerate policy once.
+   */
+  const batchUnlink = useCallback(async (purchases: PurchaseRecord[]) => {
+    if (purchases.length === 0) return;
+    const isBatch = purchases.length > 1;
+    if (isBatch) {
+      setBatchProgress({ active: true, action: 'unlinking', current: 0, total: purchases.length });
+    }
+    try {
+      const errors: string[] = [];
+      const successPurchases: PurchaseRecord[] = [];
+
+      for (let i = 0; i < purchases.length; i++) {
+        const p = purchases[i];
+        if (isBatch) {
+          setBatchProgress(prev => ({
+            ...prev,
+            current: i + 1,
+            currentInvoice: `${p.supplier_name} - ${p.invoice_number}`,
+          }));
+        }
+        try {
+          const { error } = await supabase
+            .from("tab_purchase_journal_links" as any)
+            .delete()
+            .eq("enterprise_id", enterpriseId)
+            .eq("purchase_id", p.id);
+          if (error) throw error;
+          successPurchases.push(p);
+        } catch (err: any) {
+          errors.push(`${p.invoice_number}: ${err.message}`);
+        }
+      }
+
+      if (successPurchases.length > 0) {
+        const successIds = new Set(successPurchases.map(p => p.id));
+        setLinkedPurchases(prev => {
+          const next = prev.filter(p => !successIds.has(p.id));
+          updatePendingFlag(next);
+          return next;
+        });
+        setUnlinkedPurchases(prev =>
+          [...prev, ...successPurchases].sort((a, b) => a.invoice_date.localeCompare(b.invoice_date))
+        );
+        setSelectedLinked(prev => {
+          const n = new Set(prev);
+          successIds.forEach(id => n.delete(id));
+          return n;
+        });
+
+        const newLinked = linkedPurchases.filter(p => !successIds.has(p.id));
+        await autoApply(newLinked);
+      }
+
+      if (errors.length > 0) {
+        toast({
+          title: `${errors.length} factura(s) no se pudieron desvincular`,
+          description: errors.join('\n'),
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
+      toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
+    } finally {
+      if (isBatch) setBatchProgress({ active: false, action: 'unlinking', current: 0, total: 0 });
+    }
+  }, [enterpriseId, linkedPurchases, updatePendingFlag, autoApply, toast]);
+
+  const handleLink = (purchase: PurchaseRecord) => batchLink([purchase]);
+  const handleUnlink = (purchase: PurchaseRecord) => batchUnlink([purchase]);
+
+  const handleBulkLink = () => {
+    const toLink = unlinkedPurchases.filter(p => selectedUnlinked.has(p.id));
+    return batchLink(toLink);
+  };
+
+  const handleBulkUnlink = () => {
+    const toUnlink = linkedPurchases.filter(p => selectedLinked.has(p.id));
+    return batchUnlink(toUnlink);
+  };
   const handleApplyToEntry = async () => {
     await autoApply();
   };
@@ -301,19 +399,39 @@ export function PurchaseLinkManager({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal>
+    <Dialog open={open} onOpenChange={(v) => { if (!batchProgress.active && !applying) onOpenChange(v); }} modal>
       <DialogContent
         className="max-w-4xl max-h-[85vh] flex flex-col"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.stopPropagation()}
+        onEscapeKeyDown={(e) => { if (batchProgress.active || applying) e.preventDefault(); e.stopPropagation(); }}
       >
-        {/* Applying overlay */}
-        {applying && (
-          <div className="fixed inset-0 z-[60] bg-background/60 backdrop-blur-sm flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Actualizando póliza...</span>
+        {/* Batch / applying processing overlay */}
+        {(applying || batchProgress.active) && (
+          <div className="absolute inset-0 z-[60] bg-background/70 backdrop-blur-sm flex items-center justify-center rounded-lg">
+            <div className="flex flex-col items-center gap-3 max-w-xs w-full px-6">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm font-semibold text-foreground">
+                {batchProgress.active
+                  ? (batchProgress.action === 'linking' ? 'Vinculando facturas…' : 'Desvinculando facturas…')
+                  : 'Actualizando póliza…'}
+              </p>
+              {batchProgress.active && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Procesando factura {batchProgress.current} de {batchProgress.total}
+                  </p>
+                  <Progress
+                    value={batchProgress.total > 0 ? Math.round((batchProgress.current / batchProgress.total) * 100) : 0}
+                    className="h-2 w-full"
+                  />
+                  {batchProgress.currentInvoice && (
+                    <p className="text-xs text-muted-foreground truncate max-w-full">
+                      {batchProgress.currentInvoice}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
