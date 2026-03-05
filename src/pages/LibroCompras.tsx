@@ -341,12 +341,13 @@ export default function LibroCompras() {
 
   const checkExistingJournalEntry = async (enterpriseId: string, month: number, year: number) => {
     try {
-      const entryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+      const descPattern = `Libro de Compras ${monthNames[month - 1]} ${year}`;
       const { data, error } = await supabase
         .from("tab_journal_entries")
         .select("id")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", entryNumber)
+        .eq("description", descPattern)
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
