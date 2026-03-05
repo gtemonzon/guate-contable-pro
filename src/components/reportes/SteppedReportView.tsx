@@ -1,4 +1,5 @@
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 
 interface SteppedReportViewProps {
@@ -12,11 +13,9 @@ interface SteppedReportViewProps {
 const formatAmount = (amount: number) =>
   `Q ${amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/**
- * Stepped Financial Layout: single "Concepto" column with balance placed
- * in the column matching the account level (Nivel 5 → Nivel 1, right to left).
- */
 export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick }: SteppedReportViewProps) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
@@ -52,27 +51,24 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
             const hasChildren = isAccount && line.hasChildren;
             const isClickable = isAccount && !!onAccountClick && !!line.accountId;
             const isExpanded = hasChildren && line.accountId ? expanded.has(line.accountId) : false;
+            const isSelected = isAccount && line.accountId === selectedId;
 
             return (
               <tr
                 key={idx}
                 className={[
+                  'group',
                   line.showLine ? 'border-t-2 border-border' : 'border-b border-border/20',
                   line.isBold ? 'font-bold' : '',
                   isSection ? 'bg-muted/40' : '',
                   isSummary ? 'bg-muted/30' : '',
-                  isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
+                  isSelected ? 'bg-accent/50' : '',
                 ].join(' ')}
-                onClick={() => {
-                  if (hasChildren && line.accountId) toggleExpand(line.accountId);
-                  if (isClickable) onAccountClick!(line);
-                }}
               >
                 <td
                   className={[
                     'px-3 py-1.5',
                     isSection || isSummary ? 'font-bold' : '',
-                    isClickable ? 'text-primary hover:underline' : '',
                   ].join(' ')}
                   style={{
                     paddingLeft: isAccount ? `${Math.min(48, (line.level ?? 1) * 12 + 12)}px` : undefined,
@@ -80,19 +76,49 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                 >
                   <span className="flex items-center gap-1">
                     {isAccount && hasChildren && (
-                      <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                      <button
+                        type="button"
+                        className="w-4 h-4 flex items-center justify-center shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (line.accountId) toggleExpand(line.accountId);
+                        }}
+                      >
                         {isExpanded
                           ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                           : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         }
-                      </span>
+                      </button>
                     )}
                     {isAccount && !hasChildren && (
                       <span className="w-4 h-4 flex items-center justify-center shrink-0">
                         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
                       </span>
                     )}
-                    <span className="truncate">{line.label}</span>
+                    <span
+                      className={[
+                        'truncate select-none',
+                        isClickable ? 'cursor-pointer hover:text-primary' : '',
+                        isSelected ? 'text-primary' : '',
+                      ].join(' ')}
+                      onClick={() => { if (isAccount && line.accountId) setSelectedId(line.accountId); }}
+                      onDoubleClick={() => { if (isClickable) onAccountClick!(line); }}
+                    >
+                      {line.label}
+                    </span>
+                    {isClickable && (
+                      <button
+                        type="button"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-accent"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAccountClick!(line);
+                        }}
+                        title="Ver Mayor"
+                      >
+                        <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
                   </span>
                 </td>
 
