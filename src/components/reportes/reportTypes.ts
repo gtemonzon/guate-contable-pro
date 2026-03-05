@@ -8,4 +8,6 @@ export interface ReportLine {
   showLine?: boolean;
   accountId?: number;
   accountCode?: string;
+  parentAccountId?: number | null;
+  hasChildren?: boolean;
 }
