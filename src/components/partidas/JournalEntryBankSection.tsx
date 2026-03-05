@@ -70,7 +70,7 @@ export function JournalEntryBankSection({
                   <p className="text-xs"><strong>Entrada:</strong> Depósitos, reembolsos y transferencias entrantes.</p>
                 </TooltipContent>
               </Tooltip>
-            </div>
+            </Label>
             <Select value={bankDirection} onValueChange={(v) => setBankDirection(v as BankDirection)} disabled={isReadOnly}>
               <SelectTrigger id="bankDirection">
                 <SelectValue />
