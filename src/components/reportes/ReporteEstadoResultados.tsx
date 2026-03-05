@@ -18,6 +18,7 @@ import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
 import type { ReportLine } from "./reportTypes";
+import { collectDescendantIds } from "./collectDescendantIds";
 
 interface CdvBreakdown {
   initialInventory: number;
@@ -47,7 +48,7 @@ export default function ReporteEstadoResultados() {
   const [displayLevel, setDisplayLevel] = useState<number>(0);
   const [cdvBreakdown, setCdvBreakdown] = useState<CdvBreakdown | null>(null);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
-  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
+  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
   const { toast } = useToast();
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
@@ -539,7 +540,8 @@ export default function ReporteEstadoResultados() {
     if (!line.accountId || !line.accountCode) return;
     const parts = line.label.split(' - ');
     const name = parts.length > 1 ? parts.slice(1).join(' - ') : line.label;
-    setDrawerAccount({ id: line.accountId, code: line.accountCode, name });
+    const descendantIds = collectDescendantIds(line.accountId, reportLines);
+    setDrawerAccount({ id: line.accountId, code: line.accountCode, name, ids: descendantIds });
   };
 
   return (
@@ -676,6 +678,7 @@ export default function ReporteEstadoResultados() {
         open={drawerAccount !== null}
         onOpenChange={(o) => { if (!o) setDrawerAccount(null); }}
         accountId={drawerAccount?.id ?? null}
+        accountIds={drawerAccount?.ids}
         accountCode={drawerAccount?.code ?? ''}
         accountName={drawerAccount?.name ?? ''}
         enterpriseId={currentEnterpriseId}

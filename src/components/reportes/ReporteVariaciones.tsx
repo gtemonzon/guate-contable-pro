@@ -75,7 +75,7 @@ export default function ReporteVariaciones() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [filterSignificant, setFilterSignificant] = useState(false);
   const [threshold, setThreshold] = useState("5");
-  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
+  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -374,8 +374,17 @@ export default function ReporteVariaciones() {
   };
 
   const handleAccountClick = (line: VariationLine) => {
-    if (line.hasChildren) return;
-    setDrawerAccount({ id: line.id, code: line.code, name: line.name });
+    // Collect descendant IDs for consolidated ledger view
+    const ids: number[] = [line.id];
+    let collecting = false;
+    for (const l of lines) {
+      if (l.id === line.id) { collecting = true; continue; }
+      if (collecting) {
+        if (l.level > line.level) ids.push(l.id);
+        else break;
+      }
+    }
+    setDrawerAccount({ id: line.id, code: line.code, name: line.name, ids });
   };
 
   return (
@@ -499,8 +508,7 @@ export default function ReporteVariaciones() {
           {/* Rows */}
           <div className="font-mono text-sm">
             {visibleLines.map(line => {
-              const isLeaf = !line.hasChildren;
-              const isClickable = isLeaf;
+              const isClickable = true;
               const isExpanded = line.hasChildren ? expanded.has(line.id) : false;
 
               return (
@@ -514,7 +522,7 @@ export default function ReporteVariaciones() {
                   style={{ paddingLeft: `${Math.min(52, (line.level - 1) * 16 + 4)}px` }}
                   onClick={() => {
                     if (line.hasChildren) toggleExpand(line.id);
-                    else handleAccountClick(line);
+                    handleAccountClick(line);
                   }}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -549,6 +557,7 @@ export default function ReporteVariaciones() {
         open={drawerAccount !== null}
         onOpenChange={o => { if (!o) setDrawerAccount(null); }}
         accountId={drawerAccount?.id ?? null}
+        accountIds={drawerAccount?.ids}
         accountCode={drawerAccount?.code ?? ""}
         accountName={drawerAccount?.name ?? ""}
         enterpriseId={enterpriseId}
