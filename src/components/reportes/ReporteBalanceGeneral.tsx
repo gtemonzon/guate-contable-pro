@@ -12,6 +12,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
+import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 
 interface ReportLine {
   type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
@@ -321,6 +322,10 @@ export default function ReporteBalanceGeneral() {
       const result = toColumnarExcelData(filteredReportLines);
       headers = result.headers;
       data = result.data;
+    } else if (layout === 'stepped') {
+      const result = toSteppedExcelData(filteredReportLines);
+      headers = result.headers;
+      data = result.data;
     } else {
       headers = ["Concepto", "Monto"];
       data = filteredReportLines.map(line => [
@@ -464,6 +469,8 @@ export default function ReporteBalanceGeneral() {
           </div>
           {layout === 'columnar' ? (
             <ColumnarReportView lines={filteredReportLines} />
+          ) : layout === 'stepped' ? (
+            <SteppedReportView lines={filteredReportLines} />
           ) : (
             <div className="space-y-1 font-mono text-sm">
               {filteredReportLines.map((line, idx) => (

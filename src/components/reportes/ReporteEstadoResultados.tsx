@@ -14,6 +14,7 @@ import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatem
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
+import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 
 interface CdvBreakdown {
   initialInventory: number;
@@ -435,6 +436,10 @@ export default function ReporteEstadoResultados() {
       const result = toColumnarExcelData(filteredReportLines);
       headers = result.headers;
       data = result.data;
+    } else if (layout === 'stepped') {
+      const result = toSteppedExcelData(filteredReportLines);
+      headers = result.headers;
+      data = result.data;
     } else {
       headers = ["Concepto", "Monto"];
       data = filteredReportLines.map(line => [
@@ -607,6 +612,8 @@ export default function ReporteEstadoResultados() {
           </div>
           {layout === 'columnar' ? (
             <ColumnarReportView lines={filteredReportLines} />
+          ) : layout === 'stepped' ? (
+            <SteppedReportView lines={filteredReportLines} />
           ) : (
             <div className="space-y-1 font-mono text-sm">
               {filteredReportLines.map((line, idx) => (
