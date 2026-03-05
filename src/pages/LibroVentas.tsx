@@ -12,6 +12,7 @@ import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";

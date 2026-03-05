@@ -14,6 +14,7 @@ import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { formatCurrency } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
