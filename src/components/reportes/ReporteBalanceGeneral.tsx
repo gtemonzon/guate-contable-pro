@@ -13,16 +13,8 @@ import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/us
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
-
-interface ReportLine {
-  type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
-  label: string;
-  amount: number;
-  level?: number;
-  accountLevel?: number;
-  isBold?: boolean;
-  showLine?: boolean;
-}
+import AccountLedgerDrawer from "./AccountLedgerDrawer";
+import type { ReportLine } from "./reportTypes";
 
 interface AccountBalance {
   id: number;
@@ -40,8 +32,9 @@ export default function ReporteBalanceGeneral() {
   const [reportDate, setReportDate] = useState("");
   const [reportLines, setReportLines] = useState<ReportLine[]>([]);
   const [loading, setLoading] = useState(false);
-  const [displayLevel, setDisplayLevel] = useState<number>(0); // 0 = all levels
+  const [displayLevel, setDisplayLevel] = useState<number>(0);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
+  const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
   const { toast } = useToast();
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
@@ -86,27 +79,17 @@ export default function ReporteBalanceGeneral() {
 
   const generateReport = async () => {
     if (!currentEnterpriseId) {
-      toast({
-        title: "Error",
-        description: "Selecciona una empresa primero",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Selecciona una empresa primero", variant: "destructive" });
       return;
     }
-
     if (!reportDate) {
-      toast({
-        title: "Error",
-        description: "Debes seleccionar una fecha",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Debes seleccionar una fecha", variant: "destructive" });
       return;
     }
 
     try {
       setLoading(true);
 
-      // Use server-side RPC — no raw movement rows pulled to client
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_balance_sheet', {
         p_enterprise_id: currentEnterpriseId,
         p_as_of_date: reportDate,
@@ -124,12 +107,10 @@ export default function ReporteBalanceGeneral() {
         balance: Number(row.balance),
       }));
 
-      // If we have a configured format, use it
       if (format && format.sections.length > 0) {
         const lines = generateFormattedReport(format.sections, accountBalances);
         setReportLines(lines);
       } else {
-        // Fallback to simple list of accounts with movements
         const simpleLines: ReportLine[] = accountBalances
           .filter(a => ['activo', 'pasivo', 'capital'].includes(a.account_type) && a.balance !== 0)
           .map(a => ({
@@ -137,22 +118,17 @@ export default function ReporteBalanceGeneral() {
             label: `${a.account_code} - ${a.account_name}`,
             amount: a.balance,
             level: a.level,
+            accountId: a.id,
+            accountCode: a.account_code,
           }));
         setReportLines(simpleLines);
       }
 
       if (reportLines.length === 0 && !format) {
-        toast({
-          title: "Sin datos",
-          description: "No hay movimientos contabilizados hasta la fecha seleccionada",
-        });
+        toast({ title: "Sin datos", description: "No hay movimientos contabilizados hasta la fecha seleccionada" });
       }
     } catch (error: any) {
-      toast({
-        title: "Error al generar reporte",
-        description: getSafeErrorMessage(error),
-        variant: "destructive",
-      });
+      toast({ title: "Error al generar reporte", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -162,7 +138,6 @@ export default function ReporteBalanceGeneral() {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
 
-    // Build children index for roll-up calculations
     const childrenByParent = new Map<number, AccountBalance[]>();
     for (const acc of accountBalances) {
       if (acc.parent_account_id == null) continue;
@@ -175,10 +150,8 @@ export default function ReporteBalanceGeneral() {
     const getAggregatedBalance = (accId: number): number => {
       const cached = aggCache.get(accId);
       if (cached !== undefined) return cached;
-
       const acc = accountBalances.find(a => a.id === accId);
       if (!acc) return 0;
-
       const children = childrenByParent.get(accId) || [];
       const total = acc.balance + children.reduce((sum, c) => sum + getAggregatedBalance(c.id), 0);
       aggCache.set(accId, total);
@@ -193,6 +166,8 @@ export default function ReporteBalanceGeneral() {
         amount,
         level: depth,
         accountLevel: root.level,
+        accountId: root.id,
+        accountCode: root.account_code,
       });
 
       const children = (childrenByParent.get(root.id) || []).slice().sort((a, b) => a.account_code.localeCompare(b.account_code));
@@ -201,11 +176,8 @@ export default function ReporteBalanceGeneral() {
       }
     };
 
-    // Calculate "RESULTADO DEL PERÍODO" correctly:
-    // Only sum root-level income and expense accounts to avoid double-counting
     const rootIncomeAccounts = accountBalances.filter(a => a.account_type === "ingreso" && a.parent_account_id === null);
     const rootExpenseAccounts = accountBalances.filter(a => a.account_type === "gasto" && a.parent_account_id === null);
-    
     const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
     const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
     const periodResult = totalIngresos - totalGastos;
@@ -214,14 +186,7 @@ export default function ReporteBalanceGeneral() {
       if (!section.show_in_report) continue;
 
       if (section.section_type === "group") {
-        // Section header
-        lines.push({
-          type: "section",
-          label: section.section_name,
-          amount: 0,
-          isBold: true,
-        });
-
+        lines.push({ type: "section", label: section.section_name, amount: 0, isBold: true });
         let sectionTotal = 0;
 
         for (const sectionAccount of section.accounts) {
@@ -229,9 +194,7 @@ export default function ReporteBalanceGeneral() {
           if (!account) continue;
 
           if (sectionAccount.include_children) {
-            // Add ONLY the top aggregated value to the section total (avoid double counting children)
             sectionTotal += getAggregatedBalance(account.id) * sectionAccount.sign_multiplier;
-            // Render full hierarchy (parents show roll-up)
             pushAccountTree(account, sectionAccount.sign_multiplier, 1);
           } else {
             const amount = account.balance * sectionAccount.sign_multiplier;
@@ -242,72 +205,44 @@ export default function ReporteBalanceGeneral() {
               amount,
               level: 1,
               accountLevel: account.level,
+              accountId: account.id,
+              accountCode: account.account_code,
             });
           }
         }
-
         sectionTotals.set(section.section_name, sectionTotal);
       } else if (section.section_type === "subtotal") {
-        // Sum all previous group sections until another subtotal or total
         let subtotal = 0;
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
-          if (prevSection.section_type === "subtotal" || prevSection.section_type === "total") {
-            break;
-          }
+          if (prevSection.section_type === "subtotal" || prevSection.section_type === "total") break;
           if (prevSection.section_type === "group") {
             subtotal += sectionTotals.get(prevSection.section_name) || 0;
           }
         }
         sectionTotals.set(section.section_name, subtotal);
-
-        lines.push({
-          type: "subtotal",
-          label: section.section_name,
-          amount: subtotal,
-          isBold: true,
-          showLine: true,
-        });
+        lines.push({ type: "subtotal", label: section.section_name, amount: subtotal, isBold: true, showLine: true });
       } else if (section.section_type === "total") {
-        // Sum previous groups, subtotals, and calculated sections
         let total = 0;
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
-          if (prevSection.section_type === "total") {
-            break;
-          }
+          if (prevSection.section_type === "total") break;
           if (prevSection.section_type === "calculated") {
             total += sectionTotals.get(prevSection.section_name) || 0;
           } else if (prevSection.section_type === "subtotal") {
             total += sectionTotals.get(prevSection.section_name) || 0;
           } else if (prevSection.section_type === "group") {
-            const hasSubtotalAfter = sections
-              .slice(i + 1, sections.indexOf(section))
-              .some(s => s.section_type === "subtotal");
+            const hasSubtotalAfter = sections.slice(i + 1, sections.indexOf(section)).some(s => s.section_type === "subtotal");
             if (!hasSubtotalAfter) {
               total += sectionTotals.get(prevSection.section_name) || 0;
             }
           }
         }
         sectionTotals.set(section.section_name, total);
-
-        lines.push({
-          type: "total",
-          label: section.section_name,
-          amount: total,
-          isBold: true,
-          showLine: true,
-        });
+        lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        // Special calculation: RESULTADO DEL PERÍODO = Ingresos - Gastos
         sectionTotals.set(section.section_name, periodResult);
-
-        lines.push({
-          type: "calculated",
-          label: section.section_name,
-          amount: periodResult,
-          isBold: true,
-        });
+        lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
       }
     }
 
@@ -342,25 +277,16 @@ export default function ReporteBalanceGeneral() {
       data,
     });
 
-    toast({
-      title: "Exportado",
-      description: "El reporte se ha exportado a Excel correctamente",
-    });
+    toast({ title: "Exportado", description: "El reporte se ha exportado a Excel correctamente" });
   };
 
   const handleExportPDF = () => {
-    // Get max account level for dynamic column generation
     const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
-    const levelCount = Math.min(maxLevel, 5); // Cap at 5 levels
-    
-    // Create headers with level columns
+    const levelCount = Math.min(maxLevel, 5);
     const headers = ["Concepto", ...Array.from({ length: levelCount }, (_, i) => `Nivel ${i + 1}`)];
-    
-    // Transform data to multi-column format
+
     const data = filteredReportLines.map(line => {
       const row: string[] = [line.type === 'account' ? `  ${line.label}` : line.label];
-      
-      // Add empty columns for each level
       for (let i = 0; i < levelCount; i++) {
         if (line.type === 'section') {
           row.push('');
@@ -372,7 +298,6 @@ export default function ReporteBalanceGeneral() {
           row.push('');
         }
       }
-      
       return row;
     });
 
@@ -385,13 +310,9 @@ export default function ReporteBalanceGeneral() {
       forcePortrait: true,
     });
 
-    toast({
-      title: "Exportado",
-      description: "El reporte se ha exportado a PDF correctamente",
-    });
+    toast({ title: "Exportado", description: "El reporte se ha exportado a PDF correctamente" });
   };
 
-  // Filter lines based on display level + hide zero-balance accounts
   const filteredReportLines = reportLines
     .filter((line) => line.type !== "account" || Math.abs(line.amount) > 0.00001)
     .filter((line) =>
@@ -399,6 +320,13 @@ export default function ReporteBalanceGeneral() {
         ? true
         : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
     );
+
+  const handleAccountClick = (line: ReportLine) => {
+    if (!line.accountId || !line.accountCode) return;
+    const parts = line.label.split(' - ');
+    const name = parts.length > 1 ? parts.slice(1).join(' - ') : line.label;
+    setDrawerAccount({ id: line.accountId, code: line.accountCode, name });
+  };
 
   return (
     <div className="space-y-6">
@@ -468,27 +396,41 @@ export default function ReporteBalanceGeneral() {
             </p>
           </div>
           {layout === 'columnar' ? (
-            <ColumnarReportView lines={filteredReportLines} />
+            <ColumnarReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           ) : layout === 'stepped' ? (
-            <SteppedReportView lines={filteredReportLines} />
+            <SteppedReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           ) : (
             <div className="space-y-1 font-mono text-sm">
-              {filteredReportLines.map((line, idx) => (
-                <div
-                  key={idx}
-                  className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''}`}
-                  style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
-                >
-                  <div>{line.label}</div>
-                  <div className="text-right">
-                    {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+              {filteredReportLines.map((line, idx) => {
+                const isClickable = line.type === 'account' && !!line.accountId;
+                return (
+                  <div
+                    key={idx}
+                    className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''} ${isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors rounded' : ''}`}
+                    style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
+                    onClick={isClickable ? () => handleAccountClick(line) : undefined}
+                  >
+                    <div className={isClickable ? 'text-primary hover:underline' : ''}>{line.label}</div>
+                    <div className="text-right">
+                      {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
+
+      <AccountLedgerDrawer
+        open={drawerAccount !== null}
+        onOpenChange={(o) => { if (!o) setDrawerAccount(null); }}
+        accountId={drawerAccount?.id ?? null}
+        accountCode={drawerAccount?.code ?? ''}
+        accountName={drawerAccount?.name ?? ''}
+        enterpriseId={currentEnterpriseId}
+        endDate={reportDate}
+      />
     </div>
   );
 }

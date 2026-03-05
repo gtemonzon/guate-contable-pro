@@ -1,25 +1,16 @@
-import { formatCurrency } from "@/lib/utils";
-
-interface ReportLine {
-  type: 'section' | 'account' | 'subtotal' | 'total' | 'calculated';
-  label: string;
-  amount: number;
-  level?: number;
-  accountLevel?: number;
-  isBold?: boolean;
-  showLine?: boolean;
-}
+import type { ReportLine } from "./reportTypes";
 
 interface ColumnarReportViewProps {
   lines: ReportLine[];
   maxLevel?: number;
+  onAccountClick?: (line: ReportLine) => void;
 }
 
 /**
  * Displays financial report lines in a columnar layout where each account level
  * occupies its own column, instead of using indentation.
  */
-export default function ColumnarReportView({ lines, maxLevel: maxLevelProp }: ColumnarReportViewProps) {
+export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, onAccountClick }: ColumnarReportViewProps) {
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
     ? Math.max(...accountLines.map(l => l.accountLevel!))
@@ -52,6 +43,7 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp }: Co
             const isSummary = line.type === 'subtotal' || line.type === 'total' || line.type === 'calculated';
             const isAccount = line.type === 'account';
             const acctLevel = line.accountLevel ?? 1;
+            const isClickable = isAccount && !!onAccountClick && !!line.accountId;
 
             return (
               <tr
@@ -61,14 +53,13 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp }: Co
                   line.isBold ? 'font-bold' : '',
                   isSection ? 'bg-muted/40' : '',
                   isSummary ? 'bg-muted/30' : '',
+                  isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors' : '',
                 ].join(' ')}
+                onClick={isClickable ? () => onAccountClick(line) : undefined}
               >
                 {isSection && (
                   <>
-                    <td
-                      colSpan={maxLevel}
-                      className="px-2 py-1.5 font-bold text-foreground"
-                    >
+                    <td colSpan={maxLevel} className="px-2 py-1.5 font-bold text-foreground">
                       {line.label}
                     </td>
                     <td className="px-3 py-1.5 text-right" />
@@ -77,10 +68,7 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp }: Co
 
                 {isSummary && (
                   <>
-                    <td
-                      colSpan={maxLevel}
-                      className="px-2 py-1.5 font-bold"
-                    >
+                    <td colSpan={maxLevel} className="px-2 py-1.5 font-bold">
                       {line.label}
                     </td>
                     <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">
@@ -93,15 +81,14 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp }: Co
                   <>
                     {Array.from({ length: maxLevel }, (_, i) => {
                       const col = i + 1;
-                      // Show account name in its matching level column
                       const showHere = col === acctLevel;
-                      // For parent accounts (level < maxLevel with children), show in their column
                       return (
                         <td
                           key={i}
                           className={[
                             'px-2 py-1 border-r border-r-border/20 truncate max-w-[200px]',
                             showHere ? (line.isBold ? 'font-semibold' : '') : 'text-muted-foreground/30',
+                            isClickable && showHere ? 'text-primary hover:underline' : '',
                           ].join(' ')}
                           title={showHere ? line.label : undefined}
                         >
@@ -156,7 +143,6 @@ export function toColumnarExcelData(lines: ReportLine[], maxLevel?: number): { h
       }
     }
 
-    // Balance column
     if (isSection) {
       row.push('');
     } else {
