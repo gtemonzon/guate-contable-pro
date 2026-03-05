@@ -15,6 +15,7 @@ import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
+import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
 import type { ReportLine } from "./reportTypes";
 
@@ -238,8 +239,9 @@ export default function ReporteEstadoResultados() {
       return total;
     };
 
-    const pushAccountTree = (root: AccountBalance, signMultiplier: number, depth: number) => {
+    const pushAccountTree = (root: AccountBalance, signMultiplier: number, depth: number, parentId?: number | null) => {
       const amount = getAggregatedBalance(root.id) * signMultiplier;
+      const children = (childrenByParent.get(root.id) || []).slice().sort((a, b) => a.account_code.localeCompare(b.account_code));
       lines.push({
         type: "account",
         label: `${root.account_code} - ${root.account_name}`,
@@ -248,11 +250,12 @@ export default function ReporteEstadoResultados() {
         accountLevel: root.level,
         accountId: root.id,
         accountCode: root.account_code,
+        parentAccountId: parentId ?? null,
+        hasChildren: children.length > 0,
       });
 
-      const children = (childrenByParent.get(root.id) || []).slice().sort((a, b) => a.account_code.localeCompare(b.account_code));
       for (const child of children) {
-        pushAccountTree(child, signMultiplier, depth + 1);
+        pushAccountTree(child, signMultiplier, depth + 1, root.id);
       }
     };
 
@@ -621,24 +624,7 @@ export default function ReporteEstadoResultados() {
           ) : layout === 'stepped' ? (
             <SteppedReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           ) : (
-            <div className="space-y-1 font-mono text-sm">
-              {filteredReportLines.map((line, idx) => {
-                const isClickable = line.type === 'account' && !!line.accountId;
-                return (
-                  <div
-                    key={idx}
-                    className={`grid grid-cols-2 gap-4 py-1 ${line.isBold ? 'font-bold' : ''} ${line.showLine ? 'border-t border-border' : ''} ${isClickable ? 'cursor-pointer hover:bg-accent/40 transition-colors rounded' : ''}`}
-                    style={{ paddingLeft: line.type === 'account' ? `${Math.min(48, (line.level ?? 1) * 16)}px` : '0' }}
-                    onClick={isClickable ? () => handleAccountClick(line) : undefined}
-                  >
-                    <div className={isClickable ? 'text-primary hover:underline' : ''}>{line.label}</div>
-                    <div className="text-right">
-                      {line.type !== 'section' ? `Q ${line.amount.toFixed(2)}` : ''}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <HierarchicalReportView lines={filteredReportLines} onAccountClick={handleAccountClick} />
           )}
 
           {/* CDV Breakdown Section */}
