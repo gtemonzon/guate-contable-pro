@@ -119,17 +119,25 @@ export default function ReporteVariaciones() {
     try {
       setLoading(true);
 
-      const [currentRes, comparedRes] = await Promise.all([
+      // Derive fiscal year start for P&L period queries
+      const baseFiscalStart = `${new Date(baseDate + "T00:00:00").getFullYear()}-01-01`;
+      const compareFiscalStart = `${new Date(compareDate + "T00:00:00").getFullYear()}-01-01`;
+
+      const [currentBsRes, currentPnlRes, comparedBsRes, comparedPnlRes] = await Promise.all([
         supabase.rpc("get_balance_sheet", { p_enterprise_id: enterpriseId, p_as_of_date: baseDate }),
+        supabase.rpc("get_pnl", { p_enterprise_id: enterpriseId, p_start_date: baseFiscalStart, p_end_date: baseDate }),
         supabase.rpc("get_balance_sheet", { p_enterprise_id: enterpriseId, p_as_of_date: compareDate }),
+        supabase.rpc("get_pnl", { p_enterprise_id: enterpriseId, p_start_date: compareFiscalStart, p_end_date: compareDate }),
       ]);
 
-      if (currentRes.error) throw currentRes.error;
-      if (comparedRes.error) throw comparedRes.error;
+      if (currentBsRes.error) throw currentBsRes.error;
+      if (currentPnlRes.error) throw currentPnlRes.error;
+      if (comparedBsRes.error) throw comparedBsRes.error;
+      if (comparedPnlRes.error) throw comparedPnlRes.error;
 
-      const toMap = (rows: any[]): Map<number, AccountBalance> => {
+      const toMap = (bsRows: any[], pnlRows: any[]): Map<number, AccountBalance> => {
         const m = new Map<number, AccountBalance>();
-        for (const r of rows) {
+        for (const r of bsRows) {
           m.set(Number(r.account_id), {
             id: Number(r.account_id),
             account_code: r.account_code,
@@ -140,11 +148,25 @@ export default function ReporteVariaciones() {
             balance: Number(r.balance),
           });
         }
+        for (const r of pnlRows) {
+          const id = Number(r.account_id);
+          if (!m.has(id)) {
+            m.set(id, {
+              id,
+              account_code: r.account_code,
+              account_name: r.account_name,
+              account_type: r.account_type,
+              level: r.level,
+              parent_account_id: r.parent_account_id ? Number(r.parent_account_id) : null,
+              balance: Number(r.balance),
+            });
+          }
+        }
         return m;
       };
 
-      const currentMap = toMap(currentRes.data || []);
-      const comparedMap = toMap(comparedRes.data || []);
+      const currentMap = toMap(currentBsRes.data || [], currentPnlRes.data || []);
+      const comparedMap = toMap(comparedBsRes.data || [], comparedPnlRes.data || []);
 
       // Merge all account IDs
       const allIds = new Set([...currentMap.keys(), ...comparedMap.keys()]);
