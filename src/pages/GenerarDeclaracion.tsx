@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +26,6 @@ const MONTHS = [
 ];
 
 const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
 export default function GenerarDeclaracion() {
   const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
@@ -37,6 +37,7 @@ export default function GenerarDeclaracion() {
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
   const [exencionIVA, setExencionIVA] = useState<number>(0);
   const [retencionISR, setRetencionISR] = useState<number>(0);
+  const [periodYears, setPeriodYears] = useState<number[]>([]);
 
   const {
     loading,
@@ -61,6 +62,27 @@ export default function GenerarDeclaracion() {
     }
   }, []);
 
+  // Load available years from accounting periods
+  useEffect(() => {
+    if (!enterpriseId) return;
+    supabase
+      .from("tab_accounting_periods")
+      .select("year")
+      .eq("enterprise_id", enterpriseId)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const uniqueYears = [...new Set(data.map(p => p.year))].sort((a, b) => b - a);
+          setPeriodYears(uniqueYears);
+          // If current selection isn't in the list, select the most recent
+          if (!uniqueYears.includes(selectedYear)) {
+            setSelectedYear(uniqueYears[0]);
+          }
+        } else {
+          // Fallback: wide range
+          setPeriodYears(Array.from({ length: 10 }, (_, i) => currentYear - i));
+        }
+      });
+  }, [enterpriseId]);
   // Auto-select form type based on config
   useEffect(() => {
     if (taxConfigs.length > 0 && !selectedFormType) {
@@ -153,7 +175,7 @@ export default function GenerarDeclaracion() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {YEARS.map((y) => (
+                  {periodYears.map((y) => (
                     <SelectItem key={y} value={String(y)}>
                       {y}
                     </SelectItem>
