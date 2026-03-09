@@ -618,6 +618,13 @@ export function useJournalEntryForm(
       bankReference,
     });
     setDetailLines(enforced);
+
+    // Auto-populate document_references from linked purchases
+    const refs = purchases.map(p => {
+      const series = p.invoice_series ? `${p.invoice_series}-` : '';
+      return `${series}${p.invoice_number}`;
+    });
+    setDocumentReferences(refs);
   };
 
   /** Minimal validation for draft save — very permissive */
