@@ -283,7 +283,23 @@ export default function ReporteVariaciones() {
 
   // Filtered lines
   const filteredLines = useMemo(() => {
-    let filtered = lines;
+    // First, identify accounts (and their ancestors) that have at least one non-zero balance
+    const hasActivitySet = new Set<number>();
+    for (const l of lines) {
+      if (Math.abs(l.currentBalance) > 0.001 || Math.abs(l.comparedBalance) > 0.001) {
+        hasActivitySet.add(l.id);
+        // Mark all ancestors as having activity so parent rows remain visible
+        let parentId = l.parentId;
+        while (parentId != null) {
+          if (hasActivitySet.has(parentId)) break;
+          hasActivitySet.add(parentId);
+          const parent = lines.find(p => p.id === parentId);
+          parentId = parent?.parentId ?? null;
+        }
+      }
+    }
+
+    let filtered = lines.filter(l => hasActivitySet.has(l.id));
 
     // Level filter
     if (displayLevel > 0) {
