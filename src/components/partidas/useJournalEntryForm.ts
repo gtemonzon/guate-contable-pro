@@ -212,6 +212,7 @@ export function useJournalEntryForm(
       setPeriodId(entry.accounting_period_id);
       setDocumentReference(entry.document_reference || "");
       setHeaderDescription(entry.description);
+      setDocumentReferences((entry as any).document_references || []);
       setAuditInfo({ createdBy: entry.creator?.full_name || null, createdAt: entry.created_at, updatedBy: entry.modifier?.full_name || null, updatedAt: entry.updated_at });
       setEntryStatus((entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus);
       setBankAccountId(entry.bank_account_id || null);
