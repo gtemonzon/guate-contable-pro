@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -467,7 +468,7 @@ export default function ReportePartidas() {
                               <TableCell>{entry.entry_number}</TableCell>
                               <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                               <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                              <TableCell>{entry.description}</TableCell>
+                              <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                             </TableRow>
@@ -481,7 +482,7 @@ export default function ReportePartidas() {
                                     {detail.account_code} - {detail.account_name}
                                   </TableCell>
                                   <TableCell className="text-sm" colSpan={2}>
-                                    {detail.description || '-'}
+                                    <TruncatedText text={detail.description || '-'} inline />
                                   </TableCell>
                                   <TableCell className="text-right text-sm">
                                     {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}
@@ -500,7 +501,7 @@ export default function ReportePartidas() {
                         <TableCell>{entry.entry_number}</TableCell>
                         <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                         <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                        <TableCell>{entry.description}</TableCell>
+                        <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                       </TableRow>

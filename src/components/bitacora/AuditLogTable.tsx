@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { es } from "date-fns/locale";
 import {
   Table,
@@ -111,8 +112,8 @@ export function AuditLogTable({
                   <TableCell className="text-sm">
                     {getTableLabel(log.table_name)}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
-                    {summary}
+                  <TableCell className="text-sm text-muted-foreground max-w-[300px]">
+                    <TruncatedText text={summary} className="text-sm" inline />
                   </TableCell>
                   <TableCell>
                     <Button

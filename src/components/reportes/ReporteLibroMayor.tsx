@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -667,7 +668,7 @@ export default function ReporteLibroMayor() {
                                 secondaryLabel={entry.description}
                               />
                             </TableCell>
-                            <TableCell>{entry.description}</TableCell>
+                            <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                             <TableCell className="text-right font-mono">
                               {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
                             </TableCell>

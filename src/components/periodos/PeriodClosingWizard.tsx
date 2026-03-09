@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -682,7 +683,7 @@ export function PeriodClosingWizard({
                           <TableRow key={entry.id}>
                             <TableCell className="font-mono text-sm">{entry.entry_number}</TableCell>
                             <TableCell>{formatDate(entry.entry_date)}</TableCell>
-                            <TableCell className="max-w-[200px] truncate">{entry.description}</TableCell>
+                            <TableCell className="max-w-[250px]"><TruncatedText text={entry.description} inline /></TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="capitalize">
                                 {entry.status === 'borrador' ? 'Borrador' : 'Pendiente'}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -180,8 +181,8 @@ export default function AccountLedgerDrawer({
                           <ExternalLink className="h-3 w-3" />
                         </button>
                       </TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate" title={row.description}>
-                        {row.description}
+                      <TableCell className="text-xs max-w-[250px]">
+                        <TruncatedText text={row.description} className="text-xs" inline />
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs whitespace-nowrap">
                         {row.debit_amount > 0 ? formatQ(row.debit_amount) : ''}

@@ -1,4 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -88,8 +89,8 @@ export function BankStatementPreviewTable({
                 <TableCell className="whitespace-nowrap">
                   {formatDateForDisplay(row.fecha)}
                 </TableCell>
-                <TableCell className="max-w-[200px] truncate" title={row.descripcion}>
-                  {row.descripcion || '-'}
+                <TableCell className="max-w-[250px]">
+                  <TruncatedText text={row.descripcion || '-'} inline />
                 </TableCell>
                 <TableCell>{row.referencia || '-'}</TableCell>
                 <TableCell className="text-right font-mono">

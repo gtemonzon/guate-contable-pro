@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatCurrency } from "@/lib/utils";
 
 interface JournalEntryTotalsBarProps {
@@ -31,7 +32,7 @@ export function JournalEntryTotalsBar({
           {headerDescription && (
             <>
               <span className="text-muted-foreground">•</span>
-              <span className="truncate max-w-[200px] text-muted-foreground" title={headerDescription}>{headerDescription}</span>
+              <TruncatedText text={headerDescription} maxLength={60} className="max-w-[200px] text-muted-foreground" inline />
             </>
           )}
         </div>
