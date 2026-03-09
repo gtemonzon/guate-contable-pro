@@ -817,7 +817,8 @@ export function useJournalEntryForm(
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,
-          description: headerDescription, bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
+          description: headerDescription, document_references: documentReferences.length > 0 ? documentReferences : null,
+          bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
           is_posted: false, posted_at: null, created_by: user.id,
