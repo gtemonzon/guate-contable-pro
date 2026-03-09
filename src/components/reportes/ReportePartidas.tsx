@@ -37,6 +37,7 @@ interface JournalEntryData {
   total_debit: number;
   total_credit: number;
   is_posted: boolean;
+  document_references?: string[] | null;
 }
 
 interface JournalEntryDetail {
