@@ -576,6 +576,9 @@ export default function Partidas() {
                         })()}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
+                      {entry.document_references && entry.document_references.length > 0 && (
+                        <ReferenceBadges references={entry.document_references} maxVisible={1} compact className="mt-0.5" />
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-mono font-medium">Q{entry.total_debit.toFixed(2)}</p>
