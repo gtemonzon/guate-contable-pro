@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { es } from "date-fns/locale";
 import {
   Table,

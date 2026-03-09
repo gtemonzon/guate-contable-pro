@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import { formatCurrency } from "@/lib/utils";
 
 interface JournalEntryTotalsBarProps {

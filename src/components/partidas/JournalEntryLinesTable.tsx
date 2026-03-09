@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Trash2, Check, ChevronsUpDown, BarChart2, Landmark, FileText } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import type { Account, DetailLine } from "./useJournalEntryForm";
 
 interface JournalEntryLinesTableProps {
