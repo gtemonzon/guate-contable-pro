@@ -414,6 +414,10 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                 <p className="font-medium">{entry.description}</p>
               </div>
 
+              {entry.document_references && entry.document_references.length > 0 && (
+                <ReferencesFullList references={entry.document_references} />
+              )}
+
               {entry.beneficiary_name && (
                 <div className="text-xs">
                   <span className="text-muted-foreground">Beneficiario</span>
