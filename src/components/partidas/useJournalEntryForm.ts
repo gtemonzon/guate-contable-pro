@@ -156,8 +156,8 @@ export function useJournalEntryForm(
       detailLines: freshLines.map(({ id, ...rest }) => rest),
     });
     setEntryDate(freshDate); setEntryType("diario"); setPeriodId(null);
-    setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
+    setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
+    setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
     draftEntryIdRef.current = null;
