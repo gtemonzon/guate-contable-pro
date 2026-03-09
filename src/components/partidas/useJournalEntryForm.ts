@@ -137,8 +137,8 @@ export function useJournalEntryForm(
 
   const resetFormForEdit = () => {
     setNextEntryNumber(""); setEntryDate(""); setEntryType(""); setPeriodId(null);
-    setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
+    setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
+    setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
     draftEntryIdRef.current = null;
