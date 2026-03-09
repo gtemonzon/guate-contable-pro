@@ -79,6 +79,7 @@ export function useJournalEntryForm(
   const [periodId, setPeriodId] = useState<number | null>(null);
   const [documentReference, setDocumentReference] = useState("");
   const [headerDescription, setHeaderDescription] = useState("");
+  const [documentReferences, setDocumentReferences] = useState<string[]>([]);
 
   // Bank fields
   const [bankAccountId, setBankAccountId] = useState<number | null>(null);
@@ -136,8 +137,8 @@ export function useJournalEntryForm(
 
   const resetFormForEdit = () => {
     setNextEntryNumber(""); setEntryDate(""); setEntryType(""); setPeriodId(null);
-    setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
+    setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
+    setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
     draftEntryIdRef.current = null;
@@ -155,8 +156,8 @@ export function useJournalEntryForm(
       detailLines: freshLines.map(({ id, ...rest }) => rest),
     });
     setEntryDate(freshDate); setEntryType("diario"); setPeriodId(null);
-    setDocumentReference(""); setHeaderDescription(""); setBankAccountId(null);
-    setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
+    setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
+    setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
     draftEntryIdRef.current = null;
@@ -211,6 +212,7 @@ export function useJournalEntryForm(
       setPeriodId(entry.accounting_period_id);
       setDocumentReference(entry.document_reference || "");
       setHeaderDescription(entry.description);
+      setDocumentReferences((entry as any).document_references || []);
       setAuditInfo({ createdBy: entry.creator?.full_name || null, createdAt: entry.created_at, updatedBy: entry.modifier?.full_name || null, updatedAt: entry.updated_at });
       setEntryStatus((entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus);
       setBankAccountId(entry.bank_account_id || null);
@@ -616,6 +618,13 @@ export function useJournalEntryForm(
       bankReference,
     });
     setDetailLines(enforced);
+
+    // Auto-populate document_references from linked purchases
+    const refs = purchases.map(p => {
+      const series = p.invoice_series ? `${p.invoice_series}-` : '';
+      return `${series}${p.invoice_number}`;
+    });
+    setDocumentReferences(refs);
   };
 
   /** Minimal validation for draft save — very permissive */
@@ -733,6 +742,7 @@ export function useJournalEntryForm(
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
+          document_references: documentReferences.length > 0 ? documentReferences : null,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
@@ -770,6 +780,7 @@ export function useJournalEntryForm(
           entry_number: finalEntryNumber,
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
+          document_references: documentReferences.length > 0 ? documentReferences : null,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
@@ -806,7 +817,8 @@ export function useJournalEntryForm(
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
           enterprise_id: parseInt(enterpriseId), entry_number: finalEntryNumber, entry_date: entryDate,
           entry_type: entryType, accounting_period_id: periodId, document_reference: documentReference || null,
-          description: headerDescription, bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
+          description: headerDescription, document_references: documentReferences.length > 0 ? documentReferences : null,
+          bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
           is_posted: false, posted_at: null, created_by: user.id,
@@ -860,6 +872,7 @@ export function useJournalEntryForm(
     loading, isLoadingEntry, accounts, periods, nextEntryNumber,
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
     documentReference, setDocumentReference, headerDescription, setHeaderDescription,
+    documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,

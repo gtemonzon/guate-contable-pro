@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit } from "lucide-react";
+import { ReferenceBadges } from "@/components/partidas/ReferenceBadges";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
@@ -45,6 +46,7 @@ interface JournalEntry {
   document_reference?: string | null;
   reversal_entry_id?: number | null;
   reversed_by_entry_id?: number | null;
+  document_references?: string[] | null;
 }
 
 interface AccountingPeriod {
@@ -574,6 +576,9 @@ export default function Partidas() {
                         })()}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
+                      {entry.document_references && entry.document_references.length > 0 && (
+                        <ReferenceBadges references={entry.document_references} maxVisible={1} compact className="mt-0.5" />
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-mono font-medium">Q{entry.total_debit.toFixed(2)}</p>

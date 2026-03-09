@@ -1,0 +1,1 @@
+ALTER TABLE public.tab_journal_entries ADD COLUMN IF NOT EXISTS document_references text[] DEFAULT '{}'::text[];

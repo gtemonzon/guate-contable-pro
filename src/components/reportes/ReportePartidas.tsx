@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import { ReferenceBadges } from "@/components/partidas/ReferenceBadges";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -36,6 +37,7 @@ interface JournalEntryData {
   total_debit: number;
   total_credit: number;
   is_posted: boolean;
+  document_references?: string[] | null;
 }
 
 interface JournalEntryDetail {
@@ -468,7 +470,12 @@ export default function ReportePartidas() {
                               <TableCell>{entry.entry_number}</TableCell>
                               <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                               <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                              <TableCell><TruncatedText text={entry.description} inline /></TableCell>
+                              <TableCell>
+                                <TruncatedText text={entry.description} inline />
+                                {entry.document_references?.length > 0 && (
+                                  <ReferenceBadges references={entry.document_references} maxVisible={1} compact className="mt-0.5" />
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                             </TableRow>
@@ -501,7 +508,12 @@ export default function ReportePartidas() {
                         <TableCell>{entry.entry_number}</TableCell>
                         <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                         <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                        <TableCell><TruncatedText text={entry.description} inline /></TableCell>
+                        <TableCell>
+                          <TruncatedText text={entry.description} inline />
+                          {entry.document_references?.length && entry.document_references.length > 0 && (
+                            <ReferenceBadges references={entry.document_references} maxVisible={1} compact className="mt-0.5" />
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                       </TableRow>

@@ -14,6 +14,7 @@ import {
   ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ReferencesFullList, ReferenceBadges } from "./ReferenceBadges";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import EntityLink, { type DateContext } from "@/components/ui/entity-link";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +37,7 @@ interface EntryData {
   entry_date: string;
   entry_type: string;
   description: string;
+  document_references?: string[] | null;
   total_debit: number;
   total_credit: number;
   status: string;
@@ -411,6 +413,10 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                 <span className="text-muted-foreground">Descripción</span>
                 <p className="font-medium">{entry.description}</p>
               </div>
+
+              {entry.document_references && entry.document_references.length > 0 && (
+                <ReferencesFullList references={entry.document_references} />
+              )}
 
               {entry.beneficiary_name && (
                 <div className="text-xs">

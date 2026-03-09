@@ -1889,6 +1889,7 @@ export type Database = {
           deleted_by: string | null
           description: string
           document_reference: string | null
+          document_references: string[] | null
           enterprise_id: number | null
           entry_date: string
           entry_number: string
@@ -1922,6 +1923,7 @@ export type Database = {
           deleted_by?: string | null
           description: string
           document_reference?: string | null
+          document_references?: string[] | null
           enterprise_id?: number | null
           entry_date: string
           entry_number: string
@@ -1955,6 +1957,7 @@ export type Database = {
           deleted_by?: string | null
           description?: string
           document_reference?: string | null
+          document_references?: string[] | null
           enterprise_id?: number | null
           entry_date?: string
           entry_number?: string
