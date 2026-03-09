@@ -780,6 +780,7 @@ export function useJournalEntryForm(
           entry_number: finalEntryNumber,
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
+          document_references: documentReferences.length > 0 ? documentReferences : null,
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
