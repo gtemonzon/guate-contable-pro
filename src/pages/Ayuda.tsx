@@ -218,11 +218,16 @@ const helpSections: HelpSection[] = [
         steps: [
           { title: "Ver y Filtrar Partidas", description: "Lista todas las partidas con número, fecha, descripción, totales y estado. Filtre por mes/año, tipo y estado." },
           { title: "Crear Partida con Atajos de Teclado", description: "Haga clic en 'Nueva Partida'. Use Ctrl+Enter para contabilizar o Ctrl+Shift+Enter para guardar borrador." },
+          { title: "Numeración Automática (PREFIX-YYYY-MM-####)", description: "Cada partida recibe un correlativo automático con formato PREFIX-YYYY-MM-#### (ej: PD-2021-03-0001). El número se asigna al contabilizar, no al crear el borrador. Las reversiones usan REV-YYYY-MM-####." },
           { title: "Agregar Líneas de Detalle", description: "Para cada línea: seleccione una cuenta (busque por código o nombre), ingrese descripción y monto al Debe o al Haber." },
           { title: "Validación en Tiempo Real", description: "La barra de totales muestra en verde cuando Debe = Haber. Solo se puede contabilizar si está cuadrada y sin sobregiro." },
-          { title: "Anular Partida", description: "Las partidas contabilizadas pueden anularse registrando el motivo. Queda registrado en la bitácora." },
+          { title: "Anular Partida", description: "Las partidas contabilizadas pueden anularse registrando el motivo. Se genera automáticamente una partida de reversión con correlativo REV-YYYY-MM-####. Queda registrado en la bitácora." },
         ],
-        tips: ["Use Ctrl+Enter en el diálogo para contabilizar sin hacer clic en el botón.", "Los borradores aparecen en la Bandeja de Acciones para facilitar su seguimiento."],
+        tips: [
+          "Use Ctrl+Enter en el diálogo para contabilizar sin hacer clic en el botón.",
+          "Los borradores aparecen en la Bandeja de Acciones para facilitar su seguimiento.",
+          "El correlativo se reinicia mensualmente por empresa y prefijo (PD, PA, PC, REV, VENT, COMP, DEP, BAJA).",
+        ],
       },
       {
         id: "libros-fiscales",
