@@ -640,63 +640,38 @@ const Ayuda = () => {
     </div>
   );
 
-  const renderSection = (section: HelpSection) => (
-    <Card key={section.id} className="mb-4">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <section.icon className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle className="text-lg flex items-center gap-2">
-                {section.title}
-                {section.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
-              </CardTitle>
-              <CardDescription>{section.description}</CardDescription>
-            </div>
-          </div>
-          {section.route && (
-            <Button variant="outline" size="sm" asChild>
-              <Link to={section.route}>
-                Ir a sección <ExternalLink className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {section.steps && renderSteps(section.steps)}
-        {section.tips && renderTips(section.tips)}
-        {section.subsections && (
-          <Accordion type="single" collapsible className="mt-4">
-            {section.subsections.map((sub) => (
-              <AccordionItem key={sub.id} value={sub.id}>
-                <AccordionTrigger className="hover:no-underline">
-                  <div className="flex items-center gap-2 text-left">
-                    <span className="font-medium">{sub.title}</span>
-                    {sub.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
-                    {sub.route && <Badge variant="outline" className="text-xs font-normal">{sub.route}</Badge>}
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="pt-2">
-                  <p className="text-muted-foreground mb-4">{sub.description}</p>
-                  {sub.steps && renderSteps(sub.steps)}
-                  {sub.tips && renderTips(sub.tips)}
-                  {sub.route && (
-                    <Button variant="outline" size="sm" className="mt-4" asChild>
-                      <Link to={sub.route}>
-                        Ir a {sub.title} <ExternalLink className="ml-1 h-3 w-3" />
-                      </Link>
-                    </Button>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        )}
-      </CardContent>
-    </Card>
+  const renderSectionContent = (section: HelpSection) => (
+    <>
+      {section.steps && renderSteps(section.steps)}
+      {section.tips && renderTips(section.tips)}
+      {section.subsections && (
+        <Accordion type="single" collapsible className="mt-4">
+          {section.subsections.map((sub) => (
+            <AccordionItem key={sub.id} value={sub.id}>
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex items-center gap-2 text-left">
+                  <span className="font-medium">{sub.title}</span>
+                  {sub.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
+                  {sub.route && <Badge variant="outline" className="text-xs font-normal">{sub.route}</Badge>}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-2">
+                <p className="text-muted-foreground mb-4">{sub.description}</p>
+                {sub.steps && renderSteps(sub.steps)}
+                {sub.tips && renderTips(sub.tips)}
+                {sub.route && (
+                  <Button variant="outline" size="sm" className="mt-4" asChild>
+                    <Link to={sub.route}>
+                      Ir a {sub.title} <ExternalLink className="ml-1 h-3 w-3" />
+                    </Link>
+                  </Button>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      )}
+    </>
   );
 
   const whatsappNumber = "50254135354";
