@@ -475,6 +475,14 @@ const faqItems = [
     question: "¿Puedo restaurar un respaldo en otra empresa?",
     answer: "Sí, use el modo 'Clonar a esta empresa' en Configuración → Respaldo. El sistema genera nuevos identificadores y reasigna todas las relaciones automáticamente. Ideal para crear empresas de prueba.",
   },
+  {
+    question: "¿Cómo funciona la numeración de partidas?",
+    answer: "Las partidas usan el formato PREFIX-YYYY-MM-#### (ej: PD-2021-03-0001). El correlativo es secuencial por empresa, prefijo, año y mes, y se asigna al contabilizar. Los borradores muestran 'Sin asignar' hasta que se contabilizan. Cada tipo de partida tiene su prefijo: PD (diario), PA (ajuste), PC (cierre), REV (reversión), VENT (ventas), COMP (compras), DEP (depreciación), BAJA (baja de activos).",
+  },
+  {
+    question: "¿Qué formato tienen las reversiones?",
+    answer: "Las reversiones usan el formato REV-YYYY-MM-#### donde el año y mes corresponden a la fecha de la partida original. El número secuencial es independiente por mes, asegurando un correlativo limpio y organizado.",
+  },
 ];
 
 const Ayuda = () => {
