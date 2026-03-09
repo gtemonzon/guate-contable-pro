@@ -239,9 +239,9 @@ const helpSections: HelpSection[] = [
           { title: "Ingreso Rápido con Alt+N", description: "Presione Alt+N para crear un nuevo registro. El sistema guarda el actual antes de crear el nuevo." },
           { title: "Autoguardado Inteligente", description: "Los cambios se guardan automáticamente. El indicador muestra el estado (Guardando… / Guardado)." },
           { title: "Importar desde SAT (CSV o PDF)", description: "Haga clic en 'Importar'. Suba el CSV del portal SAT o el PDF de consulta de compras. El sistema extrae los datos automáticamente." },
-          { title: "Generar Partida Automática del Mes", description: "Haga clic en 'Generar Partida' para crear el asiento contable del mes. Requiere cuentas especiales configuradas." },
+          { title: "Generar Partida Automática del Mes", description: "Haga clic en 'Generar Partida' para crear el asiento contable del mes. El correlativo usa el formato estándar (ej: VENT-2021-03-0001 o COMP-2021-03-0001). Requiere cuentas especiales configuradas." },
         ],
-        tips: ["Alt+N es la forma más rápida de capturar múltiples facturas en secuencia.", "Los archivos CSV del SAT no deben modificarse antes de importar."],
+        tips: ["Alt+N es la forma más rápida de capturar múltiples facturas en secuencia.", "Los archivos CSV del SAT no deben modificarse antes de importar.", "Las partidas generadas desde libros fiscales usan el mismo sistema de numeración atómica que las partidas manuales."],
       },
       {
         id: "asistente-compras",
