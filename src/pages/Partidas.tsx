@@ -45,6 +45,7 @@ interface JournalEntry {
   document_reference?: string | null;
   reversal_entry_id?: number | null;
   reversed_by_entry_id?: number | null;
+  document_references?: string[] | null;
 }
 
 interface AccountingPeriod {
