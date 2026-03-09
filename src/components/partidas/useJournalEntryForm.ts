@@ -79,6 +79,7 @@ export function useJournalEntryForm(
   const [periodId, setPeriodId] = useState<number | null>(null);
   const [documentReference, setDocumentReference] = useState("");
   const [headerDescription, setHeaderDescription] = useState("");
+  const [documentReferences, setDocumentReferences] = useState<string[]>([]);
 
   // Bank fields
   const [bankAccountId, setBankAccountId] = useState<number | null>(null);
