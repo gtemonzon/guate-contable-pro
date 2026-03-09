@@ -800,11 +800,36 @@ const Ayuda = () => {
             <Button variant="link" onClick={() => setSearchQuery("")}>Limpiar búsqueda</Button>
           </Card>
         ) : (
-          filteredSections.map((section) => (
-            <div key={section.id} id={section.id}>
-              {renderSection(section)}
-            </div>
-          ))
+        <Accordion type="multiple" className="space-y-3">
+          {filteredSections.map((section) => (
+            <AccordionItem key={section.id} value={section.id} id={section.id} className="border rounded-lg bg-card px-4">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-3 text-left flex-1">
+                  <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
+                    <section.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-semibold flex items-center gap-2">
+                      {section.title}
+                      {section.isNew && <Badge variant="secondary" className="text-xs">Nuevo</Badge>}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{section.description}</p>
+                  </div>
+                  {section.route && (
+                    <Button variant="outline" size="sm" asChild className="flex-shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
+                      <Link to={section.route}>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-0 pb-4">
+                {renderSectionContent(section)}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
         )}
       </div>
 
