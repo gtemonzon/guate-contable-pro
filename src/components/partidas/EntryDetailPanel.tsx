@@ -14,6 +14,7 @@ import {
   ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ReferencesFullList, ReferenceBadges } from "./ReferenceBadges";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import EntityLink, { type DateContext } from "@/components/ui/entity-link";
 import { useToast } from "@/hooks/use-toast";
