@@ -667,7 +667,7 @@ export default function ReporteLibroMayor() {
                                 secondaryLabel={entry.description}
                               />
                             </TableCell>
-                            <TableCell>{entry.description}</TableCell>
+                            <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                             <TableCell className="text-right font-mono">
                               {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
                             </TableCell>

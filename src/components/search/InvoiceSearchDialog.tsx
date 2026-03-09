@@ -416,8 +416,8 @@ export function InvoiceSearchDialog({
                       {format(parseISO(invoice.invoice_date), "dd/MM/yyyy")}
                     </TableCell>
                     <TableCell className="font-mono">{invoice.nit}</TableCell>
-                    <TableCell className="max-w-[180px] truncate" title={invoice.name}>
-                      {invoice.name}
+                    <TableCell className="max-w-[200px]">
+                      <TruncatedText text={invoice.name} inline />
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatCurrency(invoice.total_amount)}

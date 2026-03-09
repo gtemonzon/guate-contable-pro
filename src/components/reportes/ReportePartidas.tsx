@@ -481,7 +481,7 @@ export default function ReportePartidas() {
                                     {detail.account_code} - {detail.account_name}
                                   </TableCell>
                                   <TableCell className="text-sm" colSpan={2}>
-                                    {detail.description || '-'}
+                                    <TruncatedText text={detail.description || '-'} inline />
                                   </TableCell>
                                   <TableCell className="text-right text-sm">
                                     {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}

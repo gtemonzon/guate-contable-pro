@@ -177,7 +177,7 @@ export function JournalEntryLinesTable({
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-sm px-1 truncate block min-w-0" title={line.description}>{line.description || <span className="text-muted-foreground">-</span>}</span>
+                        {line.description ? <TruncatedText text={line.description} className="text-sm px-1" inline /> : <span className="text-sm px-1 text-muted-foreground">-</span>}
                         {line.source_type === 'PURCHASE' && (
                           <Tooltip>
                             <TooltipTrigger asChild>

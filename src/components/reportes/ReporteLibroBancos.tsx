@@ -390,8 +390,8 @@ export default function ReporteLibroBancos() {
                 <TableRow key={i} className={cn(r.status === "VOID" && "opacity-60 line-through decoration-destructive/40")}>
                   <TableCell className="text-sm">{new Date(r.date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
                   <TableCell className="font-mono text-sm">{r.document_number}</TableCell>
-                  <TableCell className="text-sm truncate max-w-[150px]" title={r.beneficiary}>{r.beneficiary || "—"}</TableCell>
-                  <TableCell className="text-sm truncate max-w-[200px]" title={r.concept}>{r.concept || "—"}</TableCell>
+                  <TableCell className="text-sm max-w-[150px]"><TruncatedText text={r.beneficiary || "—"} className="text-sm" inline /></TableCell>
+                  <TableCell className="text-sm max-w-[200px]"><TruncatedText text={r.concept || "—"} className="text-sm" inline /></TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className={cn("text-[10px]", r.direction === "IN" ? "border-green-500 text-green-600" : "border-orange-500 text-orange-600")}>
                       {r.direction === "IN" ? "Ingreso" : "Egreso"}

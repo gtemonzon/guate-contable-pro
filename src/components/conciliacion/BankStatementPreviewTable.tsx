@@ -88,8 +88,8 @@ export function BankStatementPreviewTable({
                 <TableCell className="whitespace-nowrap">
                   {formatDateForDisplay(row.fecha)}
                 </TableCell>
-                <TableCell className="max-w-[200px] truncate" title={row.descripcion}>
-                  {row.descripcion || '-'}
+                <TableCell className="max-w-[250px]">
+                  <TruncatedText text={row.descripcion || '-'} inline />
                 </TableCell>
                 <TableCell>{row.referencia || '-'}</TableCell>
                 <TableCell className="text-right font-mono">

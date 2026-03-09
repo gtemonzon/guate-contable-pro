@@ -682,7 +682,7 @@ export function PeriodClosingWizard({
                           <TableRow key={entry.id}>
                             <TableCell className="font-mono text-sm">{entry.entry_number}</TableCell>
                             <TableCell>{formatDate(entry.entry_date)}</TableCell>
-                            <TableCell className="max-w-[200px] truncate">{entry.description}</TableCell>
+                            <TableCell className="max-w-[250px]"><TruncatedText text={entry.description} inline /></TableCell>
                             <TableCell>
                               <Badge variant="secondary" className="capitalize">
                                 {entry.status === 'borrador' ? 'Borrador' : 'Pendiente'}
