@@ -872,6 +872,7 @@ export function useJournalEntryForm(
     loading, isLoadingEntry, accounts, periods, nextEntryNumber,
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
     documentReference, setDocumentReference, headerDescription, setHeaderDescription,
+    documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,
