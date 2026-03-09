@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import { ReferenceBadges } from "@/components/partidas/ReferenceBadges";
 import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
