@@ -37,6 +37,7 @@ interface EntryData {
   entry_date: string;
   entry_type: string;
   description: string;
+  document_references?: string[] | null;
   total_debit: number;
   total_credit: number;
   status: string;
