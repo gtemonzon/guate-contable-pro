@@ -500,7 +500,7 @@ export default function ReportePartidas() {
                         <TableCell>{entry.entry_number}</TableCell>
                         <TableCell>{new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('es-GT')}</TableCell>
                         <TableCell className="capitalize">{entry.entry_type}</TableCell>
-                        <TableCell>{entry.description}</TableCell>
+                        <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_debit)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.total_credit)}</TableCell>
                       </TableRow>
