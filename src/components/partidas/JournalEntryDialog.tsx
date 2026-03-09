@@ -19,6 +19,7 @@ import { AccountBalanceInspector } from "./AccountBalanceInspector";
 import VoidChequeDialog from "./VoidChequeDialog";
 import { MetadataEditDialog } from "./MetadataEditDialog";
 import { PurchaseLinkManager } from "./PurchaseLinkManager";
+import { ReferenceBadges } from "./ReferenceBadges";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
