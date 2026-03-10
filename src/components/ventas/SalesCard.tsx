@@ -3,13 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban, RotateCcw, X } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -92,6 +93,9 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = sale.isNew;
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  const saleRef = useRef(sale);
+  saleRef.current = sale;
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
@@ -116,22 +120,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   }));
 
   const searchCustomerByNit = async (nit: string) => {
-    if (!nit || nit.length < 3) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from("tab_sales_ledger")
-        .select("customer_name, customer_nit")
-        .eq("customer_nit", nit)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        onUpdate(index, "customer_name", data.customer_name);
-      }
-    } catch (error) {
-      console.error("Error searching customer:", error);
+    if (!nit || nit.length < 2) return;
+    const result = await lookupNit(nit);
+    if (result?.found && !saleRef.current.customer_name.trim()) {
+      onUpdate(index, "customer_name", result.name);
     }
   };
 
@@ -417,12 +409,17 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
             <div className={sale.establishment_name ? "col-span-2" : "col-span-4"}>
               <label className="text-xs text-muted-foreground">Cliente</label>
-              <Input
-                value={sale.customer_name}
-                onChange={(e) => handleFieldChange("customer_name", e.target.value)}
-                placeholder="Nombre del cliente"
-                className="h-8"
-              />
+              <div className="relative">
+                <Input
+                  value={sale.customer_name}
+                  onChange={(e) => handleFieldChange("customer_name", e.target.value)}
+                  placeholder="Nombre del cliente"
+                  className="h-8"
+                />
+                {nitLooking && (
+                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
             </div>
             {sale.establishment_name && (
               <div className="col-span-2">

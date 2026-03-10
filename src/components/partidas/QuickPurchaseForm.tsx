@@ -9,6 +9,7 @@ import { Plus, CheckCircle2, XCircle, Loader2, RotateCcw, Fuel, AlertTriangle, L
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
+import { useNitLookup } from "@/hooks/useNitLookup";
 
 interface QuickPurchaseFormProps {
   enterpriseId: number;
@@ -56,6 +57,7 @@ export function QuickPurchaseForm({
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
 
   // Duplicate detection state
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
@@ -205,18 +207,10 @@ export function QuickPurchaseForm({
 
     setSuggestLoading(true);
     try {
-      // Lookup supplier name
+      // Lookup supplier name via centralized NIT lookup
       if (!supplier.trim()) {
-        const { data } = await supabase
-          .from("tab_purchase_ledger")
-          .select("supplier_name")
-          .eq("enterprise_id", enterpriseId)
-          .eq("supplier_nit", cleaned)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data?.supplier_name) setSupplier(data.supplier_name);
+        const result = await lookupNit(cleaned);
+        if (result?.found) setSupplier(result.name);
       }
 
       // Auto-suggest operation type + expense account from last purchase
@@ -549,7 +543,12 @@ export function QuickPurchaseForm({
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Proveedor</label>
-          <Input value={supplier} onChange={e => setSupplier(e.target.value)} className="h-8 text-xs mt-1" placeholder="Nombre" />
+          <div className="relative">
+            <Input value={supplier} onChange={e => setSupplier(e.target.value)} className="h-8 text-xs mt-1" placeholder="Nombre" />
+            {nitLooking && (
+              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            )}
+          </div>
         </div>
       </div>
 

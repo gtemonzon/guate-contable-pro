@@ -8,6 +8,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAssetSuppliers, useUpsertAssetSupplier, useDeleteAssetSupplier, type FixedAssetSupplier } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useNitLookup } from "@/hooks/useNitLookup";
+import { validateNIT } from "@/utils/nitValidation";
 
 interface Props { enterpriseId: number; }
 const EMPTY: Partial<FixedAssetSupplier> = { name: "", tax_id: "", address: "", email: "", phone: "", is_active: true };
@@ -19,6 +21,7 @@ export default function AssetSuppliersManager({ enterpriseId }: Props) {
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<FixedAssetSupplier>>(EMPTY);
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
 
   return (
     <>
@@ -73,7 +76,13 @@ export default function AssetSuppliersManager({ enterpriseId }: Props) {
           <DialogHeader><DialogTitle>{form.id ? "Editar proveedor" : "Nuevo proveedor"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Nombre *</Label><Input value={form.name || ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            <div><Label>NIT</Label><Input value={form.tax_id || ""} onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))} /></div>
+            <div><Label>NIT</Label><div className="relative"><Input value={form.tax_id || ""} onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))} onBlur={async (e) => {
+              const val = e.target.value;
+              if (val && validateNIT(val) && !form.name?.trim()) {
+                const result = await lookupNit(val);
+                if (result?.found) setForm((f) => ({ ...f, name: result.name }));
+              }
+            }} />{nitLooking && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}</div></div>
             <div><Label>Dirección</Label><Input value={form.address || ""} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Email</Label><Input value={form.email || ""} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>

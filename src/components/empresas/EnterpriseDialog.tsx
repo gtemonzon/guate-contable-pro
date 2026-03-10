@@ -5,6 +5,7 @@ import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { useToast } from "@/hooks/use-toast";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import {
   Dialog,
   DialogContent,
@@ -81,6 +82,7 @@ export function EnterpriseDialog({
 }: EnterpriseDialogProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(defaultTab || "general");
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -272,7 +274,20 @@ export function EnterpriseDialog({
                   <FormItem>
                     <FormLabel>NIT</FormLabel>
                     <FormControl>
-                      <Input placeholder="12345678-9" {...field} />
+                      <Input
+                        placeholder="12345678-9"
+                        {...field}
+                        onBlur={async (e) => {
+                          field.onBlur();
+                          const val = e.target.value;
+                          if (val && validateNIT(val) && !form.getValues("business_name")?.trim()) {
+                            const result = await lookupNit(val);
+                            if (result?.found) {
+                              form.setValue("business_name", result.name);
+                            }
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -479,7 +494,20 @@ export function EnterpriseDialog({
                     <FormItem>
                       <FormLabel>NIT</FormLabel>
                       <FormControl>
-                        <Input placeholder="12345678-9" {...field} />
+                        <Input
+                          placeholder="12345678-9"
+                          {...field}
+                          onBlur={async (e) => {
+                            field.onBlur();
+                            const val = e.target.value;
+                            if (val && validateNIT(val) && !form.getValues("business_name")?.trim()) {
+                              const result = await lookupNit(val);
+                              if (result?.found) {
+                                form.setValue("business_name", result.name);
+                              }
+                            }
+                          }}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

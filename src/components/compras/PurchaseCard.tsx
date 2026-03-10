@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, X, AlertTriangle } from "lucide-react";
+import { Trash2, Save, X, AlertTriangle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNitLookup } from "@/hooks/useNitLookup";
 
 export interface PurchaseEntry {
   id?: number;
@@ -90,6 +91,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = purchase.isNew;
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
   const isCompact = variant === 'compact';
 
   // Keep a ref to the latest purchase props to avoid stale closures in async callbacks
@@ -122,33 +124,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   }));
 
   const searchSupplierByNit = async (nit: string) => {
-    if (!nit || nit.length < 3) return;
-    
-    // Handle CF
-    if (nit.toUpperCase() === "CF") {
-      if (!purchaseRef.current.supplier_name.trim()) {
-        onUpdate(index, "supplier_name", "Consumidor Final");
-      }
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("tab_purchase_ledger")
-        .select("supplier_name, supplier_nit")
-        .eq("supplier_nit", nit)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        // Use ref to read latest supplier_name (avoids stale closure)
-        if (!purchaseRef.current.supplier_name.trim()) {
-          onUpdate(index, "supplier_name", data.supplier_name);
-        }
-      }
-    } catch (error) {
-      console.error("Error searching supplier:", error);
+    if (!nit || nit.length < 2) return;
+    const result = await lookupNit(nit);
+    if (result?.found && !purchaseRef.current.supplier_name.trim()) {
+      onUpdate(index, "supplier_name", result.name);
     }
   };
 
@@ -463,12 +442,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">Proveedor</label>
-                <Input
-                  value={purchase.supplier_name}
-                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                  placeholder="Nombre del proveedor"
-                  className="h-8 text-xs"
-                />
+                <div className="relative">
+                  <Input
+                    value={purchase.supplier_name}
+                    onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                    placeholder="Nombre del proveedor"
+                    className="h-8 text-xs"
+                  />
+                  {nitLooking && (
+                    <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -668,12 +652,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Proveedor</label>
-              <Input
-                value={purchase.supplier_name}
-                onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                placeholder="Nombre del proveedor"
-                className="h-8"
-              />
+              <div className="relative">
+                <Input
+                  value={purchase.supplier_name}
+                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                  placeholder="Nombre del proveedor"
+                  className="h-8"
+                />
+                {nitLooking && (
+                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
             </div>
           </div>
 
