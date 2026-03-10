@@ -362,17 +362,8 @@ export default function JournalEntryDialog({
           draftEntryId: form.draftEntryId,
         } : undefined}
         onSuccess={async () => {
-          // After voiding: cleanup any auto-draft, force-close dialog, refresh list
-          try {
-            if (form.draftEntryId && !entryToEdit) {
-              await form.handleDiscardAndClose();
-            } else {
-              // For existing entries: just close directly (no draft to clean)
-              onOpenChange(false);
-            }
-          } catch {
-            onOpenChange(false);
-          }
+          // After voiding: cleanup draft if any, close dialog, refresh list
+          await form.handleDiscardAndClose();
           onSuccess();
         }}
       />
