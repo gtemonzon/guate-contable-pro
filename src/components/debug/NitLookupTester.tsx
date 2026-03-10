@@ -214,13 +214,13 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
 
     // Step 4: Guatecompras
     updateStep(3, { status: "running", message: "Consultando Guatecompras..." }, setSteps as any);
-    const satStart = performance.now();
+    const gcStart = performance.now();
     try {
       const { data, error } = await supabase.functions.invoke("lookup-nit", {
         body: { nit: cleaned },
       });
 
-      const satDuration = Math.round(performance.now() - satStart);
+      const gcDuration = Math.round(performance.now() - gcStart);
 
       if (error) {
         updateStep(3, {
