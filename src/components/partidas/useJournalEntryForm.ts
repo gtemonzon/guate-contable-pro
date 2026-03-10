@@ -372,15 +372,19 @@ export function useJournalEntryForm(
     return serializeForDirtyCheck({ entryDate, entryType, periodId, documentReference, headerDescription, detailLines: detailLines.map(({ id, ...rest }) => rest) }) !== initialSnapshotRef.current;
   }, [detailLines, documentReference, entryDate, entryType, headerDescription, periodId, serializeForDirtyCheck]);
 
-  const handleCloseAttempt = useCallback((newOpen: boolean) => {
+  const handleCloseAttempt = useCallback(async (newOpen: boolean) => {
     if (!newOpen && hasUnsavedChanges()) {
       const alreadyPosted = entryToEdit?.is_posted || entryToEdit?.status === 'contabilizado';
       if (alreadyPosted) {
+        await cleanupDraftEntry();
         onOpenChange(false);
         return;
       }
       setShowCloseConfirm(true);
     } else {
+      if (!newOpen) {
+        await cleanupDraftEntry();
+      }
       onOpenChange(newOpen);
     }
   }, [hasUnsavedChanges, onOpenChange, entryToEdit]);
@@ -686,6 +690,30 @@ export function useJournalEntryForm(
 
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
+
+    // ── Fresh duplicate bank-ref check before save ──────────────────
+    if (bankAccountId && bankReference.trim()) {
+      let dupQuery = supabase.from("tab_journal_entries")
+        .select("id, entry_number")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("bank_account_id", bankAccountId)
+        .eq("bank_reference", bankReference.trim())
+        .neq("status", "anulado")
+        .is("deleted_at", null)
+        .not("entry_number", "like", "REV-%")
+        .limit(1);
+
+      const currentId = entryToEdit?.id || draftEntryIdRef.current;
+      if (currentId) dupQuery = dupQuery.neq("id", currentId);
+
+      const { data: dupRow } = await dupQuery.maybeSingle();
+      if (dupRow) {
+        setBankRefDuplicate({ entryNumber: dupRow.entry_number, entryId: dupRow.id });
+        toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${dupRow.entry_number} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
+        return;
+      }
+      setBankRefDuplicate(null);
+    }
 
     // Set loading immediately for instant UI feedback
     setLoading(true);
