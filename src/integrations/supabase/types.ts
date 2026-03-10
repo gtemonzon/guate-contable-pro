@@ -3097,6 +3097,27 @@ export type Database = {
           },
         ]
       }
+      taxpayer_cache: {
+        Row: {
+          last_checked: string
+          name: string
+          nit: string
+          source: string
+        }
+        Insert: {
+          last_checked?: string
+          name: string
+          nit: string
+          source?: string
+        }
+        Update: {
+          last_checked?: string
+          name?: string
+          nit?: string
+          source?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
