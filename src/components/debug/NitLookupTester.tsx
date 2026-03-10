@@ -297,7 +297,7 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
         return <Database className="h-3.5 w-3.5 text-muted-foreground" />;
       case "history":
         return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
-      case "sat":
+      case "guatecompras":
         return <Globe className="h-3.5 w-3.5 text-muted-foreground" />;
     }
   };
