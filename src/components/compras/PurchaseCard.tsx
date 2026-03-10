@@ -124,33 +124,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   }));
 
   const searchSupplierByNit = async (nit: string) => {
-    if (!nit || nit.length < 3) return;
-    
-    // Handle CF
-    if (nit.toUpperCase() === "CF") {
-      if (!purchaseRef.current.supplier_name.trim()) {
-        onUpdate(index, "supplier_name", "Consumidor Final");
-      }
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("tab_purchase_ledger")
-        .select("supplier_name, supplier_nit")
-        .eq("supplier_nit", nit)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        // Use ref to read latest supplier_name (avoids stale closure)
-        if (!purchaseRef.current.supplier_name.trim()) {
-          onUpdate(index, "supplier_name", data.supplier_name);
-        }
-      }
-    } catch (error) {
-      console.error("Error searching supplier:", error);
+    if (!nit || nit.length < 2) return;
+    const result = await lookupNit(nit);
+    if (result?.found && !purchaseRef.current.supplier_name.trim()) {
+      onUpdate(index, "supplier_name", result.name);
     }
   };
 
