@@ -372,15 +372,19 @@ export function useJournalEntryForm(
     return serializeForDirtyCheck({ entryDate, entryType, periodId, documentReference, headerDescription, detailLines: detailLines.map(({ id, ...rest }) => rest) }) !== initialSnapshotRef.current;
   }, [detailLines, documentReference, entryDate, entryType, headerDescription, periodId, serializeForDirtyCheck]);
 
-  const handleCloseAttempt = useCallback((newOpen: boolean) => {
+  const handleCloseAttempt = useCallback(async (newOpen: boolean) => {
     if (!newOpen && hasUnsavedChanges()) {
       const alreadyPosted = entryToEdit?.is_posted || entryToEdit?.status === 'contabilizado';
       if (alreadyPosted) {
+        await cleanupDraftEntry();
         onOpenChange(false);
         return;
       }
       setShowCloseConfirm(true);
     } else {
+      if (!newOpen) {
+        await cleanupDraftEntry();
+      }
       onOpenChange(newOpen);
     }
   }, [hasUnsavedChanges, onOpenChange, entryToEdit]);
