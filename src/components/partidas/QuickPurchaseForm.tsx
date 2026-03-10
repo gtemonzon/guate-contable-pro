@@ -57,6 +57,7 @@ export function QuickPurchaseForm({
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
 
   // Duplicate detection state
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
