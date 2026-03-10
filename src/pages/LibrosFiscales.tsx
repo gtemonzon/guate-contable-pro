@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3 } from "lucide-react";
+import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3, Bug } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
+import { NitLookupTester } from "@/components/debug/NitLookupTester";
 
 interface FELDocumentType {
   id: number;
@@ -93,6 +94,7 @@ export default function LibrosFiscales() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showNitTester, setShowNitTester] = useState(false);
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
@@ -1490,6 +1492,10 @@ export default function LibrosFiscales() {
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Estadísticas
                   </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowNitTester(true)}>
+                    <Bug className="h-4 w-4 mr-2" />
+                    Test NIT
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
                     <Upload className="h-4 w-4 mr-2" />
                     Importar
@@ -1581,6 +1587,10 @@ export default function LibrosFiscales() {
                   <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Estadísticas
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowNitTester(true)}>
+                    <Bug className="h-4 w-4 mr-2" />
+                    Test NIT
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
                     <Upload className="h-4 w-4 mr-2" />
@@ -2748,6 +2758,7 @@ export default function LibrosFiscales() {
           type={activeTab}
         />
       )}
+      <NitLookupTester open={showNitTester} onOpenChange={setShowNitTester} />
     </div>
   );
 }

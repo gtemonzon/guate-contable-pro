@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNitLookup } from "@/hooks/useNitLookup";
+import { validateNIT } from "@/utils/nitValidation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -31,6 +33,7 @@ import {
   DollarSign,
   BookOpen,
   Save,
+  Loader2,
 } from "lucide-react";
 import { ValidationAlert } from "@/components/ui/status-badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,6 +112,7 @@ export function PurchaseInvoiceWizard({
   periodId,
 }: PurchaseInvoiceWizardProps) {
   const { toast } = useToast();
+  const nitLookup = useNitLookup();
   const [currentStep, setCurrentStep] = useState(1);
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
   const [step2Data, setStep2Data] = useState<Step2Data | null>(null);
@@ -297,14 +301,32 @@ export function PurchaseInvoiceWizard({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">NIT del Proveedor *</Label>
-                    <Input {...form1.register("supplier_nit")} placeholder="CF o número de NIT" className="h-9" />
+                    <Input
+                      {...form1.register("supplier_nit")}
+                      placeholder="CF o número de NIT"
+                      className="h-9"
+                      onBlur={async (e) => {
+                        const val = e.target.value;
+                        if (val && validateNIT(val) && !form1.getValues("supplier_name")?.trim()) {
+                          const result = await nitLookup.lookupNit(val);
+                          if (result?.found) {
+                            form1.setValue("supplier_name", result.name);
+                          }
+                        }
+                      }}
+                    />
                     {form1.formState.errors.supplier_nit && (
                       <ValidationAlert type="error" message={form1.formState.errors.supplier_nit.message!} />
                     )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Nombre del Proveedor *</Label>
-                    <Input {...form1.register("supplier_name")} placeholder="Razón social" className="h-9" />
+                    <div className="relative">
+                      <Input {...form1.register("supplier_name")} placeholder="Razón social" className="h-9" />
+                      {nitLookup.isLooking && (
+                        <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
                     {form1.formState.errors.supplier_name && (
                       <ValidationAlert type="error" message={form1.formState.errors.supplier_name.message!} />
                     )}
