@@ -930,7 +930,12 @@ export function useJournalEntryForm(
       resetForm();
       onOpenChange(false);
     },
-    handleSaveDraftAndClose: async () => { setShowCloseConfirm(false); await saveEntry(false); },
+    handleSaveDraftAndClose: async () => {
+      setShowCloseConfirm(false);
+      // Clear stale duplicate state before attempting save
+      setBankRefDuplicate(null);
+      await saveEntry(false);
+    },
     permissions, formatDateTime,
   };
 }
