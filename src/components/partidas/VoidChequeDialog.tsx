@@ -43,6 +43,7 @@ interface VoidChequeDialogProps {
     entryDate: string;
     description: string;
     bankDirection: string;
+    draftEntryId?: number | null;
   };
   onSuccess: () => void;
 }

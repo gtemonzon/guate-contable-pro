@@ -359,8 +359,13 @@ export default function JournalEntryDialog({
           entryDate: form.entryDate,
           description: form.headerDescription,
           bankDirection: form.bankDirection,
+          draftEntryId: form.draftEntryId,
         } : undefined}
-        onSuccess={onSuccess}
+        onSuccess={async () => {
+          // After voiding: cleanup draft if any, close dialog, refresh list
+          await form.handleDiscardAndClose();
+          onSuccess();
+        }}
       />
 
       {/* Metadata Edit Dialog for posted entries */}
