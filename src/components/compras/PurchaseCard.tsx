@@ -442,12 +442,17 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">Proveedor</label>
-                <Input
-                  value={purchase.supplier_name}
-                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                  placeholder="Nombre del proveedor"
-                  className="h-8 text-xs"
-                />
+                <div className="relative">
+                  <Input
+                    value={purchase.supplier_name}
+                    onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                    placeholder="Nombre del proveedor"
+                    className="h-8 text-xs"
+                  />
+                  {nitLooking && (
+                    <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
               </div>
             </div>
 
