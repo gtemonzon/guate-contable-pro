@@ -1492,6 +1492,10 @@ export default function LibrosFiscales() {
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Estadísticas
                   </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowNitTester(true)}>
+                    <Bug className="h-4 w-4 mr-2" />
+                    Test NIT
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
                     <Upload className="h-4 w-4 mr-2" />
                     Importar
