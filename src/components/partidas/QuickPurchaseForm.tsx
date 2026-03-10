@@ -207,18 +207,10 @@ export function QuickPurchaseForm({
 
     setSuggestLoading(true);
     try {
-      // Lookup supplier name
+      // Lookup supplier name via centralized NIT lookup
       if (!supplier.trim()) {
-        const { data } = await supabase
-          .from("tab_purchase_ledger")
-          .select("supplier_name")
-          .eq("enterprise_id", enterpriseId)
-          .eq("supplier_nit", cleaned)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (data?.supplier_name) setSupplier(data.supplier_name);
+        const result = await lookupNit(cleaned);
+        if (result?.found) setSupplier(result.name);
       }
 
       // Auto-suggest operation type + expense account from last purchase
