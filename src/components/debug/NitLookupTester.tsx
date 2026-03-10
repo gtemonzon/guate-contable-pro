@@ -246,17 +246,17 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
         setRawResponse(data || { found: false });
       }
     } catch (err: any) {
-      const satDuration = Math.round(performance.now() - satStart);
+      const gcDuration = Math.round(performance.now() - gcStart);
       let errorMsg = err.message || "Error desconocido";
       if (err.name === "AbortError" || errorMsg.includes("timeout")) {
-        errorMsg = "Timeout: SAT FEL no respondió en el tiempo esperado";
+        errorMsg = "Timeout: Guatecompras no respondió en el tiempo esperado";
       } else if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError")) {
         errorMsg = "Error de conexión: No se pudo contactar al servidor";
       }
       updateStep(3, {
         status: "error",
         message: errorMsg,
-        durationMs: satDuration,
+        durationMs: gcDuration,
       }, setSteps as any);
       setRawResponse({ error: errorMsg });
     }
