@@ -212,8 +212,8 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
       updateStep(2, { status: "error", message: `Error: ${err.message}` }, setSteps as any);
     }
 
-    // Step 4: SAT FEL
-    updateStep(3, { status: "running", message: "Consultando SAT FEL Registry..." }, setSteps as any);
+    // Step 4: Guatecompras
+    updateStep(3, { status: "running", message: "Consultando Guatecompras..." }, setSteps as any);
     const satStart = performance.now();
     try {
       const { data, error } = await supabase.functions.invoke("lookup-nit", {
