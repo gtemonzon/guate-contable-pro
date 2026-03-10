@@ -93,6 +93,9 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = sale.isNew;
+  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  const saleRef = useRef(sale);
+  saleRef.current = sale;
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
