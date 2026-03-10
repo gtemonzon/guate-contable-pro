@@ -3,13 +3,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban, RotateCcw, X } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import {
   AlertDialog,
   AlertDialogAction,
