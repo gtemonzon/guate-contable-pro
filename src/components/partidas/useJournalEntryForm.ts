@@ -286,15 +286,45 @@ export function useJournalEntryForm(
     if (!open || !bankAccountId || bankReference) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
-    supabase.from("tab_journal_entries").select("bank_reference")
-      .eq("enterprise_id", parseInt(enterpriseId)).eq("bank_account_id", bankAccountId)
-      .not("bank_reference", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data?.bank_reference) {
-          const match = data.bank_reference.match(/(\d+)$/);
-          if (match) setBankReference(`${data.bank_reference.replace(/\d+$/, '')}${parseInt(match[1]) + 1}`);
+
+    const fetchNextRef = async () => {
+      // Get the highest bank_reference (numeric suffix) across ALL entries for this bank account,
+      // including voided ones, so we never reuse a voided cheque number.
+      const { data } = await supabase.from("tab_journal_entries").select("bank_reference")
+        .eq("enterprise_id", parseInt(enterpriseId)).eq("bank_account_id", bankAccountId)
+        .not("bank_reference", "is", null)
+        .not("entry_number", "like", "DRAFT-%")
+        .is("deleted_at", null)
+        .order("bank_reference", { ascending: false }).limit(1).maybeSingle();
+
+      // Also check voided bank documents for higher numbers
+      const { data: voidDoc } = await supabase.from("tab_bank_documents")
+        .select("document_number")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .order("document_number", { ascending: false }).limit(1).maybeSingle();
+
+      // Find the highest numeric suffix between journal entries and bank documents
+      let highestNum = 0;
+      let prefix = '';
+
+      for (const ref of [data?.bank_reference, voidDoc?.document_number]) {
+        if (!ref) continue;
+        const match = ref.match(/^(.*?)(\d+)$/);
+        if (match) {
+          const num = parseInt(match[2]);
+          if (num > highestNum) {
+            highestNum = num;
+            prefix = match[1];
+          }
         }
-      });
+      }
+
+      if (highestNum > 0) {
+        setBankReference(`${prefix}${highestNum + 1}`);
+      }
+    };
+
+    fetchNextRef();
   }, [open, bankAccountId]);
 
   // ─── Auto Bank Line Management (single invariant) ──────────────────
@@ -925,7 +955,12 @@ export function useJournalEntryForm(
       resetForm();
       onOpenChange(false);
     },
-    handleSaveDraftAndClose: async () => { setShowCloseConfirm(false); await saveEntry(false); },
+    handleSaveDraftAndClose: async () => {
+      setShowCloseConfirm(false);
+      // Clear stale duplicate state before attempting save
+      setBankRefDuplicate(null);
+      await saveEntry(false);
+    },
     permissions, formatDateTime,
   };
 }
