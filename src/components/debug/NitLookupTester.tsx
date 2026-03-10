@@ -226,7 +226,7 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
         updateStep(3, {
           status: "error",
           message: `Error de Edge Function: ${error.message}`,
-          durationMs: satDuration,
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse({ error: error.message });
       } else if (data?.found) {
@@ -234,14 +234,14 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
           status: "success",
           message: `Encontrado: ${data.name}`,
           detail: `Fuente: ${data.source}`,
-          durationMs: satDuration,
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse(data);
       } else {
         updateStep(3, {
           status: "error",
-          message: "No encontrado en SAT FEL",
-          durationMs: satDuration,
+          message: "No encontrado en Guatecompras",
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse(data || { found: false });
       }
