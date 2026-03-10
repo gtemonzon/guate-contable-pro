@@ -33,6 +33,7 @@ import {
   DollarSign,
   BookOpen,
   Save,
+  Loader2,
 } from "lucide-react";
 import { ValidationAlert } from "@/components/ui/status-badge";
 import { supabase } from "@/integrations/supabase/client";
