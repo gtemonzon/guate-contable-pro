@@ -274,7 +274,20 @@ export function EnterpriseDialog({
                   <FormItem>
                     <FormLabel>NIT</FormLabel>
                     <FormControl>
-                      <Input placeholder="12345678-9" {...field} />
+                      <Input
+                        placeholder="12345678-9"
+                        {...field}
+                        onBlur={async (e) => {
+                          field.onBlur();
+                          const val = e.target.value;
+                          if (val && validateNIT(val) && !form.getValues("business_name")?.trim()) {
+                            const result = await lookupNit(val);
+                            if (result?.found) {
+                              form.setValue("business_name", result.name);
+                            }
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
