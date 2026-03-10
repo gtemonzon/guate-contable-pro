@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNitLookup } from "@/hooks/useNitLookup";
+import { validateNIT } from "@/utils/nitValidation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
