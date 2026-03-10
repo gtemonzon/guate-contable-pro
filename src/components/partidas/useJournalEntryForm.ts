@@ -288,7 +288,12 @@ export function useJournalEntryForm(
     if (!enterpriseId) return;
     supabase.from("tab_journal_entries").select("bank_reference")
       .eq("enterprise_id", parseInt(enterpriseId)).eq("bank_account_id", bankAccountId)
-      .not("bank_reference", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle()
+      .not("bank_reference", "is", null)
+      .not("entry_number", "like", "DRAFT-%")
+      .not("entry_number", "like", "REV-%")
+      .neq("status", "anulado")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle()
       .then(({ data }) => {
         if (data?.bank_reference) {
           const match = data.bank_reference.match(/(\d+)$/);
