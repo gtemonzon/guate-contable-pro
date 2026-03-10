@@ -120,22 +120,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   }));
 
   const searchCustomerByNit = async (nit: string) => {
-    if (!nit || nit.length < 3) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from("tab_sales_ledger")
-        .select("customer_name, customer_nit")
-        .eq("customer_nit", nit)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        onUpdate(index, "customer_name", data.customer_name);
-      }
-    } catch (error) {
-      console.error("Error searching customer:", error);
+    if (!nit || nit.length < 2) return;
+    const result = await lookupNit(nit);
+    if (result?.found && !saleRef.current.customer_name.trim()) {
+      onUpdate(index, "customer_name", result.name);
     }
   };
 
