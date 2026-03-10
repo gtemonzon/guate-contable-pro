@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Clean NIT: remove spaces and dashes
+    // Clean NIT: remove spaces, dashes, non-alphanumeric except K
     const cleaned = nit.replace(/[-\s]/g, "").trim().toUpperCase();
 
     // Handle CF
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 2: Check local purchase/sales ledger as secondary source
+    // Step 2: Check local purchase/sales ledger
     const { data: purchaseMatch } = await supabase
       .from("tab_purchase_ledger")
       .select("supplier_name")
@@ -81,7 +81,6 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (purchaseMatch?.supplier_name) {
-      // Cache locally
       await supabase.from("taxpayer_cache").upsert({
         nit: cleaned,
         name: purchaseMatch.supplier_name,
@@ -128,40 +127,67 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Step 3: Call SAT FEL registry
+    // Step 3: Query Guatecompras
     try {
-      const satUrl = `https://felgtt.sat.gob.gt/RegistroFEL/registroRecipiente?NIT=${cleaned}`;
-      const satResponse = await fetch(satUrl, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(8000),
+      const guatecomprasUrl = `https://www.guatecompras.gt/proveedores/consulta_nit.aspx?nit=${cleaned}`;
+      const gcResponse = await fetch(guatecomprasUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; AccountingApp/1.0)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+        signal: AbortSignal.timeout(10000),
       });
 
-      if (satResponse.ok) {
-        const satData = await satResponse.json();
-        const name =
-          satData?.nombre ||
-          satData?.NOMBRE ||
-          satData?.razonSocial ||
-          satData?.razon_social ||
-          null;
+      if (gcResponse.ok) {
+        const html = await gcResponse.text();
+
+        // Try to extract the supplier name from the HTML response
+        // Guatecompras typically shows the name in a span or label element
+        let name: string | null = null;
+
+        // Pattern 1: Look for "Nombre" or "Razón Social" label followed by value
+        const patterns = [
+          // Common pattern: <span id="...lblNombre">NAME</span>
+          /lblNombre[^>]*>([^<]+)</i,
+          /lblRazonSocial[^>]*>([^<]+)</i,
+          /lblProveedor[^>]*>([^<]+)</i,
+          // Pattern: "Nombre:" or "Razón Social:" followed by text
+          /(?:Nombre|Raz[óo]n\s*Social)\s*:?\s*<[^>]*>\s*([^<]+)/i,
+          // Pattern: table cell after Nombre label
+          /Nombre[^<]*<\/(?:td|th|span|label)>\s*<(?:td|span)[^>]*>\s*([^<]+)/i,
+          // Generic pattern for provider name in structured HTML
+          /(?:proveedor|empresa|contribuyente)[^<]*<\/[^>]+>\s*<[^>]*>\s*([^<]{3,})/i,
+        ];
+
+        for (const pattern of patterns) {
+          const match = html.match(pattern);
+          if (match?.[1]) {
+            const candidate = match[1].trim();
+            // Filter out empty results and HTML artifacts
+            if (candidate.length > 1 && !candidate.startsWith("<") && candidate !== "&nbsp;") {
+              name = candidate;
+              break;
+            }
+          }
+        }
 
         if (name) {
           // Cache result
           await supabase.from("taxpayer_cache").upsert({
             nit: cleaned,
             name,
-            source: "SAT FEL Registry",
+            source: "Guatecompras",
             last_checked: new Date().toISOString(),
           });
 
           return new Response(
-            JSON.stringify({ nit: cleaned, name, source: "SAT FEL Registry", found: true }),
+            JSON.stringify({ nit: cleaned, name, source: "Guatecompras", found: true }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       }
-    } catch (satError) {
-      console.error("SAT FEL lookup failed:", satError);
+    } catch (gcError) {
+      console.error("Guatecompras lookup failed:", gcError);
       // Don't fail – just return not found
     }
 

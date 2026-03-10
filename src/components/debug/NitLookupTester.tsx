@@ -72,7 +72,7 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
       { step: "validation", label: "Validación de formato", status: "pending", message: "" },
       { step: "cache", label: "Caché local (base de datos)", status: "pending", message: "" },
       { step: "history", label: "Historial de compras/ventas", status: "pending", message: "" },
-      { step: "sat", label: "Consulta SAT FEL", status: "pending", message: "" },
+      { step: "guatecompras", label: "Consulta Guatecompras", status: "pending", message: "" },
     ];
     setSteps(initialSteps);
     setSearching(true);
@@ -212,21 +212,21 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
       updateStep(2, { status: "error", message: `Error: ${err.message}` }, setSteps as any);
     }
 
-    // Step 4: SAT FEL
-    updateStep(3, { status: "running", message: "Consultando SAT FEL Registry..." }, setSteps as any);
-    const satStart = performance.now();
+    // Step 4: Guatecompras
+    updateStep(3, { status: "running", message: "Consultando Guatecompras..." }, setSteps as any);
+    const gcStart = performance.now();
     try {
       const { data, error } = await supabase.functions.invoke("lookup-nit", {
         body: { nit: cleaned },
       });
 
-      const satDuration = Math.round(performance.now() - satStart);
+      const gcDuration = Math.round(performance.now() - gcStart);
 
       if (error) {
         updateStep(3, {
           status: "error",
           message: `Error de Edge Function: ${error.message}`,
-          durationMs: satDuration,
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse({ error: error.message });
       } else if (data?.found) {
@@ -234,29 +234,29 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
           status: "success",
           message: `Encontrado: ${data.name}`,
           detail: `Fuente: ${data.source}`,
-          durationMs: satDuration,
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse(data);
       } else {
         updateStep(3, {
           status: "error",
-          message: "No encontrado en SAT FEL",
-          durationMs: satDuration,
+          message: "No encontrado en Guatecompras",
+          durationMs: gcDuration,
         }, setSteps as any);
         setRawResponse(data || { found: false });
       }
     } catch (err: any) {
-      const satDuration = Math.round(performance.now() - satStart);
+      const gcDuration = Math.round(performance.now() - gcStart);
       let errorMsg = err.message || "Error desconocido";
       if (err.name === "AbortError" || errorMsg.includes("timeout")) {
-        errorMsg = "Timeout: SAT FEL no respondió en el tiempo esperado";
+        errorMsg = "Timeout: Guatecompras no respondió en el tiempo esperado";
       } else if (errorMsg.includes("Failed to fetch") || errorMsg.includes("NetworkError")) {
         errorMsg = "Error de conexión: No se pudo contactar al servidor";
       }
       updateStep(3, {
         status: "error",
         message: errorMsg,
-        durationMs: satDuration,
+        durationMs: gcDuration,
       }, setSteps as any);
       setRawResponse({ error: errorMsg });
     }
@@ -297,7 +297,7 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
         return <Database className="h-3.5 w-3.5 text-muted-foreground" />;
       case "history":
         return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
-      case "sat":
+      case "guatecompras":
         return <Globe className="h-3.5 w-3.5 text-muted-foreground" />;
     }
   };
