@@ -409,12 +409,17 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
             <div className={sale.establishment_name ? "col-span-2" : "col-span-4"}>
               <label className="text-xs text-muted-foreground">Cliente</label>
-              <Input
-                value={sale.customer_name}
-                onChange={(e) => handleFieldChange("customer_name", e.target.value)}
-                placeholder="Nombre del cliente"
-                className="h-8"
-              />
+              <div className="relative">
+                <Input
+                  value={sale.customer_name}
+                  onChange={(e) => handleFieldChange("customer_name", e.target.value)}
+                  placeholder="Nombre del cliente"
+                  className="h-8"
+                />
+                {nitLooking && (
+                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
             </div>
             {sale.establishment_name && (
               <div className="col-span-2">
