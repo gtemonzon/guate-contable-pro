@@ -5,6 +5,7 @@ import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { useToast } from "@/hooks/use-toast";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import {
   Dialog,
   DialogContent,
