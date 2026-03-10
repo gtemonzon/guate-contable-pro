@@ -72,7 +72,7 @@ export function NitLookupTester({ open, onOpenChange }: NitLookupTesterProps) {
       { step: "validation", label: "Validación de formato", status: "pending", message: "" },
       { step: "cache", label: "Caché local (base de datos)", status: "pending", message: "" },
       { step: "history", label: "Historial de compras/ventas", status: "pending", message: "" },
-      { step: "sat", label: "Consulta SAT FEL", status: "pending", message: "" },
+      { step: "guatecompras", label: "Consulta Guatecompras", status: "pending", message: "" },
     ];
     setSteps(initialSteps);
     setSearching(true);
