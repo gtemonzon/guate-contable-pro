@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNitLookup } from "@/hooks/useNitLookup";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 
 export interface PurchaseEntry {
   id?: number;
@@ -91,7 +91,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = purchase.isNew;
-  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  
   const isCompact = variant === 'compact';
 
   // Keep a ref to the latest purchase props to avoid stale closures in async callbacks
@@ -123,13 +123,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   }));
 
-  const searchSupplierByNit = async (nit: string) => {
-    if (!nit || nit.length < 2) return;
-    const result = await lookupNit(nit);
-    if (result?.found && !purchaseRef.current.supplier_name.trim()) {
-      onUpdate(index, "supplier_name", result.name);
-    }
-  };
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
@@ -419,7 +412,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">NIT</label>
-                <Input
+                <NitAutocomplete
                   value={purchase.supplier_nit}
                   onChange={(e) => {
                     const val = e.target.value.replace(/-/g, "");
@@ -433,7 +426,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     } else {
                       setNitError(null);
                     }
-                    searchSupplierByNit(val);
+                  }}
+                  onSelectTaxpayer={(nit, name) => {
+                    handleFieldChange("supplier_nit", nit);
+                    if (!purchaseRef.current.supplier_name.trim()) {
+                      handleFieldChange("supplier_name", name);
+                    }
                   }}
                   placeholder="123456789"
                   className={cn("h-8 text-xs", nitError && "border-destructive")}
@@ -442,17 +440,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               <div className="col-span-4">
                 <label className="text-xs text-muted-foreground">Proveedor</label>
-                <div className="relative">
-                  <Input
-                    value={purchase.supplier_name}
-                    onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                    placeholder="Nombre del proveedor"
-                    className="h-8 text-xs"
-                  />
-                  {nitLooking && (
-                    <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </div>
+                <Input
+                  value={purchase.supplier_name}
+                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                  placeholder="Nombre del proveedor"
+                  className="h-8 text-xs"
+                />
               </div>
             </div>
 
@@ -629,7 +622,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">NIT</label>
-              <Input
+              <NitAutocomplete
                 value={purchase.supplier_nit}
                 onChange={(e) => {
                   const val = e.target.value.replace(/-/g, "");
@@ -643,7 +636,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   } else {
                     setNitError(null);
                   }
-                  searchSupplierByNit(val);
+                }}
+                onSelectTaxpayer={(nit, name) => {
+                  handleFieldChange("supplier_nit", nit);
+                  if (!purchaseRef.current.supplier_name.trim()) {
+                    handleFieldChange("supplier_name", name);
+                  }
                 }}
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}
@@ -652,17 +650,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Proveedor</label>
-              <div className="relative">
-                <Input
-                  value={purchase.supplier_name}
-                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                  placeholder="Nombre del proveedor"
-                  className="h-8"
-                />
-                {nitLooking && (
-                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
+              <Input
+                value={purchase.supplier_name}
+                onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                placeholder="Nombre del proveedor"
+                className="h-8"
+              />
             </div>
           </div>
 
