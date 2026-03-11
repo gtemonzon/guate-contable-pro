@@ -207,12 +207,7 @@ export function QuickPurchaseForm({
 
     setSuggestLoading(true);
     try {
-      // Lookup supplier name via centralized NIT lookup
-      if (!supplier.trim()) {
-        const result = await lookupNit(cleaned);
-        if (result?.found) setSupplier(result.name);
-      }
-
+      // Name autofill is handled by NitAutocomplete onSelectTaxpayer
       // Auto-suggest operation type + expense account from last purchase
       let sugOpType: number | null = null;
       let sugAccount: number | null = null;
