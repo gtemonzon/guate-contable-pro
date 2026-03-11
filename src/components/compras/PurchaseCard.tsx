@@ -123,13 +123,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   }));
 
-  const searchSupplierByNit = async (nit: string) => {
-    if (!nit || nit.length < 2) return;
-    const result = await lookupNit(nit);
-    if (result?.found && !purchaseRef.current.supplier_name.trim()) {
-      onUpdate(index, "supplier_name", result.name);
-    }
-  };
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
