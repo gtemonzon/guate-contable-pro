@@ -1655,6 +1655,7 @@ export default function LibrosFiscales() {
                       ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
                       purchase={purchase}
                       index={index}
+                      enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       expenseAccounts={expenseAccounts}
