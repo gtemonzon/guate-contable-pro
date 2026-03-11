@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
-import { NitLookupTester } from "@/components/debug/NitLookupTester";
+
 
 interface FELDocumentType {
   id: number;
