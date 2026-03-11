@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
+import { sanitizeNIT } from "@/utils/nitValidation";
 
 interface NitLookupResult {
   name: string;
@@ -27,72 +27,72 @@ function setMemoryCache(nit: string, name: string, source: string) {
 }
 
 /**
- * Hook for automatic taxpayer name lookup by NIT.
- * 
- * Usage:
- * ```
- * const { lookupNit, isLooking } = useNitLookup();
- * // On NIT blur:
- * const result = await lookupNit(nitValue);
- * if (result?.found && !currentName) setName(result.name);
- * ```
+ * Hook for local-only taxpayer name lookup by NIT.
+ * Queries only the local taxpayer_cache table — no external APIs.
  */
 export function useNitLookup() {
   const [isLooking, setIsLooking] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
 
   const lookupNit = useCallback(async (rawNit: string): Promise<NitLookupResult | null> => {
     const cleaned = sanitizeNIT(rawNit).trim().toUpperCase();
-
-    // Quick exits
     if (!cleaned || cleaned.length < 2) return null;
-    if (!validateNIT(rawNit)) return null;
 
-    // CF shortcut
     if (cleaned === "CF") {
       return { name: "Consumidor Final", source: "system", found: true };
     }
 
-    // Check memory cache first
     const cached = getFromMemoryCache(cleaned);
     if (cached) {
       return { name: cached.name, source: cached.source, found: true };
     }
 
-    // Abort previous in-flight request
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
     setIsLooking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("lookup-nit", {
-        body: { nit: cleaned },
-      });
+      const { data } = await supabase
+        .from("taxpayer_cache")
+        .select("name, source")
+        .eq("nit", cleaned)
+        .maybeSingle();
 
-      if (controller.signal.aborted) return null;
-
-      if (error) {
-        console.error("NIT lookup error:", error);
-        return null;
-      }
-
-      if (data?.found) {
+      if (data) {
         setMemoryCache(cleaned, data.name, data.source);
         return { name: data.name, source: data.source, found: true };
       }
 
       return { name: "", source: "", found: false };
-    } catch (err: any) {
-      if (err?.name === "AbortError") return null;
+    } catch (err) {
       console.error("NIT lookup failed:", err);
       return null;
     } finally {
-      if (!controller.signal.aborted) {
-        setIsLooking(false);
-      }
+      setIsLooking(false);
     }
   }, []);
 
   return { lookupNit, isLooking };
+}
+
+/**
+ * Upsert a taxpayer into the local cache.
+ * Called automatically via DB triggers on purchase/sales save,
+ * but can also be called manually.
+ */
+export async function upsertTaxpayerCache(nit: string, name: string) {
+  if (!nit || !name || nit.toUpperCase() === "CF") return;
+  const cleaned = sanitizeNIT(nit).trim().toUpperCase();
+  if (cleaned.length < 2) return;
+
+  try {
+    await supabase.from("taxpayer_cache").upsert(
+      {
+        nit: cleaned,
+        name,
+        source: "Sistema",
+        last_checked: new Date().toISOString(),
+      },
+      { onConflict: "nit" }
+    );
+    setMemoryCache(cleaned, name, "Sistema");
+  } catch {
+    // Ignore cache errors — non-critical
+  }
 }
