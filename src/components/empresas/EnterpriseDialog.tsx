@@ -493,17 +493,16 @@ export function EnterpriseDialog({
                     <FormItem>
                       <FormLabel>NIT</FormLabel>
                       <FormControl>
-                        <Input
+                        <NitAutocomplete
                           placeholder="12345678-9"
-                          {...field}
-                          onBlur={async (e) => {
-                            field.onBlur();
-                            const val = e.target.value;
-                            if (val && validateNIT(val) && !form.getValues("business_name")?.trim()) {
-                              const result = await lookupNit(val);
-                              if (result?.found) {
-                                form.setValue("business_name", result.name);
-                              }
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          onSelectTaxpayer={(nit, name) => {
+                            form.setValue("nit", nit);
+                            if (!form.getValues("business_name")?.trim()) {
+                              form.setValue("business_name", name);
                             }
                           }}
                         />
