@@ -112,7 +112,7 @@ export function PurchaseInvoiceWizard({
   periodId,
 }: PurchaseInvoiceWizardProps) {
   const { toast } = useToast();
-  const nitLookup = useNitLookup();
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
   const [step2Data, setStep2Data] = useState<Step2Data | null>(null);
