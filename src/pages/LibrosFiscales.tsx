@@ -2750,7 +2750,7 @@ export default function LibrosFiscales() {
           type={activeTab}
         />
       )}
-      <NitLookupTester open={showNitTester} onOpenChange={setShowNitTester} />
+      
     </div>
   );
 }

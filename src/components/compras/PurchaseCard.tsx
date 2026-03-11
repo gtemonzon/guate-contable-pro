@@ -622,7 +622,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">NIT</label>
-              <Input
+              <NitAutocomplete
                 value={purchase.supplier_nit}
                 onChange={(e) => {
                   const val = e.target.value.replace(/-/g, "");
@@ -636,7 +636,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   } else {
                     setNitError(null);
                   }
-                  searchSupplierByNit(val);
+                }}
+                onSelectTaxpayer={(nit, name) => {
+                  handleFieldChange("supplier_nit", nit);
+                  if (!purchaseRef.current.supplier_name.trim()) {
+                    handleFieldChange("supplier_name", name);
+                  }
                 }}
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}
@@ -645,17 +650,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground">Proveedor</label>
-              <div className="relative">
-                <Input
-                  value={purchase.supplier_name}
-                  onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
-                  placeholder="Nombre del proveedor"
-                  className="h-8"
-                />
-                {nitLooking && (
-                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
+              <Input
+                value={purchase.supplier_name}
+                onChange={(e) => handleFieldChange("supplier_name", e.target.value)}
+                placeholder="Nombre del proveedor"
+                className="h-8"
+              />
             </div>
           </div>
 
