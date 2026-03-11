@@ -119,13 +119,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     }
   }));
 
-  const searchCustomerByNit = async (nit: string) => {
-    if (!nit || nit.length < 2) return;
-    const result = await lookupNit(nit);
-    if (result?.found && !saleRef.current.customer_name.trim()) {
-      onUpdate(index, "customer_name", result.name);
-    }
-  };
 
   const handleFieldChange = (field: keyof SaleEntry, value: any) => {
     setHasChanges(true);
