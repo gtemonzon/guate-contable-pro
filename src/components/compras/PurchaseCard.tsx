@@ -127,6 +127,52 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   }));
 
 
+  /** Auto-suggest operation type + expense account from last purchase for this supplier */
+  const fetchSupplierMapping = async (nit: string) => {
+    if (!enterpriseId || !nit || nit.length < 2) return;
+    try {
+      // Try RPC first
+      try {
+        const { data: mapping } = await supabase.rpc("get_last_purchase_mapping", {
+          p_enterprise_id: enterpriseId,
+          p_supplier_nit: nit,
+        });
+        if (mapping && (mapping as any).operation_type_id) {
+          const m = mapping as any;
+          if (!touchedFields.has("operation_type_id") && m.operation_type_id) {
+            onUpdate(index, "operation_type_id", m.operation_type_id);
+          }
+          if (!touchedFields.has("expense_account_id") && m.expense_account_id) {
+            onUpdate(index, "expense_account_id", m.expense_account_id);
+          }
+          return;
+        }
+      } catch { /* RPC not available */ }
+
+      // Fallback: direct query
+      const { data: lastPurchase } = await supabase
+        .from("tab_purchase_ledger")
+        .select("operation_type_id, expense_account_id")
+        .eq("enterprise_id", enterpriseId)
+        .eq("supplier_nit", nit)
+        .is("deleted_at", null)
+        .order("invoice_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastPurchase) {
+        if (!touchedFields.has("operation_type_id") && lastPurchase.operation_type_id) {
+          onUpdate(index, "operation_type_id", lastPurchase.operation_type_id);
+        }
+        if (!touchedFields.has("expense_account_id") && lastPurchase.expense_account_id) {
+          onUpdate(index, "expense_account_id", lastPurchase.expense_account_id);
+        }
+      }
+    } catch {
+      // Non-critical, ignore
+    }
+  };
+
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
     setTouchedFields(prev => new Set(prev).add(field));
