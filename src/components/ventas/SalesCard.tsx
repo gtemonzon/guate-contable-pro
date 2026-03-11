@@ -10,7 +10,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNitLookup } from "@/hooks/useNitLookup";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import {
   AlertDialog,
   AlertDialogAction,
