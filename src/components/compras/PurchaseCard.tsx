@@ -695,9 +695,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 }}
                 onSelectTaxpayer={(nit, name) => {
                   handleFieldChange("supplier_nit", nit);
-                  if (!purchaseRef.current.supplier_name.trim()) {
-                    handleFieldChange("supplier_name", name);
-                  }
+                  handleFieldChange("supplier_name", name);
                   fetchSupplierMapping(nit);
                 }}
                 placeholder="123456789"
