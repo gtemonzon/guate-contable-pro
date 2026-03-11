@@ -107,6 +107,7 @@ export function PurchaseInvoiceList({
           ref={index === purchases.length - 1 ? lastCardRef : undefined}
           purchase={purchase}
           index={index}
+          enterpriseId={enterpriseId}
           variant={variant}
           felDocTypes={felDocTypes}
           operationTypes={operationTypes}
