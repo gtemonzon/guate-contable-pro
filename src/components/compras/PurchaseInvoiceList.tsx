@@ -5,6 +5,8 @@ import { PurchaseCard, PurchaseCardRef, PurchaseEntry } from "./PurchaseCard";
 
 interface PurchaseInvoiceListProps {
   purchases: PurchaseEntry[];
+  /** Enterprise ID for auto-suggest mapping lookups */
+  enterpriseId?: number | null;
   /** 'full' shows all fields; 'compact' hides bank, operation, IDP, batch_reference */
   variant?: "full" | "compact";
   felDocTypes: { code: string; name: string }[];
