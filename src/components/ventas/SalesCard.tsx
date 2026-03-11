@@ -396,9 +396,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 }}
                 onSelectTaxpayer={(nit, name) => {
                   handleFieldChange("customer_nit", nit);
-                  if (!saleRef.current.customer_name.trim()) {
-                    handleFieldChange("customer_name", name);
-                  }
+                  handleFieldChange("customer_name", name);
                 }}
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}

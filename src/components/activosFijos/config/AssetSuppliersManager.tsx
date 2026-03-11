@@ -76,7 +76,7 @@ export default function AssetSuppliersManager({ enterpriseId }: Props) {
           <div className="space-y-3">
             <div><Label>Nombre *</Label><Input value={form.name || ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>NIT</Label><NitAutocomplete value={form.tax_id || ""} onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))} onSelectTaxpayer={(nit, name) => {
-              setForm((f) => ({ ...f, tax_id: nit, ...(!f.name?.trim() ? { name } : {}) }));
+              setForm((f) => ({ ...f, tax_id: nit, name }));
             }} /></div>
             <div><Label>Dirección</Label><Input value={form.address || ""} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">

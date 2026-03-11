@@ -522,7 +522,7 @@ export function QuickPurchaseForm({
               onSelectTaxpayer={(selectedNit, name) => {
                 handleNitChange(selectedNit);
                 setNitValid(validateNIT(selectedNit));
-                if (!supplier.trim()) setSupplier(name);
+                setSupplier(name);
               }}
               className={`h-8 text-xs pr-8 ${nitValid === false ? 'border-destructive focus-visible:ring-destructive' : nitValid === true ? 'border-green-500 focus-visible:ring-green-500' : ''}`}
               placeholder="NIT proveedor"
