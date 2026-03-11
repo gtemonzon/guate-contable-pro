@@ -8,8 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAssetSuppliers, useUpsertAssetSupplier, useDeleteAssetSupplier, type FixedAssetSupplier } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
-import { useNitLookup } from "@/hooks/useNitLookup";
-import { validateNIT } from "@/utils/nitValidation";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 
 interface Props { enterpriseId: number; }
 const EMPTY: Partial<FixedAssetSupplier> = { name: "", tax_id: "", address: "", email: "", phone: "", is_active: true };
