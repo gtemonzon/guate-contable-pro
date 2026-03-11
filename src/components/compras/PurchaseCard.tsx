@@ -689,6 +689,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     setNitError("NIT inválido");
                   } else {
                     setNitError(null);
+                    if (val && validateNIT(val)) {
+                      const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
+                      fetchSupplierMapping(cleaned);
+                    }
                   }
                 }}
                 onSelectTaxpayer={(nit, name) => {
