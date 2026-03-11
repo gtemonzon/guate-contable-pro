@@ -9,7 +9,7 @@ import { Plus, CheckCircle2, XCircle, Loader2, RotateCcw, Fuel, AlertTriangle, L
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
-import { useNitLookup } from "@/hooks/useNitLookup";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 
 interface QuickPurchaseFormProps {
   enterpriseId: number;
