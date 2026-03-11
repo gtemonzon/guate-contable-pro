@@ -20,7 +20,7 @@ export default function AssetSuppliersManager({ enterpriseId }: Props) {
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<FixedAssetSupplier>>(EMPTY);
-  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  
 
   return (
     <>
