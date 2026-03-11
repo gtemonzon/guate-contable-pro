@@ -40,12 +40,30 @@ export const NitAutocomplete = forwardRef<HTMLInputElement, NitAutocompleteProps
       clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
         try {
-          const { data } = await supabase
-            .from("taxpayer_cache")
-            .select("nit, name")
-            .ilike("nit", `${cleaned}%`)
-            .order("last_checked", { ascending: false })
-            .limit(10);
+          // Search by NIT prefix OR by name containing the term
+          const isNumeric = /^\d+$/.test(cleaned);
+
+          let data: Suggestion[] | null = null;
+
+          if (isNumeric) {
+            // Search by NIT prefix
+            const res = await supabase
+              .from("taxpayer_cache")
+              .select("nit, name")
+              .ilike("nit", `${cleaned}%`)
+              .order("last_checked", { ascending: false })
+              .limit(10);
+            data = res.data;
+          } else {
+            // Search by name
+            const res = await supabase
+              .from("taxpayer_cache")
+              .select("nit, name")
+              .ilike("name", `%${cleaned}%`)
+              .order("last_checked", { ascending: false })
+              .limit(10);
+            data = res.data;
+          }
 
           if (data && data.length > 0 && focusedRef.current) {
             setSuggestions(data);
