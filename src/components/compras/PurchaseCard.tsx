@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNitLookup } from "@/hooks/useNitLookup";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 
 export interface PurchaseEntry {
   id?: number;
