@@ -91,7 +91,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isNewRecord = purchase.isNew;
-  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  
   const isCompact = variant === 'compact';
 
   // Keep a ref to the latest purchase props to avoid stale closures in async callbacks
