@@ -70,6 +70,7 @@ const recommendedStyle = "italic text-muted-foreground/60";
 export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ 
   purchase, 
   index, 
+  enterpriseId,
   felDocTypes, 
   operationTypes, 
   expenseAccounts, 
