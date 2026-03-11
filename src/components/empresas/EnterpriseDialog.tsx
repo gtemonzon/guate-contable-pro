@@ -82,7 +82,7 @@ export function EnterpriseDialog({
 }: EnterpriseDialogProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(defaultTab || "general");
-  const { lookupNit, isLooking: nitLooking } = useNitLookup();
+  
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
