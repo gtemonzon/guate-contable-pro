@@ -38,6 +38,8 @@ export interface PurchaseEntry {
 export interface PurchaseCardProps {
   purchase: PurchaseEntry;
   index: number;
+  /** Enterprise ID for auto-suggest mapping lookups */
+  enterpriseId?: number | null;
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
