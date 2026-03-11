@@ -37,6 +37,7 @@ interface PurchaseInvoiceListProps {
 
 export function PurchaseInvoiceList({
   purchases,
+  enterpriseId,
   variant = "full",
   felDocTypes,
   operationTypes,
