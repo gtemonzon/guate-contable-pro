@@ -481,6 +481,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     if (!purchaseRef.current.supplier_name.trim()) {
                       handleFieldChange("supplier_name", name);
                     }
+                    fetchSupplierMapping(nit);
                   }}
                   placeholder="123456789"
                   className={cn("h-8 text-xs", nitError && "border-destructive")}
