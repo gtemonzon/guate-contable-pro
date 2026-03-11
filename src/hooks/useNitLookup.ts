@@ -79,19 +79,21 @@ export function useNitLookup() {
 export async function upsertTaxpayerCache(nit: string, name: string) {
   if (!nit || !name || nit.toUpperCase() === "CF") return;
   const cleaned = sanitizeNIT(nit).trim().toUpperCase();
-  if (cleaned.length < 2) return;
+  // Don't cache short/partial NITs
+  if (cleaned.length < 4) return;
 
   try {
+    // Only update if the new name is at least as long (more complete)
     await supabase.from("taxpayer_cache").upsert(
       {
         nit: cleaned,
-        name,
+        name: name.trim(),
         source: "Sistema",
         last_checked: new Date().toISOString(),
       },
       { onConflict: "nit" }
     );
-    setMemoryCache(cleaned, name, "Sistema");
+    setMemoryCache(cleaned, name.trim(), "Sistema");
   } catch {
     // Ignore cache errors — non-critical
   }
