@@ -282,9 +282,7 @@ export function EnterpriseDialog({
                         name={field.name}
                         onSelectTaxpayer={(nit, name) => {
                           form.setValue("nit", nit);
-                          if (!form.getValues("business_name")?.trim()) {
-                            form.setValue("business_name", name);
-                          }
+                          form.setValue("business_name", name);
                         }}
                       />
                     </FormControl>
@@ -501,9 +499,7 @@ export function EnterpriseDialog({
                           name={field.name}
                           onSelectTaxpayer={(nit, name) => {
                             form.setValue("nit", nit);
-                            if (!form.getValues("business_name")?.trim()) {
-                              form.setValue("business_name", name);
-                            }
+                            form.setValue("business_name", name);
                           }}
                         />
                       </FormControl>

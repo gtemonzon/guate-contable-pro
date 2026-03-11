@@ -308,9 +308,7 @@ export function PurchaseInvoiceWizard({
                       className="h-9"
                       onSelectTaxpayer={(nit, name) => {
                         form1.setValue("supplier_nit", nit);
-                        if (!form1.getValues("supplier_name")?.trim()) {
-                          form1.setValue("supplier_name", name);
-                        }
+                        form1.setValue("supplier_name", name);
                       }}
                     />
                     {form1.formState.errors.supplier_nit && (
