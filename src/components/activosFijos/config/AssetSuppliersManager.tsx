@@ -75,13 +75,9 @@ export default function AssetSuppliersManager({ enterpriseId }: Props) {
           <DialogHeader><DialogTitle>{form.id ? "Editar proveedor" : "Nuevo proveedor"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Nombre *</Label><Input value={form.name || ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            <div><Label>NIT</Label><div className="relative"><Input value={form.tax_id || ""} onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))} onBlur={async (e) => {
-              const val = e.target.value;
-              if (val && validateNIT(val) && !form.name?.trim()) {
-                const result = await lookupNit(val);
-                if (result?.found) setForm((f) => ({ ...f, name: result.name }));
-              }
-            }} />{nitLooking && <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}</div></div>
+            <div><Label>NIT</Label><NitAutocomplete value={form.tax_id || ""} onChange={(e) => setForm((f) => ({ ...f, tax_id: e.target.value }))} onSelectTaxpayer={(nit, name) => {
+              setForm((f) => ({ ...f, tax_id: nit, ...(!f.name?.trim() ? { name } : {}) }));
+            }} /></div>
             <div><Label>Dirección</Label><Input value={form.address || ""} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Email</Label><Input value={form.email || ""} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>

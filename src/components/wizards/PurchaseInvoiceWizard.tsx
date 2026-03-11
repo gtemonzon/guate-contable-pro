@@ -301,17 +301,15 @@ export function PurchaseInvoiceWizard({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">NIT del Proveedor *</Label>
-                    <Input
+                    <NitAutocomplete
                       {...form1.register("supplier_nit")}
+                      value={form1.watch("supplier_nit") || ""}
                       placeholder="CF o número de NIT"
                       className="h-9"
-                      onBlur={async (e) => {
-                        const val = e.target.value;
-                        if (val && validateNIT(val) && !form1.getValues("supplier_name")?.trim()) {
-                          const result = await nitLookup.lookupNit(val);
-                          if (result?.found) {
-                            form1.setValue("supplier_name", result.name);
-                          }
+                      onSelectTaxpayer={(nit, name) => {
+                        form1.setValue("supplier_nit", nit);
+                        if (!form1.getValues("supplier_name")?.trim()) {
+                          form1.setValue("supplier_name", name);
                         }
                       }}
                     />
@@ -321,12 +319,7 @@ export function PurchaseInvoiceWizard({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Nombre del Proveedor *</Label>
-                    <div className="relative">
-                      <Input {...form1.register("supplier_name")} placeholder="Razón social" className="h-9" />
-                      {nitLookup.isLooking && (
-                        <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-                      )}
-                    </div>
+                    <Input {...form1.register("supplier_name")} placeholder="Razón social" className="h-9" />
                     {form1.formState.errors.supplier_name && (
                       <ValidationAlert type="error" message={form1.formState.errors.supplier_name.message!} />
                     )}

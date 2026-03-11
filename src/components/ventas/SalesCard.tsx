@@ -379,7 +379,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">NIT</label>
-              <Input
+              <NitAutocomplete
                 value={sale.customer_nit}
                 onChange={(e) => {
                   const val = e.target.value.replace(/-/g, "");
@@ -393,7 +393,12 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   } else {
                     setNitError(null);
                   }
-                  searchCustomerByNit(val);
+                }}
+                onSelectTaxpayer={(nit, name) => {
+                  handleFieldChange("customer_nit", nit);
+                  if (!saleRef.current.customer_name.trim()) {
+                    handleFieldChange("customer_name", name);
+                  }
                 }}
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}
@@ -402,17 +407,12 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
             <div className={sale.establishment_name ? "col-span-2" : "col-span-4"}>
               <label className="text-xs text-muted-foreground">Cliente</label>
-              <div className="relative">
-                <Input
-                  value={sale.customer_name}
-                  onChange={(e) => handleFieldChange("customer_name", e.target.value)}
-                  placeholder="Nombre del cliente"
-                  className="h-8"
-                />
-                {nitLooking && (
-                  <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
+              <Input
+                value={sale.customer_name}
+                onChange={(e) => handleFieldChange("customer_name", e.target.value)}
+                placeholder="Nombre del cliente"
+                className="h-8"
+              />
             </div>
             {sale.establishment_name && (
               <div className="col-span-2">

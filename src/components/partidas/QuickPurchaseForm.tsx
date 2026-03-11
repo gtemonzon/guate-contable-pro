@@ -514,15 +514,20 @@ export function QuickPurchaseForm({
         <div>
           <label className="text-xs font-medium text-muted-foreground">NIT</label>
           <div className="relative mt-1">
-            <Input
+            <NitAutocomplete
               ref={nitInputRef}
               value={nit}
               onChange={e => handleNitChange(e.target.value)}
               onBlur={handleNitBlur}
+              onSelectTaxpayer={(selectedNit, name) => {
+                handleNitChange(selectedNit);
+                setNitValid(validateNIT(selectedNit));
+                if (!supplier.trim()) setSupplier(name);
+              }}
               className={`h-8 text-xs pr-8 ${nitValid === false ? 'border-destructive focus-visible:ring-destructive' : nitValid === true ? 'border-green-500 focus-visible:ring-green-500' : ''}`}
               placeholder="NIT proveedor"
             />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10">
               {suggestLoading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
               ) : nitValid === true ? (
@@ -538,12 +543,7 @@ export function QuickPurchaseForm({
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground">Proveedor</label>
-          <div className="relative">
-            <Input value={supplier} onChange={e => setSupplier(e.target.value)} className="h-8 text-xs mt-1" placeholder="Nombre" />
-            {nitLooking && (
-              <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            )}
-          </div>
+          <Input value={supplier} onChange={e => setSupplier(e.target.value)} className="h-8 text-xs mt-1" placeholder="Nombre" />
         </div>
       </div>
 
