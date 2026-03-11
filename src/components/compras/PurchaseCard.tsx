@@ -38,6 +38,8 @@ export interface PurchaseEntry {
 export interface PurchaseCardProps {
   purchase: PurchaseEntry;
   index: number;
+  /** Enterprise ID for auto-suggest mapping lookups */
+  enterpriseId?: number | null;
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
@@ -68,6 +70,7 @@ const recommendedStyle = "italic text-muted-foreground/60";
 export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ 
   purchase, 
   index, 
+  enterpriseId,
   felDocTypes, 
   operationTypes, 
   expenseAccounts, 
@@ -123,6 +126,52 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   }));
 
+
+  /** Auto-suggest operation type + expense account from last purchase for this supplier */
+  const fetchSupplierMapping = async (nit: string) => {
+    if (!enterpriseId || !nit || nit.length < 2) return;
+    try {
+      // Try RPC first
+      try {
+        const { data: mapping } = await supabase.rpc("get_last_purchase_mapping", {
+          p_enterprise_id: enterpriseId,
+          p_supplier_nit: nit,
+        });
+        if (mapping && (mapping as any).operation_type_id) {
+          const m = mapping as any;
+          if (!touchedFields.has("operation_type_id") && m.operation_type_id) {
+            onUpdate(index, "operation_type_id", m.operation_type_id);
+          }
+          if (!touchedFields.has("expense_account_id") && m.expense_account_id) {
+            onUpdate(index, "expense_account_id", m.expense_account_id);
+          }
+          return;
+        }
+      } catch { /* RPC not available */ }
+
+      // Fallback: direct query
+      const { data: lastPurchase } = await supabase
+        .from("tab_purchase_ledger")
+        .select("operation_type_id, expense_account_id")
+        .eq("enterprise_id", enterpriseId)
+        .eq("supplier_nit", nit)
+        .is("deleted_at", null)
+        .order("invoice_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastPurchase) {
+        if (!touchedFields.has("operation_type_id") && lastPurchase.operation_type_id) {
+          onUpdate(index, "operation_type_id", lastPurchase.operation_type_id);
+        }
+        if (!touchedFields.has("expense_account_id") && lastPurchase.expense_account_id) {
+          onUpdate(index, "expense_account_id", lastPurchase.expense_account_id);
+        }
+      }
+    } catch {
+      // Non-critical, ignore
+    }
+  };
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
     setHasChanges(true);
@@ -425,6 +474,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                       setNitError("NIT inválido");
                     } else {
                       setNitError(null);
+                      if (val && validateNIT(val)) {
+                        const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
+                        fetchSupplierMapping(cleaned);
+                      }
                     }
                   }}
                   onSelectTaxpayer={(nit, name) => {
@@ -432,6 +485,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     if (!purchaseRef.current.supplier_name.trim()) {
                       handleFieldChange("supplier_name", name);
                     }
+                    fetchSupplierMapping(nit);
                   }}
                   placeholder="123456789"
                   className={cn("h-8 text-xs", nitError && "border-destructive")}
@@ -635,6 +689,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     setNitError("NIT inválido");
                   } else {
                     setNitError(null);
+                    if (val && validateNIT(val)) {
+                      const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
+                      fetchSupplierMapping(cleaned);
+                    }
                   }
                 }}
                 onSelectTaxpayer={(nit, name) => {
@@ -642,6 +700,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   if (!purchaseRef.current.supplier_name.trim()) {
                     handleFieldChange("supplier_name", name);
                   }
+                  fetchSupplierMapping(nit);
                 }}
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}

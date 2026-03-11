@@ -1184,6 +1184,7 @@ export default function LibroCompras() {
         <CardContent>
           <PurchaseInvoiceList
               purchases={purchases}
+              enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
               variant="full"
               felDocTypes={felDocTypes}
               operationTypes={operationTypes}

@@ -5,6 +5,8 @@ import { PurchaseCard, PurchaseCardRef, PurchaseEntry } from "./PurchaseCard";
 
 interface PurchaseInvoiceListProps {
   purchases: PurchaseEntry[];
+  /** Enterprise ID for auto-suggest mapping lookups */
+  enterpriseId?: number | null;
   /** 'full' shows all fields; 'compact' hides bank, operation, IDP, batch_reference */
   variant?: "full" | "compact";
   felDocTypes: { code: string; name: string }[];
@@ -35,6 +37,7 @@ interface PurchaseInvoiceListProps {
 
 export function PurchaseInvoiceList({
   purchases,
+  enterpriseId,
   variant = "full",
   felDocTypes,
   operationTypes,
@@ -104,6 +107,7 @@ export function PurchaseInvoiceList({
           ref={index === purchases.length - 1 ? lastCardRef : undefined}
           purchase={purchase}
           index={index}
+          enterpriseId={enterpriseId}
           variant={variant}
           felDocTypes={felDocTypes}
           operationTypes={operationTypes}

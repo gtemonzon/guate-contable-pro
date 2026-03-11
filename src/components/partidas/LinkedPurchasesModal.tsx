@@ -672,6 +672,7 @@ export default function LinkedPurchasesModal({
           <div className="pb-4">
             <PurchaseInvoiceList
               purchases={purchases}
+              enterpriseId={enterpriseId}
               variant="compact"
               felDocTypes={felDocTypes}
               operationTypes={operationTypes}
