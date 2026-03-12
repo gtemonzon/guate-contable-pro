@@ -466,13 +466,15 @@ export function useDeclaracionCalculo(
     // Aplicar retención realizada (resta del impuesto)
     const isrAPagar = Math.max(0, isrBruto - retencionISRInput);
 
+    // ISR uses exact amounts with centavos (no rounding to integers)
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     return {
-      ingresosBrutos: Math.round(ingresosBrutos),
-      primerTramo: Math.round(primerTramo),
-      segundoTramo: Math.round(segundoTramo),
-      isrBruto: Math.round(isrBruto),
-      retencionRealizada: Math.round(retencionISRInput),
-      isrAPagar: Math.round(isrAPagar),
+      ingresosBrutos: round2(ingresosBrutos),
+      primerTramo: round2(primerTramo),
+      segundoTramo: round2(segundoTramo),
+      isrBruto: round2(isrBruto),
+      retencionRealizada: round2(retencionISRInput),
+      isrAPagar: round2(isrAPagar),
     };
   }, [sales, felDocTypes, retencionISRInput]);
 
