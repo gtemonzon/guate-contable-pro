@@ -920,6 +920,13 @@ export function PeriodClosingWizard({
                           </AlertDescription>
                         </Alert>
 
+                        {cdv.error && (
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{cdv.error}</AlertDescription>
+                          </Alert>
+                        )}
+
                         {/* Action buttons */}
                         <div className="flex gap-2">
                           <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
