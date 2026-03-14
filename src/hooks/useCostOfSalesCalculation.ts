@@ -255,11 +255,14 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     }
 
     setLoading(true);
+    let createdEntryId: number | null = null;
     try {
       const period = await getPeriodData();
       if (!period) throw new Error('Período no encontrado');
 
-      // Delete existing draft CDV entry if exists
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Delete existing draft CDV entry if exists (referenced by closingData)
       if (closingData?.journal_entry_id) {
         const { data: existingEntry } = await supabase
           .from('tab_journal_entries')
@@ -279,6 +282,28 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         }
       }
 
+      // Also clean up any orphaned CDV draft entries for this period
+      const { data: orphanedEntries } = await supabase
+        .from('tab_journal_entries')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('accounting_period_id', periodId)
+        .ilike('entry_number', 'CDV-%')
+        .eq('status', 'borrador')
+        .eq('is_posted', false);
+
+      if (orphanedEntries && orphanedEntries.length > 0) {
+        const orphanIds = orphanedEntries.map(e => e.id);
+        await supabase
+          .from('tab_journal_entry_details')
+          .delete()
+          .in('journal_entry_id', orphanIds);
+        await supabase
+          .from('tab_journal_entries')
+          .delete()
+          .in('id', orphanIds);
+      }
+
       // Generate entry number
       const year = period.year;
       const { data: lastEntry } = await supabase
@@ -296,11 +321,76 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       }
       const entryNumber = `CDV-${year}-${String(nextNumber).padStart(4, '0')}`;
 
-      // Total debits = costOfSales + finalInventory
-      // Total credits = initialInventory + purchasesAmount
-      const totalDebits = Math.round((costOfSales + finalInventory) * 100) / 100;
-      const totalCredits = Math.round((initialInventory + purchasesAmount) * 100) / 100;
+      // Build detail lines first to calculate accurate totals
+      const detailLines: any[] = [];
+      let lineNumber = 1;
+      let calcDebits = 0;
+      let calcCredits = 0;
 
+      if (costOfSales > 0) {
+        const amt = Math.round(Math.abs(costOfSales) * 100) / 100;
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: config.cost_of_sales_account_id,
+          description: 'Costo de Ventas del período',
+          debit_amount: amt,
+          credit_amount: 0,
+        });
+        calcDebits += amt;
+      }
+
+      if (initialInventory > 0) {
+        const amt = Math.round(initialInventory * 100) / 100;
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: config.inventory_account_id,
+          description: 'Traslado inventario inicial',
+          debit_amount: 0,
+          credit_amount: amt,
+        });
+        calcCredits += amt;
+      }
+
+      if (purchasesAmount > 0) {
+        const amt = Math.round(purchasesAmount * 100) / 100;
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: config.purchases_account_id,
+          description: 'Cierre de compras del período',
+          debit_amount: 0,
+          credit_amount: amt,
+        });
+        calcCredits += amt;
+      }
+
+      if (finalInventory > 0) {
+        const amt = Math.round(finalInventory * 100) / 100;
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: config.inventory_account_id,
+          description: 'Registro inventario final (conteo físico)',
+          debit_amount: amt,
+          credit_amount: 0,
+        });
+        calcDebits += amt;
+      }
+
+      if (costOfSales < 0) {
+        const amt = Math.round(Math.abs(costOfSales) * 100) / 100;
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: config.cost_of_sales_account_id,
+          description: 'Costo de Ventas del período (negativo)',
+          debit_amount: 0,
+          credit_amount: amt,
+        });
+        calcCredits += amt;
+      }
+
+      calcDebits = Math.round(calcDebits * 100) / 100;
+      calcCredits = Math.round(calcCredits * 100) / 100;
+
+      // Insert header as draft
       const { data: newEntry, error: entryError } = await supabase
         .from('tab_journal_entries')
         .insert({
@@ -310,91 +400,34 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
           entry_date: period.end_date,
           entry_type: 'diario',
           description: `Costo de Ventas por Coeficiente - Período ${year}`,
-          total_debit: totalDebits,
-          total_credit: totalCredits,
-          is_balanced: Math.abs(totalDebits - totalCredits) < 0.01,
+          total_debit: calcDebits,
+          total_credit: calcCredits,
+          is_balanced: Math.abs(calcDebits - calcCredits) < 0.01,
           is_posted: false,
           status: 'borrador',
+          created_by: user?.id || null,
         })
         .select('id')
         .single();
 
       if (entryError) throw entryError;
+      createdEntryId = newEntry.id;
 
-      // Create detail lines
-      const detailLines: any[] = [];
-      let lineNumber = 1;
-
-      if (costOfSales > 0) {
-        // Line 1: DEBIT cost_of_sales_account
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: config.cost_of_sales_account_id,
-          description: 'Costo de Ventas del período',
-          debit_amount: Math.abs(costOfSales),
-          credit_amount: 0,
-        });
-      }
-
-      // Line 2: CREDIT inventory (initial inventory)
-      if (initialInventory > 0) {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: config.inventory_account_id,
-          description: 'Traslado inventario inicial',
-          debit_amount: 0,
-          credit_amount: initialInventory,
-        });
-      }
-
-      // Line 3: CREDIT purchases
-      if (purchasesAmount > 0) {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: config.purchases_account_id,
-          description: 'Cierre de compras del período',
-          debit_amount: 0,
-          credit_amount: purchasesAmount,
-        });
-      }
-
-      // Line 4: DEBIT inventory (final inventory)
-      if (finalInventory > 0) {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: config.inventory_account_id,
-          description: 'Registro inventario final (conteo físico)',
-          debit_amount: finalInventory,
-          credit_amount: 0,
-        });
-      }
-
-      // Handle negative cost of sales case
-      if (costOfSales < 0) {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: config.cost_of_sales_account_id,
-          description: 'Costo de Ventas del período (negativo)',
-          debit_amount: 0,
-          credit_amount: Math.abs(costOfSales),
-        });
-      }
-
+      // Insert detail lines
       if (detailLines.length > 0) {
+        const linesWithEntryId = detailLines.map(l => ({
+          ...l,
+          journal_entry_id: newEntry.id,
+        }));
         const { error: detailsError } = await supabase
           .from('tab_journal_entry_details')
-          .insert(detailLines);
+          .insert(linesWithEntryId);
         if (detailsError) throw detailsError;
       }
 
       // Update closing record
       if (closingData) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('tab_period_inventory_closing')
           .update({
             journal_entry_id: newEntry.id,
@@ -404,13 +437,24 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
           })
           .eq('id', closingData.id);
 
+        if (updateError) throw updateError;
         setClosingData({ ...closingData, journal_entry_id: newEntry.id, status: 'borrador' });
       }
 
+      createdEntryId = null; // success — don't clean up
       toast.success(`Partida de Costo de Ventas ${entryNumber} generada`);
     } catch (err: any) {
       console.error('Error generating CDV entry:', err);
-      toast.error('Error al generar partida de costo de ventas');
+      const detail = err?.message || err?.details || 'Error desconocido';
+      toast.error(`Error al generar partida CDV: ${detail}`);
+
+      // Clean up partial entry on failure
+      if (createdEntryId) {
+        try {
+          await supabase.from('tab_journal_entry_details').delete().eq('journal_entry_id', createdEntryId);
+          await supabase.from('tab_journal_entries').delete().eq('id', createdEntryId);
+        } catch { /* ignore cleanup errors */ }
+      }
     } finally {
       setLoading(false);
     }

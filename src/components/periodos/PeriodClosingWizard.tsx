@@ -260,6 +260,8 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { data: resultAccount, error: accountError } = await supabase
         .from('tab_accounts')
         .select('id, account_code, account_name')
@@ -271,6 +273,23 @@ export function PeriodClosingWizard({
       }
       
       const year = period.year;
+
+      // Clean up orphaned CIER drafts for this period
+      const { data: orphanedEntries } = await supabase
+        .from('tab_journal_entries')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('accounting_period_id', period.id)
+        .ilike('entry_number', 'CIER-%')
+        .eq('status', 'borrador')
+        .eq('is_posted', false);
+
+      if (orphanedEntries && orphanedEntries.length > 0) {
+        const orphanIds = orphanedEntries.map(e => e.id);
+        await supabase.from('tab_journal_entry_details').delete().in('journal_entry_id', orphanIds);
+        await supabase.from('tab_journal_entries').delete().in('id', orphanIds);
+      }
+
       const { data: lastEntry } = await supabase
         .from('tab_journal_entries')
         .select('entry_number')
@@ -300,7 +319,8 @@ export function PeriodClosingWizard({
           total_credit: Math.round((totalIncome + totalExpenses) * 100) / 100,
           is_balanced: true,
           is_posted: false,
-          status: 'borrador'
+          status: 'borrador',
+          created_by: user?.id || null,
         })
         .select('id')
         .single();
@@ -361,9 +381,10 @@ export function PeriodClosingWizard({
       setClosingEntryId(newEntry.id);
       setClosingEntryGenerated(true);
       toast.success(`Partida de cierre ${entryNumber} generada exitosamente`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating closing entry:', error);
-      toast.error('Error al generar partida de cierre');
+      const detail = error?.message || error?.details || 'Error desconocido';
+      toast.error(`Error al generar partida de cierre: ${detail}`);
     } finally {
       setLoading(false);
     }
@@ -800,19 +821,27 @@ export function PeriodClosingWizard({
                             <TableRow>
                               <TableCell>(-) Inventario Final de Mercaderías</TableCell>
                               <TableCell className="text-right">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={cdv.finalInventory ?? ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === '') return;
-                                    cdv.saveFinalInventory(parseFloat(val));
-                                  }}
-                                  placeholder="Ingrese conteo físico"
-                                  className="w-48 text-right font-mono ml-auto"
-                                />
+                                <div className="flex items-center gap-2 justify-end">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    defaultValue={cdv.finalInventory ?? ''}
+                                    onBlur={(e) => {
+                                      const val = e.target.value;
+                                      if (val === '') return;
+                                      const num = parseFloat(val);
+                                      if (!isNaN(num)) cdv.saveFinalInventory(num);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        (e.target as HTMLInputElement).blur();
+                                      }
+                                    }}
+                                    placeholder="Ingrese conteo físico"
+                                    className="w-48 text-right font-mono ml-auto"
+                                  />
+                                </div>
                               </TableCell>
                               <TableCell>
                                 {cdv.finalInventory !== null ? (
@@ -880,6 +909,40 @@ export function PeriodClosingWizard({
                               <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
                                 Partida CDV generada
                               </Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  // Allow regeneration by clearing the reference
+                                  if (cdv.closingData?.journal_entry_id) {
+                                    try {
+                                      const { data: existingEntry } = await supabase
+                                        .from('tab_journal_entries')
+                                        .select('id, status')
+                                        .eq('id', cdv.closingData.journal_entry_id)
+                                        .single();
+
+                                      if (existingEntry && existingEntry.status === 'borrador') {
+                                        await supabase.from('tab_journal_entry_details').delete().eq('journal_entry_id', existingEntry.id);
+                                        await supabase.from('tab_journal_entries').delete().eq('id', existingEntry.id);
+                                      }
+
+                                      await supabase
+                                        .from('tab_period_inventory_closing')
+                                        .update({ journal_entry_id: null, updated_at: new Date().toISOString() })
+                                        .eq('id', cdv.closingData.id);
+
+                                      cdv.calculate();
+                                      toast.success('Partida CDV eliminada. Puede regenerar.');
+                                    } catch (e: any) {
+                                      toast.error('Error al eliminar partida CDV');
+                                    }
+                                  }
+                                }}
+                              >
+                                <RefreshCw className="h-4 w-4 mr-1" />
+                                Regenerar
+                              </Button>
                             </div>
                           ) : (
                             <Button
