@@ -148,7 +148,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         .eq('accounting_period_id', periodId)
         .eq('is_posted', true)
         .is('deleted_at', null)
-        .neq('entry_type', 'apertura')
+        .in('entry_type', ['diario', 'ajuste'])
     );
 
     if (!entries || entries.length === 0) return 0;
