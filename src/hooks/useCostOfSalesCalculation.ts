@@ -255,6 +255,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     }
 
     setLoading(true);
+    setError(null);
     let createdEntryId: number | null = null;
     try {
       const period = await getPeriodData();
