@@ -801,7 +801,7 @@ export function PeriodClosingWizard({
         </div>
 
         {/* Content */}
-        <ScrollArea className="flex-1 px-1">
+        <ScrollArea className="flex-1 min-h-0 px-1">
           <div className="py-4">
             {/* Step: Pending Entries */}
             {currentStepId === 'partidas' && (
