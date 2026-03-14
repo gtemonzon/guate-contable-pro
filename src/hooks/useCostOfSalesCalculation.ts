@@ -213,13 +213,15 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         return;
       }
 
-      const [invInitial, purchases] = await Promise.all([
+      const [invInitial, purchases, sales] = await Promise.all([
         calculateInitialInventory(period),
         calculatePurchases(period),
+        calculateSales(period),
       ]);
 
       setInitialInventory(invInitial);
       setPurchasesAmount(purchases);
+      setTotalSales(sales);
 
       if (existing) {
         setFinalInventory(existing.final_inventory_amount);
