@@ -118,6 +118,7 @@ export function EnterpriseAccountsManager() {
     { key: 'vat_credit_account_id', label: 'IVA Crédito Fiscal', description: 'Cuenta para registrar el IVA de compras' },
     { key: 'vat_debit_account_id', label: 'IVA Débito Fiscal', description: 'Cuenta para registrar el IVA de ventas' },
     { key: 'period_result_account_id', label: 'Resultado del Período', description: 'Cuenta para acumular utilidad/pérdida del ejercicio' },
+    { key: 'retained_earnings_account_id', label: 'Utilidades Acumuladas', description: 'Cuenta de capital para trasladar el resultado del ejercicio al cierre anual' },
     { key: 'inventory_account_id', label: 'Inventario de Mercaderías', description: 'Cuenta de inventario (se usa para calcular inventario inicial y final)' },
     { key: 'purchases_account_id', label: 'Compras', description: 'Cuenta para registrar las compras' },
     { key: 'sales_account_id', label: 'Ventas', description: 'Cuenta para registrar las ventas' },
