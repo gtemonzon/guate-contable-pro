@@ -517,7 +517,11 @@ export function PeriodClosingWizard({
       case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
       case 'cdv':
-        return cdv.finalInventory !== null && cdv.closingData?.journal_entry_id != null;
+        return cdv.finalInventory !== null &&
+          cdv.costOfSales !== null &&
+          !!config?.inventory_account_id &&
+          !!config?.purchases_account_id &&
+          !!config?.cost_of_sales_account_id;
       case 'generar':
         return closingEntryGenerated;
       case 'verificar':
@@ -543,20 +547,42 @@ export function PeriodClosingWizard({
         await loadAccountBalances();
       }
     } else if (currentStepId === 'cdv' && canAdvance()) {
-      // Post CDV entry before generating closing entry
+      // Ensure CDV entry exists, then post it before moving on
       setLoading(true);
       try {
+        let journalEntryId = cdv.closingData?.journal_entry_id ?? null;
+
+        if (!journalEntryId && cdv.finalInventory !== null && cdv.costOfSales !== null && period) {
+          const generated = await cdv.generateCostOfSalesEntry();
+
+          if (generated) {
+            const { data: latestClosing } = await supabase
+              .from('tab_period_inventory_closing')
+              .select('journal_entry_id')
+              .eq('enterprise_id', enterpriseId)
+              .eq('accounting_period_id', period.id)
+              .maybeSingle();
+
+            journalEntryId = latestClosing?.journal_entry_id ?? null;
+          }
+        }
+
+        if (!journalEntryId) {
+          toast.error('No se pudo generar la póliza CDV. Use "Generar / Reintentar".');
+          return;
+        }
+
         const posted = await cdv.postCdvEntry();
         if (!posted) {
           toast.error('Error al contabilizar la partida de costo de ventas');
-          setLoading(false);
           return;
         }
+
+        setCurrentStepIndex(nextIndex);
+        await loadAccountBalances();
       } finally {
         setLoading(false);
       }
-      setCurrentStepIndex(nextIndex);
-      await loadAccountBalances();
     } else if (currentStepId === 'generar' && canAdvance()) {
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
@@ -898,6 +924,13 @@ export function PeriodClosingWizard({
                           </AlertDescription>
                         </Alert>
 
+                        {cdv.error && (
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{cdv.error}</AlertDescription>
+                          </Alert>
+                        )}
+
                         {/* Action buttons */}
                         <div className="flex gap-2">
                           <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
@@ -950,7 +983,7 @@ export function PeriodClosingWizard({
                               disabled={cdv.loading || cdv.finalInventory === null || cdv.costOfSales === null || !config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id}
                             >
                               <Calculator className="h-4 w-4 mr-2" />
-                              Generar Partida de Costo de Ventas
+                              Generar / Reintentar Partida CDV
                             </Button>
                           )}
                         </div>

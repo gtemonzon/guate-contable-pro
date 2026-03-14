@@ -244,17 +244,18 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     }
   };
 
-  const generateCostOfSalesEntry = async () => {
+  const generateCostOfSalesEntry = async (): Promise<boolean> => {
     if (!config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id) {
       toast.error('Faltan cuentas configuradas para el costo de ventas');
-      return;
+      return false;
     }
     if (finalInventory === null || costOfSales === null) {
       toast.error('Debe ingresar el inventario final primero');
-      return;
+      return false;
     }
 
     setLoading(true);
+    setError(null);
     let createdEntryId: number | null = null;
     try {
       const period = await getPeriodData();
@@ -425,27 +426,50 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         if (detailsError) throw detailsError;
       }
 
-      // Update closing record
+      // Update or create closing record (avoid stale-state race conditions)
+      const closingPayload = {
+        enterprise_id: enterpriseId,
+        accounting_period_id: periodId,
+        initial_inventory_amount: initialInventory,
+        purchases_amount: purchasesAmount,
+        final_inventory_amount: finalInventory,
+        cost_of_sales_amount: costOfSales,
+        journal_entry_id: newEntry.id,
+        status: 'borrador' as const,
+        calculated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
       if (closingData) {
-        const { error: updateError } = await supabase
+        const { data: updatedClosing, error: updateError } = await supabase
           .from('tab_period_inventory_closing')
-          .update({
-            journal_entry_id: newEntry.id,
-            status: 'borrador',
-            calculated_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', closingData.id);
+          .update(closingPayload)
+          .eq('id', closingData.id)
+          .select('*')
+          .single();
 
         if (updateError) throw updateError;
-        setClosingData({ ...closingData, journal_entry_id: newEntry.id, status: 'borrador' });
+        setClosingData(updatedClosing as ClosingData);
+      } else {
+        const { data: upsertedClosing, error: upsertError } = await supabase
+          .from('tab_period_inventory_closing')
+          .upsert(closingPayload, { onConflict: 'enterprise_id,accounting_period_id' })
+          .select('*')
+          .single();
+
+        if (upsertError) throw upsertError;
+        setClosingData(upsertedClosing as ClosingData);
       }
+
+      setNeedsRecalculation(false);
 
       createdEntryId = null; // success — don't clean up
       toast.success(`Partida de Costo de Ventas ${entryNumber} generada`);
+      return true;
     } catch (err: any) {
       console.error('Error generating CDV entry:', err);
       const detail = err?.message || err?.details || 'Error desconocido';
+      setError(detail);
       toast.error(`Error al generar partida CDV: ${detail}`);
 
       // Clean up partial entry on failure
@@ -455,6 +479,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
           await supabase.from('tab_journal_entries').delete().eq('id', createdEntryId);
         } catch { /* ignore cleanup errors */ }
       }
+      return false;
     } finally {
       setLoading(false);
     }
