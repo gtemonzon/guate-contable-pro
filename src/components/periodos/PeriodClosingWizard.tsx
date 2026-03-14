@@ -516,6 +516,8 @@ export function PeriodClosingWizard({
       case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
       case 'cdv':
+        // Allow advance if CDV is already posted
+        if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
         return cdv.finalInventory !== null &&
           cdv.costOfSales !== null &&
           !!config?.inventory_account_id &&
