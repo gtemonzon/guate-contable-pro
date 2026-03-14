@@ -403,7 +403,6 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
           description: `Costo de Ventas por Coeficiente - Período ${year}`,
           total_debit: calcDebits,
           total_credit: calcCredits,
-          is_balanced: Math.abs(calcDebits - calcCredits) < 0.01,
           is_posted: false,
           status: 'borrador',
           created_by: user?.id || null,

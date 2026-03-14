@@ -317,7 +317,6 @@ export function PeriodClosingWizard({
           description: `Partida de cierre del período ${period.year}`,
           total_debit: Math.round((totalIncome + totalExpenses) * 100) / 100,
           total_credit: Math.round((totalIncome + totalExpenses) * 100) / 100,
-          is_balanced: true,
           is_posted: false,
           status: 'borrador',
           created_by: user?.id || null,
@@ -761,7 +760,7 @@ export function PeriodClosingWizard({
 
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[58vh] overflow-y-auto pr-1">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
