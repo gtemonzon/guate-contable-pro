@@ -1218,9 +1218,13 @@ export function PeriodClosingWizard({
                           <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
                             <CheckCircle2 className="h-6 w-6" />
                             <div>
-                              <p className="font-medium">Partida de cierre generada</p>
+                              <p className="font-medium">
+                                {closingEntryStatus === 'contabilizado' ? 'Partida de cierre ya contabilizada' : 'Partida de cierre generada'}
+                              </p>
                               <p className="text-sm text-green-600 dark:text-green-500">
-                                La partida ha sido creada como borrador y se contabilizará al confirmar el cierre.
+                                {closingEntryNumber
+                                  ? `La póliza ${closingEntryNumber} ya existe${closingEntryStatus === 'contabilizado' ? ' y está contabilizada.' : ' en borrador y se contabilizará al confirmar el cierre.'}`
+                                  : 'La partida ha sido creada como borrador y se contabilizará al confirmar el cierre.'}
                               </p>
                             </div>
                           </div>
