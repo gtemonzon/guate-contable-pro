@@ -156,6 +156,7 @@ export function PeriodClosingWizard({
       .eq('accounting_period_id', period.id)
       .eq('entry_type', 'cierre')
       .is('deleted_at', null)
+      .is('reversal_entry_id', null)
       .order('is_posted', { ascending: false })
       .order('id', { ascending: false })
       .limit(1)
