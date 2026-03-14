@@ -100,11 +100,10 @@ export function PurchaseLinkSummary({
     }
 
     const totalContra = totals.total;
+    const contraAccount = bankAccountId ? accounts.find((a) => a.id === bankAccountId) : null;
     const contraLine: PreviewLine = {
       account: bankAccountId
-        ? (accounts.find((a) => a.id === bankAccountId)
-            ? `${accounts.find((a) => a.id === bankAccountId)!.account_code} ${accounts.find((a) => a.id === bankAccountId)!.account_name}`
-            : "Banco")
+        ? (contraAccount ? `${contraAccount.account_code} ${contraAccount.account_name}` : "Banco")
         : "Cuentas por Pagar",
       debit: totalContra < 0 ? Math.abs(totalContra) : 0,
       credit: totalContra >= 0 ? totalContra : 0,
