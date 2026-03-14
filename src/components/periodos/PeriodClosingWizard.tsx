@@ -565,6 +565,7 @@ export function PeriodClosingWizard({
         window.dispatchEvent(new CustomEvent('periodChanged'));
       }
       
+      setClosingEntryStatus('contabilizado');
       toast.success('Período cerrado exitosamente');
       setCurrentStepIndex(steps.length - 1); // Go to "Completado"
     } catch (error) {
