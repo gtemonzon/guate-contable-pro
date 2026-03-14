@@ -760,7 +760,7 @@ export function PeriodClosingWizard({
 
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[58vh] overflow-y-auto pr-1">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
