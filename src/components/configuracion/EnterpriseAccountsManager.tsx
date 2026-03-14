@@ -91,6 +91,7 @@ export function EnterpriseAccountsManager() {
       vat_credit_account_id: formData.vat_credit_account_id,
       vat_debit_account_id: formData.vat_debit_account_id,
       period_result_account_id: formData.period_result_account_id,
+      retained_earnings_account_id: formData.retained_earnings_account_id,
       purchases_account_id: formData.purchases_account_id,
       sales_account_id: formData.sales_account_id,
       customers_account_id: formData.customers_account_id,
