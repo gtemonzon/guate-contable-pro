@@ -25,7 +25,9 @@ import {
   ExternalLink,
   AlertCircle,
   Package,
-  RefreshCw
+  RefreshCw,
+  ArrowRightLeft,
+  BookOpen
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
@@ -61,7 +63,7 @@ interface AccountBalance {
   balance: number;
 }
 
-interface ExistingClosingEntry {
+interface ExistingEntry {
   id: number;
   entry_number: string;
   status: string;
@@ -97,13 +99,26 @@ export function PeriodClosingWizard({
   const [pendingEntries, setPendingEntries] = useState<PendingEntry[]>([]);
   const [continueDespitePending, setContinueDespitePending] = useState(false);
   
-  // Step: Closing entry
+  // Step: Closing entry (results)
   const [incomeAccounts, setIncomeAccounts] = useState<AccountBalance[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<AccountBalance[]>([]);
   const [closingEntryGenerated, setClosingEntryGenerated] = useState(false);
   const [closingEntryId, setClosingEntryId] = useState<number | null>(null);
   const [closingEntryNumber, setClosingEntryNumber] = useState<string | null>(null);
   const [closingEntryStatus, setClosingEntryStatus] = useState<string | null>(null);
+  
+  // Step: Transfer to equity
+  const [transferEntryGenerated, setTransferEntryGenerated] = useState(false);
+  const [transferEntryId, setTransferEntryId] = useState<number | null>(null);
+  const [transferEntryNumber, setTransferEntryNumber] = useState<string | null>(null);
+  const [transferEntryStatus, setTransferEntryStatus] = useState<string | null>(null);
+
+  // Step: Opening balance
+  const [openingEntryGenerated, setOpeningEntryGenerated] = useState(false);
+  const [openingEntryId, setOpeningEntryId] = useState<number | null>(null);
+  const [openingEntryNumber, setOpeningEntryNumber] = useState<string | null>(null);
+  const [openingEntryStatus, setOpeningEntryStatus] = useState<string | null>(null);
+  const [openingBalanceAccounts, setOpeningBalanceAccounts] = useState<AccountBalance[]>([]);
   
   // Step: Balance verification
   const [totalAssets, setTotalAssets] = useState(0);
@@ -129,7 +144,9 @@ export function PeriodClosingWizard({
       s.push({ id: 'cdv', title: 'Costo Ventas', icon: Package, description: 'Calcular CDV' });
     }
     s.push(
-      { id: 'generar', title: 'Generar', icon: Calculator, description: 'Partida de cierre' },
+      { id: 'generar', title: 'Cierre', icon: Calculator, description: 'Cierre de resultados' },
+      { id: 'traslado', title: 'Traslado', icon: ArrowRightLeft, description: 'A utilidades' },
+      { id: 'apertura', title: 'Apertura', icon: BookOpen, description: 'Partida apertura' },
       { id: 'verificar', title: 'Verificar', icon: Scale, description: 'Balances' },
       { id: 'confirmar', title: 'Confirmar', icon: Lock, description: 'Cierre' },
       { id: 'completado', title: 'Completado', icon: PartyPopper, description: '' },
@@ -139,22 +156,19 @@ export function PeriodClosingWizard({
 
   const currentStepId = steps[currentStepIndex]?.id || 'partidas';
   
-  // Signed totals (do not use absolute values):
-  // ingreso balance is usually credit (negative in debit-credit model) => invert sign
-  // gasto balance is usually debit (positive in debit-credit model) => keep sign
   const totalIncome = incomeAccounts.reduce((sum, acc) => sum + (-acc.balance), 0);
   const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + acc.balance, 0);
   const periodResult = totalIncome - totalExpenses;
 
-  const findExistingClosingEntry = useCallback(async (): Promise<ExistingClosingEntry | null> => {
-    if (!period) return null;
-
+  // ---- Find existing entries ----
+  const findExistingEntry = useCallback(async (entryType: string, periodId: number, prefix: string): Promise<ExistingEntry | null> => {
     const { data, error } = await supabase
       .from('tab_journal_entries')
       .select('id, entry_number, status, is_posted')
       .eq('enterprise_id', enterpriseId)
-      .eq('accounting_period_id', period.id)
-      .eq('entry_type', 'cierre')
+      .eq('accounting_period_id', periodId)
+      .eq('entry_type', entryType)
+      .ilike('entry_number', `${prefix}-%`)
       .is('deleted_at', null)
       .is('reversal_entry_id', null)
       .order('is_posted', { ascending: false })
@@ -163,29 +177,52 @@ export function PeriodClosingWizard({
       .maybeSingle();
 
     if (error) throw error;
-    return (data as ExistingClosingEntry | null) ?? null;
-  }, [enterpriseId, period]);
+    return (data as ExistingEntry | null) ?? null;
+  }, [enterpriseId]);
 
-  const syncExistingClosingEntryState = useCallback(async () => {
+  const syncExistingEntries = useCallback(async () => {
+    if (!period) return;
     try {
-      const existingEntry = await findExistingClosingEntry();
-
-      if (existingEntry) {
+      // Check closing entry
+      const closingEntry = await findExistingEntry('cierre', period.id, 'CIER');
+      if (closingEntry) {
         setClosingEntryGenerated(true);
-        setClosingEntryId(existingEntry.id);
-        setClosingEntryNumber(existingEntry.entry_number);
-        setClosingEntryStatus(existingEntry.status);
-        return;
+        setClosingEntryId(closingEntry.id);
+        setClosingEntryNumber(closingEntry.entry_number);
+        setClosingEntryStatus(closingEntry.status);
       }
 
-      setClosingEntryGenerated(false);
-      setClosingEntryId(null);
-      setClosingEntryNumber(null);
-      setClosingEntryStatus(null);
+      // Check transfer entry
+      const transferEntry = await findExistingEntry('cierre', period.id, 'TRAS');
+      if (transferEntry) {
+        setTransferEntryGenerated(true);
+        setTransferEntryId(transferEntry.id);
+        setTransferEntryNumber(transferEntry.entry_number);
+        setTransferEntryStatus(transferEntry.status);
+      }
+
+      // Check opening entry (in next period)
+      const nextYear = period.year + 1;
+      const { data: nextPeriod } = await supabase
+        .from('tab_accounting_periods')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('year', nextYear)
+        .maybeSingle();
+
+      if (nextPeriod) {
+        const openEntry = await findExistingEntry('apertura', nextPeriod.id, 'APER');
+        if (openEntry) {
+          setOpeningEntryGenerated(true);
+          setOpeningEntryId(openEntry.id);
+          setOpeningEntryNumber(openEntry.entry_number);
+          setOpeningEntryStatus(openEntry.status);
+        }
+      }
     } catch (error) {
-      console.error('Error loading existing closing entry:', error);
+      console.error('Error loading existing entries:', error);
     }
-  }, [findExistingClosingEntry]);
+  }, [period, enterpriseId, findExistingEntry]);
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -199,15 +236,24 @@ export function PeriodClosingWizard({
       setClosingEntryId(null);
       setClosingEntryNumber(null);
       setClosingEntryStatus(null);
+      setTransferEntryGenerated(false);
+      setTransferEntryId(null);
+      setTransferEntryNumber(null);
+      setTransferEntryStatus(null);
+      setOpeningEntryGenerated(false);
+      setOpeningEntryId(null);
+      setOpeningEntryNumber(null);
+      setOpeningEntryStatus(null);
+      setOpeningBalanceAccounts([]);
       setTotalAssets(0);
       setTotalLiabilities(0);
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
       loadPendingEntries();
-      syncExistingClosingEntryState();
+      syncExistingEntries();
     }
-  }, [open, period, syncExistingClosingEntryState]);
+  }, [open, period, syncExistingEntries]);
 
   const loadPendingEntries = async () => {
     if (!period) return;
@@ -308,6 +354,7 @@ export function PeriodClosingWizard({
     }
   }, [period, enterpriseId]);
 
+  // ---- Generate Closing Entry (Results) ----
   const generateClosingEntry = async () => {
     if (!period || !config?.period_result_account_id) {
       toast.error('Falta configurar la cuenta de Resultado del Período');
@@ -316,7 +363,7 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
-      const existingEntry = await findExistingClosingEntry();
+      const existingEntry = await findExistingEntry('cierre', period.id, 'CIER');
       if (existingEntry) {
         setClosingEntryGenerated(true);
         setClosingEntryId(existingEntry.id);
@@ -328,19 +375,7 @@ export function PeriodClosingWizard({
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      const { data: resultAccount, error: accountError } = await supabase
-        .from('tab_accounts')
-        .select('id, account_code, account_name')
-        .eq('id', config.period_result_account_id)
-        .single();
-      
-      if (accountError || !resultAccount) {
-        throw new Error('No se encontró la cuenta de Resultado del Período');
-      }
-      
-      const year = period.year;
-
-      // Clean up orphaned CIER drafts for this period
+      // Clean up orphaned CIER drafts
       const { data: orphanedEntries } = await supabase
         .from('tab_journal_entries')
         .select('id')
@@ -356,6 +391,7 @@ export function PeriodClosingWizard({
         await supabase.from('tab_journal_entries').delete().in('id', orphanIds);
       }
 
+      const year = period.year;
       const { data: lastEntry } = await supabase
         .from('tab_journal_entries')
         .select('entry_number')
@@ -372,7 +408,7 @@ export function PeriodClosingWizard({
       
       const entryNumber = `CIER-${year}-${String(nextNumber).padStart(4, '0')}`;
 
-      type DraftClosingLine = {
+      type DraftLine = {
         line_number: number;
         account_id: number;
         description: string;
@@ -380,7 +416,7 @@ export function PeriodClosingWizard({
         credit_amount: number;
       };
 
-      const detailLines: DraftClosingLine[] = [];
+      const detailLines: DraftLine[] = [];
       let lineNumber = 1;
       let totalDebits = 0;
       let totalCredits = 0;
@@ -389,9 +425,6 @@ export function PeriodClosingWizard({
         const amount = Math.round(Math.abs(acc.balance) * 100) / 100;
         if (amount <= 0.01) return;
 
-        // Cerrar por signo real del saldo (no por tipo de cuenta)
-        // balance > 0  => saldo deudor, se cierra con crédito
-        // balance < 0  => saldo acreedor, se cierra con débito
         const debit = acc.balance < 0 ? amount : 0;
         const credit = acc.balance > 0 ? amount : 0;
 
@@ -410,7 +443,7 @@ export function PeriodClosingWizard({
       incomeAccounts.forEach(addClosingLine);
       expenseAccounts.forEach(addClosingLine);
 
-      // Contrapartida a resultado del período para cuadrar y reflejar utilidad/pérdida real
+      // Offset to "Resultado del período"
       const resultAmount = Math.round(Math.abs(totalDebits - totalCredits) * 100) / 100;
       if (resultAmount > 0.01) {
         const isProfit = totalDebits > totalCredits;
@@ -440,7 +473,7 @@ export function PeriodClosingWizard({
           entry_number: entryNumber,
           entry_date: period.end_date,
           entry_type: 'cierre',
-          description: `Partida de cierre del período ${period.year}`,
+          description: `Partida de cierre de resultados del período ${period.year}`,
           total_debit: totalDebits,
           total_credit: totalCredits,
           is_posted: false,
@@ -477,6 +510,308 @@ export function PeriodClosingWizard({
     }
   };
 
+  // ---- Generate Transfer Entry (Result → Retained Earnings) ----
+  const generateTransferEntry = async () => {
+    if (!period || !config?.period_result_account_id || !config?.retained_earnings_account_id) {
+      toast.error('Falta configurar la cuenta de Utilidades Acumuladas en Configuración → Cuentas Especiales');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const existingEntry = await findExistingEntry('cierre', period.id, 'TRAS');
+      if (existingEntry) {
+        setTransferEntryGenerated(true);
+        setTransferEntryId(existingEntry.id);
+        setTransferEntryNumber(existingEntry.entry_number);
+        setTransferEntryStatus(existingEntry.status);
+        toast.info(`La partida ${existingEntry.entry_number} ya existe.`);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const year = period.year;
+
+      // Calculate result amount: the balance in the period_result_account after the closing entry
+      // The closing entry credits (profit) or debits (loss) this account
+      // We need to compute its actual balance
+      const resultAmount = Math.abs(periodResult);
+      if (resultAmount <= 0.01) {
+        toast.info('El resultado del período es cero, no se requiere traslado.');
+        setTransferEntryGenerated(true);
+        setTransferEntryStatus('no_requerido');
+        return;
+      }
+
+      const entryNumber = `TRAS-${year}-0001`;
+      const isProfit = periodResult >= 0;
+
+      // If profit: Resultado del ejercicio (debit) → Utilidades acumuladas (credit)
+      // If loss: Utilidades acumuladas (debit) → Resultado del ejercicio (credit)
+      const lines = [
+        {
+          line_number: 1,
+          account_id: config.period_result_account_id,
+          description: `Traslado ${isProfit ? 'utilidad' : 'pérdida'} ${year} a utilidades acumuladas`,
+          debit_amount: isProfit ? resultAmount : 0,
+          credit_amount: isProfit ? 0 : resultAmount,
+        },
+        {
+          line_number: 2,
+          account_id: config.retained_earnings_account_id,
+          description: `${isProfit ? 'Utilidad' : 'Pérdida'} del ejercicio ${year}`,
+          debit_amount: isProfit ? 0 : resultAmount,
+          credit_amount: isProfit ? resultAmount : 0,
+        },
+      ];
+
+      const totalAmount = Math.round(resultAmount * 100) / 100;
+
+      const { data: newEntry, error: entryError } = await supabase
+        .from('tab_journal_entries')
+        .insert({
+          enterprise_id: enterpriseId,
+          accounting_period_id: period.id,
+          entry_number: entryNumber,
+          entry_date: period.end_date,
+          entry_type: 'cierre',
+          description: `Traslado de ${isProfit ? 'utilidad' : 'pérdida'} del ejercicio ${year} a utilidades acumuladas`,
+          total_debit: totalAmount,
+          total_credit: totalAmount,
+          is_posted: false,
+          status: 'borrador',
+          created_by: user?.id || null,
+        })
+        .select('id')
+        .single();
+
+      if (entryError) throw entryError;
+
+      const { error: detailsError } = await supabase
+        .from('tab_journal_entry_details')
+        .insert(lines.map(l => ({ ...l, journal_entry_id: newEntry.id })));
+
+      if (detailsError) throw detailsError;
+
+      setTransferEntryId(newEntry.id);
+      setTransferEntryGenerated(true);
+      setTransferEntryNumber(entryNumber);
+      setTransferEntryStatus('borrador');
+      toast.success(`Partida de traslado ${entryNumber} generada`);
+    } catch (error: any) {
+      console.error('Error generating transfer entry:', error);
+      toast.error(`Error al generar partida de traslado: ${error?.message || 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Generate Opening Balance Entry ----
+  const generateOpeningEntry = async () => {
+    if (!period) return;
+
+    setLoading(true);
+    try {
+      const nextYear = period.year + 1;
+
+      // Ensure next period exists
+      let nextPeriodId: number;
+      const { data: existingNext } = await supabase
+        .from('tab_accounting_periods')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('year', nextYear)
+        .maybeSingle();
+
+      if (existingNext) {
+        nextPeriodId = existingNext.id;
+      } else {
+        const { data: newPeriod, error: periodError } = await supabase
+          .from('tab_accounting_periods')
+          .insert({
+            enterprise_id: enterpriseId,
+            year: nextYear,
+            start_date: `${nextYear}-01-01`,
+            end_date: `${nextYear}-12-31`,
+            status: 'abierto',
+          })
+          .select('id')
+          .single();
+
+        if (periodError) throw periodError;
+        nextPeriodId = newPeriod.id;
+        toast.success(`Período ${nextYear} creado automáticamente`);
+      }
+
+      // Check if opening entry already exists
+      const existingEntry = await findExistingEntry('apertura', nextPeriodId, 'APER');
+      if (existingEntry) {
+        setOpeningEntryGenerated(true);
+        setOpeningEntryId(existingEntry.id);
+        setOpeningEntryNumber(existingEntry.entry_number);
+        setOpeningEntryStatus(existingEntry.status);
+        toast.info(`La partida ${existingEntry.entry_number} ya existe.`);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Get all accounts
+      const { data: accounts, error: accountsError } = await supabase
+        .from('tab_accounts')
+        .select('id, account_code, account_name, account_type, balance_type, allows_movement')
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_active', true);
+
+      if (accountsError) throw accountsError;
+
+      // Calculate cumulative balances up to end of closing period (including closing and transfer entries)
+      const entries = await fetchAllRecords(
+        supabase
+          .from('tab_journal_entries')
+          .select(`
+            id,
+            tab_journal_entry_details (
+              account_id,
+              debit_amount,
+              credit_amount
+            )
+          `)
+          .eq('enterprise_id', enterpriseId)
+          .eq('is_posted', true)
+          .is('deleted_at', null)
+          .lte('entry_date', period.end_date)
+      );
+
+      const balanceMap = new Map<number, number>();
+      entries.forEach((entry: any) => {
+        entry.tab_journal_entry_details?.forEach((detail: any) => {
+          const currentBalance = balanceMap.get(detail.account_id) || 0;
+          balanceMap.set(detail.account_id, currentBalance + (detail.debit_amount || 0) - (detail.credit_amount || 0));
+        });
+      });
+
+      // Also include draft closing & transfer entries that haven't been posted yet
+      const draftIds = [closingEntryId, transferEntryId].filter(Boolean);
+      if (draftIds.length > 0) {
+        const { data: draftDetails } = await supabase
+          .from('tab_journal_entry_details')
+          .select('account_id, debit_amount, credit_amount')
+          .in('journal_entry_id', draftIds);
+
+        draftDetails?.forEach((detail: any) => {
+          // Only add if not already counted (entry wasn't posted)
+          const entryPosted = (detail.journal_entry_id === closingEntryId && closingEntryStatus === 'contabilizado') ||
+                              (detail.journal_entry_id === transferEntryId && transferEntryStatus === 'contabilizado');
+          if (!entryPosted) {
+            const currentBalance = balanceMap.get(detail.account_id) || 0;
+            balanceMap.set(detail.account_id, currentBalance + (detail.debit_amount || 0) - (detail.credit_amount || 0));
+          }
+        });
+      }
+
+      // Build opening entry lines — only balance sheet accounts
+      type OpeningLine = {
+        line_number: number;
+        account_id: number;
+        description: string;
+        debit_amount: number;
+        credit_amount: number;
+      };
+
+      const openingLines: OpeningLine[] = [];
+      const balanceAccounts: AccountBalance[] = [];
+      let lineNumber = 1;
+      let totalDebits = 0;
+      let totalCredits = 0;
+
+      accounts?.forEach(account => {
+        if (!account.allows_movement) return;
+        const accountTypeLower = account.account_type?.toLowerCase() || '';
+        // Only balance sheet accounts
+        if (!['activo', 'pasivo', 'capital', 'patrimonio'].includes(accountTypeLower)) return;
+
+        const rawBalance = balanceMap.get(account.id) || 0;
+        if (Math.abs(rawBalance) <= 0.01) return;
+
+        // rawBalance is debit - credit
+        const debitAmount = rawBalance > 0 ? Math.round(rawBalance * 100) / 100 : 0;
+        const creditAmount = rawBalance < 0 ? Math.round(Math.abs(rawBalance) * 100) / 100 : 0;
+
+        openingLines.push({
+          line_number: lineNumber++,
+          account_id: account.id,
+          description: `Saldo inicial ${account.account_code} - ${account.account_name}`,
+          debit_amount: debitAmount,
+          credit_amount: creditAmount,
+        });
+
+        totalDebits += debitAmount;
+        totalCredits += creditAmount;
+
+        balanceAccounts.push({
+          account_id: account.id,
+          account_code: account.account_code,
+          account_name: account.account_name,
+          account_type: account.account_type,
+          balance: rawBalance,
+        });
+      });
+
+      setOpeningBalanceAccounts(balanceAccounts.sort((a, b) => a.account_code.localeCompare(b.account_code)));
+
+      if (openingLines.length === 0) {
+        toast.info('No hay saldos de balance para trasladar.');
+        setOpeningEntryGenerated(true);
+        setOpeningEntryStatus('no_requerido');
+        return;
+      }
+
+      totalDebits = Math.round(totalDebits * 100) / 100;
+      totalCredits = Math.round(totalCredits * 100) / 100;
+
+      const entryNumber = `APER-${nextYear}-0001`;
+
+      const { data: newEntry, error: entryError } = await supabase
+        .from('tab_journal_entries')
+        .insert({
+          enterprise_id: enterpriseId,
+          accounting_period_id: nextPeriodId,
+          entry_number: entryNumber,
+          entry_date: `${nextYear}-01-01`,
+          entry_type: 'apertura',
+          description: `Partida de apertura del ejercicio ${nextYear}`,
+          total_debit: totalDebits,
+          total_credit: totalCredits,
+          is_posted: false,
+          status: 'borrador',
+          created_by: user?.id || null,
+        })
+        .select('id')
+        .single();
+
+      if (entryError) throw entryError;
+
+      const { error: detailsError } = await supabase
+        .from('tab_journal_entry_details')
+        .insert(openingLines.map(l => ({ ...l, journal_entry_id: newEntry.id })));
+
+      if (detailsError) throw detailsError;
+
+      setOpeningEntryId(newEntry.id);
+      setOpeningEntryGenerated(true);
+      setOpeningEntryNumber(entryNumber);
+      setOpeningEntryStatus('borrador');
+      toast.success(`Partida de apertura ${entryNumber} generada para ${nextYear}`);
+    } catch (error: any) {
+      console.error('Error generating opening entry:', error);
+      toast.error(`Error al generar partida de apertura: ${error?.message || 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Balance Verification ----
   const loadBalanceVerification = useCallback(async () => {
     if (!period) return;
     
@@ -490,8 +825,6 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
 
-      // Fetch ALL posted entries up to the period end date (not just this period)
-      // to include previous balances — same logic as Balance de Saldos
       const entries = await fetchAllRecords(
         supabase
           .from('tab_journal_entries')
@@ -520,37 +853,32 @@ export function PeriodClosingWizard({
         });
       });
 
-      // Only sum leaf accounts (allows_movement) to avoid double-counting
       let assets = 0;
       let liabilities = 0;
       let equity = 0;
       
       accounts?.forEach(account => {
-        if (!account.allows_movement) return; // skip parent/title accounts
+        if (!account.allows_movement) return;
         const rawBalance = balanceMap.get(account.id) || 0;
         const accountTypeLower = account.account_type?.toLowerCase() || '';
         
-        // Compute signed balance per account nature:
-        // Activo/Gasto are debit-natured => balance = debit - credit (rawBalance)
-        // Pasivo/Capital/Ingreso are credit-natured => balance = credit - debit (-rawBalance)
         switch (accountTypeLower) {
           case 'activo':
             assets += rawBalance;
             break;
           case 'pasivo':
-            liabilities += -rawBalance; // credit-natured
+            liabilities += -rawBalance;
             break;
           case 'capital':
           case 'patrimonio':
-            equity += -rawBalance; // credit-natured
+            equity += -rawBalance;
             break;
-          // ingreso/gasto should be zero after closing entry, but include for safety
           case 'ingreso':
             equity += -rawBalance;
             break;
           case 'gasto':
           case 'costo':
-            assets += rawBalance; // treat unclosed expense as debit-natured
+            assets += rawBalance;
             break;
         }
       });
@@ -569,26 +897,35 @@ export function PeriodClosingWizard({
     }
   }, [period, enterpriseId]);
 
+  // ---- Close Period ----
   const handleClosePeriod = async () => {
-    if (!period || !closingEntryId) return;
+    if (!period) return;
     
     setLoading(true);
     try {
-      // Post the closing entry if not already posted
-      if (closingEntryStatus !== 'contabilizado') {
-        const { error: postError } = await supabase
-          .from('tab_journal_entries')
-          .update({
-            is_posted: true,
-            status: 'contabilizado',
-            posted_at: new Date().toISOString()
-          })
-          .eq('id', closingEntryId);
-        
-        if (postError) throw postError;
-      }
-      
       const { data: { user } } = await supabase.auth.getUser();
+
+      // Post all draft entries: closing, transfer, opening
+      const entriesToPost = [
+        { id: closingEntryId, status: closingEntryStatus, label: 'cierre' },
+        { id: transferEntryId, status: transferEntryStatus, label: 'traslado' },
+        { id: openingEntryId, status: openingEntryStatus, label: 'apertura' },
+      ];
+
+      for (const entry of entriesToPost) {
+        if (entry.id && entry.status !== 'contabilizado' && entry.status !== 'no_requerido') {
+          const { error: postError } = await supabase
+            .from('tab_journal_entries')
+            .update({
+              is_posted: true,
+              status: 'contabilizado',
+              posted_at: new Date().toISOString()
+            })
+            .eq('id', entry.id);
+          
+          if (postError) throw new Error(`Error al contabilizar partida de ${entry.label}: ${postError.message}`);
+        }
+      }
       
       // Close the period
       const { error: closeError } = await supabase
@@ -602,28 +939,6 @@ export function PeriodClosingWizard({
       
       if (closeError) throw closeError;
 
-      // Ensure next period exists (but NO opening entry — reports use cumulative balances)
-      const nextYear = period.year + 1;
-      const { data: existingNext } = await supabase
-        .from('tab_accounting_periods')
-        .select('id')
-        .eq('enterprise_id', enterpriseId)
-        .eq('year', nextYear)
-        .maybeSingle();
-
-      if (!existingNext) {
-        await supabase
-          .from('tab_accounting_periods')
-          .insert({
-            enterprise_id: enterpriseId,
-            year: nextYear,
-            start_date: `${nextYear}-01-01`,
-            end_date: `${nextYear}-12-31`,
-            status: 'abierto',
-          });
-        toast.success(`Período ${nextYear} creado automáticamente`);
-      }
-      
       const activePeriodId = localStorage.getItem('activePeriodId');
       if (activePeriodId === String(period.id)) {
         localStorage.removeItem('activePeriodId');
@@ -632,22 +947,24 @@ export function PeriodClosingWizard({
       }
       
       setClosingEntryStatus('contabilizado');
+      setTransferEntryStatus('contabilizado');
+      setOpeningEntryStatus('contabilizado');
       toast.success('Período cerrado exitosamente');
-      setCurrentStepIndex(steps.length - 1); // Go to "Completado"
-    } catch (error) {
+      setCurrentStepIndex(steps.length - 1);
+    } catch (error: any) {
       console.error('Error closing period:', error);
-      toast.error('Error al cerrar el período');
+      toast.error(`Error al cerrar el período: ${error?.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // ---- Navigation Logic ----
   const canAdvance = () => {
     switch (currentStepId) {
       case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
       case 'cdv':
-        // Allow advance if CDV is already posted
         if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
         return cdv.finalInventory !== null &&
           cdv.costOfSales !== null &&
@@ -655,12 +972,15 @@ export function PeriodClosingWizard({
           !!config?.purchases_account_id &&
           !!config?.cost_of_sales_account_id;
       case 'generar':
-        // Allow advance when there are balances to close OR when an existing closing entry already exists
         return (incomeAccounts.length > 0 || expenseAccounts.length > 0 || closingEntryGenerated) && !!config?.period_result_account_id;
+      case 'traslado':
+        return transferEntryGenerated || !config?.retained_earnings_account_id;
+      case 'apertura':
+        return openingEntryGenerated;
       case 'verificar':
         return true;
       case 'confirmar':
-        return confirmClose && closingEntryId;
+        return confirmClose && (closingEntryId || closingEntryGenerated);
       default:
         return true;
     }
@@ -680,21 +1000,18 @@ export function PeriodClosingWizard({
         await loadAccountBalances();
       }
     } else if (currentStepId === 'cdv' && canAdvance()) {
-      // If CDV is already posted, just move to next step
       if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) {
         setCurrentStepIndex(nextIndex);
         await loadAccountBalances();
         return;
       }
 
-      // Ensure CDV entry exists, then post it before moving on
       setLoading(true);
       try {
         let journalEntryId = cdv.closingData?.journal_entry_id ?? null;
 
         if (!journalEntryId && cdv.finalInventory !== null && cdv.costOfSales !== null && period) {
           const generated = await cdv.generateCostOfSalesEntry();
-
           if (generated) {
             const { data: latestClosing } = await supabase
               .from('tab_period_inventory_closing')
@@ -702,7 +1019,6 @@ export function PeriodClosingWizard({
               .eq('enterprise_id', enterpriseId)
               .eq('accounting_period_id', period.id)
               .maybeSingle();
-
             journalEntryId = latestClosing?.journal_entry_id ?? null;
           }
         }
@@ -724,23 +1040,31 @@ export function PeriodClosingWizard({
         setLoading(false);
       }
     } else if (currentStepId === 'generar' && canAdvance()) {
-      // If wizard was reopened, recover existing closing entry before trying to generate another
       if (!closingEntryGenerated) {
-        const existingEntry = await findExistingClosingEntry();
+        const existingEntry = await findExistingEntry('cierre', period!.id, 'CIER');
         if (existingEntry) {
           setClosingEntryGenerated(true);
           setClosingEntryId(existingEntry.id);
           setClosingEntryNumber(existingEntry.entry_number);
           setClosingEntryStatus(existingEntry.status);
           setCurrentStepIndex(nextIndex);
-          await loadBalanceVerification();
           return;
         }
-
         await generateClosingEntry();
         return;
       }
-
+      setCurrentStepIndex(nextIndex);
+    } else if (currentStepId === 'traslado' && canAdvance()) {
+      if (!transferEntryGenerated && config?.retained_earnings_account_id) {
+        await generateTransferEntry();
+        return;
+      }
+      setCurrentStepIndex(nextIndex);
+    } else if (currentStepId === 'apertura' && canAdvance()) {
+      if (!openingEntryGenerated) {
+        await generateOpeningEntry();
+        return;
+      }
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
     } else if (currentStepId === 'verificar') {
@@ -771,6 +1095,42 @@ export function PeriodClosingWizard({
 
   const isLastStep = currentStepIndex === steps.length - 1;
 
+  // ---- Render helpers ----
+  const renderEntryStatusBadge = (status: string | null, number: string | null) => {
+    if (!status) return null;
+    if (status === 'no_requerido') {
+      return (
+        <Card className="border-muted bg-muted/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <CheckCircle2 className="h-6 w-6" />
+              <p className="font-medium">No se requiere esta partida (monto cero)</p>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+    return (
+      <Card className="border-green-200 bg-green-50 dark:bg-green-950/20">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+            <CheckCircle2 className="h-6 w-6" />
+            <div>
+              <p className="font-medium">
+                {status === 'contabilizado' ? 'Partida contabilizada' : 'Partida generada'}
+              </p>
+              <p className="text-sm text-green-600 dark:text-green-500">
+                {number
+                  ? `Póliza ${number} — ${status === 'contabilizado' ? 'contabilizada' : 'borrador, se contabilizará al confirmar el cierre'}`
+                  : 'Generada como borrador.'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
@@ -785,7 +1145,7 @@ export function PeriodClosingWizard({
         </DialogHeader>
 
         {/* Stepper */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 rounded-lg">
+        <div className="flex items-center justify-between px-2 py-3 border-b bg-muted/30 rounded-lg overflow-x-auto">
           {steps.map((step, index) => {
             const Icon = step.icon;
             const isActive = currentStepIndex === index;
@@ -795,19 +1155,19 @@ export function PeriodClosingWizard({
               <div key={step.id} className="flex items-center">
                 <div className="flex flex-col items-center">
                   <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors",
+                    "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors",
                     isCompleted && "bg-primary border-primary text-primary-foreground",
                     isActive && "border-primary text-primary bg-primary/10",
                     !isActive && !isCompleted && "border-muted-foreground/30 text-muted-foreground"
                   )}>
                     {isCompleted ? (
-                      <CheckCircle2 className="h-5 w-5" />
+                      <CheckCircle2 className="h-4 w-4" />
                     ) : (
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-4 w-4" />
                     )}
                   </div>
                   <span className={cn(
-                    "text-xs mt-1 font-medium",
+                    "text-[10px] mt-1 font-medium whitespace-nowrap",
                     isActive && "text-primary",
                     !isActive && !isCompleted && "text-muted-foreground"
                   )}>
@@ -816,7 +1176,7 @@ export function PeriodClosingWizard({
                 </div>
                 {index < steps.length - 1 && (
                   <div className={cn(
-                    "w-12 h-0.5 mx-2",
+                    "w-6 h-0.5 mx-1",
                     isCompleted ? "bg-primary" : "bg-muted-foreground/30"
                   )} />
                 )}
@@ -919,13 +1279,11 @@ export function PeriodClosingWizard({
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
               <div className="space-y-4">
-                {/* Show completed banner if CDV is already posted */}
                 {cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id && (
                   <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-700 dark:text-green-400">
                       La partida de Costo de Ventas ya fue generada y contabilizada.
-                      Puede continuar al siguiente paso.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -937,7 +1295,6 @@ export function PeriodClosingWizard({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Missing config warning */}
                     {(!config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id) && (
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
@@ -950,7 +1307,6 @@ export function PeriodClosingWizard({
                       </Alert>
                     )}
 
-                    {/* Recalculation warning */}
                     {cdv.needsRecalculation && (
                       <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
                         <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -970,7 +1326,6 @@ export function PeriodClosingWizard({
                       </div>
                     ) : (
                       <>
-                        {/* Calculation table */}
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -982,34 +1337,18 @@ export function PeriodClosingWizard({
                           <TableBody>
                             <TableRow>
                               <TableCell>Inventario Inicial de Mercaderías</TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(cdv.initialInventory)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                  ✅ Calculado
-                                </Badge>
-                              </TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(cdv.initialInventory)}</TableCell>
+                              <TableCell><Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">✅ Calculado</Badge></TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell>(+) Compras del Período</TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(cdv.purchasesAmount)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                  ✅ Calculado
-                                </Badge>
-                              </TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(cdv.purchasesAmount)}</TableCell>
+                              <TableCell><Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">✅ Calculado</Badge></TableCell>
                             </TableRow>
                             <TableRow className="bg-muted/50">
                               <TableCell className="font-semibold">(=) Mercadería Disponible para Venta</TableCell>
-                              <TableCell className="text-right font-mono font-semibold">
-                                {formatCurrency(cdv.initialInventory + cdv.purchasesAmount)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">Subtotal</Badge>
-                              </TableCell>
+                              <TableCell className="text-right font-mono font-semibold">{formatCurrency(cdv.initialInventory + cdv.purchasesAmount)}</TableCell>
+                              <TableCell><Badge variant="outline">Subtotal</Badge></TableCell>
                             </TableRow>
                             <TableRow>
                               <TableCell>(-) Inventario Final de Mercaderías</TableCell>
@@ -1029,11 +1368,7 @@ export function PeriodClosingWizard({
                                         const num = parseFloat(val);
                                         if (!isNaN(num)) cdv.saveFinalInventory(num);
                                       }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          (e.target as HTMLInputElement).blur();
-                                        }
-                                      }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                                       placeholder="Ingrese conteo físico"
                                       className="w-48 text-right font-mono ml-auto"
                                     />
@@ -1042,56 +1377,38 @@ export function PeriodClosingWizard({
                               </TableCell>
                               <TableCell>
                                 {cdv.finalInventory !== null ? (
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                    ✅ Ingresado
-                                  </Badge>
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">✅ Ingresado</Badge>
                                 ) : (
-                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-                                    ⚠️ Pendiente
-                                  </Badge>
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400">⚠️ Pendiente</Badge>
                                 )}
                               </TableCell>
                             </TableRow>
                             <TableRow className="border-t-2 font-bold">
                               <TableCell className="text-base">(=) COSTO DE VENTAS</TableCell>
-                              <TableCell className="text-right font-mono text-lg">
-                                {cdv.costOfSales !== null ? formatCurrency(cdv.costOfSales) : '—'}
-                              </TableCell>
+                              <TableCell className="text-right font-mono text-lg">{cdv.costOfSales !== null ? formatCurrency(cdv.costOfSales) : '—'}</TableCell>
                               <TableCell>
                                 {cdv.costOfSales !== null ? (
-                                  cdv.costOfSales < 0 ? (
-                                    <Badge variant="destructive">⚠️ Negativo</Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                      ✅ Calculado
-                                    </Badge>
-                                  )
-                                ) : (
-                                  <Badge variant="secondary">Pendiente</Badge>
-                                )}
+                                  cdv.costOfSales < 0 ? <Badge variant="destructive">⚠️ Negativo</Badge> :
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">✅ Calculado</Badge>
+                                ) : <Badge variant="secondary">Pendiente</Badge>}
                               </TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>
 
-                        {/* Negative cost warning */}
                         {cdv.costOfSales !== null && cdv.costOfSales < 0 && (
                           <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>
-                              El costo de ventas es negativo. Esto puede indicar un error en los datos
-                              o que el inventario final es mayor que la mercadería disponible.
-                              Verifique los montos antes de continuar.
+                              El costo de ventas es negativo. Verifique los montos antes de continuar.
                             </AlertDescription>
                           </Alert>
                         )}
 
-                        {/* Info note */}
                         <Alert>
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
-                            El inventario final debe corresponder al conteo físico de mercaderías
-                            al cierre del período. Este dato no es calculado por el sistema.
+                            El inventario final debe corresponder al conteo físico de mercaderías al cierre del período.
                           </AlertDescription>
                         </Alert>
 
@@ -1102,7 +1419,6 @@ export function PeriodClosingWizard({
                           </Alert>
                         )}
 
-                        {/* Action buttons - only show when not yet posted */}
                         {cdv.closingData?.status !== 'contabilizado' && (
                           <div className="flex gap-2">
                             <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
@@ -1125,17 +1441,14 @@ export function PeriodClosingWizard({
                                           .select('id, status')
                                           .eq('id', cdv.closingData.journal_entry_id)
                                           .single();
-
                                         if (existingEntry && existingEntry.status === 'borrador') {
                                           await supabase.from('tab_journal_entry_details').delete().eq('journal_entry_id', existingEntry.id);
                                           await supabase.from('tab_journal_entries').delete().eq('id', existingEntry.id);
                                         }
-
                                         await supabase
                                           .from('tab_period_inventory_closing')
                                           .update({ journal_entry_id: null, updated_at: new Date().toISOString() })
                                           .eq('id', cdv.closingData.id);
-
                                         cdv.calculate();
                                         toast.success('Partida CDV eliminada. Puede regenerar.');
                                       } catch (e: any) {
@@ -1171,7 +1484,7 @@ export function PeriodClosingWizard({
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-lg font-medium">
                   <Calculator className="h-5 w-5" />
-                  Generar Partida de Cierre
+                  Cierre de Cuentas de Resultado
                 </div>
 
                 {!config?.period_result_account_id ? (
@@ -1199,9 +1512,7 @@ export function PeriodClosingWizard({
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center justify-between">
                             <span>Cuentas de Ingreso</span>
-                            <Badge variant="outline" className="font-mono">
-                              {formatCurrency(totalIncome)}
-                            </Badge>
+                            <Badge variant="outline" className="font-mono">{formatCurrency(totalIncome)}</Badge>
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -1224,9 +1535,7 @@ export function PeriodClosingWizard({
                         <CardHeader className="pb-2">
                           <CardTitle className="text-base flex items-center justify-between">
                             <span>Cuentas de Gasto</span>
-                            <Badge variant="outline" className="font-mono">
-                              {formatCurrency(totalExpenses)}
-                            </Badge>
+                            <Badge variant="outline" className="font-mono">{formatCurrency(totalExpenses)}</Badge>
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -1279,28 +1588,12 @@ export function PeriodClosingWizard({
                     </Card>
 
                     {closingEntryGenerated ? (
-                      <Card className="border-green-200 bg-green-50 dark:bg-green-950/20">
-                        <CardContent className="pt-6">
-                          <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
-                            <CheckCircle2 className="h-6 w-6" />
-                            <div>
-                              <p className="font-medium">
-                                {closingEntryStatus === 'contabilizado' ? 'Partida de cierre ya contabilizada' : 'Partida de cierre generada'}
-                              </p>
-                              <p className="text-sm text-green-600 dark:text-green-500">
-                                {closingEntryNumber
-                                  ? `La póliza ${closingEntryNumber} ya existe${closingEntryStatus === 'contabilizado' ? ' y está contabilizada.' : ' en borrador y se contabilizará al confirmar el cierre.'}`
-                                  : 'La partida ha sido creada como borrador y se contabilizará al confirmar el cierre.'}
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      renderEntryStatusBadge(closingEntryStatus, closingEntryNumber)
                     ) : (
                       <div className="flex justify-center">
                         <Button 
                           onClick={generateClosingEntry} 
-                          disabled={loading || incomeAccounts.length === 0 && expenseAccounts.length === 0}
+                          disabled={loading || (incomeAccounts.length === 0 && expenseAccounts.length === 0)}
                           size="lg"
                         >
                           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1309,6 +1602,129 @@ export function PeriodClosingWizard({
                       </div>
                     )}
                   </>
+                )}
+              </div>
+            )}
+
+            {/* Step: Transfer to Equity */}
+            {currentStepId === 'traslado' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-medium">
+                  <ArrowRightLeft className="h-5 w-5" />
+                  Traslado a Utilidades Acumuladas
+                </div>
+
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Este paso traslada el saldo de la cuenta <strong>"Resultado del Período"</strong> a la cuenta <strong>"Utilidades Acumuladas"</strong> en el patrimonio, 
+                    dejando la cuenta de resultado en cero para el próximo ejercicio.
+                  </AlertDescription>
+                </Alert>
+
+                {!config?.retained_earnings_account_id ? (
+                  <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3 text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="h-6 w-6" />
+                        <div>
+                          <p className="font-medium">Cuenta de Utilidades Acumuladas no configurada</p>
+                          <p className="text-sm text-amber-600 dark:text-amber-500">
+                            Configure la cuenta en Configuración → Cuentas Especiales. 
+                            Puede omitir este paso y configurarla después.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="grid grid-cols-2 gap-4 text-center">
+                          <div>
+                            <p className="text-sm text-muted-foreground">
+                              {periodResult >= 0 ? 'Utilidad a trasladar' : 'Pérdida a trasladar'}
+                            </p>
+                            <p className={cn(
+                              "text-2xl font-bold font-mono",
+                              periodResult >= 0 ? "text-green-600" : "text-red-600"
+                            )}>
+                              {formatCurrency(Math.abs(periodResult))}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Destino</p>
+                            <p className="text-lg font-medium">Utilidades Acumuladas</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {transferEntryGenerated ? (
+                      renderEntryStatusBadge(transferEntryStatus, transferEntryNumber)
+                    ) : (
+                      <div className="flex justify-center">
+                        <Button onClick={generateTransferEntry} disabled={loading} size="lg">
+                          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Generar Partida de Traslado
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Step: Opening Balance */}
+            {currentStepId === 'apertura' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-lg font-medium">
+                  <BookOpen className="h-5 w-5" />
+                  Partida de Apertura — {period.year + 1}
+                </div>
+
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Se generará una partida con los saldos finales de todas las cuentas de balance 
+                    (Activo, Pasivo, Capital) al {formatDate(period.end_date)}, como saldos iniciales del período {period.year + 1}.
+                  </AlertDescription>
+                </Alert>
+
+                {openingEntryGenerated ? (
+                  <>
+                    {renderEntryStatusBadge(openingEntryStatus, openingEntryNumber)}
+                    {openingBalanceAccounts.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-base">Cuentas incluidas en la apertura</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {openingBalanceAccounts.map(acc => (
+                              <div key={acc.account_id} className="flex justify-between text-sm">
+                                <span className="truncate">{acc.account_code} - {acc.account_name}</span>
+                                <span className={cn(
+                                  "font-mono ml-2",
+                                  acc.balance >= 0 ? "text-foreground" : "text-destructive"
+                                )}>
+                                  {acc.balance >= 0 ? 'D ' : 'C '}{formatCurrency(Math.abs(acc.balance))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex justify-center">
+                    <Button onClick={generateOpeningEntry} disabled={loading} size="lg">
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Generar Partida de Apertura {period.year + 1}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -1365,9 +1781,7 @@ export function PeriodClosingWizard({
                             )}
                             <div>
                               <p className="font-medium">Ecuación Contable</p>
-                              <p className="text-sm text-muted-foreground">
-                                Activo = Pasivo + Capital
-                              </p>
+                              <p className="text-sm text-muted-foreground">Activo = Pasivo + Capital</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -1402,7 +1816,7 @@ export function PeriodClosingWizard({
                   <CardContent className="pt-6 space-y-4">
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Partida de cierre generada</span>
+                      <span>Partida de cierre de resultados generada</span>
                     </div>
                     {hasCdvStep && (
                       <div className="flex items-center gap-3">
@@ -1410,6 +1824,16 @@ export function PeriodClosingWizard({
                         <span>Costo de ventas calculado y contabilizado</span>
                       </div>
                     )}
+                    {transferEntryGenerated && transferEntryStatus !== 'no_requerido' && (
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <span>Resultado trasladado a utilidades acumuladas</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <span>Partida de apertura {period.year + 1} generada</span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
                       <span>Balance verificado</span>
@@ -1435,12 +1859,11 @@ export function PeriodClosingWizard({
                       <AlertTriangle className="h-6 w-6 text-amber-600 mt-0.5" />
                       <div>
                         <p className="font-medium text-amber-700 dark:text-amber-400">
-                          Acción irreversible
+                          Acción importante
                         </p>
                         <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
-                          Al cerrar el período, la partida de cierre será contabilizada y no podrá crear, 
-                          editar ni eliminar partidas en este período. Podrá reabrir el período si es necesario, 
-                          pero esto requiere permisos de administrador.
+                          Al confirmar, todas las partidas (cierre, traslado y apertura) serán contabilizadas 
+                          y el período será marcado como cerrado. Podrá reabrir el período si es necesario.
                         </p>
                       </div>
                     </div>
@@ -1454,7 +1877,7 @@ export function PeriodClosingWizard({
                     onCheckedChange={(checked) => setConfirmClose(checked === true)}
                   />
                   <Label htmlFor="confirm-close" className="text-sm cursor-pointer">
-                    Entiendo que al cerrar el período no podré modificar partidas y deseo continuar
+                    Entiendo y deseo cerrar el período, contabilizar todas las partidas generadas
                   </Label>
                 </div>
               </div>
@@ -1471,9 +1894,11 @@ export function PeriodClosingWizard({
                   <p className="text-muted-foreground mt-2">
                     El período {period.year} ha sido cerrado exitosamente.
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Los saldos de las cuentas de balance se arrastran automáticamente al período {period.year + 1}.
-                  </p>
+                  <div className="text-sm text-muted-foreground mt-3 space-y-1">
+                    {closingEntryNumber && <p>✅ Cierre de resultados: <span className="font-mono">{closingEntryNumber}</span></p>}
+                    {transferEntryNumber && <p>✅ Traslado a utilidades: <span className="font-mono">{transferEntryNumber}</span></p>}
+                    {openingEntryNumber && <p>✅ Apertura {period.year + 1}: <span className="font-mono">{openingEntryNumber}</span></p>}
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => onOpenChange(false)}>

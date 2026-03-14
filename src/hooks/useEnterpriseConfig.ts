@@ -8,6 +8,7 @@ export interface EnterpriseConfig {
   vat_credit_account_id: number | null;
   vat_debit_account_id: number | null;
   period_result_account_id: number | null;
+  retained_earnings_account_id: number | null;
   initial_inventory_account_id: number | null;
   final_inventory_account_id: number | null;
   purchases_account_id: number | null;
@@ -24,6 +25,7 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   vat_credit_account_id: null,
   vat_debit_account_id: null,
   period_result_account_id: null,
+  retained_earnings_account_id: null,
   initial_inventory_account_id: null,
   final_inventory_account_id: null,
   purchases_account_id: null,
@@ -75,6 +77,7 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         vat_credit_account_id: newConfig.vat_credit_account_id,
         vat_debit_account_id: newConfig.vat_debit_account_id,
         period_result_account_id: newConfig.period_result_account_id,
+        retained_earnings_account_id: newConfig.retained_earnings_account_id,
         initial_inventory_account_id: newConfig.initial_inventory_account_id,
         final_inventory_account_id: newConfig.final_inventory_account_id,
         purchases_account_id: newConfig.purchases_account_id,
