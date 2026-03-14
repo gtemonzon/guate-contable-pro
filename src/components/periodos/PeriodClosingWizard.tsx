@@ -61,6 +61,13 @@ interface AccountBalance {
   balance: number;
 }
 
+interface ExistingClosingEntry {
+  id: number;
+  entry_number: string;
+  status: string;
+  is_posted: boolean;
+}
+
 interface StepDef {
   id: string;
   title: string;
