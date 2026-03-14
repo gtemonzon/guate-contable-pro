@@ -61,6 +61,13 @@ interface AccountBalance {
   balance: number;
 }
 
+interface ExistingClosingEntry {
+  id: number;
+  entry_number: string;
+  status: string;
+  is_posted: boolean;
+}
+
 interface StepDef {
   id: string;
   title: string;
@@ -95,6 +102,8 @@ export function PeriodClosingWizard({
   const [expenseAccounts, setExpenseAccounts] = useState<AccountBalance[]>([]);
   const [closingEntryGenerated, setClosingEntryGenerated] = useState(false);
   const [closingEntryId, setClosingEntryId] = useState<number | null>(null);
+  const [closingEntryNumber, setClosingEntryNumber] = useState<string | null>(null);
+  const [closingEntryStatus, setClosingEntryStatus] = useState<string | null>(null);
   
   // Step: Balance verification
   const [totalAssets, setTotalAssets] = useState(0);
@@ -134,6 +143,46 @@ export function PeriodClosingWizard({
   const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
   const periodResult = totalIncome - totalExpenses;
 
+  const findExistingClosingEntry = useCallback(async (): Promise<ExistingClosingEntry | null> => {
+    if (!period) return null;
+
+    const { data, error } = await supabase
+      .from('tab_journal_entries')
+      .select('id, entry_number, status, is_posted')
+      .eq('enterprise_id', enterpriseId)
+      .eq('accounting_period_id', period.id)
+      .eq('entry_type', 'cierre')
+      .is('deleted_at', null)
+      .order('is_posted', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as ExistingClosingEntry | null) ?? null;
+  }, [enterpriseId, period]);
+
+  const syncExistingClosingEntryState = useCallback(async () => {
+    try {
+      const existingEntry = await findExistingClosingEntry();
+
+      if (existingEntry) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(existingEntry.id);
+        setClosingEntryNumber(existingEntry.entry_number);
+        setClosingEntryStatus(existingEntry.status);
+        return;
+      }
+
+      setClosingEntryGenerated(false);
+      setClosingEntryId(null);
+      setClosingEntryNumber(null);
+      setClosingEntryStatus(null);
+    } catch (error) {
+      console.error('Error loading existing closing entry:', error);
+    }
+  }, [findExistingClosingEntry]);
+
   // Reset state when dialog opens
   useEffect(() => {
     if (open && period) {
@@ -144,14 +193,17 @@ export function PeriodClosingWizard({
       setExpenseAccounts([]);
       setClosingEntryGenerated(false);
       setClosingEntryId(null);
+      setClosingEntryNumber(null);
+      setClosingEntryStatus(null);
       setTotalAssets(0);
       setTotalLiabilities(0);
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
       loadPendingEntries();
+      syncExistingClosingEntryState();
     }
-  }, [open, period]);
+  }, [open, period, syncExistingClosingEntryState]);
 
   const loadPendingEntries = async () => {
     if (!period) return;
@@ -260,6 +312,16 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
+      const existingEntry = await findExistingClosingEntry();
+      if (existingEntry) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(existingEntry.id);
+        setClosingEntryNumber(existingEntry.entry_number);
+        setClosingEntryStatus(existingEntry.status);
+        toast.info(`La partida ${existingEntry.entry_number} ya existe.`);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
 
       const { data: resultAccount, error: accountError } = await supabase
@@ -379,6 +441,8 @@ export function PeriodClosingWizard({
       
       setClosingEntryId(newEntry.id);
       setClosingEntryGenerated(true);
+      setClosingEntryNumber(entryNumber);
+      setClosingEntryStatus('borrador');
       toast.success(`Partida de cierre ${entryNumber} generada exitosamente`);
     } catch (error: any) {
       console.error('Error generating closing entry:', error);
@@ -501,6 +565,7 @@ export function PeriodClosingWizard({
         window.dispatchEvent(new CustomEvent('periodChanged'));
       }
       
+      setClosingEntryStatus('contabilizado');
       toast.success('Período cerrado exitosamente');
       setCurrentStepIndex(steps.length - 1); // Go to "Completado"
     } catch (error) {
@@ -524,8 +589,8 @@ export function PeriodClosingWizard({
           !!config?.purchases_account_id &&
           !!config?.cost_of_sales_account_id;
       case 'generar':
-        // Allow advance if there are accounts to close OR if entry was already generated
-        return (incomeAccounts.length > 0 || expenseAccounts.length > 0) && !!config?.period_result_account_id;
+        // Allow advance when there are balances to close OR when an existing closing entry already exists
+        return (incomeAccounts.length > 0 || expenseAccounts.length > 0 || closingEntryGenerated) && !!config?.period_result_account_id;
       case 'verificar':
         return true;
       case 'confirmar':
@@ -593,15 +658,23 @@ export function PeriodClosingWizard({
         setLoading(false);
       }
     } else if (currentStepId === 'generar' && canAdvance()) {
-      // Auto-generate the closing entry if not yet generated
+      // If wizard was reopened, recover existing closing entry before trying to generate another
       if (!closingEntryGenerated) {
+        const existingEntry = await findExistingClosingEntry();
+        if (existingEntry) {
+          setClosingEntryGenerated(true);
+          setClosingEntryId(existingEntry.id);
+          setClosingEntryNumber(existingEntry.entry_number);
+          setClosingEntryStatus(existingEntry.status);
+          setCurrentStepIndex(nextIndex);
+          await loadBalanceVerification();
+          return;
+        }
+
         await generateClosingEntry();
-        // Check if it was successfully generated after the call
-        // generateClosingEntry sets closingEntryGenerated=true on success
-        // We need to wait and check - but since it's async and sets state,
-        // we'll just return and let the user click again after generation
         return;
       }
+
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
     } else if (currentStepId === 'verificar') {
@@ -1145,9 +1218,13 @@ export function PeriodClosingWizard({
                           <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
                             <CheckCircle2 className="h-6 w-6" />
                             <div>
-                              <p className="font-medium">Partida de cierre generada</p>
+                              <p className="font-medium">
+                                {closingEntryStatus === 'contabilizado' ? 'Partida de cierre ya contabilizada' : 'Partida de cierre generada'}
+                              </p>
                               <p className="text-sm text-green-600 dark:text-green-500">
-                                La partida ha sido creada como borrador y se contabilizará al confirmar el cierre.
+                                {closingEntryNumber
+                                  ? `La póliza ${closingEntryNumber} ya existe${closingEntryStatus === 'contabilizado' ? ' y está contabilizada.' : ' en borrador y se contabilizará al confirmar el cierre.'}`
+                                  : 'La partida ha sido creada como borrador y se contabilizará al confirmar el cierre.'}
                               </p>
                             </div>
                           </div>
