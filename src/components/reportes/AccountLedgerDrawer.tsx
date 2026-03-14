@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { supabase } from "@/integrations/supabase/client";
+import { getFiscalFloorDate } from "@/utils/fiscalFloor";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, ExternalLink } from "lucide-react";
