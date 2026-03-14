@@ -646,6 +646,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     purchasesAmount,
     finalInventory,
     costOfSales,
+    totalSales,
     loading,
     needsRecalculation,
     error,
