@@ -102,6 +102,8 @@ export function PeriodClosingWizard({
   const [expenseAccounts, setExpenseAccounts] = useState<AccountBalance[]>([]);
   const [closingEntryGenerated, setClosingEntryGenerated] = useState(false);
   const [closingEntryId, setClosingEntryId] = useState<number | null>(null);
+  const [closingEntryNumber, setClosingEntryNumber] = useState<string | null>(null);
+  const [closingEntryStatus, setClosingEntryStatus] = useState<string | null>(null);
   
   // Step: Balance verification
   const [totalAssets, setTotalAssets] = useState(0);
