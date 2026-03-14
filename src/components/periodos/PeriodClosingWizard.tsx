@@ -143,6 +143,46 @@ export function PeriodClosingWizard({
   const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
   const periodResult = totalIncome - totalExpenses;
 
+  const findExistingClosingEntry = useCallback(async (): Promise<ExistingClosingEntry | null> => {
+    if (!period) return null;
+
+    const { data, error } = await supabase
+      .from('tab_journal_entries')
+      .select('id, entry_number, status, is_posted')
+      .eq('enterprise_id', enterpriseId)
+      .eq('accounting_period_id', period.id)
+      .eq('entry_type', 'cierre')
+      .is('deleted_at', null)
+      .order('is_posted', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as ExistingClosingEntry | null) ?? null;
+  }, [enterpriseId, period]);
+
+  const syncExistingClosingEntryState = useCallback(async () => {
+    try {
+      const existingEntry = await findExistingClosingEntry();
+
+      if (existingEntry) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(existingEntry.id);
+        setClosingEntryNumber(existingEntry.entry_number);
+        setClosingEntryStatus(existingEntry.status);
+        return;
+      }
+
+      setClosingEntryGenerated(false);
+      setClosingEntryId(null);
+      setClosingEntryNumber(null);
+      setClosingEntryStatus(null);
+    } catch (error) {
+      console.error('Error loading existing closing entry:', error);
+    }
+  }, [findExistingClosingEntry]);
+
   // Reset state when dialog opens
   useEffect(() => {
     if (open && period) {
