@@ -139,8 +139,11 @@ export function PeriodClosingWizard({
 
   const currentStepId = steps[currentStepIndex]?.id || 'partidas';
   
-  const totalIncome = incomeAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
-  const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+  // Signed totals (do not use absolute values):
+  // ingreso balance is usually credit (negative in debit-credit model) => invert sign
+  // gasto balance is usually debit (positive in debit-credit model) => keep sign
+  const totalIncome = incomeAccounts.reduce((sum, acc) => sum + (-acc.balance), 0);
+  const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + acc.balance, 0);
   const periodResult = totalIncome - totalExpenses;
 
   const findExistingClosingEntry = useCallback(async (): Promise<ExistingClosingEntry | null> => {
@@ -153,6 +156,7 @@ export function PeriodClosingWizard({
       .eq('accounting_period_id', period.id)
       .eq('entry_type', 'cierre')
       .is('deleted_at', null)
+      .is('reversal_entry_id', null)
       .order('is_posted', { ascending: false })
       .order('id', { ascending: false })
       .limit(1)
@@ -367,7 +371,67 @@ export function PeriodClosingWizard({
       }
       
       const entryNumber = `CIER-${year}-${String(nextNumber).padStart(4, '0')}`;
-      
+
+      type DraftClosingLine = {
+        line_number: number;
+        account_id: number;
+        description: string;
+        debit_amount: number;
+        credit_amount: number;
+      };
+
+      const detailLines: DraftClosingLine[] = [];
+      let lineNumber = 1;
+      let totalDebits = 0;
+      let totalCredits = 0;
+
+      const addClosingLine = (acc: AccountBalance) => {
+        const amount = Math.round(Math.abs(acc.balance) * 100) / 100;
+        if (amount <= 0.01) return;
+
+        // Cerrar por signo real del saldo (no por tipo de cuenta)
+        // balance > 0  => saldo deudor, se cierra con crédito
+        // balance < 0  => saldo acreedor, se cierra con débito
+        const debit = acc.balance < 0 ? amount : 0;
+        const credit = acc.balance > 0 ? amount : 0;
+
+        detailLines.push({
+          line_number: lineNumber++,
+          account_id: acc.account_id,
+          description: `Cierre ${acc.account_code} - ${acc.account_name}`,
+          debit_amount: debit,
+          credit_amount: credit,
+        });
+
+        totalDebits += debit;
+        totalCredits += credit;
+      };
+
+      incomeAccounts.forEach(addClosingLine);
+      expenseAccounts.forEach(addClosingLine);
+
+      // Contrapartida a resultado del período para cuadrar y reflejar utilidad/pérdida real
+      const resultAmount = Math.round(Math.abs(totalDebits - totalCredits) * 100) / 100;
+      if (resultAmount > 0.01) {
+        const isProfit = totalDebits > totalCredits;
+        const resultDebit = isProfit ? 0 : resultAmount;
+        const resultCredit = isProfit ? resultAmount : 0;
+
+        detailLines.push({
+          line_number: lineNumber,
+          account_id: config.period_result_account_id,
+          description: `${isProfit ? 'Utilidad' : 'Pérdida'} del período ${period.year}`,
+          debit_amount: resultDebit,
+          credit_amount: resultCredit,
+        });
+
+        totalDebits += resultDebit;
+        totalCredits += resultCredit;
+      }
+
+      totalDebits = Math.round(totalDebits * 100) / 100;
+      totalCredits = Math.round(totalCredits * 100) / 100;
+
       const { data: newEntry, error: entryError } = await supabase
         .from('tab_journal_entries')
         .insert({
@@ -377,65 +441,25 @@ export function PeriodClosingWizard({
           entry_date: period.end_date,
           entry_type: 'cierre',
           description: `Partida de cierre del período ${period.year}`,
-          total_debit: Math.round((totalIncome + totalExpenses) * 100) / 100,
-          total_credit: Math.round((totalIncome + totalExpenses) * 100) / 100,
+          total_debit: totalDebits,
+          total_credit: totalCredits,
           is_posted: false,
           status: 'borrador',
           created_by: user?.id || null,
         })
         .select('id')
         .single();
-      
+
       if (entryError) throw entryError;
-      
-      const detailLines: any[] = [];
-      let lineNumber = 1;
-      
-      incomeAccounts.forEach(acc => {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: acc.account_id,
-          description: `Cierre ${acc.account_code} - ${acc.account_name}`,
-          debit_amount: Math.abs(acc.balance),
-          credit_amount: 0
-        });
-      });
-      
-      expenseAccounts.forEach(acc => {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber++,
-          account_id: acc.account_id,
-          description: `Cierre ${acc.account_code} - ${acc.account_name}`,
-          debit_amount: 0,
-          credit_amount: Math.abs(acc.balance)
-        });
-      });
-      
-      if (periodResult >= 0) {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber,
-          account_id: config.period_result_account_id,
-          description: `Utilidad del período ${period.year}`,
-          debit_amount: 0,
-          credit_amount: Math.abs(periodResult)
-        });
-      } else {
-        detailLines.push({
-          journal_entry_id: newEntry.id,
-          line_number: lineNumber,
-          account_id: config.period_result_account_id,
-          description: `Pérdida del período ${period.year}`,
-          debit_amount: Math.abs(periodResult),
-          credit_amount: 0
-        });
-      }
-      
+
+      const detailsWithEntryId = detailLines.map((line) => ({
+        ...line,
+        journal_entry_id: newEntry.id,
+      }));
+
       const { error: detailsError } = await supabase
         .from('tab_journal_entry_details')
-        .insert(detailLines);
+        .insert(detailsWithEntryId);
       
       if (detailsError) throw detailsError;
       
