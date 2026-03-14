@@ -63,11 +63,11 @@ The system now supports proper fiscal year closing with three generated entries:
 2. **Transfer Entry (TRAS-)**: Moves the period result to "Utilidades Acumuladas" (retained earnings) in equity
 3. **Opening Entry (APER-)**: Creates opening balances for all balance sheet accounts (Assets, Liabilities, Equity) on Jan 1 of the next year
 
-### Phase 5 (Pending): Report Calculation Update
-Reports currently use cumulative historical calculation. Future update will change reports to use:
-- Opening Balance = OPENING_BALANCE entry
-- + Movements within selected period
-This will improve performance for large datasets.
+### Phase 5 (Implemented): Fiscal Floor Optimization
+Reports now use the most recent `apertura` (opening balance) entry as a floor date instead of summing all historical entries from the beginning of time:
+- **RPCs**: `get_trial_balance`, `get_balance_sheet`, `get_ledger_detail` all include a `_fiscal_floor` CTE that finds `MAX(entry_date)` from `apertura` entries <= the query date
+- **Client-side**: `MayorGeneral.tsx`, `AccountLedgerDrawer.tsx` use `getFiscalFloorDate()` utility to bound their previous-balance queries
+- **Fallback**: If no apertura entry exists, falls back to `1900-01-01` (full cumulative, backward compatible)
 
 ## Future Improvements
 
