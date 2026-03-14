@@ -317,7 +317,6 @@ export function PeriodClosingWizard({
           description: `Partida de cierre del período ${period.year}`,
           total_debit: Math.round((totalIncome + totalExpenses) * 100) / 100,
           total_credit: Math.round((totalIncome + totalExpenses) * 100) / 100,
-          is_balanced: true,
           is_posted: false,
           status: 'borrador',
           created_by: user?.id || null,
