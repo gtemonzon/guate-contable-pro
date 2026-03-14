@@ -972,7 +972,7 @@ export function PeriodClosingWizard({
                               disabled={cdv.loading || cdv.finalInventory === null || cdv.costOfSales === null || !config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id}
                             >
                               <Calculator className="h-4 w-4 mr-2" />
-                              Generar Partida de Costo de Ventas
+                              Generar / Reintentar Partida CDV
                             </Button>
                           )}
                         </div>
