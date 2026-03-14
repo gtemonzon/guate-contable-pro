@@ -21,6 +21,7 @@ export function EnterpriseAccountsManager() {
     vat_credit_account_id: null as number | null,
     vat_debit_account_id: null as number | null,
     period_result_account_id: null as number | null,
+    retained_earnings_account_id: null as number | null,
     purchases_account_id: null as number | null,
     sales_account_id: null as number | null,
     customers_account_id: null as number | null,
