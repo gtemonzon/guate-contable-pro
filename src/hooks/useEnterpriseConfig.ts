@@ -77,6 +77,7 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         vat_credit_account_id: newConfig.vat_credit_account_id,
         vat_debit_account_id: newConfig.vat_debit_account_id,
         period_result_account_id: newConfig.period_result_account_id,
+        retained_earnings_account_id: newConfig.retained_earnings_account_id,
         initial_inventory_account_id: newConfig.initial_inventory_account_id,
         final_inventory_account_id: newConfig.final_inventory_account_id,
         purchases_account_id: newConfig.purchases_account_id,
