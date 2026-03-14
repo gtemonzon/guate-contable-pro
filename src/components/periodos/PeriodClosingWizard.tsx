@@ -312,6 +312,16 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
+      const existingEntry = await findExistingClosingEntry();
+      if (existingEntry) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(existingEntry.id);
+        setClosingEntryNumber(existingEntry.entry_number);
+        setClosingEntryStatus(existingEntry.status);
+        toast.info(`La partida ${existingEntry.entry_number} ya existe.`);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
 
       const { data: resultAccount, error: accountError } = await supabase
