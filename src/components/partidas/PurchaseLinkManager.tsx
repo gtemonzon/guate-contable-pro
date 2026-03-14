@@ -69,7 +69,7 @@ export function PurchaseLinkManager({
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: number; account_code: string; account_name: string }>>([]);
-  const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string }>>([]);
+  const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string; affects_total: number; applies_vat: boolean }>>([]);
   const [selectedUnlinked, setSelectedUnlinked] = useState<Set<number>>(new Set());
   const [selectedLinked, setSelectedLinked] = useState<Set<number>>(new Set());
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -149,10 +149,10 @@ export function PurchaseLinkManager({
       const [{ data: accts }, { data: docTypes }] = await Promise.all([
         supabase.from("tab_accounts").select("id, account_code, account_name")
           .eq("enterprise_id", enterpriseId).eq("allows_movement", true).eq("is_active", true).order("account_code"),
-        supabase.from("tab_fel_document_types").select("code, name").eq("is_active", true).order("name"),
+        supabase.from("tab_fel_document_types").select("code, name, affects_total, applies_vat").eq("is_active", true).order("name"),
       ]);
       setAccounts(accts || []);
-      setFelDocTypes(docTypes || []);
+      setFelDocTypes((docTypes as Array<{ code: string; name: string; affects_total: number; applies_vat: boolean }>) || []);
     } catch (err) {
       console.error("Error loading reference data:", err);
     }
