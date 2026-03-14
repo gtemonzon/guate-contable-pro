@@ -893,7 +893,7 @@ export function PeriodClosingWizard({
 
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
-              <div className="space-y-4 max-h-[58vh] overflow-y-auto pr-1">
+              <div className="space-y-4">
                 {/* Show completed banner if CDV is already posted */}
                 {cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id && (
                   <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
