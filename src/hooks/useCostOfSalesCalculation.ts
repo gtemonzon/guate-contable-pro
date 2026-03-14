@@ -468,6 +468,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     } catch (err: any) {
       console.error('Error generating CDV entry:', err);
       const detail = err?.message || err?.details || 'Error desconocido';
+      setError(detail);
       toast.error(`Error al generar partida CDV: ${detail}`);
 
       // Clean up partial entry on failure
@@ -477,6 +478,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
           await supabase.from('tab_journal_entries').delete().eq('id', createdEntryId);
         } catch { /* ignore cleanup errors */ }
       }
+      return false;
     } finally {
       setLoading(false);
     }
