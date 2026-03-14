@@ -244,14 +244,14 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     }
   };
 
-  const generateCostOfSalesEntry = async () => {
+  const generateCostOfSalesEntry = async (): Promise<boolean> => {
     if (!config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id) {
       toast.error('Faltan cuentas configuradas para el costo de ventas');
-      return;
+      return false;
     }
     if (finalInventory === null || costOfSales === null) {
       toast.error('Debe ingresar el inventario final primero');
-      return;
+      return false;
     }
 
     setLoading(true);
