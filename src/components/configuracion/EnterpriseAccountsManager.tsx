@@ -44,6 +44,7 @@ export function EnterpriseAccountsManager() {
         vat_credit_account_id: config.vat_credit_account_id,
         vat_debit_account_id: config.vat_debit_account_id,
         period_result_account_id: config.period_result_account_id,
+        retained_earnings_account_id: config.retained_earnings_account_id,
         purchases_account_id: config.purchases_account_id,
         sales_account_id: config.sales_account_id,
         customers_account_id: config.customers_account_id,
