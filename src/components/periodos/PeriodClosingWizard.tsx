@@ -593,6 +593,15 @@ export function PeriodClosingWizard({
         setLoading(false);
       }
     } else if (currentStepId === 'generar' && canAdvance()) {
+      // Auto-generate the closing entry if not yet generated
+      if (!closingEntryGenerated) {
+        await generateClosingEntry();
+        // Check if it was successfully generated after the call
+        // generateClosingEntry sets closingEntryGenerated=true on success
+        // We need to wait and check - but since it's async and sets state,
+        // we'll just return and let the user click again after generation
+        return;
+      }
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
     } else if (currentStepId === 'verificar') {
