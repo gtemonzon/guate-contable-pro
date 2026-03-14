@@ -33,6 +33,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
   const [loading, setLoading] = useState(false);
   const [needsRecalculation, setNeedsRecalculation] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalSales, setTotalSales] = useState(0);
 
   const getPeriodData = async (): Promise<PeriodData | null> => {
     const { data, error } = await supabase
@@ -136,6 +137,45 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     return Math.round(totalBalance * 100) / 100;
   };
 
+  const calculateSales = async (period: PeriodData): Promise<number> => {
+    if (!config?.sales_account_id) return 0;
+
+    const entries = await fetchAllRecords(
+      supabase
+        .from('tab_journal_entries')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('accounting_period_id', periodId)
+        .eq('is_posted', true)
+        .is('deleted_at', null)
+        .neq('entry_type', 'apertura')
+    );
+
+    if (!entries || entries.length === 0) return 0;
+
+    const entryIds = entries.map((e: any) => e.id);
+    
+    let totalBalance = 0;
+    const batchSize = 100;
+    for (let i = 0; i < entryIds.length; i += batchSize) {
+      const batch = entryIds.slice(i, i + batchSize);
+      const { data: details, error: detailsError } = await supabase
+        .from('tab_journal_entry_details')
+        .select('debit_amount, credit_amount')
+        .eq('account_id', config.sales_account_id)
+        .is('deleted_at', null)
+        .in('journal_entry_id', batch);
+
+      if (detailsError) throw detailsError;
+      
+      (details || []).forEach((d: any) => {
+        totalBalance += (Number(d.credit_amount) || 0) - (Number(d.debit_amount) || 0);
+      });
+    }
+
+    return Math.round(totalBalance * 100) / 100;
+  };
+
   const loadExistingClosing = async (): Promise<ClosingData | null> => {
     const { data, error } = await supabase
       .from('tab_period_inventory_closing')
@@ -173,13 +213,15 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         return;
       }
 
-      const [invInitial, purchases] = await Promise.all([
+      const [invInitial, purchases, sales] = await Promise.all([
         calculateInitialInventory(period),
         calculatePurchases(period),
+        calculateSales(period),
       ]);
 
       setInitialInventory(invInitial);
       setPurchasesAmount(purchases);
+      setTotalSales(sales);
 
       if (existing) {
         setFinalInventory(existing.final_inventory_amount);
@@ -504,13 +546,15 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       const period = await getPeriodData();
       if (!period) throw new Error('Período no encontrado');
 
-      const [invInitial, purchases] = await Promise.all([
+      const [invInitial, purchases, sales] = await Promise.all([
         calculateInitialInventory(period),
         calculatePurchases(period),
+        calculateSales(period),
       ]);
 
       setInitialInventory(invInitial);
       setPurchasesAmount(purchases);
+      setTotalSales(sales);
 
       // Keep existing finalInventory
       if (finalInventory !== null) {
@@ -604,6 +648,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     purchasesAmount,
     finalInventory,
     costOfSales,
+    totalSales,
     loading,
     needsRecalculation,
     error,

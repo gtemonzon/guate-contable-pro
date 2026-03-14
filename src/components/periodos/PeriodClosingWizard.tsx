@@ -1405,6 +1405,57 @@ export function PeriodClosingWizard({
                           </Alert>
                         )}
 
+                        {/* Projected Financial Result */}
+                        {cdv.costOfSales !== null && (
+                          <Card className="border-primary/20 bg-primary/5">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-base flex items-center gap-2">
+                                <Scale className="h-4 w-4" />
+                                Resultado Financiero Proyectado
+                              </CardTitle>
+                              <p className="text-xs text-muted-foreground">Informativo — no genera partidas contables</p>
+                            </CardHeader>
+                            <CardContent>
+                              {(() => {
+                                const sales = cdv.totalSales;
+                                const cos = cdv.costOfSales ?? 0;
+                                const grossProfit = sales - cos;
+                                const grossMargin = sales !== 0 ? (grossProfit / sales) * 100 : 0;
+                                return (
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Ventas del Período</p>
+                                      <p className="text-lg font-bold font-mono">{formatCurrency(sales)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Costo de Ventas Est.</p>
+                                      <p className="text-lg font-bold font-mono">{formatCurrency(cos)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Utilidad Bruta Est.</p>
+                                      <p className={cn(
+                                        "text-lg font-bold font-mono",
+                                        grossProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                                      )}>
+                                        {formatCurrency(grossProfit)}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Margen Bruto</p>
+                                      <p className={cn(
+                                        "text-lg font-bold font-mono",
+                                        grossMargin >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                                      )}>
+                                        {grossMargin.toFixed(1)}%
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </CardContent>
+                          </Card>
+                        )}
+
                         <Alert>
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
