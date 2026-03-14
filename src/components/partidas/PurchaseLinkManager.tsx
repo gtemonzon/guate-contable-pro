@@ -214,17 +214,26 @@ export function PurchaseLinkManager({
           }));
         }
         try {
-          const { error } = await supabase
-            .from("tab_purchase_journal_links" as any)
-            .upsert({
-              enterprise_id: enterpriseId,
-              purchase_id: p.id,
-              journal_entry_id: journalEntryId,
-              link_source: 'MANUAL_LINK',
-              linked_by: user.id,
-              linked_at: new Date().toISOString(),
-            }, { onConflict: "enterprise_id,purchase_id" });
-          if (error) throw error;
+          const [{ error: linkError }, { error: legacyError }] = await Promise.all([
+            supabase
+              .from("tab_purchase_journal_links" as any)
+              .upsert({
+                enterprise_id: enterpriseId,
+                purchase_id: p.id,
+                journal_entry_id: journalEntryId,
+                link_source: 'MANUAL_LINK',
+                linked_by: user.id,
+                linked_at: new Date().toISOString(),
+              }, { onConflict: "enterprise_id,purchase_id" }),
+            supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: journalEntryId })
+              .eq("enterprise_id", enterpriseId)
+              .eq("id", p.id)
+              .is("deleted_at", null),
+          ]);
+          if (linkError) throw linkError;
+          if (legacyError) throw legacyError;
           successPurchases.push(p);
         } catch (err: any) {
           errors.push(`${p.invoice_number}: ${err.message}`);
