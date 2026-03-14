@@ -389,9 +389,9 @@ export default function MayorGeneral() {
           .lte("tab_journal_entries.entry_date", endDate)
       );
 
-      // Calcular saldo anterior (antes del startDate) con paginación automática
-      const previousDetails = await fetchAllRecords<any>(
-        supabase
+      // Calcular saldo anterior (desde la partida de apertura más reciente hasta startDate)
+      const fiscalFloor = await getFiscalFloorDate(parseInt(currentEnterpriseId), startDate);
+      let previousQuery = supabase
           .from("tab_journal_entry_details")
           .select(`
             account_id,
@@ -407,8 +407,13 @@ export default function MayorGeneral() {
           .in("account_id", allDetailAccountIds)
           .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
           .eq("tab_journal_entries.is_posted", true)
-          .lt("tab_journal_entries.entry_date", startDate)
-      );
+          .lt("tab_journal_entries.entry_date", startDate);
+
+      if (fiscalFloor) {
+        previousQuery = previousQuery.gte("tab_journal_entries.entry_date", fiscalFloor);
+      }
+
+      const previousDetails = await fetchAllRecords<any>(previousQuery);
 
       // Calcular saldo anterior por cuenta de detalle
       const previousBalanceByAccount: Record<number, number> = {};

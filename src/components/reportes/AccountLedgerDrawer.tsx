@@ -65,6 +65,10 @@ export default function AccountLedgerDrawer({
     if (resolvedIds.length === 0 || !enterpriseId) return;
     setLoading(true);
     try {
+      // Determine fiscal floor: use the most recent apertura entry as lower bound
+      const effectiveStart = startDate || endDate;
+      const fiscalFloor = await getFiscalFloorDate(enterpriseId, effectiveStart);
+
       // Get all detail lines for the account(s) within the date range, from posted entries only
       const query = supabase
         .from("tab_journal_entry_details")
@@ -89,8 +93,11 @@ export default function AccountLedgerDrawer({
         .lte("tab_journal_entries.entry_date", endDate)
         .order("tab_journal_entries(entry_date)", { ascending: true });
 
+      // Apply fiscal floor or explicit startDate
       if (startDate) {
         query.gte("tab_journal_entries.entry_date", startDate);
+      } else if (fiscalFloor) {
+        query.gte("tab_journal_entries.entry_date", fiscalFloor);
       }
 
       const { data, error } = await query;
