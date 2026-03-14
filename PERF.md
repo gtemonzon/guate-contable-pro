@@ -55,6 +55,20 @@ Every RPC:
 
 Network payload reduction is roughly **N_lines / N_accounts** — typically 50–500×.
 
+## Fiscal Year Closing Architecture
+
+The system now supports proper fiscal year closing with three generated entries:
+
+1. **Closing Entry (CIER-)**: Closes all income and expense accounts to zero, with offset to "Resultado del Período"
+2. **Transfer Entry (TRAS-)**: Moves the period result to "Utilidades Acumuladas" (retained earnings) in equity
+3. **Opening Entry (APER-)**: Creates opening balances for all balance sheet accounts (Assets, Liabilities, Equity) on Jan 1 of the next year
+
+### Phase 5 (Pending): Report Calculation Update
+Reports currently use cumulative historical calculation. Future update will change reports to use:
+- Opening Balance = OPENING_BALANCE entry
+- + Movements within selected period
+This will improve performance for large datasets.
+
 ## Future Improvements
 
 1. **Indexes**: Add a composite index on `(enterprise_id, entry_date, is_posted)` on `tab_journal_entries` and `(journal_entry_id, account_id)` on `tab_journal_entry_details` to accelerate the GROUP BY queries.
