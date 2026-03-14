@@ -425,21 +425,42 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         if (detailsError) throw detailsError;
       }
 
-      // Update closing record
+      // Update or create closing record (avoid stale-state race conditions)
+      const closingPayload = {
+        enterprise_id: enterpriseId,
+        accounting_period_id: periodId,
+        initial_inventory_amount: initialInventory,
+        purchases_amount: purchasesAmount,
+        final_inventory_amount: finalInventory,
+        cost_of_sales_amount: costOfSales,
+        journal_entry_id: newEntry.id,
+        status: 'borrador' as const,
+        calculated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
       if (closingData) {
-        const { error: updateError } = await supabase
+        const { data: updatedClosing, error: updateError } = await supabase
           .from('tab_period_inventory_closing')
-          .update({
-            journal_entry_id: newEntry.id,
-            status: 'borrador',
-            calculated_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', closingData.id);
+          .update(closingPayload)
+          .eq('id', closingData.id)
+          .select('*')
+          .single();
 
         if (updateError) throw updateError;
-        setClosingData({ ...closingData, journal_entry_id: newEntry.id, status: 'borrador' });
+        setClosingData(updatedClosing as ClosingData);
+      } else {
+        const { data: upsertedClosing, error: upsertError } = await supabase
+          .from('tab_period_inventory_closing')
+          .upsert(closingPayload, { onConflict: 'enterprise_id,accounting_period_id' })
+          .select('*')
+          .single();
+
+        if (upsertError) throw upsertError;
+        setClosingData(upsertedClosing as ClosingData);
       }
+
+      setNeedsRecalculation(false);
 
       createdEntryId = null; // success — don't clean up
       toast.success(`Partida de Costo de Ventas ${entryNumber} generada`);
