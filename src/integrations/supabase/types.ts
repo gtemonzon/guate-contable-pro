@@ -1329,6 +1329,7 @@ export type Database = {
           inventory_account_id: number | null
           period_result_account_id: number | null
           purchases_account_id: number | null
+          retained_earnings_account_id: number | null
           sales_account_id: number | null
           suppliers_account_id: number | null
           vat_credit_account_id: number | null
@@ -1346,6 +1347,7 @@ export type Database = {
           inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
+          retained_earnings_account_id?: number | null
           sales_account_id?: number | null
           suppliers_account_id?: number | null
           vat_credit_account_id?: number | null
@@ -1363,6 +1365,7 @@ export type Database = {
           inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
+          retained_earnings_account_id?: number | null
           sales_account_id?: number | null
           suppliers_account_id?: number | null
           vat_credit_account_id?: number | null
@@ -1379,6 +1382,13 @@ export type Database = {
           {
             foreignKeyName: "tab_enterprise_config_inventory_account_id_fkey"
             columns: ["inventory_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_retained_earnings_account_id_fkey"
+            columns: ["retained_earnings_account_id"]
             isOneToOne: false
             referencedRelation: "tab_accounts"
             referencedColumns: ["id"]
