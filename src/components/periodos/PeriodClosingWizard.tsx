@@ -1621,6 +1621,9 @@ export function PeriodClosingWizard({
                   <p className="text-muted-foreground mt-2">
                     El período {period.year} ha sido cerrado exitosamente.
                   </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Se generó automáticamente la partida de apertura para el período {period.year + 1}.
+                  </p>
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
