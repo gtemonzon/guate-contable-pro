@@ -69,7 +69,7 @@ export function PurchaseLinkManager({
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [accounts, setAccounts] = useState<Array<{ id: number; account_code: string; account_name: string }>>([]);
-  const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string }>>([]);
+  const [felDocTypes, setFelDocTypes] = useState<Array<{ code: string; name: string; affects_total: number; applies_vat: boolean }>>([]);
   const [selectedUnlinked, setSelectedUnlinked] = useState<Set<number>>(new Set());
   const [selectedLinked, setSelectedLinked] = useState<Set<number>>(new Set());
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
@@ -149,10 +149,10 @@ export function PurchaseLinkManager({
       const [{ data: accts }, { data: docTypes }] = await Promise.all([
         supabase.from("tab_accounts").select("id, account_code, account_name")
           .eq("enterprise_id", enterpriseId).eq("allows_movement", true).eq("is_active", true).order("account_code"),
-        supabase.from("tab_fel_document_types").select("code, name").eq("is_active", true).order("name"),
+        supabase.from("tab_fel_document_types").select("code, name, affects_total, applies_vat").eq("is_active", true).order("name"),
       ]);
       setAccounts(accts || []);
-      setFelDocTypes(docTypes || []);
+      setFelDocTypes((docTypes as Array<{ code: string; name: string; affects_total: number; applies_vat: boolean }>) || []);
     } catch (err) {
       console.error("Error loading reference data:", err);
     }
@@ -214,17 +214,26 @@ export function PurchaseLinkManager({
           }));
         }
         try {
-          const { error } = await supabase
-            .from("tab_purchase_journal_links" as any)
-            .upsert({
-              enterprise_id: enterpriseId,
-              purchase_id: p.id,
-              journal_entry_id: journalEntryId,
-              link_source: 'MANUAL_LINK',
-              linked_by: user.id,
-              linked_at: new Date().toISOString(),
-            }, { onConflict: "enterprise_id,purchase_id" });
-          if (error) throw error;
+          const [{ error: linkError }, { error: legacyError }] = await Promise.all([
+            supabase
+              .from("tab_purchase_journal_links" as any)
+              .upsert({
+                enterprise_id: enterpriseId,
+                purchase_id: p.id,
+                journal_entry_id: journalEntryId,
+                link_source: 'MANUAL_LINK',
+                linked_by: user.id,
+                linked_at: new Date().toISOString(),
+              }, { onConflict: "enterprise_id,purchase_id" }),
+            supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: journalEntryId })
+              .eq("enterprise_id", enterpriseId)
+              .eq("id", p.id)
+              .is("deleted_at", null),
+          ]);
+          if (linkError) throw linkError;
+          if (legacyError) throw legacyError;
           successPurchases.push(p);
         } catch (err: any) {
           errors.push(`${p.invoice_number}: ${err.message}`);
@@ -286,12 +295,22 @@ export function PurchaseLinkManager({
           }));
         }
         try {
-          const { error } = await supabase
-            .from("tab_purchase_journal_links" as any)
-            .delete()
-            .eq("enterprise_id", enterpriseId)
-            .eq("purchase_id", p.id);
-          if (error) throw error;
+          const [{ error: linkError }, { error: legacyError }] = await Promise.all([
+            supabase
+              .from("tab_purchase_journal_links" as any)
+              .delete()
+              .eq("enterprise_id", enterpriseId)
+              .eq("purchase_id", p.id),
+            supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: null })
+              .eq("enterprise_id", enterpriseId)
+              .eq("id", p.id)
+              .eq("journal_entry_id", journalEntryId)
+              .is("deleted_at", null),
+          ]);
+          if (linkError) throw linkError;
+          if (legacyError) throw legacyError;
           successPurchases.push(p);
         } catch (err: any) {
           errors.push(`${p.invoice_number}: ${err.message}`);
@@ -465,6 +484,7 @@ export function PurchaseLinkManager({
           journalEntryNumber={journalEntryNumber}
           bankAccountId={bankAccountId}
           accounts={accounts}
+          felDocTypes={felDocTypes}
           onApplyToEntry={handleApplyToEntry}
           applying={applying}
           hasPendingChanges={hasPendingChanges}

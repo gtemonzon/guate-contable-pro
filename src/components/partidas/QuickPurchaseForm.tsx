@@ -153,16 +153,27 @@ export function QuickPurchaseForm({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
-      await supabase
-        .from("tab_purchase_journal_links" as any)
-        .upsert({
-          enterprise_id: enterpriseId,
-          purchase_id: duplicate.id,
-          journal_entry_id: journalEntryId,
-          link_source: 'FROM_JOURNAL_MODAL',
-          linked_by: user.id,
-          linked_at: new Date().toISOString(),
-        }, { onConflict: "enterprise_id,purchase_id" });
+      const [{ error: linkError }, { error: legacyError }] = await Promise.all([
+        supabase
+          .from("tab_purchase_journal_links" as any)
+          .upsert({
+            enterprise_id: enterpriseId,
+            purchase_id: duplicate.id,
+            journal_entry_id: journalEntryId,
+            link_source: 'FROM_JOURNAL_MODAL',
+            linked_by: user.id,
+            linked_at: new Date().toISOString(),
+          }, { onConflict: "enterprise_id,purchase_id" }),
+        supabase
+          .from("tab_purchase_ledger")
+          .update({ journal_entry_id: journalEntryId })
+          .eq("enterprise_id", enterpriseId)
+          .eq("id", duplicate.id)
+          .is("deleted_at", null),
+      ]);
+
+      if (linkError) throw linkError;
+      if (legacyError) throw legacyError;
 
       toast({ title: "Factura existente vinculada", description: `${duplicate.supplier_name} - ${number}` });
       // Reset form
