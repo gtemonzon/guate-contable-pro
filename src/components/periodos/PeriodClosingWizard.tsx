@@ -139,8 +139,11 @@ export function PeriodClosingWizard({
 
   const currentStepId = steps[currentStepIndex]?.id || 'partidas';
   
-  const totalIncome = incomeAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
-  const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+  // Signed totals (do not use absolute values):
+  // ingreso balance is usually credit (negative in debit-credit model) => invert sign
+  // gasto balance is usually debit (positive in debit-credit model) => keep sign
+  const totalIncome = incomeAccounts.reduce((sum, acc) => sum + (-acc.balance), 0);
+  const totalExpenses = expenseAccounts.reduce((sum, acc) => sum + acc.balance, 0);
   const periodResult = totalIncome - totalExpenses;
 
   const findExistingClosingEntry = useCallback(async (): Promise<ExistingClosingEntry | null> => {
