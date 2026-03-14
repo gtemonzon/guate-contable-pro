@@ -516,6 +516,8 @@ export function PeriodClosingWizard({
       case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
       case 'cdv':
+        // Allow advance if CDV is already posted
+        if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
         return cdv.finalInventory !== null &&
           cdv.costOfSales !== null &&
           !!config?.inventory_account_id &&
@@ -546,6 +548,13 @@ export function PeriodClosingWizard({
         await loadAccountBalances();
       }
     } else if (currentStepId === 'cdv' && canAdvance()) {
+      // If CDV is already posted, just move to next step
+      if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) {
+        setCurrentStepIndex(nextIndex);
+        await loadAccountBalances();
+        return;
+      }
+
       // Ensure CDV entry exists, then post it before moving on
       setLoading(true);
       try {
@@ -761,6 +770,16 @@ export function PeriodClosingWizard({
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
               <div className="space-y-4 max-h-[58vh] overflow-y-auto pr-1">
+                {/* Show completed banner if CDV is already posted */}
+                {cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id && (
+                  <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-700 dark:text-green-400">
+                      La partida de Costo de Ventas ya fue generada y contabilizada.
+                      Puede continuar al siguiente paso.
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -847,25 +866,29 @@ export function PeriodClosingWizard({
                               <TableCell>(-) Inventario Final de Mercaderías</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center gap-2 justify-end">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    defaultValue={cdv.finalInventory ?? ''}
-                                    onBlur={(e) => {
-                                      const val = e.target.value;
-                                      if (val === '') return;
-                                      const num = parseFloat(val);
-                                      if (!isNaN(num)) cdv.saveFinalInventory(num);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        (e.target as HTMLInputElement).blur();
-                                      }
-                                    }}
-                                    placeholder="Ingrese conteo físico"
-                                    className="w-48 text-right font-mono ml-auto"
-                                  />
+                                  {cdv.closingData?.status === 'contabilizado' ? (
+                                    <span className="font-mono">{cdv.finalInventory !== null ? formatCurrency(cdv.finalInventory) : '—'}</span>
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      defaultValue={cdv.finalInventory ?? ''}
+                                      onBlur={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') return;
+                                        const num = parseFloat(val);
+                                        if (!isNaN(num)) cdv.saveFinalInventory(num);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          (e.target as HTMLInputElement).blur();
+                                        }
+                                      }}
+                                      placeholder="Ingrese conteo físico"
+                                      className="w-48 text-right font-mono ml-auto"
+                                    />
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -930,62 +953,63 @@ export function PeriodClosingWizard({
                           </Alert>
                         )}
 
-                        {/* Action buttons */}
-                        <div className="flex gap-2">
-                          <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Recalcular
-                          </Button>
-                          {cdv.closingData?.journal_entry_id ? (
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                Partida CDV generada
-                              </Badge>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={async () => {
-                                  // Allow regeneration by clearing the reference
-                                  if (cdv.closingData?.journal_entry_id) {
-                                    try {
-                                      const { data: existingEntry } = await supabase
-                                        .from('tab_journal_entries')
-                                        .select('id, status')
-                                        .eq('id', cdv.closingData.journal_entry_id)
-                                        .single();
-
-                                      if (existingEntry && existingEntry.status === 'borrador') {
-                                        await supabase.from('tab_journal_entry_details').delete().eq('journal_entry_id', existingEntry.id);
-                                        await supabase.from('tab_journal_entries').delete().eq('id', existingEntry.id);
-                                      }
-
-                                      await supabase
-                                        .from('tab_period_inventory_closing')
-                                        .update({ journal_entry_id: null, updated_at: new Date().toISOString() })
-                                        .eq('id', cdv.closingData.id);
-
-                                      cdv.calculate();
-                                      toast.success('Partida CDV eliminada. Puede regenerar.');
-                                    } catch (e: any) {
-                                      toast.error('Error al eliminar partida CDV');
-                                    }
-                                  }
-                                }}
-                              >
-                                <RefreshCw className="h-4 w-4 mr-1" />
-                                Regenerar
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              onClick={cdv.generateCostOfSalesEntry}
-                              disabled={cdv.loading || cdv.finalInventory === null || cdv.costOfSales === null || !config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id}
-                            >
-                              <Calculator className="h-4 w-4 mr-2" />
-                              Generar / Reintentar Partida CDV
+                        {/* Action buttons - only show when not yet posted */}
+                        {cdv.closingData?.status !== 'contabilizado' && (
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={cdv.refreshCalculation} disabled={cdv.loading}>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Recalcular
                             </Button>
-                          )}
-                        </div>
+                            {cdv.closingData?.journal_entry_id ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
+                                  Partida CDV generada
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (cdv.closingData?.journal_entry_id) {
+                                      try {
+                                        const { data: existingEntry } = await supabase
+                                          .from('tab_journal_entries')
+                                          .select('id, status')
+                                          .eq('id', cdv.closingData.journal_entry_id)
+                                          .single();
+
+                                        if (existingEntry && existingEntry.status === 'borrador') {
+                                          await supabase.from('tab_journal_entry_details').delete().eq('journal_entry_id', existingEntry.id);
+                                          await supabase.from('tab_journal_entries').delete().eq('id', existingEntry.id);
+                                        }
+
+                                        await supabase
+                                          .from('tab_period_inventory_closing')
+                                          .update({ journal_entry_id: null, updated_at: new Date().toISOString() })
+                                          .eq('id', cdv.closingData.id);
+
+                                        cdv.calculate();
+                                        toast.success('Partida CDV eliminada. Puede regenerar.');
+                                      } catch (e: any) {
+                                        toast.error('Error al eliminar partida CDV');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <RefreshCw className="h-4 w-4 mr-1" />
+                                  Regenerar
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={cdv.generateCostOfSalesEntry}
+                                disabled={cdv.loading || cdv.finalInventory === null || cdv.costOfSales === null || !config?.inventory_account_id || !config?.purchases_account_id || !config?.cost_of_sales_account_id}
+                              >
+                                <Calculator className="h-4 w-4 mr-2" />
+                                Generar / Reintentar Partida CDV
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </>
                     )}
                   </CardContent>
