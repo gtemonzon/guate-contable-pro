@@ -210,6 +210,9 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         setFinalInventory(existing.final_inventory_amount);
         setCostOfSales(existing.cost_of_sales_amount);
         setNeedsRecalculation(false);
+        // Still calculate sales for the financial projection display
+        const sales = await calculateSales(period);
+        setTotalSales(sales);
         return;
       }
 
