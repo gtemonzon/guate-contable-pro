@@ -153,14 +153,17 @@ export function PeriodClosingWizard({
       setExpenseAccounts([]);
       setClosingEntryGenerated(false);
       setClosingEntryId(null);
+      setClosingEntryNumber(null);
+      setClosingEntryStatus(null);
       setTotalAssets(0);
       setTotalLiabilities(0);
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
       loadPendingEntries();
+      syncExistingClosingEntryState();
     }
-  }, [open, period]);
+  }, [open, period, syncExistingClosingEntryState]);
 
   const loadPendingEntries = async () => {
     if (!period) return;
