@@ -569,122 +569,6 @@ export function PeriodClosingWizard({
     }
   }, [period, enterpriseId]);
 
-  const generateOpeningEntry = async (userId: string | undefined, nextPeriod: { id: number; start_date: string; year: number }) => {
-    // Get all accounts
-    const { data: accounts } = await supabase
-      .from('tab_accounts')
-      .select('id, account_code, account_name, account_type, balance_type, allows_movement')
-      .eq('enterprise_id', enterpriseId)
-      .eq('is_active', true);
-
-    if (!accounts || accounts.length === 0) return null;
-
-    // Fetch ALL posted entries up to the closed period's end date
-    const entries = await fetchAllRecords(
-      supabase
-        .from('tab_journal_entries')
-        .select(`id, tab_journal_entry_details (account_id, debit_amount, credit_amount)`)
-        .eq('enterprise_id', enterpriseId)
-        .eq('is_posted', true)
-        .is('deleted_at', null)
-        .lte('entry_date', period!.end_date)
-    );
-
-    // Compute raw balance per account (debit - credit)
-    const balanceMap = new Map<number, number>();
-    entries.forEach((entry: any) => {
-      entry.tab_journal_entry_details?.forEach((d: any) => {
-        balanceMap.set(d.account_id, (balanceMap.get(d.account_id) || 0) + (d.debit_amount || 0) - (d.credit_amount || 0));
-      });
-    });
-
-    // Build opening lines for balance sheet accounts only
-    const balanceSheetTypes = ['activo', 'pasivo', 'capital', 'patrimonio'];
-    type OpeningLine = { line_number: number; account_id: number; description: string; debit_amount: number; credit_amount: number };
-    const lines: OpeningLine[] = [];
-    let lineNumber = 1;
-    let totalDebits = 0;
-    let totalCredits = 0;
-
-    accounts.forEach(acc => {
-      if (!acc.allows_movement) return;
-      if (!balanceSheetTypes.includes(acc.account_type?.toLowerCase() || '')) return;
-      const rawBalance = balanceMap.get(acc.id) || 0;
-      const amount = Math.round(Math.abs(rawBalance) * 100) / 100;
-      if (amount < 0.01) return;
-
-      // rawBalance > 0 means debit balance → open with debit
-      // rawBalance < 0 means credit balance → open with credit
-      const debit = rawBalance > 0 ? amount : 0;
-      const credit = rawBalance < 0 ? amount : 0;
-
-      lines.push({
-        line_number: lineNumber++,
-        account_id: acc.id,
-        description: `Apertura ${acc.account_code} - ${acc.account_name}`,
-        debit_amount: debit,
-        credit_amount: credit,
-      });
-      totalDebits += debit;
-      totalCredits += credit;
-    });
-
-    if (lines.length === 0) return null;
-
-    totalDebits = Math.round(totalDebits * 100) / 100;
-    totalCredits = Math.round(totalCredits * 100) / 100;
-
-    // Allocate entry number
-    const { data: entryNumber } = await supabase.rpc('allocate_journal_entry_number', {
-      p_enterprise_id: enterpriseId,
-      p_entry_type: 'apertura',
-      p_entry_date: nextPeriod.start_date,
-    });
-
-    // Insert header as draft
-    const { data: newEntry, error: entryError } = await supabase
-      .from('tab_journal_entries')
-      .insert({
-        enterprise_id: enterpriseId,
-        accounting_period_id: nextPeriod.id,
-        entry_number: entryNumber || `APER-${nextPeriod.year}-01-0001`,
-        entry_date: nextPeriod.start_date,
-        entry_type: 'apertura',
-        description: `Partida de apertura del período ${nextPeriod.year}`,
-        total_debit: totalDebits,
-        total_credit: totalCredits,
-        is_posted: false,
-        status: 'borrador',
-        created_by: userId || null,
-      })
-      .select('id, entry_number')
-      .single();
-
-    if (entryError) throw entryError;
-
-    // Insert detail lines
-    const detailsWithEntryId = lines.map(line => ({
-      ...line,
-      journal_entry_id: newEntry.id,
-    }));
-
-    const { error: detailsError } = await supabase
-      .from('tab_journal_entry_details')
-      .insert(detailsWithEntryId);
-
-    if (detailsError) throw detailsError;
-
-    // Post the opening entry
-    const { error: postErr } = await supabase
-      .from('tab_journal_entries')
-      .update({ is_posted: true, status: 'contabilizado', posted_at: new Date().toISOString() })
-      .eq('id', newEntry.id);
-
-    if (postErr) throw postErr;
-
-    return newEntry;
-  };
-
   const handleClosePeriod = async () => {
     if (!period || !closingEntryId) return;
     
@@ -718,60 +602,26 @@ export function PeriodClosingWizard({
       
       if (closeError) throw closeError;
 
-      // Find or create the next period and generate the opening entry
-      try {
-        const nextYear = period.year + 1;
-        let nextPeriod: { id: number; start_date: string; year: number } | null = null;
+      // Ensure next period exists (but NO opening entry — reports use cumulative balances)
+      const nextYear = period.year + 1;
+      const { data: existingNext } = await supabase
+        .from('tab_accounting_periods')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('year', nextYear)
+        .maybeSingle();
 
-        // Look for existing next period
-        const { data: existingNext } = await supabase
+      if (!existingNext) {
+        await supabase
           .from('tab_accounting_periods')
-          .select('id, start_date, year')
-          .eq('enterprise_id', enterpriseId)
-          .eq('year', nextYear)
-          .maybeSingle();
-
-        if (existingNext) {
-          nextPeriod = existingNext;
-        } else {
-          // Create next period
-          const { data: createdPeriod, error: createErr } = await supabase
-            .from('tab_accounting_periods')
-            .insert({
-              enterprise_id: enterpriseId,
-              year: nextYear,
-              start_date: `${nextYear}-01-01`,
-              end_date: `${nextYear}-12-31`,
-              status: 'abierto',
-            })
-            .select('id, start_date, year')
-            .single();
-          
-          if (createErr) throw createErr;
-          nextPeriod = createdPeriod;
-        }
-
-        if (nextPeriod) {
-          // Check if opening entry already exists for the next period
-          const { data: existingOpening } = await supabase
-            .from('tab_journal_entries')
-            .select('id')
-            .eq('enterprise_id', enterpriseId)
-            .eq('accounting_period_id', nextPeriod.id)
-            .eq('entry_type', 'apertura')
-            .is('deleted_at', null)
-            .maybeSingle();
-
-          if (!existingOpening) {
-            const openingEntry = await generateOpeningEntry(user?.id, nextPeriod);
-            if (openingEntry) {
-              toast.success(`Partida de apertura ${openingEntry.entry_number} generada para ${nextYear}`);
-            }
-          }
-        }
-      } catch (openingError) {
-        console.error('Error generating opening entry:', openingError);
-        toast.error('Período cerrado, pero hubo un error al generar la partida de apertura. Puede crearla manualmente.');
+          .insert({
+            enterprise_id: enterpriseId,
+            year: nextYear,
+            start_date: `${nextYear}-01-01`,
+            end_date: `${nextYear}-12-31`,
+            status: 'abierto',
+          });
+        toast.success(`Período ${nextYear} creado automáticamente`);
       }
       
       const activePeriodId = localStorage.getItem('activePeriodId');
