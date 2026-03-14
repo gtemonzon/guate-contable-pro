@@ -8,6 +8,7 @@ export interface EnterpriseConfig {
   vat_credit_account_id: number | null;
   vat_debit_account_id: number | null;
   period_result_account_id: number | null;
+  retained_earnings_account_id: number | null;
   initial_inventory_account_id: number | null;
   final_inventory_account_id: number | null;
   purchases_account_id: number | null;
