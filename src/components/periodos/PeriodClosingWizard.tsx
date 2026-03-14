@@ -260,6 +260,8 @@ export function PeriodClosingWizard({
     
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { data: resultAccount, error: accountError } = await supabase
         .from('tab_accounts')
         .select('id, account_code, account_name')
@@ -271,6 +273,23 @@ export function PeriodClosingWizard({
       }
       
       const year = period.year;
+
+      // Clean up orphaned CIER drafts for this period
+      const { data: orphanedEntries } = await supabase
+        .from('tab_journal_entries')
+        .select('id')
+        .eq('enterprise_id', enterpriseId)
+        .eq('accounting_period_id', period.id)
+        .ilike('entry_number', 'CIER-%')
+        .eq('status', 'borrador')
+        .eq('is_posted', false);
+
+      if (orphanedEntries && orphanedEntries.length > 0) {
+        const orphanIds = orphanedEntries.map(e => e.id);
+        await supabase.from('tab_journal_entry_details').delete().in('journal_entry_id', orphanIds);
+        await supabase.from('tab_journal_entries').delete().in('id', orphanIds);
+      }
+
       const { data: lastEntry } = await supabase
         .from('tab_journal_entries')
         .select('entry_number')
@@ -300,7 +319,8 @@ export function PeriodClosingWizard({
           total_credit: Math.round((totalIncome + totalExpenses) * 100) / 100,
           is_balanced: true,
           is_posted: false,
-          status: 'borrador'
+          status: 'borrador',
+          created_by: user?.id || null,
         })
         .select('id')
         .single();
