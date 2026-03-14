@@ -25,6 +25,7 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   vat_credit_account_id: null,
   vat_debit_account_id: null,
   period_result_account_id: null,
+  retained_earnings_account_id: null,
   initial_inventory_account_id: null,
   final_inventory_account_id: null,
   purchases_account_id: null,
