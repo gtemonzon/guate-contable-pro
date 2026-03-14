@@ -157,15 +157,29 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       const period = await getPeriodData();
       if (!period) throw new Error('Período no encontrado');
 
-      const [invInitial, purchases, existing] = await Promise.all([
+      const existing = await loadExistingClosing();
+      setClosingData(existing);
+
+      // If a CDV entry already exists and is posted ("contabilizado"),
+      // use the stored values from the closing record instead of recalculating.
+      // Recalculating would show 0 purchases because the CDV entry already
+      // credited the purchases account.
+      if (existing?.journal_entry_id && existing.status === 'contabilizado') {
+        setInitialInventory(existing.initial_inventory_amount);
+        setPurchasesAmount(existing.purchases_amount);
+        setFinalInventory(existing.final_inventory_amount);
+        setCostOfSales(existing.cost_of_sales_amount);
+        setNeedsRecalculation(false);
+        return;
+      }
+
+      const [invInitial, purchases] = await Promise.all([
         calculateInitialInventory(period),
         calculatePurchases(period),
-        loadExistingClosing(),
       ]);
 
       setInitialInventory(invInitial);
       setPurchasesAmount(purchases);
-      setClosingData(existing);
 
       if (existing) {
         setFinalInventory(existing.final_inventory_amount);
