@@ -524,7 +524,8 @@ export function PeriodClosingWizard({
           !!config?.purchases_account_id &&
           !!config?.cost_of_sales_account_id;
       case 'generar':
-        return closingEntryGenerated;
+        // Allow advance if there are accounts to close OR if entry was already generated
+        return (incomeAccounts.length > 0 || expenseAccounts.length > 0) && !!config?.period_result_account_id;
       case 'verificar':
         return true;
       case 'confirmar':
