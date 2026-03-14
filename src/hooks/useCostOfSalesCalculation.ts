@@ -546,13 +546,15 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       const period = await getPeriodData();
       if (!period) throw new Error('Período no encontrado');
 
-      const [invInitial, purchases] = await Promise.all([
+      const [invInitial, purchases, sales] = await Promise.all([
         calculateInitialInventory(period),
         calculatePurchases(period),
+        calculateSales(period),
       ]);
 
       setInitialInventory(invInitial);
       setPurchasesAmount(purchases);
+      setTotalSales(sales);
 
       // Keep existing finalInventory
       if (finalInventory !== null) {
