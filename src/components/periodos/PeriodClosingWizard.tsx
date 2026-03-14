@@ -517,7 +517,7 @@ export function PeriodClosingWizard({
       case 'partidas':
         return pendingEntries.length === 0 || continueDespitePending;
       case 'cdv':
-        return cdv.finalInventory !== null && cdv.closingData?.journal_entry_id != null;
+        return cdv.finalInventory !== null && cdv.costOfSales !== null;
       case 'generar':
         return closingEntryGenerated;
       case 'verificar':
