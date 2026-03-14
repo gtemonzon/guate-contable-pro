@@ -1472,7 +1472,7 @@ export function PeriodClosingWizard({
                     El período {period.year} ha sido cerrado exitosamente.
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Se generó automáticamente la partida de apertura para el período {period.year + 1}.
+                    Los saldos de las cuentas de balance se arrastran automáticamente al período {period.year + 1}.
                   </p>
                 </div>
                 <div className="flex gap-3">
