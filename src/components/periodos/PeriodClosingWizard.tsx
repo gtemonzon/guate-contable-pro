@@ -546,6 +546,13 @@ export function PeriodClosingWizard({
         await loadAccountBalances();
       }
     } else if (currentStepId === 'cdv' && canAdvance()) {
+      // If CDV is already posted, just move to next step
+      if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) {
+        setCurrentStepIndex(nextIndex);
+        await loadAccountBalances();
+        return;
+      }
+
       // Ensure CDV entry exists, then post it before moving on
       setLoading(true);
       try {
