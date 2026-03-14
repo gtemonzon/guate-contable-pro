@@ -866,25 +866,29 @@ export function PeriodClosingWizard({
                               <TableCell>(-) Inventario Final de Mercaderías</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex items-center gap-2 justify-end">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    defaultValue={cdv.finalInventory ?? ''}
-                                    onBlur={(e) => {
-                                      const val = e.target.value;
-                                      if (val === '') return;
-                                      const num = parseFloat(val);
-                                      if (!isNaN(num)) cdv.saveFinalInventory(num);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        (e.target as HTMLInputElement).blur();
-                                      }
-                                    }}
-                                    placeholder="Ingrese conteo físico"
-                                    className="w-48 text-right font-mono ml-auto"
-                                  />
+                                  {cdv.closingData?.status === 'contabilizado' ? (
+                                    <span className="font-mono">{cdv.finalInventory !== null ? formatCurrency(cdv.finalInventory) : '—'}</span>
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      defaultValue={cdv.finalInventory ?? ''}
+                                      onBlur={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') return;
+                                        const num = parseFloat(val);
+                                        if (!isNaN(num)) cdv.saveFinalInventory(num);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          (e.target as HTMLInputElement).blur();
+                                        }
+                                      }}
+                                      placeholder="Ingrese conteo físico"
+                                      className="w-48 text-right font-mono ml-auto"
+                                    />
+                                  )}
                                 </div>
                               </TableCell>
                               <TableCell>
