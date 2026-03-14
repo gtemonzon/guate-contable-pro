@@ -109,6 +109,8 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         .eq('accounting_period_id', periodId)
         .eq('is_posted', true)
         .is('deleted_at', null)
+        .is('reversal_entry_id', null)
+        .is('reversed_by_entry_id', null)
         .in('entry_type', ['diario', 'ajuste'])
     );
 
