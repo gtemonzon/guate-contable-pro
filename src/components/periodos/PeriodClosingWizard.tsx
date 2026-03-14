@@ -441,6 +441,8 @@ export function PeriodClosingWizard({
       
       setClosingEntryId(newEntry.id);
       setClosingEntryGenerated(true);
+      setClosingEntryNumber(entryNumber);
+      setClosingEntryStatus('borrador');
       toast.success(`Partida de cierre ${entryNumber} generada exitosamente`);
     } catch (error: any) {
       console.error('Error generating closing entry:', error);
