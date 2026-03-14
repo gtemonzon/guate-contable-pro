@@ -47,20 +47,33 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
   const calculateInitialInventory = async (period: PeriodData): Promise<number> => {
     if (!config?.inventory_account_id) return 0;
 
-    // Sum (debit - credit) for inventory account from all entries before period start
-    const entries = await fetchAllRecords(
-      supabase
-        .from('tab_journal_entries')
-        .select('id')
-        .eq('enterprise_id', enterpriseId)
-        .eq('is_posted', true)
-        .is('deleted_at', null)
-        .lt('entry_date', period.start_date)
-    );
+    // Include entries BEFORE period start + opening entries ON the start date
+    const [entriesBefore, openingEntries] = await Promise.all([
+      fetchAllRecords(
+        supabase
+          .from('tab_journal_entries')
+          .select('id')
+          .eq('enterprise_id', enterpriseId)
+          .eq('is_posted', true)
+          .is('deleted_at', null)
+          .lt('entry_date', period.start_date)
+      ),
+      fetchAllRecords(
+        supabase
+          .from('tab_journal_entries')
+          .select('id')
+          .eq('enterprise_id', enterpriseId)
+          .eq('is_posted', true)
+          .is('deleted_at', null)
+          .eq('entry_date', period.start_date)
+          .eq('entry_type', 'apertura')
+      ),
+    ]);
 
-    if (!entries || entries.length === 0) return 0;
+    const allEntries = [...(entriesBefore || []), ...(openingEntries || [])];
+    if (allEntries.length === 0) return 0;
 
-    const entryIds = entries.map((e: any) => e.id);
+    const entryIds = allEntries.map((e: any) => e.id);
     
     // Fetch details in batches
     let totalBalance = 0;
