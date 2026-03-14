@@ -484,12 +484,14 @@ export function PeriodClosingWizard({
     try {
       const { data: accounts, error: accountsError } = await supabase
         .from('tab_accounts')
-        .select('id, account_code, account_name, account_type, balance_type')
+        .select('id, account_code, account_name, account_type, balance_type, allows_movement')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
       
       if (accountsError) throw accountsError;
-      
+
+      // Fetch ALL posted entries up to the period end date (not just this period)
+      // to include previous balances — same logic as Balance de Saldos
       const entries = await fetchAllRecords(
         supabase
           .from('tab_journal_entries')
@@ -502,8 +504,9 @@ export function PeriodClosingWizard({
             )
           `)
           .eq('enterprise_id', enterpriseId)
-          .eq('accounting_period_id', period.id)
           .eq('is_posted', true)
+          .is('deleted_at', null)
+          .lte('entry_date', period.end_date)
       );
       
       const balanceMap = new Map<number, number>();
@@ -516,24 +519,38 @@ export function PeriodClosingWizard({
           balanceMap.set(detail.account_id, currentBalance + debit - credit);
         });
       });
-      
+
+      // Only sum leaf accounts (allows_movement) to avoid double-counting
       let assets = 0;
       let liabilities = 0;
       let equity = 0;
       
       accounts?.forEach(account => {
-        const balance = balanceMap.get(account.id) || 0;
+        if (!account.allows_movement) return; // skip parent/title accounts
+        const rawBalance = balanceMap.get(account.id) || 0;
         const accountTypeLower = account.account_type?.toLowerCase() || '';
         
+        // Compute signed balance per account nature:
+        // Activo/Gasto are debit-natured => balance = debit - credit (rawBalance)
+        // Pasivo/Capital/Ingreso are credit-natured => balance = credit - debit (-rawBalance)
         switch (accountTypeLower) {
           case 'activo':
-            assets += balance;
+            assets += rawBalance;
             break;
           case 'pasivo':
-            liabilities += Math.abs(balance);
+            liabilities += -rawBalance; // credit-natured
             break;
           case 'capital':
-            equity += Math.abs(balance);
+          case 'patrimonio':
+            equity += -rawBalance; // credit-natured
+            break;
+          // ingreso/gasto should be zero after closing entry, but include for safety
+          case 'ingreso':
+            equity += -rawBalance;
+            break;
+          case 'gasto':
+          case 'costo':
+            assets += rawBalance; // treat unclosed expense as debit-natured
             break;
         }
       });
