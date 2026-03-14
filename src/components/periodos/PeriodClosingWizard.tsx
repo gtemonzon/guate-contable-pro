@@ -1462,7 +1462,7 @@ export function PeriodClosingWizard({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer with navigation buttons */}
         {!isLastStep && (
