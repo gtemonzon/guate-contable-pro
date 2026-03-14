@@ -464,6 +464,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       createdEntryId = null; // success — don't clean up
       toast.success(`Partida de Costo de Ventas ${entryNumber} generada`);
+      return true;
     } catch (err: any) {
       console.error('Error generating CDV entry:', err);
       const detail = err?.message || err?.details || 'Error desconocido';
