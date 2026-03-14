@@ -295,12 +295,22 @@ export function PurchaseLinkManager({
           }));
         }
         try {
-          const { error } = await supabase
-            .from("tab_purchase_journal_links" as any)
-            .delete()
-            .eq("enterprise_id", enterpriseId)
-            .eq("purchase_id", p.id);
-          if (error) throw error;
+          const [{ error: linkError }, { error: legacyError }] = await Promise.all([
+            supabase
+              .from("tab_purchase_journal_links" as any)
+              .delete()
+              .eq("enterprise_id", enterpriseId)
+              .eq("purchase_id", p.id),
+            supabase
+              .from("tab_purchase_ledger")
+              .update({ journal_entry_id: null })
+              .eq("enterprise_id", enterpriseId)
+              .eq("id", p.id)
+              .eq("journal_entry_id", journalEntryId)
+              .is("deleted_at", null),
+          ]);
+          if (linkError) throw linkError;
+          if (legacyError) throw legacyError;
           successPurchases.push(p);
         } catch (err: any) {
           errors.push(`${p.invoice_number}: ${err.message}`);
