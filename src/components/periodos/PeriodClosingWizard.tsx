@@ -657,15 +657,23 @@ export function PeriodClosingWizard({
         setLoading(false);
       }
     } else if (currentStepId === 'generar' && canAdvance()) {
-      // Auto-generate the closing entry if not yet generated
+      // If wizard was reopened, recover existing closing entry before trying to generate another
       if (!closingEntryGenerated) {
+        const existingEntry = await findExistingClosingEntry();
+        if (existingEntry) {
+          setClosingEntryGenerated(true);
+          setClosingEntryId(existingEntry.id);
+          setClosingEntryNumber(existingEntry.entry_number);
+          setClosingEntryStatus(existingEntry.status);
+          setCurrentStepIndex(nextIndex);
+          await loadBalanceVerification();
+          return;
+        }
+
         await generateClosingEntry();
-        // Check if it was successfully generated after the call
-        // generateClosingEntry sets closingEntryGenerated=true on success
-        // We need to wait and check - but since it's async and sets state,
-        // we'll just return and let the user click again after generation
         return;
       }
+
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
     } else if (currentStepId === 'verificar') {
