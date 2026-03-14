@@ -12,6 +12,7 @@ interface PurchaseLinkSummaryProps {
   journalEntryNumber: string;
   bankAccountId?: number | null;
   accounts: Array<{ id: number; account_code: string; account_name: string }>;
+  felDocTypes: Array<{ code: string; name: string; affects_total: number; applies_vat: boolean }>;
   onApplyToEntry?: () => Promise<void> | void;
   applying?: boolean;
   hasPendingChanges?: boolean;
@@ -23,24 +24,52 @@ interface PreviewLine {
   credit: number;
 }
 
+const EXEMPT_DOC_TYPES = new Set(["FPEQ", "FESP", "NABN", "RDON", "RECI"]);
+
 export function PurchaseLinkSummary({
   linkedPurchases,
   entryStatus,
   journalEntryNumber,
   bankAccountId,
   accounts,
-  onApplyToEntry,
-  applying = false,
-  hasPendingChanges = false,
+  felDocTypes,
 }: PurchaseLinkSummaryProps) {
   const [showPreview, setShowPreview] = useState(false);
 
+  const docTypeMap = useMemo(() => {
+    return felDocTypes.reduce<Record<string, { multiplier: number; appliesVat: boolean }>>((acc, dt) => {
+      acc[dt.code] = {
+        multiplier: dt.affects_total ?? 1,
+        appliesVat: dt.applies_vat ?? true,
+      };
+      return acc;
+    }, {});
+  }, [felDocTypes]);
+
+  const getSignedAmounts = (p: PurchaseRecord) => {
+    const fallbackMultiplier = p.fel_document_type === "NCRE" ? -1 : 1;
+    const meta = docTypeMap[p.fel_document_type] || { multiplier: fallbackMultiplier, appliesVat: true };
+    const isExempt = EXEMPT_DOC_TYPES.has(p.fel_document_type || "FACT") || !meta.appliesVat;
+
+    const total = (p.total_amount || 0) * meta.multiplier;
+    const iva = isExempt ? 0 : (p.vat_amount || 0) * meta.multiplier;
+    const base = total - iva;
+
+    return { base, iva, total };
+  };
+
   const totals = useMemo(() => {
-    const totalIva = linkedPurchases.reduce((s, p) => s + (p.vat_amount || 0), 0);
-    const totalAmount = linkedPurchases.reduce((s, p) => s + p.total_amount, 0);
-    const totalBase = totalAmount - totalIva;
-    return { base: totalBase, iva: totalIva, total: totalAmount };
-  }, [linkedPurchases]);
+    return linkedPurchases.reduce(
+      (acc, purchase) => {
+        const signed = getSignedAmounts(purchase);
+        acc.base += signed.base;
+        acc.iva += signed.iva;
+        acc.total += signed.total;
+        return acc;
+      },
+      { base: 0, iva: 0, total: 0 }
+    );
+  }, [linkedPurchases, docTypeMap]);
 
   const previewLines = useMemo<PreviewLine[]>(() => {
     if (linkedPurchases.length === 0) return [];
@@ -49,20 +78,20 @@ export function PurchaseLinkSummary({
     let totalIva = 0;
 
     for (const p of linkedPurchases) {
-      const base = p.total_amount - (p.vat_amount || 0);
+      const signed = getSignedAmounts(p);
       const key = p.expense_account_id;
-      expenseMap.set(key, (expenseMap.get(key) || 0) + base);
-      totalIva += p.vat_amount || 0;
+      expenseMap.set(key, (expenseMap.get(key) || 0) + signed.base);
+      totalIva += signed.iva;
     }
 
     const lines: PreviewLine[] = [];
 
     for (const [acctId, amount] of expenseMap) {
-      const acct = acctId ? accounts.find(a => a.id === acctId) : null;
+      const acct = acctId ? accounts.find((a) => a.id === acctId) : null;
       lines.push({
         account: acct ? `${acct.account_code} ${acct.account_name}` : "Cuenta gasto (sin asignar)",
-        debit: amount,
-        credit: 0,
+        debit: amount >= 0 ? amount : 0,
+        credit: amount < 0 ? Math.abs(amount) : 0,
       });
     }
 
@@ -70,24 +99,29 @@ export function PurchaseLinkSummary({
       lines.push({ account: "IVA Crédito Fiscal", debit: totalIva, credit: 0 });
     }
 
-    const totalHaber = totals.total;
-    if (bankAccountId) {
-      const bankAcct = accounts.find(a => a.id === bankAccountId);
-      lines.push({ account: bankAcct ? `${bankAcct.account_code} ${bankAcct.account_name}` : "Banco", debit: 0, credit: totalHaber });
-    } else {
-      lines.push({ account: "Cuentas por Pagar", debit: 0, credit: totalHaber });
-    }
+    const totalContra = totals.total;
+    const contraLine: PreviewLine = {
+      account: bankAccountId
+        ? (accounts.find((a) => a.id === bankAccountId)
+            ? `${accounts.find((a) => a.id === bankAccountId)!.account_code} ${accounts.find((a) => a.id === bankAccountId)!.account_name}`
+            : "Banco")
+        : "Cuentas por Pagar",
+      debit: totalContra < 0 ? Math.abs(totalContra) : 0,
+      credit: totalContra >= 0 ? totalContra : 0,
+    };
+
+    lines.push(contraLine);
 
     return lines;
-  }, [linkedPurchases, bankAccountId, accounts, totals.total]);
+  }, [linkedPurchases, bankAccountId, accounts, totals.total, docTypeMap]);
 
-  const statusLabel = entryStatus === 'contabilizado'
+  const statusLabel = entryStatus === "contabilizado"
     ? `Póliza: ${journalEntryNumber}`
     : linkedPurchases.length === 0
       ? "Borrador (sin líneas)"
       : "Borrador";
 
-  const statusVariant = entryStatus === 'contabilizado' ? 'default' as const : 'secondary' as const;
+  const statusVariant = entryStatus === "contabilizado" ? "default" as const : "secondary" as const;
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-2 shrink-0">
@@ -95,7 +129,7 @@ export function PurchaseLinkSummary({
         <div className="flex items-center gap-2">
           <Badge variant={statusVariant} className="text-[10px]">{statusLabel}</Badge>
           <span className="text-xs text-muted-foreground">
-            {linkedPurchases.length} factura{linkedPurchases.length !== 1 ? 's' : ''} vinculada{linkedPurchases.length !== 1 ? 's' : ''}
+            {linkedPurchases.length} factura{linkedPurchases.length !== 1 ? "s" : ""} vinculada{linkedPurchases.length !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -115,7 +149,7 @@ export function PurchaseLinkSummary({
             size="sm"
             variant="ghost"
             className="h-7 text-xs gap-1.5"
-            onClick={() => setShowPreview(prev => !prev)}
+            onClick={() => setShowPreview((prev) => !prev)}
           >
             {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             {showPreview ? "Ocultar preview" : "Preview asiento"}
@@ -137,8 +171,8 @@ export function PurchaseLinkSummary({
               {previewLines.map((line, i) => (
                 <tr key={i} className="border-b last:border-b-0">
                   <td className="py-1.5 px-2 truncate max-w-[200px]">{line.account}</td>
-                  <td className="py-1.5 px-2 text-right font-mono">{line.debit > 0 ? formatCurrency(line.debit) : ''}</td>
-                  <td className="py-1.5 px-2 text-right font-mono">{line.credit > 0 ? formatCurrency(line.credit) : ''}</td>
+                  <td className="py-1.5 px-2 text-right font-mono">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
+                  <td className="py-1.5 px-2 text-right font-mono">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
                 </tr>
               ))}
             </tbody>
