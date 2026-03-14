@@ -484,6 +484,7 @@ export function PurchaseLinkManager({
           journalEntryNumber={journalEntryNumber}
           bankAccountId={bankAccountId}
           accounts={accounts}
+          felDocTypes={felDocTypes}
           onApplyToEntry={handleApplyToEntry}
           applying={applying}
           hasPendingChanges={hasPendingChanges}
