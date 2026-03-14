@@ -524,7 +524,8 @@ export function PeriodClosingWizard({
           !!config?.purchases_account_id &&
           !!config?.cost_of_sales_account_id;
       case 'generar':
-        return closingEntryGenerated;
+        // Allow advance if there are accounts to close OR if entry was already generated
+        return (incomeAccounts.length > 0 || expenseAccounts.length > 0) && !!config?.period_result_account_id;
       case 'verificar':
         return true;
       case 'confirmar':
@@ -592,6 +593,15 @@ export function PeriodClosingWizard({
         setLoading(false);
       }
     } else if (currentStepId === 'generar' && canAdvance()) {
+      // Auto-generate the closing entry if not yet generated
+      if (!closingEntryGenerated) {
+        await generateClosingEntry();
+        // Check if it was successfully generated after the call
+        // generateClosingEntry sets closingEntryGenerated=true on success
+        // We need to wait and check - but since it's async and sets state,
+        // we'll just return and let the user click again after generation
+        return;
+      }
       setCurrentStepIndex(nextIndex);
       await loadBalanceVerification();
     } else if (currentStepId === 'verificar') {
