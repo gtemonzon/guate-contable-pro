@@ -171,6 +171,7 @@ export function PeriodClosingWizard({
       .ilike('entry_number', `${prefix}-%`)
       .is('deleted_at', null)
       .is('reversal_entry_id', null)
+      .is('reversed_by_entry_id', null)
       .order('is_posted', { ascending: false })
       .order('id', { ascending: false })
       .limit(1)
@@ -213,7 +214,8 @@ export function PeriodClosingWizard({
       if (nextPeriod) {
         const openEntry = await findExistingEntry('apertura', nextPeriod.id, 'APER');
         if (openEntry) {
-          setOpeningEntryGenerated(true);
+          const isAlreadyPosted = openEntry.status === 'contabilizado';
+          setOpeningEntryGenerated(isAlreadyPosted);
           setOpeningEntryId(openEntry.id);
           setOpeningEntryNumber(openEntry.entry_number);
           setOpeningEntryStatus(openEntry.status);
