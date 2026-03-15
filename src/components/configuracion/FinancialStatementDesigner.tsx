@@ -57,7 +57,7 @@ export function FinancialStatementDesigner() {
         // Filter by account type based on the active tab
         const accountTypes = activeTab === 'balance_general' 
           ? ['activo', 'pasivo', 'capital']
-          : ['ingreso', 'gasto'];
+          : ['ingreso', 'gasto', 'costo'];
 
         const { data, error } = await supabase
           .from('tab_accounts')

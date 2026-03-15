@@ -90,6 +90,8 @@ export default function AccountLedgerDrawer({
         .in("account_id", resolvedIds)
         .eq("tab_journal_entries.is_posted", true)
         .eq("tab_journal_entries.enterprise_id", enterpriseId)
+        .is("tab_journal_entries.reversal_entry_id", null)
+        .is("tab_journal_entries.reversed_by_entry_id", null)
         .lte("tab_journal_entries.entry_date", endDate)
         .order("tab_journal_entries(entry_date)", { ascending: true });
 
