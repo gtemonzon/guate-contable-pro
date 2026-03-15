@@ -93,14 +93,25 @@ export default function ReporteBalanceGeneral() {
     try {
       setLoading(true);
 
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_balance_sheet', {
-        p_enterprise_id: currentEnterpriseId,
-        p_as_of_date: reportDate,
-      });
+      // Fetch balance sheet accounts AND income/expense for period result in parallel
+      const year = new Date(reportDate + 'T00:00:00').getFullYear();
+      const periodStart = `${year}-01-01`;
 
-      if (rpcError) throw rpcError;
+      const [balanceRes, pnlRes] = await Promise.all([
+        supabase.rpc('get_balance_sheet', {
+          p_enterprise_id: currentEnterpriseId,
+          p_as_of_date: reportDate,
+        }),
+        supabase.rpc('get_pnl', {
+          p_enterprise_id: currentEnterpriseId,
+          p_start_date: periodStart,
+          p_end_date: reportDate,
+        }),
+      ]);
 
-      const accountBalances: AccountBalance[] = (rpcData || []).map((row: any) => ({
+      if (balanceRes.error) throw balanceRes.error;
+
+      const accountBalances: AccountBalance[] = (balanceRes.data || []).map((row: any) => ({
         id: Number(row.account_id),
         account_code: row.account_code,
         account_name: row.account_name,
@@ -110,8 +121,16 @@ export default function ReporteBalanceGeneral() {
         balance: Number(row.balance),
       }));
 
+      // Calculate period result from PnL (excludes closing entries)
+      const pnlAccounts = (pnlRes.data || []).map((row: any) => ({
+        id: Number(row.account_id),
+        account_type: row.account_type,
+        parent_account_id: row.parent_account_id ? Number(row.parent_account_id) : null,
+        balance: Number(row.balance),
+      }));
+
       if (format && format.sections.length > 0) {
-        const lines = generateFormattedReport(format.sections, accountBalances);
+        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts);
         setReportLines(lines);
       } else {
         const simpleLines: ReportLine[] = accountBalances
@@ -137,7 +156,7 @@ export default function ReporteBalanceGeneral() {
     }
   };
 
-  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[]): ReportLine[] => {
+  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[]): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
 
@@ -181,10 +200,29 @@ export default function ReporteBalanceGeneral() {
       }
     };
 
-    const rootIncomeAccounts = accountBalances.filter(a => a.account_type === "ingreso" && a.parent_account_id === null);
-    const rootExpenseAccounts = accountBalances.filter(a => a.account_type === "gasto" && a.parent_account_id === null);
-    const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
-    const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getAggregatedBalance(acc.id), 0);
+    // Calculate period result from PnL data (already excludes closing entries)
+    const pnlChildrenByParent = new Map<number, typeof pnlAccounts>();
+    for (const acc of pnlAccounts) {
+      if (acc.parent_account_id == null) continue;
+      const list = pnlChildrenByParent.get(acc.parent_account_id) || [];
+      list.push(acc);
+      pnlChildrenByParent.set(acc.parent_account_id, list);
+    }
+    const pnlAggCache = new Map<number, number>();
+    const getPnlAggBalance = (accId: number): number => {
+      const cached = pnlAggCache.get(accId);
+      if (cached !== undefined) return cached;
+      const acc = pnlAccounts.find(a => a.id === accId);
+      if (!acc) return 0;
+      const children = pnlChildrenByParent.get(accId) || [];
+      const total = acc.balance + children.reduce((sum, c) => sum + getPnlAggBalance(c.id), 0);
+      pnlAggCache.set(accId, total);
+      return total;
+    };
+    const rootIncomeAccounts = pnlAccounts.filter(a => a.account_type === "ingreso" && a.parent_account_id === null);
+    const rootExpenseAccounts = pnlAccounts.filter(a => (a.account_type === "gasto" || a.account_type === "costo") && a.parent_account_id === null);
+    const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
+    const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
     const periodResult = totalIngresos - totalGastos;
 
     for (const section of sections) {
