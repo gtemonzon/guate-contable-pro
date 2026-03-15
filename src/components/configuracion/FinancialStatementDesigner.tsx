@@ -25,6 +25,7 @@ const ACCOUNT_TYPE_COLORS: Record<string, string> = {
   capital: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
   ingreso: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   gasto: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  costo: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
 };
 
 export function FinancialStatementDesigner() {
@@ -56,7 +57,7 @@ export function FinancialStatementDesigner() {
         // Filter by account type based on the active tab
         const accountTypes = activeTab === 'balance_general' 
           ? ['activo', 'pasivo', 'capital']
-          : ['ingreso', 'gasto'];
+          : ['ingreso', 'gasto', 'costo'];
 
         const { data, error } = await supabase
           .from('tab_accounts')
