@@ -171,6 +171,7 @@ export function PeriodClosingWizard({
       .ilike('entry_number', `${prefix}-%`)
       .is('deleted_at', null)
       .is('reversal_entry_id', null)
+      .is('reversed_by_entry_id', null)
       .order('is_posted', { ascending: false })
       .order('id', { ascending: false })
       .limit(1)
@@ -213,7 +214,8 @@ export function PeriodClosingWizard({
       if (nextPeriod) {
         const openEntry = await findExistingEntry('apertura', nextPeriod.id, 'APER');
         if (openEntry) {
-          setOpeningEntryGenerated(true);
+          const isAlreadyPosted = openEntry.status === 'contabilizado';
+          setOpeningEntryGenerated(isAlreadyPosted);
           setOpeningEntryId(openEntry.id);
           setOpeningEntryNumber(openEntry.entry_number);
           setOpeningEntryStatus(openEntry.status);
@@ -643,17 +645,7 @@ export function PeriodClosingWizard({
         toast.success(`Período ${nextYear} creado automáticamente`);
       }
 
-      // Check if opening entry already exists
       const existingEntry = await findExistingEntry('apertura', nextPeriodId, 'APER');
-      if (existingEntry) {
-        setOpeningEntryGenerated(true);
-        setOpeningEntryId(existingEntry.id);
-        setOpeningEntryNumber(existingEntry.entry_number);
-        setOpeningEntryStatus(existingEntry.status);
-        toast.info(`La partida ${existingEntry.entry_number} ya existe.`);
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
 
       // Get all accounts
@@ -692,17 +684,18 @@ export function PeriodClosingWizard({
       });
 
       // Also include draft closing & transfer entries that haven't been posted yet
-      const draftIds = [closingEntryId, transferEntryId].filter(Boolean);
+      const draftIds = [closingEntryId, transferEntryId].filter((id): id is number => typeof id === 'number');
       if (draftIds.length > 0) {
         const { data: draftDetails } = await supabase
           .from('tab_journal_entry_details')
-          .select('account_id, debit_amount, credit_amount')
+          .select('journal_entry_id, account_id, debit_amount, credit_amount')
           .in('journal_entry_id', draftIds);
 
         draftDetails?.forEach((detail: any) => {
-          // Only add if not already counted (entry wasn't posted)
-          const entryPosted = (detail.journal_entry_id === closingEntryId && closingEntryStatus === 'contabilizado') ||
-                              (detail.journal_entry_id === transferEntryId && transferEntryStatus === 'contabilizado');
+          const entryPosted =
+            (detail.journal_entry_id === closingEntryId && closingEntryStatus === 'contabilizado') ||
+            (detail.journal_entry_id === transferEntryId && transferEntryStatus === 'contabilizado');
+
           if (!entryPosted) {
             const currentBalance = balanceMap.get(detail.account_id) || 0;
             balanceMap.set(detail.account_id, currentBalance + (detail.debit_amount || 0) - (detail.credit_amount || 0));
@@ -728,13 +721,11 @@ export function PeriodClosingWizard({
       accounts?.forEach(account => {
         if (!account.allows_movement) return;
         const accountTypeLower = account.account_type?.toLowerCase() || '';
-        // Only balance sheet accounts
         if (!['activo', 'pasivo', 'capital', 'patrimonio'].includes(accountTypeLower)) return;
 
         const rawBalance = balanceMap.get(account.id) || 0;
         if (Math.abs(rawBalance) <= 0.01) return;
 
-        // rawBalance is debit - credit
         const debitAmount = rawBalance > 0 ? Math.round(rawBalance * 100) / 100 : 0;
         const creditAmount = rawBalance < 0 ? Math.round(Math.abs(rawBalance) * 100) / 100 : 0;
 
@@ -760,9 +751,48 @@ export function PeriodClosingWizard({
 
       setOpeningBalanceAccounts(balanceAccounts.sort((a, b) => a.account_code.localeCompare(b.account_code)));
 
+      if (existingEntry?.status === 'contabilizado') {
+        setOpeningEntryGenerated(true);
+        setOpeningEntryId(existingEntry.id);
+        setOpeningEntryNumber(existingEntry.entry_number);
+        setOpeningEntryStatus(existingEntry.status);
+        toast.info(`La partida ${existingEntry.entry_number} ya está contabilizada. Si desea regenerarla, primero debe revertirla.`);
+        return;
+      }
+
+      const entryId = existingEntry?.id ?? null;
+      const entryNumber = existingEntry?.entry_number ?? `APER-${nextYear}-0001`;
+
       if (openingLines.length === 0) {
+        if (entryId) {
+          const { error: clearDetailsError } = await supabase
+            .from('tab_journal_entry_details')
+            .delete()
+            .eq('journal_entry_id', entryId);
+
+          if (clearDetailsError) throw clearDetailsError;
+
+          const { error: updateEmptyEntryError } = await supabase
+            .from('tab_journal_entries')
+            .update({
+              entry_date: `${nextYear}-01-01`,
+              description: `Partida de apertura del ejercicio ${nextYear}`,
+              total_debit: 0,
+              total_credit: 0,
+              is_posted: false,
+              status: 'borrador',
+              posted_at: null,
+              updated_by: user?.id || null,
+            })
+            .eq('id', entryId);
+
+          if (updateEmptyEntryError) throw updateEmptyEntryError;
+        }
+
         toast.info('No hay saldos de balance para trasladar.');
         setOpeningEntryGenerated(true);
+        setOpeningEntryId(entryId);
+        setOpeningEntryNumber(entryId ? entryNumber : null);
         setOpeningEntryStatus('no_requerido');
         return;
       }
@@ -770,7 +800,43 @@ export function PeriodClosingWizard({
       totalDebits = Math.round(totalDebits * 100) / 100;
       totalCredits = Math.round(totalCredits * 100) / 100;
 
-      const entryNumber = `APER-${nextYear}-0001`;
+      if (entryId) {
+        const { error: deleteDetailsError } = await supabase
+          .from('tab_journal_entry_details')
+          .delete()
+          .eq('journal_entry_id', entryId);
+
+        if (deleteDetailsError) throw deleteDetailsError;
+
+        const { error: updateEntryError } = await supabase
+          .from('tab_journal_entries')
+          .update({
+            entry_date: `${nextYear}-01-01`,
+            description: `Partida de apertura del ejercicio ${nextYear}`,
+            total_debit: totalDebits,
+            total_credit: totalCredits,
+            is_posted: false,
+            status: 'borrador',
+            posted_at: null,
+            updated_by: user?.id || null,
+          })
+          .eq('id', entryId);
+
+        if (updateEntryError) throw updateEntryError;
+
+        const { error: insertDetailsError } = await supabase
+          .from('tab_journal_entry_details')
+          .insert(openingLines.map(l => ({ ...l, journal_entry_id: entryId })));
+
+        if (insertDetailsError) throw insertDetailsError;
+
+        setOpeningEntryId(entryId);
+        setOpeningEntryGenerated(true);
+        setOpeningEntryNumber(entryNumber);
+        setOpeningEntryStatus('borrador');
+        toast.success(`Partida de apertura ${entryNumber} actualizada para ${nextYear}`);
+        return;
+      }
 
       const { data: newEntry, error: entryError } = await supabase
         .from('tab_journal_entries')
