@@ -371,7 +371,10 @@ export function useDeclaracionCalculo(
     const ivaAPagarBruto = Math.max(0, debitoFiscal - totalCredito);
     // Aplicar exención IVA realizada (resta del impuesto a pagar)
     const ivaAPagar = Math.max(0, ivaAPagarBruto - exencionIVAInput);
-    const creditoRemanenteProximoMes = Math.max(0, totalCredito - debitoFiscal);
+    // Crédito remanente: crédito que sobra del período + exceso de exención sobre impuesto bruto
+    const creditoSobrante = Math.max(0, totalCredito - debitoFiscal);
+    const exencionExcedente = Math.max(0, exencionIVAInput - ivaAPagarBruto);
+    const creditoRemanenteProximoMes = creditoSobrante + exencionExcedente;
 
     // Convertir estadísticas a array
     const documentosPorTipo = Object.entries(docTypeStats).map(([tipo, stats]) => ({
