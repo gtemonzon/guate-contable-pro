@@ -280,9 +280,8 @@ export function DeclaracionPreview({
                   <TotalRow label="IVA A PAGAR" value={ivaGeneral.ivaAPagar} isHighlight />
                 ) : ivaGeneral.creditoRemanenteProximoMes > 0 ? (
                   <div className="space-y-2">
-                    <TotalRow label="IVA A PAGAR" value={0} />
                     <div className="flex items-center justify-between py-3 bg-blue-500/10 px-3 rounded-lg">
-                      <span className="font-semibold text-blue-600 text-sm">Crédito Remanente Próximo Mes</span>
+                      <span className="font-semibold text-blue-600 text-sm">CRÉDITO FISCAL</span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-blue-600">
                           {formatCurrency(ivaGeneral.creditoRemanenteProximoMes)}
