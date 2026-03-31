@@ -78,7 +78,10 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expa
                       {line.label}
                     </td>
                     <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">
-                      Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <CopyAmountButton amount={line.amount} />
+                      </span>
                     </td>
                   </>
                 )}
