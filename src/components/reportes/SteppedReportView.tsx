@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
+import CopyAmountButton from "./CopyAmountButton";
 
 interface SteppedReportViewProps {
   lines: ReportLine[];
@@ -139,7 +140,12 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                         line.isBold && cellValue ? 'font-bold' : ''
                       }`}
                     >
-                      {cellValue}
+                      {cellValue ? (
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          {cellValue}
+                          <CopyAmountButton amount={line.amount} />
+                        </span>
+                      ) : ''}
                     </td>
                   );
                 })}

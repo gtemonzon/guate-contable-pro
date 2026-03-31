@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
+import CopyAmountButton from "./CopyAmountButton";
 
 interface ColumnarReportViewProps {
   lines: ReportLine[];
@@ -77,7 +78,10 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expa
                       {line.label}
                     </td>
                     <td className="px-3 py-1.5 text-right font-bold whitespace-nowrap">
-                      Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <CopyAmountButton amount={line.amount} />
+                      </span>
                     </td>
                   </>
                 )}
@@ -143,7 +147,10 @@ export default function ColumnarReportView({ lines, maxLevel: maxLevelProp, expa
                       );
                     })}
                     <td className={`px-3 py-1 text-right whitespace-nowrap ${line.isBold ? 'font-semibold' : ''}`}>
-                      Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Q {line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <CopyAmountButton amount={line.amount} />
+                      </span>
                     </td>
                   </>
                 )}
