@@ -93,8 +93,13 @@ export default function HierarchicalReportView({ lines, expanded, toggleExpand, 
                 </button>
               )}
             </div>
-            <div className="text-right whitespace-nowrap pr-1">
-              {line.type !== 'section' ? `Q ${line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+            <div className="text-right whitespace-nowrap pr-1 flex items-center justify-end gap-1">
+              {line.type !== 'section' ? (
+                <>
+                  <span>{`Q ${line.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+                  <CopyAmountButton amount={line.amount} />
+                </>
+              ) : ''}
             </div>
           </div>
         );

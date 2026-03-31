@@ -140,7 +140,12 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                         line.isBold && cellValue ? 'font-bold' : ''
                       }`}
                     >
-                      {cellValue}
+                      {cellValue ? (
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          {cellValue}
+                          <CopyAmountButton amount={line.amount} />
+                        </span>
+                      ) : ''}
                     </td>
                   );
                 })}
