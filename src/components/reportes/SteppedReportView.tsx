@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
+import CopyAmountButton from "./CopyAmountButton";
 
 interface SteppedReportViewProps {
   lines: ReportLine[];
