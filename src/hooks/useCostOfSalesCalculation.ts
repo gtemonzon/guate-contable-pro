@@ -530,7 +530,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       return true;
     } catch (err: unknown) {
       console.error('Error generating CDV entry:', err);
-      const detail = err?.message || err?.details || 'Error desconocido';
+      const errObj = err as Record<string, unknown> | null; const detail = String(errObj?.message || errObj?.details || 'Error desconocido');
       setError(detail);
       toast.error(`Error al generar partida CDV: ${detail}`);
 
