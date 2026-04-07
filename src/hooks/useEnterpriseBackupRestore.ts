@@ -288,7 +288,7 @@ export function useEnterpriseBackupRestore() {
           setBackupPreview(preview);
           resolve(preview);
         } catch (err: unknown) {
-          reject(new Error('El archivo no es un backup válido: ' + err.message));
+          reject(new Error('El archivo no es un backup válido: ' + (err instanceof Error ? err.message : String(err))));
         }
       };
       reader.onerror = () => reject(new Error('Error al leer el archivo'));
@@ -445,7 +445,7 @@ export function useEnterpriseBackupRestore() {
                       tableResults[tableName].inserted++;
                     }
                   } catch (err: unknown) {
-                    failedRecords.push({ table: tableName, record: rec, error: err.message });
+                    failedRecords.push({ table: tableName, record: rec, error: err instanceof Error ? err.message : String(err) });
                     tableResults[tableName].failed++;
                   }
                 }
@@ -453,7 +453,7 @@ export function useEnterpriseBackupRestore() {
                 tableResults[tableName].inserted += batch.length;
               }
             } catch (err: unknown) {
-              failedRecords.push({ table: tableName, record: { batch_start: i }, error: err.message });
+              failedRecords.push({ table: tableName, record: { batch_start: i }, error: err instanceof Error ? err.message : String(err) });
               tableResults[tableName].failed += batch.length;
             }
             recordsProcessed += batch.length;
@@ -491,14 +491,14 @@ export function useEnterpriseBackupRestore() {
                 .single();
 
               if (error) {
-                failedRecords.push({ table: tableName, record: { old_id: oldId, ...newRecord }, error: error.message });
+                failedRecords.push({ table: tableName, record: { old_id: oldId, ...newRecord }, error: error instanceof Error ? error.message : String(error) });
                 tableResults[tableName].failed++;
               } else if (inserted && oldId) {
                 idMapping[tableName][oldId] = (inserted as any).id;
                 tableResults[tableName].inserted++;
               }
             } catch (err: unknown) {
-              failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err.message });
+              failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err instanceof Error ? err.message : String(err) });
               tableResults[tableName].failed++;
             }
 
