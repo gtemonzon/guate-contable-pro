@@ -1,8 +1,9 @@
 // Utility for sanitizing error messages to prevent information leakage
 
-export function getSafeErrorMessage(error: any): string {
+export function getSafeErrorMessage(error: unknown): string {
   // Extract message from various error formats
-  const errorMessage = error?.message || error?.details || error?.hint || '';
+  const errObj = error as Record<string, unknown> | null | undefined;
+  const errorMessage = String(errObj?.message || errObj?.details || errObj?.hint || '');
   
   // Handle PostgreSQL/Supabase database errors with detailed messages
   // These come from triggers and constraints - they're safe to show
@@ -39,15 +40,16 @@ export function getSafeErrorMessage(error: any): string {
   }
   
   // Handle PostgreSQL error codes with detailed message when available
-  if (error.code === '23505') {
+  const errorCode = (errObj as Record<string, unknown>)?.code;
+  if (errorCode === '23505') {
     if (errorMessage) return `Registro duplicado: ${errorMessage}`;
     return 'Este registro ya existe';
   }
-  if (error.code === '23503') return 'Referencia inválida o dato relacionado no encontrado';
-  if (error.code === '23502') return 'Falta información requerida';
-  if (error.code === '22P02') return 'Formato de datos inválido';
-  if (error.code === '42501') return 'Sin permisos para realizar esta operación';
-  if (error.code === 'P0001') {
+  if (errorCode === '23503') return 'Referencia inválida o dato relacionado no encontrado';
+  if (errorCode === '23502') return 'Falta información requerida';
+  if (errorCode === '22P02') return 'Formato de datos inválido';
+  if (errorCode === '42501') return 'Sin permisos para realizar esta operación';
+  if (errorCode === 'P0001') {
     // P0001 is RAISE EXCEPTION from triggers - show the message
     return errorMessage || 'Error de validación en la base de datos';
   }
@@ -77,12 +79,13 @@ export function getSafeErrorMessage(error: any): string {
 }
 
 // Sanitize authentication error messages to prevent account enumeration
-export function getSafeAuthError(error: any): string {
+export function getSafeAuthError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
   // Don't differentiate between wrong email vs wrong password (prevents account enumeration)
-  if (error.message?.includes('Invalid') || 
-      error.message?.includes('not found') ||
-      error.message?.includes('credentials') ||
-      error.message?.includes('Email not confirmed')) {
+  if (msg?.includes('Invalid') || 
+      msg?.includes('not found') ||
+      msg?.includes('credentials') ||
+      msg?.includes('Email not confirmed')) {
     return 'Credenciales inválidas. Verifica tu correo y contraseña.';
   }
   
