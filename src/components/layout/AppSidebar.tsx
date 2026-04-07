@@ -1,4 +1,5 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package, Inbox } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package, Inbox, LifeBuoy } from "lucide-react";
+import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -60,6 +61,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
       { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
+      { title: "Soporte", url: "/soporte", icon: LifeBuoy },
       { title: "Ayuda", url: "/ayuda", icon: HelpCircle },
     ],
   },
@@ -69,6 +71,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
+  const { data: openTicketsCount } = useOpenTicketsCount();
 
   // Filtrar menú basado en permisos
   const filteredMenuItems = useMemo(() => {
@@ -124,7 +127,14 @@ export function AppSidebar() {
                             }
                           >
                             <item.icon className="h-4 w-4" />
-                            {!isCollapsed && <span className="truncate">{item.title}</span>}
+                            {!isCollapsed && (
+                              <span className="truncate flex-1">{item.title}</span>
+                            )}
+                            {!isCollapsed && item.url === "/soporte" && !!openTicketsCount && openTicketsCount > 0 && (
+                              <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                                {openTicketsCount}
+                              </span>
+                            )}
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
