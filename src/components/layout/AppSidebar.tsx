@@ -71,6 +71,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
+  const { data: openTicketsCount } = useOpenTicketsCount();
 
   // Filtrar menú basado en permisos
   const filteredMenuItems = useMemo(() => {
@@ -126,7 +127,14 @@ export function AppSidebar() {
                             }
                           >
                             <item.icon className="h-4 w-4" />
-                            {!isCollapsed && <span className="truncate">{item.title}</span>}
+                            {!isCollapsed && (
+                              <span className="truncate flex-1">{item.title}</span>
+                            )}
+                            {!isCollapsed && item.url === "/soporte" && !!openTicketsCount && openTicketsCount > 0 && (
+                              <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1">
+                                {openTicketsCount}
+                              </span>
+                            )}
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
