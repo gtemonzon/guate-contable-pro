@@ -505,7 +505,8 @@ export function PeriodClosingWizard({
       toast.success(`Partida de cierre ${entryNumber} generada exitosamente`);
     } catch (error: unknown) {
       console.error('Error generating closing entry:', error);
-      const detail = error?.message || error?.details || 'Error desconocido';
+      const errObj = error as Record<string, unknown> | null;
+      const detail = String(errObj?.message || errObj?.details || 'Error desconocido');
       toast.error(`Error al generar partida de cierre: ${detail}`);
     } finally {
       setLoading(false);
@@ -602,7 +603,7 @@ export function PeriodClosingWizard({
       toast.success(`Partida de traslado ${entryNumber} generada`);
     } catch (error: unknown) {
       console.error('Error generating transfer entry:', error);
-      toast.error(`Error al generar partida de traslado: ${error?.message || 'Error desconocido'}`);
+      toast.error(`Error al generar partida de traslado: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -871,7 +872,7 @@ export function PeriodClosingWizard({
       toast.success(`Partida de apertura ${entryNumber} generada para ${nextYear}`);
     } catch (error: unknown) {
       console.error('Error generating opening entry:', error);
-      toast.error(`Error al generar partida de apertura: ${error?.message || 'Error desconocido'}`);
+      toast.error(`Error al generar partida de apertura: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -1019,7 +1020,7 @@ export function PeriodClosingWizard({
       setCurrentStepIndex(steps.length - 1);
     } catch (error: unknown) {
       console.error('Error closing period:', error);
-      toast.error(`Error al cerrar el período: ${error?.message || 'Error desconocido'}`);
+      toast.error(`Error al cerrar el período: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }

@@ -1116,7 +1116,8 @@ export default function LibrosFiscales() {
       }, 3000);
     } catch (error: unknown) {
       setSaveStatus("idle");
-      const errorMessage = error.message?.includes("unique_purchase_document") 
+      const errMsg1 = error instanceof Error ? error.message : "";
+      const errorMessage = errMsg1?.includes("unique_purchase_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
         : getSafeErrorMessage(error);
       
@@ -1266,7 +1267,8 @@ export default function LibrosFiscales() {
       }, 3000);
     } catch (error: unknown) {
       setSaveStatus("idle");
-      const errorMessage = error.message?.includes("unique_sales_document") 
+      const errMsg2 = error instanceof Error ? error.message : "";
+      const errorMessage = errMsg2?.includes("unique_sales_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
         : getSafeErrorMessage(error);
       

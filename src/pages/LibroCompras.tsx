@@ -587,11 +587,13 @@ export default function LibroCompras() {
       let errorMessage = getSafeErrorMessage(error);
       
       // Mensajes más específicos según el error
-      if (error.message?.includes("fecha")) {
+      const errMsg = error instanceof Error ? error.message : '';
+      const errCode = (error as Record<string, unknown>)?.code;
+      if (errMsg?.includes("fecha")) {
         errorMessage = "La fecha de la factura debe estar en el mes seleccionado o máximo 2 meses atrás";
-      } else if (error.code === "23502") {
+      } else if (errCode === "23502") {
         errorMessage = "Faltan campos requeridos. Verifique que haya completado todos los campos obligatorios.";
-      } else if (error.code === "23503") {
+      } else if (errCode === "23503") {
         errorMessage = "Error de referencia: Verifique que las cuentas seleccionadas sean válidas.";
       }
       
