@@ -367,8 +367,8 @@ export function useUpsertFixedAsset() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (asset: Partial<FixedAsset> & { enterprise_id: number; tenant_id: number }) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, category, location, custodian, supplier, ...payload } = asset as FixedAsset & { [key: string]: unknown };
+      void category; void location; void custodian; void supplier;
       if (id) {
         const { data, error } = await db("fixed_assets")
           .update({ ...payload, updated_at: new Date().toISOString() })
