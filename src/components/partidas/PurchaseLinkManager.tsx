@@ -181,7 +181,7 @@ export function PurchaseLinkManager({
         title: "Póliza actualizada correctamente",
         description: `Líneas regeneradas con ${list.length} factura${list.length !== 1 ? 's' : ''}`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({ title: "Error al aplicar", description: err.message, variant: "destructive" });
     } finally {
       setApplying(false);
@@ -235,7 +235,7 @@ export function PurchaseLinkManager({
           if (linkError) throw linkError;
           if (legacyError) throw legacyError;
           successPurchases.push(p);
-        } catch (err: any) {
+        } catch (err: unknown) {
           errors.push(`${p.invoice_number}: ${err.message}`);
         }
       }
@@ -265,7 +265,7 @@ export function PurchaseLinkManager({
           variant: "destructive",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
     } finally {
       if (isBatch) setBatchProgress({ active: false, action: 'linking', current: 0, total: 0 });
@@ -312,7 +312,7 @@ export function PurchaseLinkManager({
           if (linkError) throw linkError;
           if (legacyError) throw legacyError;
           successPurchases.push(p);
-        } catch (err: any) {
+        } catch (err: unknown) {
           errors.push(`${p.invoice_number}: ${err.message}`);
         }
       }
@@ -344,7 +344,7 @@ export function PurchaseLinkManager({
           variant: "destructive",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({ title: "Error al desvincular", description: err.message, variant: "destructive" });
     } finally {
       if (isBatch) setBatchProgress({ active: false, action: 'unlinking', current: 0, total: 0 });

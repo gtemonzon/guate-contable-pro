@@ -308,7 +308,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
       });
 
       onDelete?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al desactivar",

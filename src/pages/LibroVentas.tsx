@@ -268,7 +268,7 @@ export default function LibroVentas() {
 
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading FEL doc types:", error);
     }
   };
@@ -304,7 +304,7 @@ export default function LibroVentas() {
       if (typesError) throw typesError;
       setOperationTypes(types || []);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al cargar cuentas:", error);
       toast({
         title: "Error al cargar cuentas",
@@ -377,7 +377,7 @@ export default function LibroVentas() {
 
       // Verificar si ya existe póliza consolidada para este mes
       await checkExistingJournalEntry(enterpriseId, month, year);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas",
         description: getSafeErrorMessage(error),
@@ -604,7 +604,7 @@ export default function LibroVentas() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error completo:", error);
       setSaveStatus("idle");
       let errorMessage = getSafeErrorMessage(error);
@@ -652,7 +652,7 @@ export default function LibroVentas() {
           ? "La factura fue marcada como anulada" 
           : "La factura fue reactivada correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: getSafeErrorMessage(error),
@@ -684,7 +684,7 @@ export default function LibroVentas() {
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al eliminar",
         description: getSafeErrorMessage(error),
@@ -989,7 +989,7 @@ export default function LibroVentas() {
       if (currentEnterpriseId) {
         await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar póliza",
         description: getSafeErrorMessage(error),

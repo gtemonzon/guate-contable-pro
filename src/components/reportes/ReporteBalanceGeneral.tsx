@@ -64,7 +64,7 @@ export default function ReporteBalanceGeneral() {
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
   };
@@ -149,7 +149,7 @@ export default function ReporteBalanceGeneral() {
       if (reportLines.length === 0 && !format) {
         toast({ title: "Sin datos", description: "No hay movimientos contabilizados hasta la fecha seleccionada" });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al generar reporte", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

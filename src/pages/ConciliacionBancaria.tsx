@@ -88,7 +88,7 @@ const ConciliacionBancaria = () => {
 
       if (error) throw error;
       setBankAccounts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar cuentas bancarias",
@@ -219,7 +219,7 @@ const ConciliacionBancaria = () => {
         allMovements.filter(m => m.is_reconciled).map(m => m.id)
       );
       setSelectedMovements(reconciledIds);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching movements:', error);
       toast({
         variant: "destructive",
@@ -388,7 +388,7 @@ const ConciliacionBancaria = () => {
       setNotes("");
       setSelectedMovements(new Set());
       setMovements([]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al conciliar",

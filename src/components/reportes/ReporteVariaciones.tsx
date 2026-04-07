@@ -266,7 +266,7 @@ export default function ReporteVariaciones() {
       if (result.length === 0) {
         toast({ title: "Sin datos", description: "No hay cuentas con movimientos para las fechas seleccionadas" });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

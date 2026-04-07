@@ -283,7 +283,7 @@ export default function TaxFormDialog({
         title: "Análisis completado",
         description: `Se detectaron ${extractedData.fieldsFound} campo(s). Revisa los datos antes de guardar.`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error analyzing PDF:", error);
       toast({
         title: "Error al analizar",
@@ -404,7 +404,7 @@ export default function TaxFormDialog({
       }
 
       onOpenChange(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: error.message || "No se pudo guardar el formulario",

@@ -90,7 +90,7 @@ const Usuarios = () => {
         if (error) throw error;
         setCurrentUser(data);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching current user:", error);
     }
   };
@@ -124,7 +124,7 @@ const Usuarios = () => {
 
       if (error) throw error;
       setUsers(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al cargar usuarios", {
         description: error.message,
       });

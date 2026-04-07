@@ -162,7 +162,7 @@ export default function LinkedPurchasesModal({
         .order("account_code");
       if (error) throw error;
       setAccounts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading accounts:", error);
     }
   };
@@ -176,7 +176,7 @@ export default function LinkedPurchasesModal({
         .order("name");
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading FEL doc types:", error);
     }
   };
@@ -192,7 +192,7 @@ export default function LinkedPurchasesModal({
         .order("name");
       if (error) throw error;
       setOperationTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading operation types:", error);
     }
   };
@@ -246,7 +246,7 @@ export default function LinkedPurchasesModal({
       } else {
         addPurchase();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading existing purchases:", error);
       addPurchase();
     }
@@ -616,7 +616,7 @@ export default function LinkedPurchasesModal({
       const balanceNote = bankAccountId ? "" : " Seleccione una cuenta bancaria para balancear la partida.";
       toast({ title: "Facturas guardadas", description: `Se generaron ${generatedLines.length} líneas de detalle y ${purchases.length} registro(s) en libro de compras.${balanceNote}` });
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al contabilizar", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

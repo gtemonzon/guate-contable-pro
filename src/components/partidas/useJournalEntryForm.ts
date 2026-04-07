@@ -188,7 +188,7 @@ export function useJournalEntryForm(
       }
       // Don't preview/allocate a number on open — show "Sin asignar" until save
       setNextEntryNumber("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al cargar datos", description: getSafeErrorMessage(error), variant: "destructive" });
     }
   };
@@ -254,7 +254,7 @@ export function useJournalEntryForm(
         detailLines: lines.map(({ id, ...rest }) => rest),
       });
       setDetailLines(lines);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al cargar partida", description: getSafeErrorMessage(error), variant: "destructive" });
     }
   };
@@ -904,7 +904,7 @@ export function useJournalEntryForm(
 
       draftEntryIdRef.current = null;
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);

@@ -223,7 +223,7 @@ export default function ReporteLibroBancos() {
       });
 
       setRows(filtered);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al cargar libro de bancos", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

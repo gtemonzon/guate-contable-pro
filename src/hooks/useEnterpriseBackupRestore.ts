@@ -254,7 +254,7 @@ export function useEnterpriseBackupRestore() {
       toast.success('Backup exportado exitosamente', {
         description: `${totalRecords.toLocaleString()} registros en ${Object.keys(tableCounts).length} tablas`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Export error:', error);
       toast.error('Error al exportar backup', { description: error.message });
     } finally {
@@ -287,7 +287,7 @@ export function useEnterpriseBackupRestore() {
           const preview: BackupPreview = { metadata: backup.metadata, tableCounts, totalRecords };
           setBackupPreview(preview);
           resolve(preview);
-        } catch (err: any) {
+        } catch (err: unknown) {
           reject(new Error('El archivo no es un backup válido: ' + err.message));
         }
       };
@@ -444,7 +444,7 @@ export function useEnterpriseBackupRestore() {
                     } else {
                       tableResults[tableName].inserted++;
                     }
-                  } catch (err: any) {
+                  } catch (err: unknown) {
                     failedRecords.push({ table: tableName, record: rec, error: err.message });
                     tableResults[tableName].failed++;
                   }
@@ -452,7 +452,7 @@ export function useEnterpriseBackupRestore() {
               } else {
                 tableResults[tableName].inserted += batch.length;
               }
-            } catch (err: any) {
+            } catch (err: unknown) {
               failedRecords.push({ table: tableName, record: { batch_start: i }, error: err.message });
               tableResults[tableName].failed += batch.length;
             }
@@ -497,7 +497,7 @@ export function useEnterpriseBackupRestore() {
                 idMapping[tableName][oldId] = (inserted as any).id;
                 tableResults[tableName].inserted++;
               }
-            } catch (err: any) {
+            } catch (err: unknown) {
               failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err.message });
               tableResults[tableName].failed++;
             }
@@ -595,7 +595,7 @@ export function useEnterpriseBackupRestore() {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Restore error:', error);
       toast.error('Error en la restauración', { description: error.message });
       const duration = Date.now() - startTime;

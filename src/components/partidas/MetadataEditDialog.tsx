@@ -94,7 +94,7 @@ export function MetadataEditDialog({
       toast({ title: "Metadatos actualizados", description: `Partida ${entryNumber} actualizada exitosamente` });
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al actualizar", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

@@ -231,7 +231,7 @@ export function EnterpriseDialog({
 
       onSuccess();
       form.reset();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error",

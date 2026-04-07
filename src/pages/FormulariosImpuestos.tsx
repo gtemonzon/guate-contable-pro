@@ -147,7 +147,7 @@ export default function FormulariosImpuestos() {
       if (error) throw error;
 
       setTaxForms(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: "No se pudieron cargar los formularios",
@@ -178,7 +178,7 @@ export default function FormulariosImpuestos() {
       });
 
       fetchTaxForms();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: "No se pudo eliminar el formulario",
@@ -208,7 +208,7 @@ export default function FormulariosImpuestos() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: "No se pudo descargar el archivo",

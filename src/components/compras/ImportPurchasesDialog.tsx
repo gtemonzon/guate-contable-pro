@@ -731,7 +731,7 @@ export function ImportPurchasesDialog({
         setDialogState("summary");
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al validar archivo",
         description: getSafeErrorMessage(error),
@@ -978,7 +978,7 @@ export function ImportPurchasesDialog({
       setPdfProgress(null);
       setRowProgress(null);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       setPdfProgress(null);
       toast({
         title: "Error al procesar PDF",
@@ -1109,7 +1109,7 @@ export function ImportPurchasesDialog({
 
       onSuccess();
       handleOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al importar",
         description: getSafeErrorMessage(error),

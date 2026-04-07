@@ -118,7 +118,7 @@ export function CopyAccountsCatalogDialog({
 
       if (error) throw error;
       setEnterprises(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -173,7 +173,7 @@ export function CopyAccountsCatalogDialog({
       });
 
       setSummary(summary);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -309,7 +309,7 @@ export function CopyAccountsCatalogDialog({
 
       onOpenChange(false);
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al copiar",

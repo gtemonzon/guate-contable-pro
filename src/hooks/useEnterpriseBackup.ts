@@ -293,7 +293,7 @@ export function useEnterpriseBackup() {
       toast.success('Backup descargado exitosamente', {
         description: `Se exportaron todos los datos de ${enterpriseName}`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error exporting enterprise data:', error);
       toast.error('Error al exportar datos', {
         description: error.message || 'Ocurrió un error al generar el backup',

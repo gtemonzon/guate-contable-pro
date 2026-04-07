@@ -79,7 +79,7 @@ const Tenants = () => {
       );
 
       setTenants(tenantsWithCounts);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al cargar tenants", {
         description: error.message,
       });

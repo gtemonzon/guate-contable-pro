@@ -527,7 +527,7 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading FEL doc types:", error);
     }
   };
@@ -581,7 +581,7 @@ export default function LibrosFiscales() {
       if (typesError) throw typesError;
       setOperationTypes(types || []);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al cargar cuentas:", error);
       toast({
         title: "Error al cargar cuentas",
@@ -632,7 +632,7 @@ export default function LibrosFiscales() {
       setCurrentBookId(book.id);
       await fetchPurchases(book.id);
       hasDataRef.current = true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar libro",
         description: getSafeErrorMessage(error),
@@ -655,7 +655,7 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
       setPurchases(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas de compra",
         description: getSafeErrorMessage(error),
@@ -686,7 +686,7 @@ export default function LibrosFiscales() {
 
       // Verificar pólizas existentes para ventas y compras
       await checkExistingJournalEntries(enterpriseId, month, year);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas de venta",
         description: getSafeErrorMessage(error),
@@ -1114,7 +1114,7 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setSaveStatus("idle");
       const errorMessage = error.message?.includes("unique_purchase_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
@@ -1264,7 +1264,7 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setSaveStatus("idle");
       const errorMessage = error.message?.includes("unique_sales_document") 
         ? `Documento ya ingresado en el mes ${selectedMonth} ${selectedYear}`
@@ -1301,7 +1301,7 @@ export default function LibrosFiscales() {
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al eliminar",
         description: getSafeErrorMessage(error),
@@ -1334,7 +1334,7 @@ export default function LibrosFiscales() {
           ? "La factura fue marcada como anulada" 
           : "La factura fue reactivada correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: getSafeErrorMessage(error),
@@ -1366,7 +1366,7 @@ export default function LibrosFiscales() {
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al eliminar",
         description: getSafeErrorMessage(error),
@@ -2090,7 +2090,7 @@ export default function LibrosFiscales() {
                     // Actualizar estado de pólizas existentes
                     await checkExistingJournalEntries(currentEnterpriseId, selectedMonth, selectedYear);
                     setShowJournalDialog(false);
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     toast({
                       title: "Error al reemplazar póliza",
                       description: getSafeErrorMessage(error),
@@ -2675,7 +2675,7 @@ export default function LibrosFiscales() {
                     // Actualizar estado de pólizas existentes
                     await checkExistingJournalEntries(currentEnterpriseId, selectedMonth, selectedYear);
                     setShowJournalDialog(false);
-                  } catch (error: any) {
+                  } catch (error: unknown) {
                     toast({
                       title: "Error al generar póliza",
                       description: getSafeErrorMessage(error),

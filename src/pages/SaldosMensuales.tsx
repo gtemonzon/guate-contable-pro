@@ -159,7 +159,7 @@ export default function SaldosMensuales() {
         const defaultPeriod = openPeriod || periodsResult.data[0];
         setSelectedPeriod(String(defaultPeriod.id));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar datos",
         description: getSafeErrorMessage(error),
@@ -433,7 +433,7 @@ export default function SaldosMensuales() {
       });
 
       setMonthlyAccounts(monthlyAccountsResult);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al consultar saldos",
         description: getSafeErrorMessage(error),

@@ -84,7 +84,7 @@ export default function ReporteCompras() {
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
   };
@@ -98,7 +98,7 @@ export default function ReporteCompras() {
 
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching FEL doc types:", error);
     }
   };
@@ -113,7 +113,7 @@ export default function ReporteCompras() {
 
       if (error) throw error;
       setOperationTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching operation types:", error);
     }
   };
@@ -213,7 +213,7 @@ export default function ReporteCompras() {
           description: "No hay compras registradas para el período seleccionado",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar reporte",
         description: getSafeErrorMessage(error),

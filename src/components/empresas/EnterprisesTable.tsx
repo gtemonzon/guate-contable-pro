@@ -216,7 +216,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       });
 
       onDelete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al desactivar",
@@ -245,7 +245,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       });
 
       onDelete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al eliminar",
@@ -269,7 +269,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       });
 
       onDelete(); // Refresh list
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al reactivar",

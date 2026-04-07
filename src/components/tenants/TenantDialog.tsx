@@ -185,7 +185,7 @@ export function TenantDialog({
 
       setLogoUrl(data.publicUrl);
       toast.success("Logo subido correctamente");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al subir el logo", {
         description: error.message,
       });
@@ -242,7 +242,7 @@ export function TenantDialog({
       }
 
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al guardar", {
         description: error.message,
       });

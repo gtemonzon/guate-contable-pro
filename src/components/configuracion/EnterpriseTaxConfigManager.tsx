@@ -147,7 +147,7 @@ export function EnterpriseTaxConfigManager() {
       }
 
       toast({ title: "Guardado", description: "Configuración de impuestos guardada correctamente" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setSaving(false);

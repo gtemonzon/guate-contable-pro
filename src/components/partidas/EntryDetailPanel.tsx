@@ -336,7 +336,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
                   if (error) throw error;
                   toast({ title: "Reversión contabilizada", description: `${reversalInfo.entry_number} fue contabilizada.` });
                   if (entryId) fetchEntry(entryId);
-                } catch (err: any) {
+                } catch (err: unknown) {
                   toast({ title: "Error", description: getSafeErrorMessage(err), variant: "destructive" });
                 } finally {
                   setPostingReversal(false);

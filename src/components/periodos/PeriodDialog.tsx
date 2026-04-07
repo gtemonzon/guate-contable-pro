@@ -162,7 +162,7 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
       }
 
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: getSafeErrorMessage(error),

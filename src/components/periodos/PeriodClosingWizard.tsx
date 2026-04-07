@@ -503,7 +503,7 @@ export function PeriodClosingWizard({
       setClosingEntryNumber(entryNumber);
       setClosingEntryStatus('borrador');
       toast.success(`Partida de cierre ${entryNumber} generada exitosamente`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating closing entry:', error);
       const detail = error?.message || error?.details || 'Error desconocido';
       toast.error(`Error al generar partida de cierre: ${detail}`);
@@ -600,7 +600,7 @@ export function PeriodClosingWizard({
       setTransferEntryNumber(entryNumber);
       setTransferEntryStatus('borrador');
       toast.success(`Partida de traslado ${entryNumber} generada`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating transfer entry:', error);
       toast.error(`Error al generar partida de traslado: ${error?.message || 'Error desconocido'}`);
     } finally {
@@ -869,7 +869,7 @@ export function PeriodClosingWizard({
       setOpeningEntryNumber(entryNumber);
       setOpeningEntryStatus('borrador');
       toast.success(`Partida de apertura ${entryNumber} generada para ${nextYear}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error generating opening entry:', error);
       toast.error(`Error al generar partida de apertura: ${error?.message || 'Error desconocido'}`);
     } finally {
@@ -1017,7 +1017,7 @@ export function PeriodClosingWizard({
       setOpeningEntryStatus('contabilizado');
       toast.success('Período cerrado exitosamente');
       setCurrentStepIndex(steps.length - 1);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error closing period:', error);
       toast.error(`Error al cerrar el período: ${error?.message || 'Error desconocido'}`);
     } finally {
@@ -1568,7 +1568,7 @@ export function PeriodClosingWizard({
                                           .eq('id', cdv.closingData.id);
                                         cdv.calculate();
                                         toast.success('Partida CDV eliminada. Puede regenerar.');
-                                      } catch (e: any) {
+                                      } catch (e: unknown) {
                                         toast.error('Error al eliminar partida CDV');
                                       }
                                     }
