@@ -23,6 +23,8 @@ import {
 } from "@/hooks/useTickets";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import ImageAttachmentInput from "./ImageAttachmentInput";
+import MessageAttachments from "./MessageAttachments";
 
 const statusLabels: Record<TicketStatus, string> = {
   open: "Abierto",
@@ -54,6 +56,7 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
   const queryClient = useQueryClient();
 
   const [newMessage, setNewMessage] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAgent, setIsAgent] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -74,12 +77,10 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
     });
   }, []);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Realtime subscription for new messages
   useEffect(() => {
     if (!ticketId) return;
 
@@ -105,9 +106,14 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
   }, [ticketId, queryClient]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !ticketId) return;
-    await sendMessage.mutateAsync({ ticketId, message: newMessage });
+    if ((!newMessage.trim() && attachments.length === 0) || !ticketId) return;
+    await sendMessage.mutateAsync({
+      ticketId,
+      message: newMessage || "(imagen adjunta)",
+      attachments: attachments.length > 0 ? attachments : undefined,
+    });
     setNewMessage("");
+    setAttachments([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -148,7 +154,6 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
             </div>
           </div>
 
-          {/* Agent actions */}
           {isAgent && ticket && (
             <div className="flex items-center gap-2 mt-3">
               <Select
@@ -206,6 +211,12 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
                       </span>
                     </div>
                     <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+
+                    {/* Attachments */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <MessageAttachments attachments={msg.attachments} />
+                    )}
+
                     <p className={`text-[10px] mt-1 ${
                       isOwnMessage ? "opacity-60" : "text-muted-foreground"
                     }`}>
@@ -221,19 +232,24 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
 
         {/* Reply box */}
         {!isClosed ? (
-          <div className="p-4 border-t bg-background">
+          <div className="p-4 border-t bg-background space-y-2">
+            <ImageAttachmentInput
+              files={attachments}
+              onChange={setAttachments}
+              disabled={sendMessage.isPending}
+            />
             <div className="flex gap-2">
               <Textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Escribe tu mensaje..."
+                placeholder="Escribe tu mensaje... (Ctrl+V para pegar imagen)"
                 className="min-h-[60px] max-h-[120px] resize-none"
               />
               <Button
                 size="icon"
                 onClick={handleSend}
-                disabled={!newMessage.trim() || sendMessage.isPending}
+                disabled={(!newMessage.trim() && attachments.length === 0) || sendMessage.isPending}
                 className="shrink-0 self-end"
               >
                 <Send className="h-4 w-4" />
