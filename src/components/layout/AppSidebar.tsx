@@ -61,6 +61,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
       { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
+      { title: "Soporte", url: "/soporte", icon: LifeBuoy },
       { title: "Ayuda", url: "/ayuda", icon: HelpCircle },
     ],
   },
