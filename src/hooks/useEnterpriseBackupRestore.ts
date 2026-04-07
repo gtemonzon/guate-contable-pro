@@ -256,7 +256,7 @@ export function useEnterpriseBackupRestore() {
       });
     } catch (error: unknown) {
       console.error('Export error:', error);
-      toast.error('Error al exportar backup', { description: error.message });
+      toast.error('Error al exportar backup', { description: error instanceof Error ? error.message : String(error) });
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -597,7 +597,7 @@ export function useEnterpriseBackupRestore() {
       return result;
     } catch (error: unknown) {
       console.error('Restore error:', error);
-      toast.error('Error en la restauración', { description: error.message });
+      toast.error('Error en la restauración', { description: error instanceof Error ? error.message : String(error) });
       const duration = Date.now() - startTime;
       const result: RestoreResult = {
         success: false, recordsProcessed: 0, recordsFailed: 0,

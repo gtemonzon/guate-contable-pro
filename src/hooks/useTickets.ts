@@ -260,7 +260,7 @@ export function useCreateTicket() {
       toast({ title: "Ticket creado", description: "Tu solicitud ha sido enviada." });
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }
@@ -318,7 +318,7 @@ export function useSendMessage() {
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
     onError: (err: any) => {
-      toast({ title: "Error al enviar mensaje", description: err.message, variant: "destructive" });
+      toast({ title: "Error al enviar mensaje", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }
@@ -355,7 +355,7 @@ export function useUpdateTicket() {
       toast({ title: "Ticket actualizado" });
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }

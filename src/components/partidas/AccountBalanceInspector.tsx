@@ -93,7 +93,7 @@ export function AccountBalanceInspector({
         setTotalRows(0);
       }
     } catch (e: unknown) {
-      setError(e.message || "Error al cargar movimientos");
+      setError((e instanceof Error ? e.message : String(e)) || "Error al cargar movimientos");
     } finally {
       setLoading(false);
     }

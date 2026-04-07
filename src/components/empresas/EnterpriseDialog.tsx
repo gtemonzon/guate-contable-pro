@@ -235,7 +235,7 @@ export function EnterpriseDialog({
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     }
   };

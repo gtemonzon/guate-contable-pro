@@ -905,7 +905,7 @@ export function useJournalEntryForm(
       draftEntryIdRef.current = null;
       onOpenChange(false);
     } catch (error: unknown) {
-      toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
+      toast({ title: "Error al guardar", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setLoading(false);
     }

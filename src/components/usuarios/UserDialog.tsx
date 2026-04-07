@@ -208,7 +208,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       setEnterprises(data || []);
     } catch (error: unknown) {
       toast.error("Error al cargar empresas", {
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     }
   };
@@ -454,7 +454,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     } catch (error: unknown) {
       console.error("Error al guardar usuario:", error);
       toast.error("Error al guardar usuario", {
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setLoading(false);

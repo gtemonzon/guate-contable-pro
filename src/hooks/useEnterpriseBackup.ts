@@ -296,7 +296,7 @@ export function useEnterpriseBackup() {
     } catch (error: unknown) {
       console.error('Error exporting enterprise data:', error);
       toast.error('Error al exportar datos', {
-        description: error.message || 'Ocurrió un error al generar el backup',
+        description: error instanceof Error ? error.message : String(error) || 'Ocurrió un error al generar el backup',
       });
     } finally {
       setIsExporting(false);

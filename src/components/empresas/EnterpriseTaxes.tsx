@@ -139,7 +139,7 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
       toast({
         variant: "destructive",
         title: "Error al cargar configuración",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setLoading(false);
@@ -199,7 +199,7 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
       toast({
         variant: "destructive",
         title: "Error al guardar",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setSaving(false);

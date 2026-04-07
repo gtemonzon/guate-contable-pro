@@ -287,7 +287,7 @@ export default function TaxFormDialog({
       console.error("Error analyzing PDF:", error);
       toast({
         title: "Error al analizar",
-        description: error.message || "No se pudo procesar el PDF. Completa los campos manualmente.",
+        description: error instanceof Error ? error.message : String(error) || "No se pudo procesar el PDF. Completa los campos manualmente.",
         variant: "destructive",
       });
     } finally {
@@ -407,7 +407,7 @@ export default function TaxFormDialog({
     } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "No se pudo guardar el formulario",
+        description: error instanceof Error ? error.message : String(error) || "No se pudo guardar el formulario",
         variant: "destructive",
       });
     } finally {
