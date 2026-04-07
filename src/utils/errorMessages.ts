@@ -90,27 +90,27 @@ export function getSafeAuthError(error: unknown): string {
   }
   
   // Registration errors
-  if (error.message?.includes('already registered') || 
-      error.message?.includes('already been registered')) {
+  if (msg?.includes('already registered') || 
+      msg?.includes('already been registered')) {
     return 'Este correo ya está registrado.';
   }
   
   // Password validation
-  if (error.message?.includes('Password')) {
+  if (msg?.includes('Password')) {
     return 'La contraseña no cumple con los requisitos mínimos.';
   }
   
   // Rate limiting
-  if (error.message?.includes('rate limit') || error.message?.includes('too many')) {
+  if (msg?.includes('rate limit') || msg?.includes('too many')) {
     return 'Demasiados intentos. Por favor espera unos minutos.';
   }
   
   // Password reset errors
-  if (error.message?.includes('email not found') || error.message?.includes('User not found')) {
+  if (msg?.includes('email not found') || msg?.includes('User not found')) {
     return 'Si ese correo existe en nuestro sistema, recibirás un enlace de recuperación.';
   }
   
-  if (error.message?.includes('invalid_token') || error.message?.includes('expired')) {
+  if (msg?.includes('invalid_token') || msg?.includes('expired')) {
     return 'El enlace de recuperación ha expirado. Solicita uno nuevo.';
   }
   
