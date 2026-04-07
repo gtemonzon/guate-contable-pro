@@ -185,7 +185,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
       if (error) throw error;
       setTenants(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching tenants:", error);
     }
   };
@@ -206,9 +206,9 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
       if (error) throw error;
       setEnterprises(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Error al cargar empresas", {
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     }
   };
@@ -260,7 +260,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           }))
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching user roles:", error);
       setEnterpriseRoles([]);
     }
@@ -451,10 +451,10 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       }
 
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al guardar usuario:", error);
       toast.error("Error al guardar usuario", {
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setLoading(false);

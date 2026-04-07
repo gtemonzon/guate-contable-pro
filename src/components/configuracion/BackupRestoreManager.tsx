@@ -142,8 +142,8 @@ export function BackupRestoreManager() {
     setSelectedFile(file);
     try {
       await previewBackup(file);
-    } catch (err: any) {
-      setPreviewError(err.message);
+    } catch (err: unknown) {
+      setPreviewError(err instanceof Error ? err.message : String(err));
       clearPreview();
     }
   };

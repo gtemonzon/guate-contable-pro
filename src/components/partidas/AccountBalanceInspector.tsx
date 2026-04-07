@@ -92,8 +92,8 @@ export function AccountBalanceInspector({
       } else {
         setTotalRows(0);
       }
-    } catch (e: any) {
-      setError(e.message || "Error al cargar movimientos");
+    } catch (e: unknown) {
+      setError((e instanceof Error ? e.message : String(e)) || "Error al cargar movimientos");
     } finally {
       setLoading(false);
     }

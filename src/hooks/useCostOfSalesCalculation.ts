@@ -252,9 +252,9 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         setCostOfSales(null);
         setNeedsRecalculation(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error calculating cost of sales:', err);
-      setError(err.message || 'Error en el cálculo');
+      setError((err instanceof Error ? err.message : String(err)) || 'Error en el cálculo');
       toast.error('Error al calcular costo de ventas');
     } finally {
       setLoading(false);
@@ -301,7 +301,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       }
 
       toast.success('Inventario final guardado');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving final inventory:', err);
       toast.error('Error al guardar inventario final');
     }
@@ -528,9 +528,9 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       createdEntryId = null; // success — don't clean up
       toast.success(`Partida de Costo de Ventas ${entryNumber} generada`);
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error generating CDV entry:', err);
-      const detail = err?.message || err?.details || 'Error desconocido';
+      const errObj = err as Record<string, unknown> | null; const detail = String(errObj?.message || errObj?.details || 'Error desconocido');
       setError(detail);
       toast.error(`Error al generar partida CDV: ${detail}`);
 
@@ -607,7 +607,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       setNeedsRecalculation(false);
       toast.success('Cálculo actualizado');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error refreshing calculation:', err);
       toast.error('Error al recalcular');
     } finally {
@@ -641,7 +641,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       setClosingData({ ...closingData, status: 'contabilizado' });
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error posting CDV entry:', err);
       toast.error('Error al contabilizar partida CDV');
       return false;

@@ -120,7 +120,7 @@ export default function BalanceSaldos() {
         setEndDate(defaultPeriod.end_date);
         await fetchBalances(enterpriseId, defaultPeriod.id, defaultPeriod.start_date, defaultPeriod.end_date);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar períodos",
         description: getSafeErrorMessage(error),
@@ -161,7 +161,7 @@ export default function BalanceSaldos() {
       }));
 
       setAccounts(accountsWithBalances);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar saldos",
         description: getSafeErrorMessage(error),

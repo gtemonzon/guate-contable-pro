@@ -40,7 +40,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
 
       if (error) throw error;
       setPeriods(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar períodos",
@@ -122,7 +122,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
       }
 
       fetchPeriods();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cerrar período",
@@ -150,7 +150,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
       });
 
       fetchPeriods();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al reabrir período",

@@ -254,9 +254,9 @@ export function useEnterpriseBackupRestore() {
       toast.success('Backup exportado exitosamente', {
         description: `${totalRecords.toLocaleString()} registros en ${Object.keys(tableCounts).length} tablas`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Export error:', error);
-      toast.error('Error al exportar backup', { description: error.message });
+      toast.error('Error al exportar backup', { description: error instanceof Error ? error.message : String(error) });
     } finally {
       setIsExporting(false);
       setExportProgress(null);
@@ -287,8 +287,8 @@ export function useEnterpriseBackupRestore() {
           const preview: BackupPreview = { metadata: backup.metadata, tableCounts, totalRecords };
           setBackupPreview(preview);
           resolve(preview);
-        } catch (err: any) {
-          reject(new Error('El archivo no es un backup válido: ' + err.message));
+        } catch (err: unknown) {
+          reject(new Error('El archivo no es un backup válido: ' + (err instanceof Error ? err.message : String(err))));
         }
       };
       reader.onerror = () => reject(new Error('Error al leer el archivo'));
@@ -444,16 +444,16 @@ export function useEnterpriseBackupRestore() {
                     } else {
                       tableResults[tableName].inserted++;
                     }
-                  } catch (err: any) {
-                    failedRecords.push({ table: tableName, record: rec, error: err.message });
+                  } catch (err: unknown) {
+                    failedRecords.push({ table: tableName, record: rec, error: err instanceof Error ? err.message : String(err) });
                     tableResults[tableName].failed++;
                   }
                 }
               } else {
                 tableResults[tableName].inserted += batch.length;
               }
-            } catch (err: any) {
-              failedRecords.push({ table: tableName, record: { batch_start: i }, error: err.message });
+            } catch (err: unknown) {
+              failedRecords.push({ table: tableName, record: { batch_start: i }, error: err instanceof Error ? err.message : String(err) });
               tableResults[tableName].failed += batch.length;
             }
             recordsProcessed += batch.length;
@@ -491,14 +491,14 @@ export function useEnterpriseBackupRestore() {
                 .single();
 
               if (error) {
-                failedRecords.push({ table: tableName, record: { old_id: oldId, ...newRecord }, error: error.message });
+                failedRecords.push({ table: tableName, record: { old_id: oldId, ...newRecord }, error: error instanceof Error ? error.message : String(error) });
                 tableResults[tableName].failed++;
               } else if (inserted && oldId) {
                 idMapping[tableName][oldId] = (inserted as any).id;
                 tableResults[tableName].inserted++;
               }
-            } catch (err: any) {
-              failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err.message });
+            } catch (err: unknown) {
+              failedRecords.push({ table: tableName, record: { old_id: oldId }, error: err instanceof Error ? err.message : String(err) });
               tableResults[tableName].failed++;
             }
 
@@ -595,9 +595,9 @@ export function useEnterpriseBackupRestore() {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Restore error:', error);
-      toast.error('Error en la restauración', { description: error.message });
+      toast.error('Error en la restauración', { description: error instanceof Error ? error.message : String(error) });
       const duration = Date.now() - startTime;
       const result: RestoreResult = {
         success: false, recordsProcessed: 0, recordsFailed: 0,

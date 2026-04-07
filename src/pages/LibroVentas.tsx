@@ -268,7 +268,7 @@ export default function LibroVentas() {
 
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading FEL doc types:", error);
     }
   };
@@ -304,7 +304,7 @@ export default function LibroVentas() {
       if (typesError) throw typesError;
       setOperationTypes(types || []);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al cargar cuentas:", error);
       toast({
         title: "Error al cargar cuentas",
@@ -377,7 +377,7 @@ export default function LibroVentas() {
 
       // Verificar si ya existe póliza consolidada para este mes
       await checkExistingJournalEntry(enterpriseId, month, year);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas",
         description: getSafeErrorMessage(error),
@@ -604,19 +604,21 @@ export default function LibroVentas() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error completo:", error);
       setSaveStatus("idle");
       let errorMessage = getSafeErrorMessage(error);
       
       // Mensajes más específicos según el error
-      if (error.message?.includes("período contable")) {
-        errorMessage = error.message;
-      } else if (error.message?.includes("fecha")) {
+      const errMsg = error instanceof Error ? error.message : '';
+      const errCode = (error as Record<string, unknown>)?.code;
+      if (errMsg?.includes("período contable")) {
+        errorMessage = errMsg;
+      } else if (errMsg?.includes("fecha")) {
         errorMessage = "La fecha de la factura debe estar en el mes seleccionado o máximo 2 meses atrás";
-      } else if (error.code === "23502") {
+      } else if (errCode === "23502") {
         errorMessage = "Faltan campos requeridos. Verifique que haya completado todos los campos obligatorios.";
-      } else if (error.code === "23503") {
+      } else if (errCode === "23503") {
         errorMessage = "Error de referencia: Verifique que las cuentas seleccionadas sean válidas.";
       }
       
@@ -652,7 +654,7 @@ export default function LibroVentas() {
           ? "La factura fue marcada como anulada" 
           : "La factura fue reactivada correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: getSafeErrorMessage(error),
@@ -684,7 +686,7 @@ export default function LibroVentas() {
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al eliminar",
         description: getSafeErrorMessage(error),
@@ -989,7 +991,7 @@ export default function LibroVentas() {
       if (currentEnterpriseId) {
         await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar póliza",
         description: getSafeErrorMessage(error),

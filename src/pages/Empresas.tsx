@@ -50,7 +50,7 @@ const Empresas = () => {
 
       if (error) throw error;
       setEnterprises(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar empresas",

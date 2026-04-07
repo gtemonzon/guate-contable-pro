@@ -229,7 +229,7 @@ export default function Partidas() {
       }));
       
       setEntries(mappedData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar partidas",
         description: getSafeErrorMessage(error),

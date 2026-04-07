@@ -269,7 +269,7 @@ export default function VoidChequeDialog({
       setReason("");
       onOpenChange(false);
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({ title: "Error al anular cheque", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
       setLoading(false);

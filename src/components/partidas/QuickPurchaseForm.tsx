@@ -184,8 +184,8 @@ export function QuickPurchaseForm({
       setTotal(0);
       setDuplicate(null);
       onCreated();
-    } catch (err: any) {
-      toast({ title: "Error al vincular", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error al vincular", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setLinkingExisting(false);
     }
@@ -410,8 +410,8 @@ export function QuickPurchaseForm({
 
       onCreated();
       setTimeout(() => dateInputRef.current?.focus(), 50);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }

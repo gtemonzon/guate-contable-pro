@@ -88,7 +88,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
 
       if (error) throw error;
       setDocuments(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar documentos",
@@ -214,7 +214,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       window.dispatchEvent(new CustomEvent("documentsChanged", {
         detail: { enterpriseId }
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al subir documento",
@@ -236,7 +236,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       if (!data?.signedUrl) throw new Error("No se pudo generar URL de descarga");
 
       window.open(data.signedUrl, '_blank');
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al descargar documento",
@@ -270,7 +270,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       window.dispatchEvent(new CustomEvent("documentsChanged", {
         detail: { enterpriseId }
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al eliminar documento",

@@ -83,7 +83,7 @@ export default function ReporteEstadoResultados() {
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
   };
@@ -203,7 +203,7 @@ export default function ReporteEstadoResultados() {
           description: "No hay movimientos de ingresos o gastos en el período",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar reporte",
         description: getSafeErrorMessage(error),

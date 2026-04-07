@@ -96,7 +96,7 @@ export default function ReportePartidas() {
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
   };
@@ -184,7 +184,7 @@ export default function ReportePartidas() {
           description: "No hay partidas registradas para el período seleccionado",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar reporte",
         description: getSafeErrorMessage(error),

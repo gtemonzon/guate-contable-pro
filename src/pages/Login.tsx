@@ -123,7 +123,7 @@ const Login = () => {
       });
 
       navigate("/dashboard");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al iniciar sesión",
@@ -152,7 +152,7 @@ const Login = () => {
       
       setShowForgotPassword(false);
       setResetEmail("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error",

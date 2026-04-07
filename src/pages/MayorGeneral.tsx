@@ -221,7 +221,7 @@ export default function MayorGeneral() {
 
       if (error) throw error;
       setAccounts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar cuentas",
         description: getSafeErrorMessage(error),
@@ -493,7 +493,7 @@ export default function MayorGeneral() {
       setAccountLedgers(ledgers);
       // Expandir todas las cuentas por defecto
       setExpandedAccounts(new Set(ledgers.map(l => l.account.id)));
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar movimientos",
         description: getSafeErrorMessage(error),
@@ -552,7 +552,7 @@ export default function MayorGeneral() {
 
       setSelectedJournalEntry(journalEntry);
       setShowJournalDialog(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar póliza",
         description: getSafeErrorMessage(error),

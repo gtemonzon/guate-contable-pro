@@ -134,8 +134,8 @@ export function JournalEntryPrefixesManager() {
 
       setDialogOpen(false);
       fetchPrefixes();
-    } catch (error: any) {
-      toast.error(error.message || "Error al guardar el prefijo");
+    } catch (error: unknown) {
+      toast.error((error instanceof Error ? error.message : String(error)) || "Error al guardar el prefijo");
     }
   };
 

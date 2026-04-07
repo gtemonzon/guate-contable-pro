@@ -169,7 +169,7 @@ export default function ReporteLibroMayor() {
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching enterprise name:", error);
     }
   };
@@ -185,7 +185,7 @@ export default function ReporteLibroMayor() {
 
       if (error) throw error;
       setAccounts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar cuentas",
         description: getSafeErrorMessage(error),
@@ -348,7 +348,7 @@ export default function ReporteLibroMayor() {
         title: "Reporte generado",
         description: `Se encontraron ${totalMovements} movimientos en ${ledgers.length} cuenta(s)`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar reporte",
         description: getSafeErrorMessage(error),

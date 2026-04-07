@@ -39,7 +39,7 @@ export async function allocateEntryNumber(
   });
 
   if (error) {
-    throw new Error(`Error al asignar número de partida: ${error.message}`);
+    throw new Error(`Error al asignar número de partida: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   return data as string;

@@ -135,11 +135,11 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
         // Use default configuration if none exists
         setTaxes(DEFAULT_TAXES);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar configuración",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setLoading(false);
@@ -195,11 +195,11 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
 
       // Refetch to get the new IDs
       fetchTaxConfigs();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al guardar",
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setSaving(false);

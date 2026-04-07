@@ -209,7 +209,7 @@ export default function LibroCompras() {
 
       if (error) throw error;
       setFelDocTypes(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error loading FEL doc types:", error);
     }
   };
@@ -257,7 +257,7 @@ export default function LibroCompras() {
       if (typesError) throw typesError;
       setOperationTypes(types || []);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al cargar cuentas:", error);
       toast({
         title: "Error al cargar cuentas",
@@ -304,7 +304,7 @@ export default function LibroCompras() {
 
       setCurrentBookId(book.id);
       await fetchPurchases(book.id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar libro",
         description: getSafeErrorMessage(error),
@@ -331,7 +331,7 @@ export default function LibroCompras() {
       if (currentEnterpriseId) {
         await checkExistingJournalEntry(currentEnterpriseId, selectedMonth, selectedYear);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas",
         description: getSafeErrorMessage(error),
@@ -581,17 +581,19 @@ export default function LibroCompras() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error completo:", error);
       setSaveStatus("idle");
       let errorMessage = getSafeErrorMessage(error);
       
       // Mensajes más específicos según el error
-      if (error.message?.includes("fecha")) {
+      const errMsg = error instanceof Error ? error.message : '';
+      const errCode = (error as Record<string, unknown>)?.code;
+      if (errMsg?.includes("fecha")) {
         errorMessage = "La fecha de la factura debe estar en el mes seleccionado o máximo 2 meses atrás";
-      } else if (error.code === "23502") {
+      } else if (errCode === "23502") {
         errorMessage = "Faltan campos requeridos. Verifique que haya completado todos los campos obligatorios.";
-      } else if (error.code === "23503") {
+      } else if (errCode === "23503") {
         errorMessage = "Error de referencia: Verifique que las cuentas seleccionadas sean válidas.";
       }
       
@@ -626,7 +628,7 @@ export default function LibroCompras() {
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al eliminar",
         description: getSafeErrorMessage(error),
@@ -948,7 +950,7 @@ export default function LibroCompras() {
       await fetchPurchases(currentBookId);
       // Actualizar estado de póliza existente
       await checkExistingJournalEntry(currentEnterpriseId, selectedMonth, selectedYear);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al generar póliza",
         description: getSafeErrorMessage(error),

@@ -609,7 +609,7 @@ export function ImportSalesDialog({
       setSelectedIndices(new Set(validRecords.map((_, i) => i)));
       setDialogState("summary");
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al validar archivo",
         description: getSafeErrorMessage(error),
@@ -653,7 +653,7 @@ export function ImportSalesDialog({
 
       onSuccess();
       handleOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al importar",
         description: getSafeErrorMessage(error),

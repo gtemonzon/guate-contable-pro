@@ -51,7 +51,7 @@ export function EnterpriseTaxConfigManager() {
         .eq("enterprise_id", enterpriseId);
 
       if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
         return;
       }
 
@@ -102,7 +102,7 @@ export function EnterpriseTaxConfigManager() {
         .eq("id", config.id);
 
       if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
         return;
       }
     }
@@ -147,8 +147,8 @@ export function EnterpriseTaxConfigManager() {
       }
 
       toast({ title: "Guardado", description: "Configuración de impuestos guardada correctamente" });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setSaving(false);
     }

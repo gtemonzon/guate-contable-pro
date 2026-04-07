@@ -178,7 +178,7 @@ export default function VoidEntryDialog({
       setReason("");
       onOpenChange(false);
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al crear reversión",
         description: getSafeErrorMessage(error),

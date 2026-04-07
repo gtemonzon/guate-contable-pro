@@ -259,8 +259,8 @@ export function useCreateTicket() {
       queryClient.invalidateQueries({ queryKey: ["open-tickets-count"] });
       toast({ title: "Ticket creado", description: "Tu solicitud ha sido enviada." });
     },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }
@@ -317,8 +317,8 @@ export function useSendMessage() {
       queryClient.invalidateQueries({ queryKey: ["ticket", variables.ticketId] });
       queryClient.invalidateQueries({ queryKey: ["tickets"] });
     },
-    onError: (err: any) => {
-      toast({ title: "Error al enviar mensaje", description: err.message, variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({ title: "Error al enviar mensaje", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }
@@ -354,8 +354,8 @@ export function useUpdateTicket() {
       queryClient.invalidateQueries({ queryKey: ["open-tickets-count"] });
       toast({ title: "Ticket actualizado" });
     },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    onError: (err: unknown) => {
+      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     },
   });
 }

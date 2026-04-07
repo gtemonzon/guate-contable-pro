@@ -72,7 +72,7 @@ const Cuentas = () => {
       const enterpriseId = parseInt(currentEnterpriseId);
       setSelectedEnterprise(enterpriseId);
       fetchAccounts(enterpriseId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -93,7 +93,7 @@ const Cuentas = () => {
 
       if (error) throw error;
       setAccounts(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar cuentas",
@@ -163,7 +163,7 @@ const Cuentas = () => {
       }
 
       return { canDelete: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         canDelete: false,
         message: getSafeErrorMessage(error)

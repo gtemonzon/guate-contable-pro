@@ -103,7 +103,7 @@ export function OperationTypesManager() {
 
       if (error) throw error;
       setOperationTypes((data || []) as OperationType[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al cargar tipos de operación",
         description: getSafeErrorMessage(error),
@@ -195,7 +195,7 @@ export function OperationTypesManager() {
 
       setDialogOpen(false);
       fetchOperationTypes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error al guardar",
         description: getSafeErrorMessage(error),
@@ -219,7 +219,7 @@ export function OperationTypesManager() {
       });
 
       fetchOperationTypes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
         description: getSafeErrorMessage(error),

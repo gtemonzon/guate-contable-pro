@@ -84,7 +84,7 @@ jobs:
 
       - name: ESLint regression guard
         run: |
-          BASELINE=464
+          BASELINE=281
           if [ "${lint_issues:-0}" -gt "$BASELINE" ]; then
             echo "::error::Lint errors increased! Current: ${lint_issues}, Baseline: $BASELINE. Fix new issues before merging."
             exit 1

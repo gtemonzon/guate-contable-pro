@@ -151,8 +151,8 @@ export default function JournalEntryDialog({
     try {
       await form.ensureDraftEntry();
       setLinkManagerOpen(true);
-    } catch (err: any) {
-      toast({ title: "Error al preparar vinculación", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error al preparar vinculación", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   };
 
