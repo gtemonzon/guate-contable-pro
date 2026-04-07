@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateTicket, TicketCategory, TicketPriority } from "@/hooks/useTickets";
+import ImageAttachmentInput from "./ImageAttachmentInput";
 
 interface Props {
   open: boolean;
@@ -17,17 +18,25 @@ export default function CreateTicketDialog({ open, onOpenChange }: Props) {
   const [category, setCategory] = useState<TicketCategory>("other");
   const [priority, setPriority] = useState<TicketPriority>("medium");
   const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
 
   const createTicket = useCreateTicket();
 
   const handleSubmit = async () => {
     if (!subject.trim() || !message.trim()) return;
 
-    await createTicket.mutateAsync({ subject, category, priority, message });
+    await createTicket.mutateAsync({
+      subject,
+      category,
+      priority,
+      message,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    });
     setSubject("");
     setCategory("other");
     setPriority("medium");
     setMessage("");
+    setAttachments([]);
     onOpenChange(false);
   };
 
@@ -88,6 +97,18 @@ export default function CreateTicketDialog({ open, onOpenChange }: Props) {
               placeholder="Describe tu problema o consulta con detalle..."
               className="min-h-[120px]"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Adjuntar imágenes (opcional)</Label>
+            <ImageAttachmentInput
+              files={attachments}
+              onChange={setAttachments}
+              disabled={createTicket.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              Puedes pegar capturas de pantalla (Ctrl+V) o seleccionar archivos. Las imágenes se comprimen automáticamente.
+            </p>
           </div>
         </div>
 

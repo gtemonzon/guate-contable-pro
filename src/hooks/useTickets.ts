@@ -23,6 +23,13 @@ export interface Ticket {
   message_count?: number;
 }
 
+export interface TicketAttachment {
+  id: number;
+  ticket_message_id: number;
+  file_url: string;
+  file_name: string;
+}
+
 export interface TicketMessage {
   id: number;
   ticket_id: number;
@@ -31,7 +38,10 @@ export interface TicketMessage {
   is_internal: boolean;
   created_at: string;
   sender_name?: string;
+  attachments?: TicketAttachment[];
 }
+
+// ── List tickets ──
 
 export function useTickets(filters?: {
   status?: TicketStatus;
@@ -55,7 +65,6 @@ export function useTickets(filters?: {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Fetch creator names
       if (data && data.length > 0) {
         const userIds = [...new Set([
           ...data.map(t => t.created_by_user_id),
@@ -82,6 +91,8 @@ export function useTickets(filters?: {
   });
 }
 
+// ── Ticket detail ──
+
 export function useTicketDetail(ticketId: number | null) {
   return useQuery({
     queryKey: ["ticket", ticketId],
@@ -96,7 +107,6 @@ export function useTicketDetail(ticketId: number | null) {
 
       if (error) throw error;
 
-      // Get creator/assignee names
       const userIds = [data.created_by_user_id, data.assigned_to_user_id].filter(Boolean) as string[];
       const { data: users } = await supabase
         .from("tab_users")
@@ -115,6 +125,8 @@ export function useTicketDetail(ticketId: number | null) {
   });
 }
 
+// ── Ticket messages with attachments ──
+
 export function useTicketMessages(ticketId: number | null) {
   return useQuery({
     queryKey: ["ticket-messages", ticketId],
@@ -128,27 +140,70 @@ export function useTicketMessages(ticketId: number | null) {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
+      if (!data || data.length === 0) return [] as TicketMessage[];
 
-      if (data && data.length > 0) {
-        const userIds = [...new Set(data.map(m => m.sender_user_id))];
-        const { data: users } = await supabase
-          .from("tab_users")
-          .select("id, full_name")
-          .in("id", userIds);
+      // Fetch sender names
+      const userIds = [...new Set(data.map(m => m.sender_user_id))];
+      const { data: users } = await supabase
+        .from("tab_users")
+        .select("id, full_name")
+        .in("id", userIds);
+      const userMap = new Map(users?.map(u => [u.id, u.full_name]) || []);
 
-        const userMap = new Map(users?.map(u => [u.id, u.full_name]) || []);
+      // Fetch attachments for all messages
+      const messageIds = data.map(m => m.id);
+      const { data: attachments } = await supabase
+        .from("ticket_attachments")
+        .select("*")
+        .in("ticket_message_id", messageIds);
 
-        return data.map(m => ({
-          ...m,
-          sender_name: userMap.get(m.sender_user_id) || "Usuario",
-        })) as TicketMessage[];
-      }
+      const attachmentMap = new Map<number, TicketAttachment[]>();
+      attachments?.forEach(a => {
+        const list = attachmentMap.get(a.ticket_message_id) || [];
+        list.push(a as TicketAttachment);
+        attachmentMap.set(a.ticket_message_id, list);
+      });
 
-      return [] as TicketMessage[];
+      return data.map(m => ({
+        ...m,
+        sender_name: userMap.get(m.sender_user_id) || "Usuario",
+        attachments: attachmentMap.get(m.id) || [],
+      })) as TicketMessage[];
     },
     enabled: !!ticketId,
   });
 }
+
+// ── Upload attachments helper ──
+
+async function uploadAttachments(
+  userId: string,
+  messageId: number,
+  files: File[]
+): Promise<void> {
+  for (const file of files) {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userId}/${messageId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("ticket-attachments")
+      .upload(path, file, { contentType: file.type });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from("ticket-attachments")
+      .getPublicUrl(path);
+
+    await supabase.from("ticket_attachments").insert({
+      ticket_message_id: messageId,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+    });
+  }
+}
+
+// ── Create ticket ──
 
 export function useCreateTicket() {
   const queryClient = useQueryClient();
@@ -161,11 +216,11 @@ export function useCreateTicket() {
       category: TicketCategory;
       priority: TicketPriority;
       message: string;
+      attachments?: File[];
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !currentTenant) throw new Error("No autenticado");
 
-      // Create ticket
       const { data: ticket, error: ticketError } = await supabase
         .from("tickets")
         .insert({
@@ -181,16 +236,21 @@ export function useCreateTicket() {
 
       if (ticketError) throw ticketError;
 
-      // Create first message
-      const { error: msgError } = await supabase
+      const { data: msg, error: msgError } = await supabase
         .from("ticket_messages")
         .insert({
           ticket_id: ticket.id,
           sender_user_id: user.id,
           message: input.message,
-        });
+        })
+        .select()
+        .single();
 
       if (msgError) throw msgError;
+
+      if (input.attachments && input.attachments.length > 0) {
+        await uploadAttachments(user.id, msg.id, input.attachments);
+      }
 
       return ticket;
     },
@@ -205,6 +265,8 @@ export function useCreateTicket() {
   });
 }
 
+// ── Send message ──
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -214,22 +276,29 @@ export function useSendMessage() {
       ticketId: number;
       message: string;
       isInternal?: boolean;
+      attachments?: File[];
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
-      const { error } = await supabase
+      const { data: msg, error } = await supabase
         .from("ticket_messages")
         .insert({
           ticket_id: input.ticketId,
           sender_user_id: user.id,
           message: input.message,
           is_internal: input.isInternal || false,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Auto-update ticket status & updated_at
+      if (input.attachments && input.attachments.length > 0) {
+        await uploadAttachments(user.id, msg.id, input.attachments);
+      }
+
+      // Auto-update ticket status
       const { data: userData } = await supabase
         .from("tab_users")
         .select("is_super_admin, is_tenant_admin")
@@ -237,12 +306,10 @@ export function useSendMessage() {
         .single();
 
       const isAgent = userData?.is_super_admin || userData?.is_tenant_admin;
-      
+
       await supabase
         .from("tickets")
-        .update({
-          status: isAgent ? "in_progress" : "waiting_user",
-        })
+        .update({ status: isAgent ? "in_progress" : "waiting_user" })
         .eq("id", input.ticketId);
     },
     onSuccess: (_data, variables) => {
@@ -255,6 +322,8 @@ export function useSendMessage() {
     },
   });
 }
+
+// ── Update ticket ──
 
 export function useUpdateTicket() {
   const queryClient = useQueryClient();
@@ -290,6 +359,8 @@ export function useUpdateTicket() {
     },
   });
 }
+
+// ── Open tickets count ──
 
 export function useOpenTicketsCount() {
   const { currentTenant } = useTenant();
