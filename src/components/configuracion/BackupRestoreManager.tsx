@@ -143,7 +143,7 @@ export function BackupRestoreManager() {
     try {
       await previewBackup(file);
     } catch (err: unknown) {
-      setPreviewError(err.message);
+      setPreviewError(err instanceof Error ? err.message : String(err));
       clearPreview();
     }
   };
