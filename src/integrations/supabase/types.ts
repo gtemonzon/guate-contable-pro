@@ -3128,6 +3128,120 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_url: string
+          id: number
+          ticket_message_id: number
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_url: string
+          id?: never
+          ticket_message_id: number
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_url?: string
+          id?: never
+          ticket_message_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_attachments_ticket_message_id_fkey"
+            columns: ["ticket_message_id"]
+            isOneToOne: false
+            referencedRelation: "ticket_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ticket_messages: {
+        Row: {
+          created_at: string
+          id: number
+          is_internal: boolean
+          message: string
+          sender_user_id: string
+          ticket_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          is_internal?: boolean
+          message: string
+          sender_user_id: string
+          ticket_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          is_internal?: boolean
+          message?: string
+          sender_user_id?: string
+          ticket_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tickets: {
+        Row: {
+          assigned_to_user_id: string | null
+          category: Database["public"]["Enums"]["ticket_category"]
+          created_at: string
+          created_by_user_id: string
+          id: number
+          priority: Database["public"]["Enums"]["ticket_priority"]
+          status: Database["public"]["Enums"]["ticket_status"]
+          subject: string
+          tenant_id: number
+          updated_at: string
+        }
+        Insert: {
+          assigned_to_user_id?: string | null
+          category?: Database["public"]["Enums"]["ticket_category"]
+          created_at?: string
+          created_by_user_id: string
+          id?: never
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject: string
+          tenant_id: number
+          updated_at?: string
+        }
+        Update: {
+          assigned_to_user_id?: string | null
+          category?: Database["public"]["Enums"]["ticket_category"]
+          created_at?: string
+          created_by_user_id?: string
+          id?: never
+          priority?: Database["public"]["Enums"]["ticket_priority"]
+          status?: Database["public"]["Enums"]["ticket_status"]
+          subject?: string
+          tenant_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tickets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -3446,6 +3560,7 @@ export type Database = {
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin_bypass: { Args: { _user_id: string }; Returns: boolean }
+      is_support_agent: { Args: { p_user_id: string }; Returns: boolean }
       is_tenant_active: { Args: { tenant_id_param: number }; Returns: boolean }
       is_tenant_admin_for: {
         Args: { check_tenant_id: number; user_uuid: string }
@@ -3521,6 +3636,14 @@ export type Database = {
         | "contador_senior"
         | "auxiliar_contable"
         | "cliente"
+      ticket_category: "technical" | "accounting" | "billing" | "other"
+      ticket_priority: "low" | "medium" | "high"
+      ticket_status:
+        | "open"
+        | "in_progress"
+        | "waiting_user"
+        | "resolved"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3657,6 +3780,15 @@ export const Constants = {
         "contador_senior",
         "auxiliar_contable",
         "cliente",
+      ],
+      ticket_category: ["technical", "accounting", "billing", "other"],
+      ticket_priority: ["low", "medium", "high"],
+      ticket_status: [
+        "open",
+        "in_progress",
+        "waiting_user",
+        "resolved",
+        "closed",
       ],
     },
   },
