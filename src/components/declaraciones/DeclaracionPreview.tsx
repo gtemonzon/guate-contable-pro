@@ -5,13 +5,15 @@ import { Copy, Check, Info } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { ISOCalculo, IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
 
 interface DeclaracionPreviewProps {
   formType: TaxFormType;
   ivaGeneral?: IVAGeneralCalculo;
   ivaPequeno?: IVAPequenoCalculo;
   isrMensual?: ISRMensualCalculo;
+  isoCalculo?: ISOCalculo;
   month: number;
   year: number;
   creditoRemanente?: number;
@@ -35,12 +37,12 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-function CopyButton({ value }: { value: number }) {
+function CopyButton({ value, copyText }: { value: number; copyText?: string }) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(value.toFixed(2));
+    await navigator.clipboard.writeText(copyText ?? value.toFixed(2));
     setCopied(true);
     toast({ title: "Copiado", description: `${formatCurrency(value)} copiado al portapapeles` });
     setTimeout(() => setCopied(false), 2000);
@@ -84,6 +86,7 @@ export function DeclaracionPreview({
   ivaGeneral, 
   ivaPequeno, 
   isrMensual, 
+  isoCalculo,
   month, 
   year,
   creditoRemanente = 0,
@@ -313,7 +316,10 @@ export function DeclaracionPreview({
             <CasillaRow label="Total Ingresos del Mes" value={ivaPequeno.totalIngresos} />
             <div className="flex items-center justify-between py-2 border-b border-border/50">
               <span className="text-sm">Tasa de Impuesto</span>
-              <span className="font-mono font-medium">{ivaPequeno.tasaImpuesto}%</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-medium">{ivaPequeno.tasaImpuesto}%</span>
+                <CopyButton value={ivaPequeno.tasaImpuesto} copyText={`${ivaPequeno.tasaImpuesto}%`} />
+              </div>
             </div>
           </div>
 
@@ -415,6 +421,45 @@ export function DeclaracionPreview({
           {/* Resultado */}
           <div className="pt-4 border-t">
             <TotalRow label="ISR A PAGAR" value={isrMensual.isrAPagar} isHighlight />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (formType === 'ISO_TRIMESTRAL' && isoCalculo) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>ISO Trimestral</span>
+            <span className="text-sm font-normal text-muted-foreground">Período: {periodLabel}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Alert className="border-primary/30 bg-primary/5">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              El formulario ISO de {isoCalculo.anioAplicacion} usa la información final de {isoCalculo.anioBase}.
+            </AlertDescription>
+          </Alert>
+
+          <div className="bg-muted/30 rounded-lg p-3">
+            <CasillaRow label={`Ingresos Netos ${isoCalculo.anioBase}`} value={isoCalculo.ingresosBrutosAnioAnterior} />
+            <CasillaRow label={`Compras Netas ${isoCalculo.anioBase}`} value={isoCalculo.comprasAnioAnterior} />
+            <CasillaRow label="Base Imponible Anual" value={isoCalculo.baseImponibleAnual} />
+            <CasillaRow label="Base Trimestral" value={isoCalculo.baseTrimestral} />
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <span className="text-sm">Tasa ISO</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-medium">{isoCalculo.tasaImpuesto}%</span>
+                <CopyButton value={isoCalculo.tasaImpuesto} copyText={`${isoCalculo.tasaImpuesto}%`} />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t">
+            <TotalRow label="ISO A PAGAR (TRIMESTRE)" value={isoCalculo.impuestoTrimestral} isHighlight />
           </div>
         </CardContent>
       </Card>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 
-export type TaxFormType = 'IVA_PEQUENO' | 'IVA_GENERAL' | 'ISR_MENSUAL' | 'ISR_TRIMESTRAL';
+export type TaxFormType = 'IVA_PEQUENO' | 'IVA_GENERAL' | 'ISR_MENSUAL' | 'ISR_TRIMESTRAL' | 'ISO_TRIMESTRAL';
 
 export interface TaxConfig {
   id: number;
@@ -97,6 +97,17 @@ export interface ISRMensualCalculo {
   isrAPagar: number; // ISR neto a pagar
 }
 
+export interface ISOCalculo {
+  anioBase: number;
+  anioAplicacion: number;
+  ingresosBrutosAnioAnterior: number;
+  comprasAnioAnterior: number;
+  baseImponibleAnual: number;
+  baseTrimestral: number;
+  tasaImpuesto: number;
+  impuestoTrimestral: number;
+}
+
 export function useDeclaracionCalculo(
   enterpriseId: number | null, 
   month: number, 
@@ -112,6 +123,8 @@ export function useDeclaracionCalculo(
   const [taxConfigs, setTaxConfigs] = useState<TaxConfig[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creditoRemanenteSugerido, setCreditoRemanenteSugerido] = useState<number>(0);
+  const [ingresosAnioAnterior, setIngresosAnioAnterior] = useState<number>(0);
+  const [comprasAnioAnterior, setComprasAnioAnterior] = useState<number>(0);
 
   // Fetch FEL document types
   useEffect(() => {
@@ -172,6 +185,32 @@ export function useDeclaracionCalculo(
       
       const purchasesData = await fetchAllRecords<PurchaseRecord>(purchasesQuery);
       setPurchases(purchasesData);
+
+      // Fetch yearly totals from previous year for ISO reference
+      const previousYear = year - 1;
+      const previousYearStart = `${previousYear}-01-01`;
+      const previousYearEnd = `${previousYear}-12-31`;
+
+      const [salesPrevYearRes, purchasesPrevYearRes] = await Promise.all([
+        supabase
+          .from("tab_sales_ledger")
+          .select("net_amount")
+          .eq("enterprise_id", enterpriseId)
+          .eq("is_annulled", false)
+          .gte("invoice_date", previousYearStart)
+          .lte("invoice_date", previousYearEnd),
+        supabase
+          .from("tab_purchase_ledger")
+          .select("net_amount")
+          .eq("enterprise_id", enterpriseId)
+          .gte("invoice_date", previousYearStart)
+          .lte("invoice_date", previousYearEnd),
+      ]);
+
+      const ingresosPrevYear = (salesPrevYearRes.data || []).reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
+      const comprasPrevYear = (purchasesPrevYearRes.data || []).reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
+      setIngresosAnioAnterior(ingresosPrevYear);
+      setComprasAnioAnterior(comprasPrevYear);
 
       // Calculate suggested crédito remanente from previous month
       await calcularCreditoRemanenteSugerido();
@@ -481,6 +520,27 @@ export function useDeclaracionCalculo(
     };
   }, [sales, felDocTypes, retencionISRInput]);
 
+  // Calculate ISO trimestral using final information from previous year
+  const isoCalculo = useMemo((): ISOCalculo => {
+    const previousYear = year - 1;
+    const tasaImpuesto = taxConfigs.find(c => c.tax_form_type === 'ISO_TRIMESTRAL')?.tax_rate ?? 1;
+
+    const baseImponibleAnual = Math.max(0, ingresosAnioAnterior - comprasAnioAnterior);
+    const baseTrimestral = baseImponibleAnual / 4;
+    const impuestoTrimestral = baseTrimestral * (tasaImpuesto / 100);
+
+    return {
+      anioBase: previousYear,
+      anioAplicacion: year,
+      ingresosBrutosAnioAnterior: Math.round(ingresosAnioAnterior),
+      comprasAnioAnterior: Math.round(comprasAnioAnterior),
+      baseImponibleAnual: Math.round(baseImponibleAnual),
+      baseTrimestral: Math.round(baseTrimestral),
+      tasaImpuesto,
+      impuestoTrimestral: Math.round(impuestoTrimestral),
+    };
+  }, [year, taxConfigs, ingresosAnioAnterior, comprasAnioAnterior]);
+
   return {
     loading,
     error,
@@ -490,6 +550,7 @@ export function useDeclaracionCalculo(
     ivaGeneralCalculo,
     ivaPequenoCalculo,
     isrMensualCalculo,
+    isoCalculo,
     creditoRemanenteSugerido,
     fetchData,
   };
