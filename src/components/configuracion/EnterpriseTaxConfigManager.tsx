@@ -22,6 +22,7 @@ const TAX_FORM_OPTIONS: { value: TaxFormType; label: string; defaultRate: number
   { value: 'IVA_GENERAL', label: 'IVA Régimen General (SAT-2237)', defaultRate: 12 },
   { value: 'ISR_MENSUAL', label: 'ISR Opción Mensual (SAT-1311)', defaultRate: 5 },
   { value: 'ISR_TRIMESTRAL', label: 'ISR Trimestral (SAT-1341)', defaultRate: 25 },
+  { value: 'ISO_TRIMESTRAL', label: 'ISO Trimestral', defaultRate: 1 },
 ];
 
 export function EnterpriseTaxConfigManager() {

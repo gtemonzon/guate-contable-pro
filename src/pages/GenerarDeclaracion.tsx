@@ -48,6 +48,7 @@ export default function GenerarDeclaracion() {
     ivaGeneralCalculo,
     ivaPequenoCalculo,
     isrMensualCalculo,
+    isoCalculo,
     creditoRemanenteSugerido,
     fetchData,
   } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR);
@@ -104,6 +105,7 @@ export default function GenerarDeclaracion() {
       'IVA_GENERAL': 'SAT-2237 IVA Régimen General',
       'ISR_MENSUAL': 'SAT-1311 ISR Opción Mensual',
       'ISR_TRIMESTRAL': 'SAT-1341 ISR Trimestral',
+      'ISO_TRIMESTRAL': 'ISO Trimestral',
     };
     return labels[type] || type;
   };
@@ -205,6 +207,7 @@ export default function GenerarDeclaracion() {
                       <SelectItem value="IVA_GENERAL">SAT-2237 IVA Régimen General</SelectItem>
                       <SelectItem value="IVA_PEQUENO">SAT-2046 IVA Pequeño Contribuyente</SelectItem>
                       <SelectItem value="ISR_MENSUAL">SAT-1311 ISR Opción Mensual</SelectItem>
+                      <SelectItem value="ISO_TRIMESTRAL">ISO Trimestral</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -253,6 +256,7 @@ export default function GenerarDeclaracion() {
           ivaGeneral={ivaGeneralCalculo}
           ivaPequeno={ivaPequenoCalculo}
           isrMensual={isrMensualCalculo}
+          isoCalculo={isoCalculo}
           month={selectedMonth}
           year={selectedYear}
           creditoRemanente={creditoRemanente}
