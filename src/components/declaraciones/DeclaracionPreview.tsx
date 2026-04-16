@@ -562,6 +562,17 @@ export function DeclaracionPreview({
             </div>
           </div>
 
+          {/* Costos y Gastos Acumulados (para casilla SAT) */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Costos y Gastos Acumulados (SAT)</h4>
+            <div className="bg-primary/5 rounded-lg p-3 border border-primary/20">
+              <CasillaRow
+                label="(-) Costos y gastos acumulados (Costo de Ventas + Gastos de Operación)"
+                value={isrTrimestral.costoVentas + isrTrimestral.gastosOperacion}
+              />
+            </div>
+          </div>
+
           {/* Otros Valores */}
           <div>
             <div className="flex items-center justify-between mb-2">
