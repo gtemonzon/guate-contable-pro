@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Loader2, Calculator, AlertCircle } from "lucide-react";
-import { useDeclaracionCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
+import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -37,6 +37,9 @@ export default function GenerarDeclaracion() {
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
   const [exencionIVA, setExencionIVA] = useState<number>(0);
   const [retencionISR, setRetencionISR] = useState<number>(0);
+  const [inventarioFinalEstimado, setInventarioFinalEstimado] = useState<number>(0);
+  const [otrosValores, setOtrosValores] = useState<OtroValorISR[]>([]);
+  const [isrPagadoAnterior, setIsrPagadoAnterior] = useState<number>(0);
   const [periodYears, setPeriodYears] = useState<number[]>([]);
 
   const {
@@ -49,9 +52,14 @@ export default function GenerarDeclaracion() {
     ivaPequenoCalculo,
     isrMensualCalculo,
     isoCalculo,
+    isrTrimestralCalculo,
     creditoRemanenteSugerido,
     fetchData,
-  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR);
+  } = useDeclaracionCalculo(
+    enterpriseId, selectedMonth, selectedYear,
+    creditoRemanente, exencionIVA, retencionISR,
+    inventarioFinalEstimado, otrosValores, isrPagadoAnterior
+  );
 
   // Load active enterprise
   useEffect(() => {
@@ -257,6 +265,7 @@ export default function GenerarDeclaracion() {
           ivaPequeno={ivaPequenoCalculo}
           isrMensual={isrMensualCalculo}
           isoCalculo={isoCalculo}
+          isrTrimestral={isrTrimestralCalculo}
           month={selectedMonth}
           year={selectedYear}
           creditoRemanente={creditoRemanente}
@@ -266,6 +275,12 @@ export default function GenerarDeclaracion() {
           onExencionIVAChange={setExencionIVA}
           retencionISR={retencionISR}
           onRetencionISRChange={setRetencionISR}
+          inventarioFinalEstimado={inventarioFinalEstimado}
+          onInventarioFinalEstimadoChange={setInventarioFinalEstimado}
+          otrosValores={otrosValores}
+          onOtrosValoresChange={setOtrosValores}
+          isrPagadoAnterior={isrPagadoAnterior}
+          onIsrPagadoAnteriorChange={setIsrPagadoAnterior}
         />
       )}
 

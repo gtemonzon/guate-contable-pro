@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Check, Info } from "lucide-react";
+import { Copy, Check, Info, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { ISOCalculo, IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ISOCalculo, IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, ISRTrimestralCalculo, OtroValorISR, TaxFormType } from "@/hooks/useDeclaracionCalculo";
 
 interface DeclaracionPreviewProps {
   formType: TaxFormType;
@@ -14,6 +15,7 @@ interface DeclaracionPreviewProps {
   ivaPequeno?: IVAPequenoCalculo;
   isrMensual?: ISRMensualCalculo;
   isoCalculo?: ISOCalculo;
+  isrTrimestral?: ISRTrimestralCalculo;
   month: number;
   year: number;
   creditoRemanente?: number;
@@ -23,6 +25,13 @@ interface DeclaracionPreviewProps {
   onExencionIVAChange?: (value: number) => void;
   retencionISR?: number;
   onRetencionISRChange?: (value: number) => void;
+  // ISR Trimestral inputs
+  inventarioFinalEstimado?: number;
+  onInventarioFinalEstimadoChange?: (value: number) => void;
+  otrosValores?: OtroValorISR[];
+  onOtrosValoresChange?: (values: OtroValorISR[]) => void;
+  isrPagadoAnterior?: number;
+  onIsrPagadoAnteriorChange?: (value: number) => void;
 }
 
 const MONTHS = [
@@ -87,6 +96,7 @@ export function DeclaracionPreview({
   ivaPequeno, 
   isrMensual, 
   isoCalculo,
+  isrTrimestral,
   month, 
   year,
   creditoRemanente = 0,
@@ -95,7 +105,13 @@ export function DeclaracionPreview({
   exencionIVA = 0,
   onExencionIVAChange,
   retencionISR = 0,
-  onRetencionISRChange
+  onRetencionISRChange,
+  inventarioFinalEstimado = 0,
+  onInventarioFinalEstimadoChange,
+  otrosValores = [],
+  onOtrosValoresChange,
+  isrPagadoAnterior = 0,
+  onIsrPagadoAnteriorChange,
 }: DeclaracionPreviewProps) {
   const { toast } = useToast();
   const periodLabel = `${MONTHS[month - 1]} ${year}`;
@@ -460,6 +476,177 @@ export function DeclaracionPreview({
 
           <div className="pt-4 border-t">
             <TotalRow label="ISO A PAGAR (TRIMESTRE)" value={isoCalculo.impuestoTrimestral} isHighlight />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (formType === 'ISR_TRIMESTRAL' && isrTrimestral) {
+    const addOtroValor = () => {
+      const newItem: OtroValorISR = {
+        id: `otro-${Date.now()}`,
+        label: '',
+        amount: 0,
+        sign: 1,
+      };
+      onOtrosValoresChange?.([...otrosValores, newItem]);
+    };
+    const updateOtroValor = (id: string, patch: Partial<OtroValorISR>) => {
+      onOtrosValoresChange?.(otrosValores.map(o => o.id === id ? { ...o, ...patch } : o));
+    };
+    const removeOtroValor = (id: string) => {
+      onOtrosValoresChange?.(otrosValores.filter(o => o.id !== id));
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>SAT-1341 ISR Trimestral</span>
+            <span className="text-sm font-normal text-muted-foreground">
+              Trimestre {isrTrimestral.trimestreLabel} · {year}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <Alert className="border-amber-500/40 bg-amber-500/5">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-sm">
+              <strong>Cálculo preliminar acumulado</strong> del {isrTrimestral.fechaInicio} al {isrTrimestral.fechaFin}.
+              Los valores se obtienen directamente de la contabilidad. El <strong>Inventario Final</strong> es estimado
+              (sin registro contable) — sirve únicamente como referencia para el contador.
+            </AlertDescription>
+          </Alert>
+
+          {/* Ingresos */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Ingresos</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <CasillaRow label="Ingresos del período (cuentas tipo Ingreso)" value={isrTrimestral.ingresos} />
+            </div>
+          </div>
+
+          {/* Costo de Ventas */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Costo de Ventas (estimado)</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <CasillaRow label="Inventario Inicial (saldo al 01/01)" value={isrTrimestral.inventarioInicial} />
+              <CasillaRow label="(+) Compras del período" value={isrTrimestral.comprasPeriodo} />
+              <div className="flex items-center justify-between py-2 border-b border-border/50">
+                <span className="text-sm">(-) Inventario Final estimado</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={inventarioFinalEstimado}
+                    onChange={(e) => onInventarioFinalEstimadoChange?.(parseFloat(e.target.value) || 0)}
+                    className="w-32 text-right font-mono h-8"
+                    placeholder="0.00"
+                  />
+                  <CopyButton value={inventarioFinalEstimado} />
+                </div>
+              </div>
+              <div className="border-t border-border mt-2 pt-2">
+                <CasillaRow label="(=) Costo de Ventas" value={isrTrimestral.costoVentas} />
+              </div>
+            </div>
+          </div>
+
+          {/* Gastos de Operación */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Gastos de Operación</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <CasillaRow label="Gastos de Operación (cuentas tipo Gasto)" value={isrTrimestral.gastosOperacion} />
+            </div>
+          </div>
+
+          {/* Otros Valores */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Otros Valores</h4>
+              <Button variant="outline" size="sm" onClick={addOtroValor} className="h-7 gap-1">
+                <Plus className="h-3 w-3" /> Agregar
+              </Button>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3 space-y-2">
+              {otrosValores.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Sin valores adicionales. Agrega otros ingresos (+) u otros gastos (-) si aplica.
+                </p>
+              ) : (
+                otrosValores.map((o) => (
+                  <div key={o.id} className="flex items-center gap-2">
+                    <Select value={String(o.sign)} onValueChange={(v) => updateOtroValor(o.id, { sign: Number(v) as 1 | -1 })}>
+                      <SelectTrigger className="w-20 h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">(+)</SelectItem>
+                        <SelectItem value="-1">(-)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder="Concepto"
+                      value={o.label}
+                      onChange={(e) => updateOtroValor(o.id, { label: e.target.value })}
+                      className="flex-1 h-8"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={o.amount}
+                      onChange={(e) => updateOtroValor(o.id, { amount: parseFloat(e.target.value) || 0 })}
+                      className="w-32 text-right font-mono h-8"
+                      placeholder="0.00"
+                    />
+                    <CopyButton value={o.amount} />
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeOtroValor(o.id)}>
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </div>
+                ))
+              )}
+              {otrosValores.length > 0 && (
+                <div className="border-t border-border mt-2 pt-2">
+                  <CasillaRow label="Neto Otros Valores" value={isrTrimestral.otrosNeto} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Resultado */}
+          <div className="pt-4 border-t space-y-3">
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resultado</h4>
+            <CasillaRow label="Renta Imponible (Ingresos - Costo - Gastos +/- Otros)" value={isrTrimestral.rentaImponible} />
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <span className="text-sm">Tasa ISR</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-medium">{isrTrimestral.tasaImpuesto}%</span>
+                <CopyButton value={isrTrimestral.tasaImpuesto} copyText={`${isrTrimestral.tasaImpuesto}%`} />
+              </div>
+            </div>
+            <CasillaRow label="ISR Calculado" value={isrTrimestral.isrCalculado} />
+
+            {/* ISR pagado en trimestres anteriores */}
+            <div className="flex items-center justify-between py-2 border-b border-border/50">
+              <span className="text-sm">(-) ISR pagado en trimestres anteriores</span>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={isrPagadoAnterior}
+                  onChange={(e) => onIsrPagadoAnteriorChange?.(parseFloat(e.target.value) || 0)}
+                  className="w-32 text-right font-mono h-8"
+                  placeholder="0.00"
+                />
+                <CopyButton value={isrPagadoAnterior} />
+              </div>
+            </div>
+
+            <TotalRow label="ISR A PAGAR (TRIMESTRE)" value={isrTrimestral.isrAPagar} isHighlight />
           </div>
         </CardContent>
       </Card>

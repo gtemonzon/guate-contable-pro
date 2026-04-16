@@ -108,13 +108,43 @@ export interface ISOCalculo {
   impuestoTrimestral: number;
 }
 
+export interface OtroValorISR {
+  id: string;
+  label: string;
+  amount: number;
+  sign: 1 | -1; // +1 suma (otro ingreso), -1 resta (otro gasto)
+}
+
+export interface ISRTrimestralCalculo {
+  trimestre: number; // 1..4
+  trimestreLabel: string; // "1 (enero a marzo)"
+  fechaInicio: string;
+  fechaFin: string;
+  // Datos contables acumulados año a la fecha
+  ingresos: number; // de cuentas tipo "ingreso"
+  inventarioInicial: number; // saldo cuenta inventario al 01-ene
+  comprasPeriodo: number; // movimiento débito - crédito de cuenta compras
+  inventarioFinalEstimado: number; // input usuario
+  costoVentas: number; // inv inicial + compras - inv final estimado
+  gastosOperacion: number; // de cuentas tipo "gasto" (excluye 5.x compras si están como gasto)
+  otrosNeto: number; // suma neta de otros valores
+  rentaImponible: number; // ingresos - costo - gastos + otros
+  isrCalculado: number; // rentaImponible * tasa
+  isrPagadoAnterior: number; // input usuario
+  isrAPagar: number; // isrCalculado - isrPagadoAnterior
+  tasaImpuesto: number;
+}
+
 export function useDeclaracionCalculo(
   enterpriseId: number | null, 
   month: number, 
   year: number,
   creditoRemanenteInput: number = 0,
   exencionIVAInput: number = 0,
-  retencionISRInput: number = 0
+  retencionISRInput: number = 0,
+  inventarioFinalEstimadoInput: number = 0,
+  otrosValoresInput: OtroValorISR[] = [],
+  isrPagadoAnteriorInput: number = 0,
 ) {
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
@@ -125,6 +155,12 @@ export function useDeclaracionCalculo(
   const [creditoRemanenteSugerido, setCreditoRemanenteSugerido] = useState<number>(0);
   const [ingresosAnioAnterior, setIngresosAnioAnterior] = useState<number>(0);
   const [comprasAnioAnterior, setComprasAnioAnterior] = useState<number>(0);
+  const [isrTrimContable, setIsrTrimContable] = useState<{
+    ingresos: number;
+    inventarioInicial: number;
+    comprasPeriodo: number;
+    gastosOperacion: number;
+  }>({ ingresos: 0, inventarioInicial: 0, comprasPeriodo: 0, gastosOperacion: 0 });
 
   // Fetch FEL document types
   useEffect(() => {
@@ -215,6 +251,9 @@ export function useDeclaracionCalculo(
       // Calculate suggested crédito remanente from previous month
       await calcularCreditoRemanenteSugerido();
 
+      // Calculate accounting data for ISR Trimestral (acumulado año a la fecha hasta fin del trimestre)
+      await calcularDatosContablesISRTrimestral();
+
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -286,7 +325,128 @@ export function useDeclaracionCalculo(
     }
   };
 
-  // Get affects_total multiplier for a document type
+  // Calculate quarterly accumulated accounting data for ISR Trimestral (SAT-1341)
+  // Pulls from accounting (no fiscal ledgers): income accounts, purchases account,
+  // inventory account opening balance, expense accounts (gastos de operación).
+  const calcularDatosContablesISRTrimestral = async () => {
+    if (!enterpriseId) return;
+    try {
+      const trimestre = Math.ceil(month / 3);
+      const monthEnd = trimestre * 3; // 3, 6, 9, 12
+      const yearStart = `${year}-01-01`;
+      const periodEnd = new Date(year, monthEnd, 0).toISOString().split('T')[0];
+
+      // Get enterprise config (inventory + purchases accounts)
+      const { data: configData } = await supabase
+        .from("tab_enterprise_config")
+        .select("inventory_account_id, purchases_account_id")
+        .eq("enterprise_id", enterpriseId)
+        .maybeSingle();
+
+      // Get all movement-allowing accounts of types: ingreso, gasto
+      const { data: accountsData } = await supabase
+        .from("tab_accounts")
+        .select("id, account_type, account_code")
+        .eq("enterprise_id", enterpriseId)
+        .eq("allows_movement", true)
+        .in("account_type", ["ingreso", "gasto"]);
+
+      const ingresoIds = (accountsData || []).filter(a => a.account_type === "ingreso").map(a => a.id);
+      // Gastos de operación: tipo 'gasto' EXCLUYENDO la cuenta de compras (que va al costo de ventas)
+      const purchasesAccId = configData?.purchases_account_id ?? null;
+      const gastoIds = (accountsData || [])
+        .filter(a => a.account_type === "gasto" && a.id !== purchasesAccId)
+        .map(a => a.id);
+      const inventoryId = configData?.inventory_account_id ?? null;
+
+      // Helper: get sum of (credit-debit) or (debit-credit) for a set of account ids in date range
+      const sumAccountsInRange = async (
+        accountIds: number[],
+        startDate: string,
+        endDate: string,
+        nature: 'debit' | 'credit'
+      ): Promise<number> => {
+        if (accountIds.length === 0) return 0;
+        const entries = await fetchAllRecords(
+          supabase
+            .from("tab_journal_entries")
+            .select("id")
+            .eq("enterprise_id", enterpriseId)
+            .eq("is_posted", true)
+            .is("deleted_at", null)
+            .gte("entry_date", startDate)
+            .lte("entry_date", endDate)
+        );
+        if (!entries || entries.length === 0) return 0;
+        const entryIds = entries.map((e: any) => e.id);
+        let total = 0;
+        const batchSize = 100;
+        for (let i = 0; i < entryIds.length; i += batchSize) {
+          const batch = entryIds.slice(i, i + batchSize);
+          const { data: details } = await supabase
+            .from("tab_journal_entry_details")
+            .select("debit_amount, credit_amount, account_id")
+            .is("deleted_at", null)
+            .in("account_id", accountIds)
+            .in("journal_entry_id", batch);
+          (details || []).forEach((d: any) => {
+            const dr = Number(d.debit_amount) || 0;
+            const cr = Number(d.credit_amount) || 0;
+            total += nature === 'credit' ? (cr - dr) : (dr - cr);
+          });
+        }
+        return Math.round(total * 100) / 100;
+      };
+
+      // Helper: balance of account up to (excluding) a date — used for inventario inicial
+      const balanceUpTo = async (accountId: number, endDateExclusive: string): Promise<number> => {
+        const entries = await fetchAllRecords(
+          supabase
+            .from("tab_journal_entries")
+            .select("id")
+            .eq("enterprise_id", enterpriseId)
+            .eq("is_posted", true)
+            .is("deleted_at", null)
+            .lt("entry_date", endDateExclusive)
+        );
+        if (!entries || entries.length === 0) return 0;
+        const entryIds = entries.map((e: any) => e.id);
+        let total = 0;
+        const batchSize = 100;
+        for (let i = 0; i < entryIds.length; i += batchSize) {
+          const batch = entryIds.slice(i, i + batchSize);
+          const { data: details } = await supabase
+            .from("tab_journal_entry_details")
+            .select("debit_amount, credit_amount")
+            .is("deleted_at", null)
+            .eq("account_id", accountId)
+            .in("journal_entry_id", batch);
+          (details || []).forEach((d: any) => {
+            total += (Number(d.debit_amount) || 0) - (Number(d.credit_amount) || 0);
+          });
+        }
+        return Math.round(total * 100) / 100;
+      };
+
+      const [ingresos, gastos, compras, invInicial] = await Promise.all([
+        sumAccountsInRange(ingresoIds, yearStart, periodEnd, 'credit'),
+        sumAccountsInRange(gastoIds, yearStart, periodEnd, 'debit'),
+        purchasesAccId ? sumAccountsInRange([purchasesAccId], yearStart, periodEnd, 'debit') : Promise.resolve(0),
+        inventoryId ? balanceUpTo(inventoryId, yearStart) : Promise.resolve(0),
+      ]);
+
+      setIsrTrimContable({
+        ingresos: Math.max(0, ingresos),
+        inventarioInicial: Math.max(0, invInicial),
+        comprasPeriodo: Math.max(0, compras),
+        gastosOperacion: Math.max(0, gastos),
+      });
+    } catch (err) {
+      console.error("Error calculating ISR Trimestral accounting data:", err);
+      setIsrTrimContable({ ingresos: 0, inventarioInicial: 0, comprasPeriodo: 0, gastosOperacion: 0 });
+    }
+  };
+
   const getMultiplier = (docType: string): number => {
     const found = felDocTypes.find(d => d.code === docType);
     return found?.affects_total ?? 1;
@@ -541,6 +701,50 @@ export function useDeclaracionCalculo(
     };
   }, [year, taxConfigs, ingresosAnioAnterior, comprasAnioAnterior]);
 
+  // Calculate ISR Trimestral (SAT-1341) — accumulated year-to-date through end of selected quarter
+  const isrTrimestralCalculo = useMemo((): ISRTrimestralCalculo => {
+    const trimestre = Math.ceil(month / 3);
+    const monthEnd = trimestre * 3;
+    const trimestreLabels: Record<number, string> = {
+      1: '1 (enero a marzo)',
+      2: '2 (abril a junio)',
+      3: '3 (julio a septiembre)',
+      4: '4 (octubre a diciembre)',
+    };
+    const fechaInicio = `${year}-01-01`;
+    const fechaFin = new Date(year, monthEnd, 0).toISOString().split('T')[0];
+
+    const config = taxConfigs.find(c => c.tax_form_type === 'ISR_TRIMESTRAL');
+    const tasaImpuesto = config?.tax_rate ?? 25; // Default 25% régimen sobre utilidades
+
+    const { ingresos, inventarioInicial, comprasPeriodo, gastosOperacion } = isrTrimContable;
+    const costoVentas = Math.max(0, inventarioInicial + comprasPeriodo - inventarioFinalEstimadoInput);
+    const otrosNeto = otrosValoresInput.reduce((sum, o) => sum + o.sign * (Number(o.amount) || 0), 0);
+    const rentaImponible = ingresos - costoVentas - gastosOperacion + otrosNeto;
+    const isrCalculado = Math.max(0, rentaImponible) * (tasaImpuesto / 100);
+    const isrAPagar = Math.max(0, isrCalculado - isrPagadoAnteriorInput);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      trimestre,
+      trimestreLabel: trimestreLabels[trimestre] || `${trimestre}`,
+      fechaInicio,
+      fechaFin,
+      ingresos: round2(ingresos),
+      inventarioInicial: round2(inventarioInicial),
+      comprasPeriodo: round2(comprasPeriodo),
+      inventarioFinalEstimado: round2(inventarioFinalEstimadoInput),
+      costoVentas: round2(costoVentas),
+      gastosOperacion: round2(gastosOperacion),
+      otrosNeto: round2(otrosNeto),
+      rentaImponible: round2(rentaImponible),
+      isrCalculado: round2(isrCalculado),
+      isrPagadoAnterior: round2(isrPagadoAnteriorInput),
+      isrAPagar: round2(isrAPagar),
+      tasaImpuesto,
+    };
+  }, [month, year, taxConfigs, isrTrimContable, inventarioFinalEstimadoInput, otrosValoresInput, isrPagadoAnteriorInput]);
+
   return {
     loading,
     error,
@@ -551,6 +755,7 @@ export function useDeclaracionCalculo(
     ivaPequenoCalculo,
     isrMensualCalculo,
     isoCalculo,
+    isrTrimestralCalculo,
     creditoRemanenteSugerido,
     fetchData,
   };
