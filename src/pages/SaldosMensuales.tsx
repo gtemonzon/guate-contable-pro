@@ -346,29 +346,48 @@ export default function SaldosMensuales() {
         });
       });
 
-      // Calculate current period balances
+      // Calculate current period balances + per-month breakdown
       const currentBalances: Record<number, { debit: number; credit: number }> = {};
+      const monthlyBreakdown: Record<number, Record<number, { debit: number; credit: number }>> = {};
+
       entries?.forEach((entry: any) => {
+        const month = new Date(entry.entry_date + "T00:00:00").getMonth() + 1;
         entry.tab_journal_entry_details?.forEach((detail: any) => {
           if (!currentBalances[detail.account_id]) {
             currentBalances[detail.account_id] = { debit: 0, credit: 0 };
           }
           currentBalances[detail.account_id].debit += detail.debit_amount || 0;
           currentBalances[detail.account_id].credit += detail.credit_amount || 0;
+
+          if (!monthlyBreakdown[detail.account_id]) {
+            monthlyBreakdown[detail.account_id] = {};
+          }
+          if (!monthlyBreakdown[detail.account_id][month]) {
+            monthlyBreakdown[detail.account_id][month] = { debit: 0, credit: 0 };
+          }
+          monthlyBreakdown[detail.account_id][month].debit += detail.debit_amount || 0;
+          monthlyBreakdown[detail.account_id][month].credit += detail.credit_amount || 0;
         });
       });
 
-      // Create account map
+      // Create account map (include monthly breakdown so it propagates up the tree)
       const accountMap: Record<number, any> = {};
       accountsToQuery.forEach((account: any) => {
         const prevBal = previousBalances[account.id] || { debit: 0, credit: 0 };
         const currBal = currentBalances[account.id] || { debit: 0, credit: 0 };
+        const monthly: Record<number, { debit: number; credit: number }> = {};
+        // initialize monthly buckets for all selected months (so parents always have keys)
+        selectedMonths.forEach((m) => {
+          const src = monthlyBreakdown[account.id]?.[m];
+          monthly[m] = { debit: src?.debit ?? 0, credit: src?.credit ?? 0 };
+        });
         accountMap[account.id] = {
           ...account,
           prev_debit: prevBal.debit,
           prev_credit: prevBal.credit,
           debit: currBal.debit,
           credit: currBal.credit,
+          monthly,
         };
       });
 
