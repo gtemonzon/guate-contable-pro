@@ -74,6 +74,10 @@ function TreeNode({
   const movementColSpan = showMonthlyDetail ? Math.max(1, months.length) : 1;
   // Use a 12 + N grid where N = extra months when expanded
   const gridCols = showMonthlyDetail ? 12 + (months.length - 1) : 12;
+  // Minimum width so columns don't compress; triggers horizontal scroll instead.
+  const minTableWidth = showMonthlyDetail
+    ? `${800 + months.length * 90}px`
+    : "1100px";
 
   return (
     <div>
@@ -98,7 +102,7 @@ function TreeNode({
 
         <div
           className="flex-1 grid gap-4 items-center"
-          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, minWidth: minTableWidth }}
         >
           {/* Code */}
           <div className="col-span-1">
@@ -254,6 +258,9 @@ export function MonthlyBalanceTreeView({
   const effectiveExpand = canExpandMonths && showMonthlyDetail;
   const movementColSpan = effectiveExpand ? months.length : 1;
   const gridCols = effectiveExpand ? 12 + (months.length - 1) : 12;
+  const minTableWidth = effectiveExpand
+    ? `${800 + months.length * 90}px`
+    : "1100px";
 
   const buildTree = (parentId: number | null = null): MonthlyAccount[] => {
     return accounts
@@ -281,9 +288,10 @@ export function MonthlyBalanceTreeView({
 
   return (
     <div className="space-y-0 overflow-x-auto">
-      {/* Header - sticky with background to cover content below */}
+     <div style={{ minWidth: minTableWidth }}>
+      {/* Header */}
       <div
-        className="grid gap-4 py-3 px-3 bg-muted font-semibold text-sm border-b-2 sticky top-[120px] z-[5]"
+        className="grid gap-4 py-3 px-3 bg-muted font-semibold text-sm border-b-2"
         style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, paddingLeft: "2rem" }}
       >
         <div className="col-span-1 pl-8">Código</div>
@@ -343,6 +351,7 @@ export function MonthlyBalanceTreeView({
 
       {/* Tree */}
       {renderTree(null, 0)}
+     </div>
     </div>
   );
 }
