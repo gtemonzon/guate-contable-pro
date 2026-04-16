@@ -313,7 +313,7 @@ export default function GenerarDeclaracion() {
       )}
 
       {/* Resumen de datos */}
-      {hasGenerated && (
+      {hasGenerated && selectedFormType !== 'ISR_TRIMESTRAL' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2">

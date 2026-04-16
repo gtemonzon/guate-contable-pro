@@ -619,7 +619,17 @@ export function DeclaracionPreview({
           {/* Resultado */}
           <div className="pt-4 border-t space-y-3">
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Resultado</h4>
-            <CasillaRow label="Renta Imponible (Ingresos - Costo - Gastos +/- Otros)" value={isrTrimestral.rentaImponible} />
+            {isrTrimestral.rentaImponible < 0 ? (
+              <div className="flex items-center justify-between py-2 border-b border-border/50">
+                <span className="text-sm font-semibold text-destructive">Pérdida del Período (Ingresos - Costo - Gastos +/- Otros)</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-semibold text-destructive">{formatCurrency(isrTrimestral.rentaImponible)}</span>
+                  <CopyButton value={isrTrimestral.rentaImponible} />
+                </div>
+              </div>
+            ) : (
+              <CasillaRow label="Renta Imponible (Ingresos - Costo - Gastos +/- Otros)" value={isrTrimestral.rentaImponible} />
+            )}
             <div className="flex items-center justify-between py-2 border-b border-border/50">
               <span className="text-sm">Tasa ISR</span>
               <div className="flex items-center gap-2">
