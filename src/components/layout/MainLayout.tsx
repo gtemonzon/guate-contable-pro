@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { User, Session } from "@supabase/supabase-js";
-import { LogOut, ChevronDown, Building2 } from "lucide-react";
+import { LogOut, ChevronDown, Building2, Search, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +26,85 @@ import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenantFavicon } from "@/hooks/useTenantFavicon";
 import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 import { KeyboardShortcutsDialog } from "@/components/shortcuts/KeyboardShortcutsDialog";
+import { EnterpriseOption } from "@/contexts/EnterpriseContext";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+function EnterpriseSearchSelector({
+  enterprises,
+  selectedEnterpriseId,
+  switchEnterprise,
+  selectedEnterprise,
+}: {
+  enterprises: EnterpriseOption[];
+  selectedEnterpriseId: number | null;
+  switchEnterprise: (id: number) => void;
+  selectedEnterprise: EnterpriseOption | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return enterprises;
+    const q = search.toLowerCase();
+    return enterprises.filter(
+      (e) =>
+        e.business_name.toLowerCase().includes(q) ||
+        e.nit.toLowerCase().includes(q) ||
+        (e.trade_name && e.trade_name.toLowerCase().includes(q))
+    );
+  }, [enterprises, search]);
+
+  return (
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSearch(""); }}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="hidden md:flex items-center gap-1 max-w-[200px]">
+          <Building2 className="h-3 w-3 shrink-0" />
+          <span className="truncate text-xs">
+            {selectedEnterprise?.business_name ?? "Seleccionar empresa"}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <div className="p-2 border-b">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar empresa..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8 h-8 text-sm"
+              autoFocus
+            />
+          </div>
+        </div>
+        <ScrollArea className="max-h-[280px]">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Sin resultados</p>
+          ) : (
+            filtered.map((ent) => (
+              <button
+                key={ent.id}
+                onClick={() => { switchEnterprise(ent.id); setOpen(false); setSearch(""); }}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent transition-colors ${
+                  selectedEnterpriseId === ent.id ? "bg-accent" : ""
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium block truncate">{ent.business_name}</span>
+                  <span className="text-xs text-muted-foreground">{ent.nit}</span>
+                </div>
+                {selectedEnterpriseId === ent.id && (
+                  <Check className="h-4 w-4 text-primary shrink-0" />
+                )}
+              </button>
+            ))
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const MainLayout = () => {
   const navigate = useNavigate();
@@ -162,35 +243,12 @@ const MainLayout = () => {
 
             {/* Enterprise switcher — only show if user has >1 enterprise */}
             {enterprises.length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="hidden md:flex items-center gap-1 max-w-[200px]">
-                    <Building2 className="h-3 w-3 shrink-0" />
-                    <span className="truncate text-xs">
-                      {selectedEnterprise?.business_name ?? "Seleccionar empresa"}
-                    </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    Cambiar empresa
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {enterprises.map((ent) => (
-                    <DropdownMenuItem
-                      key={ent.id}
-                      onClick={() => switchEnterprise(ent.id)}
-                      className={selectedEnterpriseId === ent.id ? "bg-accent" : ""}
-                    >
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{ent.business_name}</span>
-                        <span className="text-xs text-muted-foreground">{ent.nit}</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <EnterpriseSearchSelector
+                enterprises={enterprises}
+                selectedEnterpriseId={selectedEnterpriseId}
+                switchEnterprise={switchEnterprise}
+                selectedEnterprise={selectedEnterprise}
+              />
             )}
 
             <div className="ml-auto flex items-center gap-3">
