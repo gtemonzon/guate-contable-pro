@@ -699,6 +699,8 @@ export default function SaldosMensuales() {
             <div className="space-y-4">
               <MonthlyBalanceTreeView 
                 accounts={monthlyAccounts} 
+                months={[...selectedMonths].sort((a, b) => a - b)}
+                monthLabels={MONTHS}
                 onViewDetails={handleViewDetails} 
               />
               
