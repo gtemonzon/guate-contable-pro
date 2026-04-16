@@ -255,9 +255,9 @@ export default function SaldosMensuales() {
       setQuerying(true);
       const periodId = parseInt(selectedPeriod);
       
-      // Always query the FULL chart of accounts so the tree shows all branches.
-      // The selectedAccounts filter is intentionally ignored for tree rendering
-      // (totals computed at the end already work correctly across the full tree).
+      // Always compute over the FULL chart of accounts so hierarchy aggregation works.
+      // We'll filter the displayed result later based on selectedAccounts (showing
+      // each selected account plus its full ancestor and descendant chain).
       const accountsToQuery = allAccounts;
 
       // Fetch movements within selected months (excluding opening entries)
