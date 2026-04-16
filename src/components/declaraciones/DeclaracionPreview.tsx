@@ -653,5 +653,11 @@ export function DeclaracionPreview({
     );
   }
 
+  return (
+    <Card>
+      <CardContent className="py-8 text-center text-muted-foreground">
+        Selecciona un tipo de formulario y genera el cálculo
+      </CardContent>
+    </Card>
   );
 }
