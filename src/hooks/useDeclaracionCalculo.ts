@@ -108,6 +108,33 @@ export interface ISOCalculo {
   impuestoTrimestral: number;
 }
 
+export interface OtroValorISR {
+  id: string;
+  label: string;
+  amount: number;
+  sign: 1 | -1; // +1 suma (otro ingreso), -1 resta (otro gasto)
+}
+
+export interface ISRTrimestralCalculo {
+  trimestre: number; // 1..4
+  trimestreLabel: string; // "1 (enero a marzo)"
+  fechaInicio: string;
+  fechaFin: string;
+  // Datos contables acumulados año a la fecha
+  ingresos: number; // de cuentas tipo "ingreso"
+  inventarioInicial: number; // saldo cuenta inventario al 01-ene
+  comprasPeriodo: number; // movimiento débito - crédito de cuenta compras
+  inventarioFinalEstimado: number; // input usuario
+  costoVentas: number; // inv inicial + compras - inv final estimado
+  gastosOperacion: number; // de cuentas tipo "gasto" (excluye 5.x compras si están como gasto)
+  otrosNeto: number; // suma neta de otros valores
+  rentaImponible: number; // ingresos - costo - gastos + otros
+  isrCalculado: number; // rentaImponible * tasa
+  isrPagadoAnterior: number; // input usuario
+  isrAPagar: number; // isrCalculado - isrPagadoAnterior
+  tasaImpuesto: number;
+}
+
 export function useDeclaracionCalculo(
   enterpriseId: number | null, 
   month: number, 
