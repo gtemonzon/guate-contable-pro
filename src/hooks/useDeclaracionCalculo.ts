@@ -701,6 +701,50 @@ export function useDeclaracionCalculo(
     };
   }, [year, taxConfigs, ingresosAnioAnterior, comprasAnioAnterior]);
 
+  // Calculate ISR Trimestral (SAT-1341) — accumulated year-to-date through end of selected quarter
+  const isrTrimestralCalculo = useMemo((): ISRTrimestralCalculo => {
+    const trimestre = Math.ceil(month / 3);
+    const monthEnd = trimestre * 3;
+    const trimestreLabels: Record<number, string> = {
+      1: '1 (enero a marzo)',
+      2: '2 (abril a junio)',
+      3: '3 (julio a septiembre)',
+      4: '4 (octubre a diciembre)',
+    };
+    const fechaInicio = `${year}-01-01`;
+    const fechaFin = new Date(year, monthEnd, 0).toISOString().split('T')[0];
+
+    const config = taxConfigs.find(c => c.tax_form_type === 'ISR_TRIMESTRAL');
+    const tasaImpuesto = config?.tax_rate ?? 25; // Default 25% régimen sobre utilidades
+
+    const { ingresos, inventarioInicial, comprasPeriodo, gastosOperacion } = isrTrimContable;
+    const costoVentas = Math.max(0, inventarioInicial + comprasPeriodo - inventarioFinalEstimadoInput);
+    const otrosNeto = otrosValoresInput.reduce((sum, o) => sum + o.sign * (Number(o.amount) || 0), 0);
+    const rentaImponible = ingresos - costoVentas - gastosOperacion + otrosNeto;
+    const isrCalculado = Math.max(0, rentaImponible) * (tasaImpuesto / 100);
+    const isrAPagar = Math.max(0, isrCalculado - isrPagadoAnteriorInput);
+
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      trimestre,
+      trimestreLabel: trimestreLabels[trimestre] || `${trimestre}`,
+      fechaInicio,
+      fechaFin,
+      ingresos: round2(ingresos),
+      inventarioInicial: round2(inventarioInicial),
+      comprasPeriodo: round2(comprasPeriodo),
+      inventarioFinalEstimado: round2(inventarioFinalEstimadoInput),
+      costoVentas: round2(costoVentas),
+      gastosOperacion: round2(gastosOperacion),
+      otrosNeto: round2(otrosNeto),
+      rentaImponible: round2(rentaImponible),
+      isrCalculado: round2(isrCalculado),
+      isrPagadoAnterior: round2(isrPagadoAnteriorInput),
+      isrAPagar: round2(isrAPagar),
+      tasaImpuesto,
+    };
+  }, [month, year, taxConfigs, isrTrimContable, inventarioFinalEstimadoInput, otrosValoresInput, isrPagadoAnteriorInput]);
+
   return {
     loading,
     error,
@@ -711,6 +755,7 @@ export function useDeclaracionCalculo(
     ivaPequenoCalculo,
     isrMensualCalculo,
     isoCalculo,
+    isrTrimestralCalculo,
     creditoRemanenteSugerido,
     fetchData,
   };
