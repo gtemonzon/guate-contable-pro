@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Check, Info } from "lucide-react";
+import { Copy, Check, Info, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { ISOCalculo, IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ISOCalculo, IVAGeneralCalculo, IVAPequenoCalculo, ISRMensualCalculo, ISRTrimestralCalculo, OtroValorISR, TaxFormType } from "@/hooks/useDeclaracionCalculo";
 
 interface DeclaracionPreviewProps {
   formType: TaxFormType;
@@ -14,6 +15,7 @@ interface DeclaracionPreviewProps {
   ivaPequeno?: IVAPequenoCalculo;
   isrMensual?: ISRMensualCalculo;
   isoCalculo?: ISOCalculo;
+  isrTrimestral?: ISRTrimestralCalculo;
   month: number;
   year: number;
   creditoRemanente?: number;
@@ -23,6 +25,13 @@ interface DeclaracionPreviewProps {
   onExencionIVAChange?: (value: number) => void;
   retencionISR?: number;
   onRetencionISRChange?: (value: number) => void;
+  // ISR Trimestral inputs
+  inventarioFinalEstimado?: number;
+  onInventarioFinalEstimadoChange?: (value: number) => void;
+  otrosValores?: OtroValorISR[];
+  onOtrosValoresChange?: (values: OtroValorISR[]) => void;
+  isrPagadoAnterior?: number;
+  onIsrPagadoAnteriorChange?: (value: number) => void;
 }
 
 const MONTHS = [
