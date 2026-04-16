@@ -164,35 +164,12 @@ const MainLayout = () => {
 
             {/* Enterprise switcher — only show if user has >1 enterprise */}
             {enterprises.length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="hidden md:flex items-center gap-1 max-w-[200px]">
-                    <Building2 className="h-3 w-3 shrink-0" />
-                    <span className="truncate text-xs">
-                      {selectedEnterprise?.business_name ?? "Seleccionar empresa"}
-                    </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    Cambiar empresa
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {enterprises.map((ent) => (
-                    <DropdownMenuItem
-                      key={ent.id}
-                      onClick={() => switchEnterprise(ent.id)}
-                      className={selectedEnterpriseId === ent.id ? "bg-accent" : ""}
-                    >
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{ent.business_name}</span>
-                        <span className="text-xs text-muted-foreground">{ent.nit}</span>
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <EnterpriseSearchSelector
+                enterprises={enterprises}
+                selectedEnterpriseId={selectedEnterpriseId}
+                switchEnterprise={switchEnterprise}
+                selectedEnterprise={selectedEnterprise}
+              />
             )}
 
             <div className="ml-auto flex items-center gap-3">
