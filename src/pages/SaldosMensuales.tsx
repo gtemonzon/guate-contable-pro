@@ -397,10 +397,16 @@ export default function SaldosMensuales() {
       sortedAccounts.forEach((account: any) => {
         const currentAccount = accountMap[account.id];
         if (account.parent_account_id && accountMap[account.parent_account_id]) {
-          accountMap[account.parent_account_id].prev_debit += currentAccount.prev_debit;
-          accountMap[account.parent_account_id].prev_credit += currentAccount.prev_credit;
-          accountMap[account.parent_account_id].debit += currentAccount.debit;
-          accountMap[account.parent_account_id].credit += currentAccount.credit;
+          const parent = accountMap[account.parent_account_id];
+          parent.prev_debit  += currentAccount.prev_debit;
+          parent.prev_credit += currentAccount.prev_credit;
+          parent.debit       += currentAccount.debit;
+          parent.credit      += currentAccount.credit;
+          // Propagate per-month buckets
+          selectedMonths.forEach((m) => {
+            parent.monthly[m].debit  += currentAccount.monthly[m].debit;
+            parent.monthly[m].credit += currentAccount.monthly[m].credit;
+          });
         }
       });
 
@@ -429,6 +435,19 @@ export default function SaldosMensuales() {
           final_balance = initial_balance - movement;
         }
 
+        // Build monthly_movements with net (signed by account nature)
+        const monthly_movements: Record<number, { debit: number; credit: number; net: number }> = {};
+        selectedMonths.forEach((m) => {
+          const md = data.monthly[m]?.debit ?? 0;
+          const mc = data.monthly[m]?.credit ?? 0;
+          const net = isDebit ? md - mc : mc - md;
+          monthly_movements[m] = {
+            debit: Math.round(md * 100) / 100,
+            credit: Math.round(mc * 100) / 100,
+            net: Math.round(net * 100) / 100,
+          };
+        });
+
         return {
           ...account,
           initial_balance: Math.round(initial_balance * 100) / 100,
@@ -436,6 +455,7 @@ export default function SaldosMensuales() {
           credit: Math.round(credit * 100) / 100,
           movement: Math.round(movement * 100) / 100,
           final_balance: Math.round(final_balance * 100) / 100,
+          monthly_movements,
         };
       });
 
