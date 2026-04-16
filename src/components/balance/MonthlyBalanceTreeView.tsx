@@ -74,6 +74,10 @@ function TreeNode({
   const movementColSpan = showMonthlyDetail ? Math.max(1, months.length) : 1;
   // Use a 12 + N grid where N = extra months when expanded
   const gridCols = showMonthlyDetail ? 12 + (months.length - 1) : 12;
+  // Minimum width so columns don't compress; triggers horizontal scroll instead.
+  const minTableWidth = showMonthlyDetail
+    ? `${800 + months.length * 90}px`
+    : "1100px";
 
   return (
     <div>
