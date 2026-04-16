@@ -32,6 +32,8 @@ interface MonthlyAccount extends Account {
   credit: number;
   movement: number;
   final_balance: number;
+  /** Movimiento neto (debe - haber con signo según naturaleza) por cada mes seleccionado. Key = número de mes (1-12). */
+  monthly_movements: Record<number, { debit: number; credit: number; net: number }>;
 }
 
 interface AccountPeriod {
