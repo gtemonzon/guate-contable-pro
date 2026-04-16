@@ -102,7 +102,7 @@ function TreeNode({
 
         <div
           className="flex-1 grid gap-4 items-center"
-          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, minWidth: minTableWidth }}
         >
           {/* Code */}
           <div className="col-span-1">
