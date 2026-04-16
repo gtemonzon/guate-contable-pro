@@ -255,24 +255,10 @@ export default function SaldosMensuales() {
       setQuerying(true);
       const periodId = parseInt(selectedPeriod);
       
-      // Get accounts to query - if specific accounts are selected, include their ancestors too
-      let accountsToQuery = allAccounts;
-      
-      if (selectedAccounts.length > 0) {
-        // Get selected accounts and all their ancestors for proper tree rendering
-        const accountIdsToInclude = new Set<number>(selectedAccounts);
-        
-        const findAncestors = (accountId: number) => {
-          const account = allAccounts.find(a => a.id === accountId);
-          if (account?.parent_account_id) {
-            accountIdsToInclude.add(account.parent_account_id);
-            findAncestors(account.parent_account_id);
-          }
-        };
-        
-        selectedAccounts.forEach(findAncestors);
-        accountsToQuery = allAccounts.filter(a => accountIdsToInclude.has(a.id));
-      }
+      // Always query the FULL chart of accounts so the tree shows all branches.
+      // The selectedAccounts filter is intentionally ignored for tree rendering
+      // (totals computed at the end already work correctly across the full tree).
+      const accountsToQuery = allAccounts;
 
       // Fetch movements within selected months (excluding opening entries)
       const entries = await fetchAllRecords<any>(
