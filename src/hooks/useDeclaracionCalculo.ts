@@ -251,6 +251,9 @@ export function useDeclaracionCalculo(
       // Calculate suggested crédito remanente from previous month
       await calcularCreditoRemanenteSugerido();
 
+      // Calculate accounting data for ISR Trimestral (acumulado año a la fecha hasta fin del trimestre)
+      await calcularDatosContablesISRTrimestral();
+
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
