@@ -37,6 +37,9 @@ export default function GenerarDeclaracion() {
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
   const [exencionIVA, setExencionIVA] = useState<number>(0);
   const [retencionISR, setRetencionISR] = useState<number>(0);
+  const [inventarioFinalEstimado, setInventarioFinalEstimado] = useState<number>(0);
+  const [otrosValores, setOtrosValores] = useState<OtroValorISR[]>([]);
+  const [isrPagadoAnterior, setIsrPagadoAnterior] = useState<number>(0);
   const [periodYears, setPeriodYears] = useState<number[]>([]);
 
   const {
@@ -49,9 +52,14 @@ export default function GenerarDeclaracion() {
     ivaPequenoCalculo,
     isrMensualCalculo,
     isoCalculo,
+    isrTrimestralCalculo,
     creditoRemanenteSugerido,
     fetchData,
-  } = useDeclaracionCalculo(enterpriseId, selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR);
+  } = useDeclaracionCalculo(
+    enterpriseId, selectedMonth, selectedYear,
+    creditoRemanente, exencionIVA, retencionISR,
+    inventarioFinalEstimado, otrosValores, isrPagadoAnterior
+  );
 
   // Load active enterprise
   useEffect(() => {
