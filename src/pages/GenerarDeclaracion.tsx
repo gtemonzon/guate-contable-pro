@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Loader2, Calculator, AlertCircle } from "lucide-react";
-import { useDeclaracionCalculo, TaxFormType } from "@/hooks/useDeclaracionCalculo";
+import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
