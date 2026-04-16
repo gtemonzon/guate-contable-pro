@@ -32,6 +32,8 @@ interface MonthlyAccount extends Account {
   credit: number;
   movement: number;
   final_balance: number;
+  /** Movimiento neto (debe - haber con signo según naturaleza) por cada mes seleccionado. Key = número de mes (1-12). */
+  monthly_movements: Record<number, { debit: number; credit: number; net: number }>;
 }
 
 interface AccountPeriod {
@@ -253,24 +255,10 @@ export default function SaldosMensuales() {
       setQuerying(true);
       const periodId = parseInt(selectedPeriod);
       
-      // Get accounts to query - if specific accounts are selected, include their ancestors too
-      let accountsToQuery = allAccounts;
-      
-      if (selectedAccounts.length > 0) {
-        // Get selected accounts and all their ancestors for proper tree rendering
-        const accountIdsToInclude = new Set<number>(selectedAccounts);
-        
-        const findAncestors = (accountId: number) => {
-          const account = allAccounts.find(a => a.id === accountId);
-          if (account?.parent_account_id) {
-            accountIdsToInclude.add(account.parent_account_id);
-            findAncestors(account.parent_account_id);
-          }
-        };
-        
-        selectedAccounts.forEach(findAncestors);
-        accountsToQuery = allAccounts.filter(a => accountIdsToInclude.has(a.id));
-      }
+      // Always query the FULL chart of accounts so the tree shows all branches.
+      // The selectedAccounts filter is intentionally ignored for tree rendering
+      // (totals computed at the end already work correctly across the full tree).
+      const accountsToQuery = allAccounts;
 
       // Fetch movements within selected months (excluding opening entries)
       const entries = await fetchAllRecords<any>(
@@ -358,29 +346,48 @@ export default function SaldosMensuales() {
         });
       });
 
-      // Calculate current period balances
+      // Calculate current period balances + per-month breakdown
       const currentBalances: Record<number, { debit: number; credit: number }> = {};
+      const monthlyBreakdown: Record<number, Record<number, { debit: number; credit: number }>> = {};
+
       entries?.forEach((entry: any) => {
+        const month = new Date(entry.entry_date + "T00:00:00").getMonth() + 1;
         entry.tab_journal_entry_details?.forEach((detail: any) => {
           if (!currentBalances[detail.account_id]) {
             currentBalances[detail.account_id] = { debit: 0, credit: 0 };
           }
           currentBalances[detail.account_id].debit += detail.debit_amount || 0;
           currentBalances[detail.account_id].credit += detail.credit_amount || 0;
+
+          if (!monthlyBreakdown[detail.account_id]) {
+            monthlyBreakdown[detail.account_id] = {};
+          }
+          if (!monthlyBreakdown[detail.account_id][month]) {
+            monthlyBreakdown[detail.account_id][month] = { debit: 0, credit: 0 };
+          }
+          monthlyBreakdown[detail.account_id][month].debit += detail.debit_amount || 0;
+          monthlyBreakdown[detail.account_id][month].credit += detail.credit_amount || 0;
         });
       });
 
-      // Create account map
+      // Create account map (include monthly breakdown so it propagates up the tree)
       const accountMap: Record<number, any> = {};
       accountsToQuery.forEach((account: any) => {
         const prevBal = previousBalances[account.id] || { debit: 0, credit: 0 };
         const currBal = currentBalances[account.id] || { debit: 0, credit: 0 };
+        const monthly: Record<number, { debit: number; credit: number }> = {};
+        // initialize monthly buckets for all selected months (so parents always have keys)
+        selectedMonths.forEach((m) => {
+          const src = monthlyBreakdown[account.id]?.[m];
+          monthly[m] = { debit: src?.debit ?? 0, credit: src?.credit ?? 0 };
+        });
         accountMap[account.id] = {
           ...account,
           prev_debit: prevBal.debit,
           prev_credit: prevBal.credit,
           debit: currBal.debit,
           credit: currBal.credit,
+          monthly,
         };
       });
 
@@ -390,10 +397,16 @@ export default function SaldosMensuales() {
       sortedAccounts.forEach((account: any) => {
         const currentAccount = accountMap[account.id];
         if (account.parent_account_id && accountMap[account.parent_account_id]) {
-          accountMap[account.parent_account_id].prev_debit += currentAccount.prev_debit;
-          accountMap[account.parent_account_id].prev_credit += currentAccount.prev_credit;
-          accountMap[account.parent_account_id].debit += currentAccount.debit;
-          accountMap[account.parent_account_id].credit += currentAccount.credit;
+          const parent = accountMap[account.parent_account_id];
+          parent.prev_debit  += currentAccount.prev_debit;
+          parent.prev_credit += currentAccount.prev_credit;
+          parent.debit       += currentAccount.debit;
+          parent.credit      += currentAccount.credit;
+          // Propagate per-month buckets
+          selectedMonths.forEach((m) => {
+            parent.monthly[m].debit  += currentAccount.monthly[m].debit;
+            parent.monthly[m].credit += currentAccount.monthly[m].credit;
+          });
         }
       });
 
@@ -422,6 +435,19 @@ export default function SaldosMensuales() {
           final_balance = initial_balance - movement;
         }
 
+        // Build monthly_movements with net (signed by account nature)
+        const monthly_movements: Record<number, { debit: number; credit: number; net: number }> = {};
+        selectedMonths.forEach((m) => {
+          const md = data.monthly[m]?.debit ?? 0;
+          const mc = data.monthly[m]?.credit ?? 0;
+          const net = isDebit ? md - mc : mc - md;
+          monthly_movements[m] = {
+            debit: Math.round(md * 100) / 100,
+            credit: Math.round(mc * 100) / 100,
+            net: Math.round(net * 100) / 100,
+          };
+        });
+
         return {
           ...account,
           initial_balance: Math.round(initial_balance * 100) / 100,
@@ -429,6 +455,7 @@ export default function SaldosMensuales() {
           credit: Math.round(credit * 100) / 100,
           movement: Math.round(movement * 100) / 100,
           final_balance: Math.round(final_balance * 100) / 100,
+          monthly_movements,
         };
       });
 
@@ -672,6 +699,8 @@ export default function SaldosMensuales() {
             <div className="space-y-4">
               <MonthlyBalanceTreeView 
                 accounts={monthlyAccounts} 
+                months={[...selectedMonths].sort((a, b) => a - b)}
+                monthLabels={MONTHS}
                 onViewDetails={handleViewDetails} 
               />
               
