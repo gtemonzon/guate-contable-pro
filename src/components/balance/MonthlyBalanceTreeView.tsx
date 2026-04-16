@@ -351,6 +351,7 @@ export function MonthlyBalanceTreeView({
 
       {/* Tree */}
       {renderTree(null, 0)}
+     </div>
     </div>
   );
 }
