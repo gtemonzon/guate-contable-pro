@@ -141,7 +141,10 @@ export function useDeclaracionCalculo(
   year: number,
   creditoRemanenteInput: number = 0,
   exencionIVAInput: number = 0,
-  retencionISRInput: number = 0
+  retencionISRInput: number = 0,
+  inventarioFinalEstimadoInput: number = 0,
+  otrosValoresInput: OtroValorISR[] = [],
+  isrPagadoAnteriorInput: number = 0,
 ) {
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState<SaleRecord[]>([]);
@@ -152,6 +155,12 @@ export function useDeclaracionCalculo(
   const [creditoRemanenteSugerido, setCreditoRemanenteSugerido] = useState<number>(0);
   const [ingresosAnioAnterior, setIngresosAnioAnterior] = useState<number>(0);
   const [comprasAnioAnterior, setComprasAnioAnterior] = useState<number>(0);
+  const [isrTrimContable, setIsrTrimContable] = useState<{
+    ingresos: number;
+    inventarioInicial: number;
+    comprasPeriodo: number;
+    gastosOperacion: number;
+  }>({ ingresos: 0, inventarioInicial: 0, comprasPeriodo: 0, gastosOperacion: 0 });
 
   // Fetch FEL document types
   useEffect(() => {
