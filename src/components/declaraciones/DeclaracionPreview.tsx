@@ -96,6 +96,7 @@ export function DeclaracionPreview({
   ivaPequeno, 
   isrMensual, 
   isoCalculo,
+  isrTrimestral,
   month, 
   year,
   creditoRemanente = 0,
@@ -104,7 +105,13 @@ export function DeclaracionPreview({
   exencionIVA = 0,
   onExencionIVAChange,
   retencionISR = 0,
-  onRetencionISRChange
+  onRetencionISRChange,
+  inventarioFinalEstimado = 0,
+  onInventarioFinalEstimadoChange,
+  otrosValores = [],
+  onOtrosValoresChange,
+  isrPagadoAnterior = 0,
+  onIsrPagadoAnteriorChange,
 }: DeclaracionPreviewProps) {
   const { toast } = useToast();
   const periodLabel = `${MONTHS[month - 1]} ${year}`;
