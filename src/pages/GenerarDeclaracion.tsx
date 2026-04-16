@@ -265,6 +265,7 @@ export default function GenerarDeclaracion() {
           ivaPequeno={ivaPequenoCalculo}
           isrMensual={isrMensualCalculo}
           isoCalculo={isoCalculo}
+          isrTrimestral={isrTrimestralCalculo}
           month={selectedMonth}
           year={selectedYear}
           creditoRemanente={creditoRemanente}
@@ -274,6 +275,12 @@ export default function GenerarDeclaracion() {
           onExencionIVAChange={setExencionIVA}
           retencionISR={retencionISR}
           onRetencionISRChange={setRetencionISR}
+          inventarioFinalEstimado={inventarioFinalEstimado}
+          onInventarioFinalEstimadoChange={setInventarioFinalEstimado}
+          otrosValores={otrosValores}
+          onOtrosValoresChange={setOtrosValores}
+          isrPagadoAnterior={isrPagadoAnterior}
+          onIsrPagadoAnteriorChange={setIsrPagadoAnterior}
         />
       )}
 
