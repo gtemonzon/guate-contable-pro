@@ -255,9 +255,9 @@ export default function SaldosMensuales() {
       setQuerying(true);
       const periodId = parseInt(selectedPeriod);
       
-      // Always query the FULL chart of accounts so the tree shows all branches.
-      // The selectedAccounts filter is intentionally ignored for tree rendering
-      // (totals computed at the end already work correctly across the full tree).
+      // Always compute over the FULL chart of accounts so hierarchy aggregation works.
+      // We'll filter the displayed result later based on selectedAccounts (showing
+      // each selected account plus its full ancestor and descendant chain).
       const accountsToQuery = allAccounts;
 
       // Fetch movements within selected months (excluding opening entries)
@@ -459,7 +459,43 @@ export default function SaldosMensuales() {
         };
       });
 
-      setMonthlyAccounts(monthlyAccountsResult);
+      // If the user picked specific accounts, narrow the tree to those accounts
+      // plus their ancestors (so the hierarchy is visible) and descendants
+      // (so detail rows appear under each selected branch). Otherwise show all.
+      let displayed = monthlyAccountsResult;
+      if (selectedAccounts.length > 0) {
+        const byId: Record<number, MonthlyAccount> = {};
+        monthlyAccountsResult.forEach((a) => { byId[a.id] = a; });
+
+        const visible = new Set<number>();
+        // Add ancestors
+        const addAncestors = (id: number) => {
+          let cur = byId[id];
+          while (cur) {
+            visible.add(cur.id);
+            if (!cur.parent_account_id) break;
+            cur = byId[cur.parent_account_id];
+          }
+        };
+        // Add descendants (BFS)
+        const addDescendants = (id: number) => {
+          const queue = [id];
+          while (queue.length) {
+            const cur = queue.shift()!;
+            visible.add(cur);
+            monthlyAccountsResult
+              .filter((a) => a.parent_account_id === cur)
+              .forEach((child) => queue.push(child.id));
+          }
+        };
+        selectedAccounts.forEach((id) => {
+          addAncestors(id);
+          addDescendants(id);
+        });
+        displayed = monthlyAccountsResult.filter((a) => visible.has(a.id));
+      }
+
+      setMonthlyAccounts(displayed);
     } catch (error: unknown) {
       toast({
         title: "Error al consultar saldos",
