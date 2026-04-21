@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -49,6 +50,7 @@ interface EnterprisesTableProps {
 export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
+  const { switchEnterprise } = useEnterprise();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
@@ -173,8 +175,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
   }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
 
   const handleSelect = async (enterprise: Enterprise) => {
-    localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
     setActiveEnterpriseId(enterprise.id);
+    await switchEnterprise(enterprise.id);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -191,8 +193,6 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       title: "Empresa seleccionada",
       description: `${enterprise.business_name} está ahora activa`,
     });
-
-    window.dispatchEvent(new CustomEvent('enterpriseChanged'));
   };
 
   const handleDeactivate = async (enterprise: Enterprise) => {
