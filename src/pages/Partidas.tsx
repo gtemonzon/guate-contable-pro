@@ -110,6 +110,7 @@ export default function Partidas() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterYear, setFilterYear] = useState<string | null>(null);
   const [filterMonths, setFilterMonths] = useState<number[]>([]);
+  const [defaultYearApplied, setDefaultYearApplied] = useState(false);
   
   // Ordenamiento
   const [sortField, setSortField] = useState<'date' | 'number'>('date');
