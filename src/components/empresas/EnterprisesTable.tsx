@@ -175,8 +175,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
   }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
 
   const handleSelect = async (enterprise: Enterprise) => {
-    localStorage.setItem("currentEnterpriseId", enterprise.id.toString());
     setActiveEnterpriseId(enterprise.id);
+    await switchEnterprise(enterprise.id);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -193,8 +193,6 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       title: "Empresa seleccionada",
       description: `${enterprise.business_name} está ahora activa`,
     });
-
-    window.dispatchEvent(new CustomEvent('enterpriseChanged'));
   };
 
   const handleDeactivate = async (enterprise: Enterprise) => {
