@@ -427,13 +427,33 @@ export function CopyAccountsCatalogDialog({
             </div>
           )}
 
-          {hasExistingAccounts && (
+          {hasExistingAccounts && !copying && (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 La empresa destino ya tiene cuentas. Las cuentas con códigos duplicados serán omitidas.
               </AlertDescription>
             </Alert>
+          )}
+
+          {copying && copyProgress.total > 0 && (
+            <div className="space-y-2 rounded-lg border bg-muted/50 p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Copiando cuentas...
+                </span>
+                <span className="text-muted-foreground tabular-nums">
+                  {copyProgress.current} / {copyProgress.total}
+                </span>
+              </div>
+              <Progress value={(copyProgress.current / copyProgress.total) * 100} />
+              {copyProgress.currentAccount && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {copyProgress.currentAccount}
+                </p>
+              )}
+            </div>
           )}
         </div>
 
