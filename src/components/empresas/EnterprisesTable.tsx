@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useEnterpriseBackup } from "@/hooks/useEnterpriseBackup";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
