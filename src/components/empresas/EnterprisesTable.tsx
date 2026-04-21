@@ -50,6 +50,7 @@ interface EnterprisesTableProps {
 export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
+  const { switchEnterprise } = useEnterprise();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
