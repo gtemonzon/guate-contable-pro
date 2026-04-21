@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Copy, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import type { Database } from "@/integrations/supabase/types";
@@ -57,6 +58,7 @@ export function CopyAccountsCatalogDialog({
   const [summary, setSummary] = useState<CatalogSummary | null>(null);
   const [existingAccountCodes, setExistingAccountCodes] = useState<Set<string>>(new Set());
   const [hasExistingAccounts, setHasExistingAccounts] = useState(false);
+  const [copyProgress, setCopyProgress] = useState({ current: 0, total: 0, currentAccount: "" });
 
   useEffect(() => {
     if (open) {
@@ -188,6 +190,7 @@ export function CopyAccountsCatalogDialog({
     if (!selectedEnterpriseId) return;
 
     setCopying(true);
+    setCopyProgress({ current: 0, total: 0, currentAccount: "" });
     try {
       // Obtener todas las cuentas de la empresa origen
       const sourceAccounts = await fetchAllRecords<Account>(
@@ -239,11 +242,20 @@ export function CopyAccountsCatalogDialog({
       const sortedLevels = Array.from(accountsByLevel.keys()).sort((a, b) => a - b);
 
       let totalInserted = 0;
+      let processed = 0;
+      const totalToProcess = accountsToInsert.length;
+      setCopyProgress({ current: 0, total: totalToProcess, currentAccount: "" });
 
       for (const level of sortedLevels) {
         const levelAccounts = accountsByLevel.get(level)!;
         
         for (const account of levelAccounts) {
+          processed++;
+          setCopyProgress({
+            current: processed,
+            total: totalToProcess,
+            currentAccount: `${account.account_code} - ${account.account_name}`,
+          });
           // Determinar el parent_account_id correcto
           let newParentId: number | null = null;
           
@@ -317,10 +329,12 @@ export function CopyAccountsCatalogDialog({
       });
     } finally {
       setCopying(false);
+      setCopyProgress({ current: 0, total: 0, currentAccount: "" });
     }
   };
 
   const handleClose = () => {
+    if (copying) return;
     setSelectedEnterpriseId("");
     setSummary(null);
     onOpenChange(false);
