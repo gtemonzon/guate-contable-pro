@@ -110,6 +110,7 @@ export default function Partidas() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterYear, setFilterYear] = useState<string | null>(null);
   const [filterMonths, setFilterMonths] = useState<number[]>([]);
+  const [defaultYearApplied, setDefaultYearApplied] = useState(false);
   
   // Ordenamiento
   const [sortField, setSortField] = useState<'date' | 'number'>('date');
@@ -209,6 +210,20 @@ export default function Partidas() {
     applyFilters();
     setCurrentPage(1);
   }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths, sortField, sortDir]);
+
+  // Default filter: current year if it has entries, else most recent year with entries
+  useEffect(() => {
+    if (defaultYearApplied || loading || entries.length === 0) return;
+    const years = new Set(entries.map(e => e.entry_date.substring(0, 4)));
+    const currentYear = String(new Date().getFullYear());
+    if (years.has(currentYear)) {
+      setFilterYear(currentYear);
+    } else {
+      const sorted = Array.from(years).sort((a, b) => b.localeCompare(a));
+      if (sorted[0]) setFilterYear(sorted[0]);
+    }
+    setDefaultYearApplied(true);
+  }, [entries, loading, defaultYearApplied]);
 
   const fetchEntries = async (enterpriseId: string) => {
     try {
