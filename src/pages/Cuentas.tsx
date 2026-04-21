@@ -114,7 +114,11 @@ const Cuentas = () => {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (account: Account, childrenIds: number[]): Promise<{ canDelete: boolean; message?: string }> => {
+  const handleDelete = async (
+    account: Account,
+    childrenIds: number[],
+    onProgress?: (current: number, total: number, currentName: string) => void
+  ): Promise<{ canDelete: boolean; message?: string; deletedCount?: number }> => {
     try {
       // Get all account IDs to check (the account + all descendants)
       const allAccountIds = [account.id, ...childrenIds];
@@ -141,7 +145,14 @@ const Cuentas = () => {
       const accountsToDelete = [account, ...accounts.filter(acc => childrenIds.includes(acc.id))]
         .sort((a, b) => b.level - a.level);
 
+      const total = accountsToDelete.length;
+      let processed = 0;
+      onProgress?.(0, total, "");
+
       for (const acc of accountsToDelete) {
+        processed++;
+        onProgress?.(processed, total, `${acc.account_code} - ${acc.account_name}`);
+
         const { error: deleteError } = await supabase
           .from('tab_accounts')
           .delete()
@@ -150,19 +161,12 @@ const Cuentas = () => {
         if (deleteError) throw deleteError;
       }
 
-      toast({
-        title: "Cuenta eliminada",
-        description: childrenIds.length > 0 
-          ? `Se eliminó la cuenta y ${childrenIds.length} cuenta(s) dependiente(s)` 
-          : "La cuenta ha sido eliminada correctamente",
-      });
-
       // Refresh accounts
       if (selectedEnterprise) {
         fetchAccounts(selectedEnterprise);
       }
 
-      return { canDelete: true };
+      return { canDelete: true, deletedCount: total };
     } catch (error: unknown) {
       return {
         canDelete: false,

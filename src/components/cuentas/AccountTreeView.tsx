@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus } from "lucide-react";
+import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,11 @@ type Account = Database['public']['Tables']['tab_accounts']['Row'];
 interface AccountTreeViewProps {
   accounts: Account[];
   onEdit: (account: Account) => void;
-  onDelete: (account: Account, childrenIds: number[]) => Promise<{ canDelete: boolean; message?: string }>;
+  onDelete: (
+    account: Account,
+    childrenIds: number[],
+    onProgress?: (current: number, total: number, currentName: string) => void
+  ) => Promise<{ canDelete: boolean; message?: string; deletedCount?: number }>;
   onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
 }
 
@@ -33,7 +38,11 @@ interface TreeNodeProps {
   account: Account;
   children: Account[];
   onEdit: (account: Account) => void;
-  onDelete: (account: Account, childrenIds: number[]) => Promise<{ canDelete: boolean; message?: string }>;
+  onDelete: (
+    account: Account,
+    childrenIds: number[],
+    onProgress?: (current: number, total: number, currentName: string) => void
+  ) => Promise<{ canDelete: boolean; message?: string; deletedCount?: number }>;
   onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
   level: number;
   allAccounts: Account[];
@@ -62,6 +71,8 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, currentName: "" });
+  const [deleteSuccess, setDeleteSuccess] = useState<{ count: number } | null>(null);
   const hasChildren = children.length > 0;
   const paddingLeft = `${level * 1.5}rem`;
 
@@ -78,22 +89,37 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
 
   const handleDeleteClick = () => {
     setDeleteError(null);
+    setDeleteSuccess(null);
+    setDeleteProgress({ current: 0, total: 0, currentName: "" });
     setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     setDeleteError(null);
-    
+    setDeleteSuccess(null);
+
     const descendantIds = getAllDescendantIds(account.id);
-    const result = await onDelete(account, descendantIds);
-    
+    const result = await onDelete(account, descendantIds, (current, total, currentName) => {
+      setDeleteProgress({ current, total, currentName });
+    });
+
+    setIsDeleting(false);
+
     if (!result.canDelete) {
       setDeleteError(result.message || "No se puede eliminar la cuenta");
-      setIsDeleting(false);
     } else {
-      setDeleteDialogOpen(false);
-      setIsDeleting(false);
+      setDeleteSuccess({ count: result.deletedCount ?? 1 });
+    }
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (isDeleting) return;
+    setDeleteDialogOpen(open);
+    if (!open) {
+      setDeleteError(null);
+      setDeleteSuccess(null);
+      setDeleteProgress({ current: 0, total: 0, currentName: "" });
     }
   };
 
@@ -190,38 +216,80 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
         </div>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar cuenta?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {descendantCount > 0 ? (
-                <>
-                  Esta acción eliminará la cuenta <strong>{account.account_code} - {account.account_name}</strong> y{" "}
-                  <strong>{descendantCount} cuenta(s) dependiente(s)</strong>. Esta acción no se puede deshacer.
-                </>
-              ) : (
-                <>
-                  Esta acción eliminará la cuenta <strong>{account.account_code} - {account.account_name}</strong>. 
-                  Esta acción no se puede deshacer.
-                </>
-              )}
+            <AlertDialogTitle>
+              {deleteSuccess ? "Eliminación completada" : "¿Eliminar cuenta?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {deleteSuccess ? (
+                  <span className="flex items-center gap-2 text-foreground">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    Se {deleteSuccess.count === 1 ? "eliminó" : "eliminaron"}{" "}
+                    <strong>{deleteSuccess.count}</strong> cuenta{deleteSuccess.count === 1 ? "" : "s"} correctamente.
+                  </span>
+                ) : descendantCount > 0 ? (
+                  <>
+                    Esta acción eliminará la cuenta <strong>{account.account_code} - {account.account_name}</strong> y{" "}
+                    <strong>{descendantCount} cuenta(s) dependiente(s)</strong>. Esta acción no se puede deshacer.
+                  </>
+                ) : (
+                  <>
+                    Esta acción eliminará la cuenta <strong>{account.account_code} - {account.account_name}</strong>.
+                    Esta acción no se puede deshacer.
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {isDeleting && deleteProgress.total > 0 && (
+            <div className="space-y-2 rounded-lg border bg-muted/50 p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  Eliminando cuentas...
+                </span>
+                <span className="text-muted-foreground tabular-nums">
+                  {deleteProgress.current} / {deleteProgress.total}
+                </span>
+              </div>
+              <Progress value={(deleteProgress.current / deleteProgress.total) * 100} />
+              {deleteProgress.currentName && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {deleteProgress.currentName}
+                </p>
+              )}
+            </div>
+          )}
+
           {deleteError && (
             <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
               {deleteError}
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmDelete} 
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? "Eliminando..." : "Eliminar"}
-            </AlertDialogAction>
+            {deleteSuccess ? (
+              <AlertDialogAction onClick={() => handleDialogOpenChange(false)}>
+                Cerrar
+              </AlertDialogAction>
+            ) : (
+              <>
+                <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleConfirmDelete();
+                  }}
+                  disabled={isDeleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {isDeleting ? "Eliminando..." : "Eliminar"}
+                </AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
