@@ -78,7 +78,7 @@ function EnterpriseSearchSelector({
             />
           </div>
         </div>
-        <ScrollArea className="max-h-[280px]">
+        <ScrollArea className="h-[280px]">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Sin resultados</p>
           ) : (
