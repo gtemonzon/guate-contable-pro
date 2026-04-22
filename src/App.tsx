@@ -8,6 +8,7 @@ import { TenantProvider } from "@/contexts/TenantContext";
 import { EnterpriseProvider } from "@/contexts/EnterpriseContext";
 import Login from "./pages/Login";
 import MainLayout from "./components/layout/MainLayout";
+import { isNetworkError } from "@/utils/networkErrors";
 
 // Retry wrapper for dynamic imports (handles transient network failures)
 function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>, retries = 2) {
@@ -61,7 +62,21 @@ const PageLoader = () => (
   </div>
 );
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        return isNetworkError(error);
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
+    },
+    mutations: {
+      retry: (failureCount, error) => failureCount < 2 && isNetworkError(error),
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

@@ -28,6 +28,7 @@ import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 import { KeyboardShortcutsDialog } from "@/components/shortcuts/KeyboardShortcutsDialog";
 import { EnterpriseOption } from "@/contexts/EnterpriseContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { OfflineBanner } from "./OfflineBanner";
 
 function EnterpriseSearchSelector({
   enterprises,
@@ -212,10 +213,12 @@ const MainLayout = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
+      <div className="min-h-screen flex w-full flex-col">
+        <OfflineBanner />
+        <div className="flex flex-1 w-full">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col">
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
             <SidebarTrigger />
 
             <div className="flex items-center gap-2">
@@ -288,6 +291,7 @@ const MainLayout = () => {
           <main className="flex-1 p-6 bg-muted/30">
             <Outlet />
           </main>
+          </div>
         </div>
       </div>
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

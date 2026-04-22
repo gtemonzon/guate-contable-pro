@@ -1,6 +1,12 @@
 // Utility for sanitizing error messages to prevent information leakage
+import { isNetworkError } from "./networkErrors";
 
 export function getSafeErrorMessage(error: unknown): string {
+  // Network/connectivity errors take precedence — show a clear, friendly message.
+  if (isNetworkError(error)) {
+    return "Sin conexión a internet. Intenta de nuevo en unos momentos.";
+  }
+
   // Extract message from various error formats
   const errObj = error as Record<string, unknown> | null | undefined;
   const errorMessage = String(errObj?.message || errObj?.details || errObj?.hint || '');
