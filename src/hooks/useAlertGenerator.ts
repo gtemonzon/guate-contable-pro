@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
+import {
   calculateDueDate, 
   parseHolidays, 
   getDaysUntil, 
@@ -8,9 +8,34 @@ import {
   formatDueDate,
   TaxDueDateConfig,
   Holiday,
-  getDefaultTaxConfigs
+  getDefaultTaxConfigs,
+  getReferenceDate,
 } from '@/utils/dueDateCalculations';
-import { addMonths, subDays, differenceInDays } from 'date-fns';
+import { addMonths, subDays, differenceInDays, getMonth, getYear } from 'date-fns';
+
+/**
+ * Map tax_type code (from tab_tax_due_date_config) to substrings that
+ * may appear in tab_tax_forms.tax_type (free-text written by users).
+ * Match is case-insensitive and includes any of the listed tokens.
+ */
+const TAX_TYPE_MATCHERS: Record<string, string[]> = {
+  iva: ['iva'],
+  isr_mensual: ['isr'],
+  isr_trimestral: ['isr'],
+  iso: ['iso'],
+  retenciones_iva: ['ret', 'iva'],
+  retenciones_isr: ['ret', 'isr'],
+};
+
+function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
+  if (!formTaxType) return false;
+  const normalized = formTaxType.toLowerCase().trim();
+  const matchers = TAX_TYPE_MATCHERS[configTaxType] ?? [configTaxType.toLowerCase()];
+  // For combined matchers (e.g. retenciones_iva needs BOTH 'ret' and 'iva'),
+  // require all tokens to appear; for single-token matchers, just one.
+  if (matchers.length === 1) return normalized.includes(matchers[0]);
+  return matchers.every((token) => normalized.includes(token));
+}
 
 interface AlertConfig {
   alert_type: string;
