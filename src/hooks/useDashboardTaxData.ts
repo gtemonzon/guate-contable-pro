@@ -56,19 +56,50 @@ export function useDashboardTaxData(enterpriseId: number | null) {
     queryFn: async () => {
       if (!enterpriseId) return null;
 
-      // Fetch tax configs
-      const { data: taxConfigsRaw } = await supabase
-        .from("tab_enterprise_tax_config")
-        .select("id, tax_form_type, tax_rate, is_active")
-        .eq("enterprise_id", enterpriseId)
-        .eq("is_active", true);
+      // Fetch tax configs from multiple sources to detect IVA regime reliably:
+      // 1) tab_enterprise_tax_config (legacy explicit config)
+      // 2) tab_tax_due_date_config (vencimientos configurados desde la empresa)
+      // 3) tab_enterprises.tax_regime (régimen general / pequeño contribuyente)
+      const [taxConfigsRes, dueDateConfigsRes, enterpriseRes] = await Promise.all([
+        supabase
+          .from("tab_enterprise_tax_config")
+          .select("id, tax_form_type, tax_rate, is_active")
+          .eq("enterprise_id", enterpriseId)
+          .eq("is_active", true),
+        supabase
+          .from("tab_tax_due_date_config")
+          .select("tax_type, is_active")
+          .eq("enterprise_id", enterpriseId)
+          .eq("is_active", true),
+        supabase
+          .from("tab_enterprises")
+          .select("tax_regime")
+          .eq("id", enterpriseId)
+          .maybeSingle(),
+      ]);
 
-      const taxConfigs = (taxConfigsRaw || []) as TaxConfig[];
+      const taxConfigs = (taxConfigsRes.data || []) as TaxConfig[];
+      const dueDateConfigs = (dueDateConfigsRes.data || []) as Array<{ tax_type: string }>;
+      const enterpriseRegime = (enterpriseRes.data?.tax_regime || '').toLowerCase();
 
-      const hasIvaGeneral = taxConfigs.some(c => c.tax_form_type === 'IVA_GENERAL');
-      const hasIvaPequeno = taxConfigs.some(c => c.tax_form_type === 'IVA_PEQUENO');
+      let hasIvaGeneral = taxConfigs.some(c => c.tax_form_type === 'IVA_GENERAL');
+      let hasIvaPequeno = taxConfigs.some(c => c.tax_form_type === 'IVA_PEQUENO');
       const hasIsrMensual = taxConfigs.some(c => c.tax_form_type === 'ISR_MENSUAL');
       const hasIsrTrimestral = taxConfigs.some(c => c.tax_form_type === 'ISR_TRIMESTRAL');
+
+      // Fallback: inferir el régimen IVA si no hay config explícita
+      if (!hasIvaGeneral && !hasIvaPequeno) {
+        const hasIvaDueDate = dueDateConfigs.some(c =>
+          c.tax_type === 'iva_mensual' || c.tax_type === 'iva'
+        );
+        if (hasIvaDueDate) {
+          if (enterpriseRegime.includes('pequeñ') || enterpriseRegime.includes('pequen')) {
+            hasIvaPequeno = true;
+          } else {
+            hasIvaGeneral = true;
+          }
+        }
+      }
 
       // Previous month date range
       const startDate = `${refYear}-${String(refMonth).padStart(2, '0')}-01`;
