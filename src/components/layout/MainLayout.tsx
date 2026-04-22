@@ -291,6 +291,7 @@ const MainLayout = () => {
           <main className="flex-1 p-6 bg-muted/30">
             <Outlet />
           </main>
+          </div>
         </div>
       </div>
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
