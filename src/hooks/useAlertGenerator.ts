@@ -20,11 +20,16 @@ import { addMonths, subDays, differenceInDays, getMonth, getYear } from 'date-fn
  */
 const TAX_TYPE_MATCHERS: Record<string, string[]> = {
   iva: ['iva'],
+  iva_mensual: ['iva'],
   isr_mensual: ['isr'],
   isr_trimestral: ['isr'],
   iso: ['iso'],
+  iso_trimestral: ['iso'],
+  retencion_iva: ['ret', 'iva'],
   retenciones_iva: ['ret', 'iva'],
+  retencion_isr: ['ret', 'isr'],
   retenciones_isr: ['ret', 'isr'],
+  isr_anual: ['isr', 'anual'],
 };
 
 function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
