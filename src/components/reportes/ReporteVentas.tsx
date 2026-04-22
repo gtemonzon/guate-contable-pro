@@ -11,6 +11,7 @@ import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
+import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
   Table,
   TableBody,
@@ -277,7 +278,9 @@ export default function ReporteVentas() {
     return statistics;
   };
 
-  const handleExport = (options: FolioExportOptions) => {
+  const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
+
+  const handleExport = async (options: FolioExportOptions) => {
     const activeSales = sales.filter(s => !s.is_annulled);
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Cliente", "Neto", "IVA", "Total"];
     const data = activeSales.map(s => {
@@ -321,13 +324,28 @@ export default function ReporteVentas() {
     if (options.format === 'excel') {
       exportToExcel(exportOptions);
     } else {
-      exportToPDF({
+      const result = exportToPDF({
         ...exportOptions,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
         },
+        authorizationLegend: options.authorization
+          ? { number: options.authorization.number, date: options.authorization.date }
+          : undefined,
       });
+
+      if (options.authorization && result?.pageCount) {
+        const monthStart = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+        const monthEnd = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+        await consumePages(options.authorization.id, result.pageCount, {
+          enterpriseId: options.authorization.enterpriseId,
+          bookType: options.authorization.bookType,
+          reportPeriod: `${monthNames[selectedMonth - 1]} ${selectedYear}`,
+          dateFrom: monthStart,
+          dateTo: monthEnd,
+        });
+      }
     }
 
     toast({
