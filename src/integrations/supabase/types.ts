@@ -1210,6 +1210,122 @@ export type Database = {
           },
         ]
       }
+      tab_book_authorizations: {
+        Row: {
+          authorization_date: string
+          authorization_number: string
+          authorized_folios: number
+          book_type: string
+          created_at: string
+          created_by: string | null
+          depleted_notified_at: string | null
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          low_folios_notified_at: string | null
+          manual_adjustment: number
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          authorization_date: string
+          authorization_number: string
+          authorized_folios: number
+          book_type: string
+          created_at?: string
+          created_by?: string | null
+          depleted_notified_at?: string | null
+          enterprise_id: number
+          id?: never
+          is_active?: boolean
+          low_folios_notified_at?: string | null
+          manual_adjustment?: number
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          authorization_date?: string
+          authorization_number?: string
+          authorized_folios?: number
+          book_type?: string
+          created_at?: string
+          created_by?: string | null
+          depleted_notified_at?: string | null
+          enterprise_id?: number
+          id?: never
+          is_active?: boolean
+          low_folios_notified_at?: string | null
+          manual_adjustment?: number
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_book_authorizations_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_book_folio_consumption: {
+        Row: {
+          authorization_id: number
+          book_type: string
+          created_at: string
+          created_by: string | null
+          enterprise_id: number
+          id: number
+          notes: string | null
+          pages_used: number
+          report_date_from: string | null
+          report_date_to: string | null
+          report_period: string | null
+        }
+        Insert: {
+          authorization_id: number
+          book_type: string
+          created_at?: string
+          created_by?: string | null
+          enterprise_id: number
+          id?: never
+          notes?: string | null
+          pages_used: number
+          report_date_from?: string | null
+          report_date_to?: string | null
+          report_period?: string | null
+        }
+        Update: {
+          authorization_id?: number
+          book_type?: string
+          created_at?: string
+          created_by?: string | null
+          enterprise_id?: number
+          id?: never
+          notes?: string | null
+          pages_used?: number
+          report_date_from?: string | null
+          report_date_to?: string | null
+          report_period?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_book_folio_consumption_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "tab_book_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_book_folio_consumption_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_currencies: {
         Row: {
           currency_code: string
@@ -3419,6 +3535,17 @@ export type Database = {
           residual_value: number
           status: string
           useful_life_months: number
+        }[]
+      }
+      get_authorization_folio_status: {
+        Args: { _authorization_id: number }
+        Returns: {
+          adjustment: number
+          authorized: number
+          available: number
+          is_low: boolean
+          is_overdrawn: boolean
+          used: number
         }[]
       }
       get_balance_sheet: {
