@@ -83,7 +83,7 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
           )
         ) : (
           <p className="text-sm text-muted-foreground">
-            Sin régimen de IVA configurado
+            No se pudo determinar el régimen de IVA. Verifica la pestaña Impuestos en la configuración de la empresa.
           </p>
         )}
       </CardContent>
