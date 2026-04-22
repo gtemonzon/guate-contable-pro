@@ -12,6 +12,11 @@ interface PdfTypographyOptions {
   fontSize?: number;
 }
 
+export interface AuthorizationLegend {
+  number: string;
+  date: string;
+}
+
 interface ExportOptions {
   filename: string;
   title: string;
@@ -24,6 +29,7 @@ interface ExportOptions {
   pdfTypography?: PdfTypographyOptions;
   forcePortrait?: boolean;
   boldRows?: number[];
+  authorizationLegend?: AuthorizationLegend;
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
@@ -80,7 +86,7 @@ interface PdfOrientationOptions {
   forcePortrait?: boolean;
 }
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows }: ExportOptions) => {
+export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend }: ExportOptions): { pageCount: number } => {
   const doc = new jsPDF({
     orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
@@ -97,15 +103,20 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
   const titleFontSize = baseFontSize + 8;
   const subtitleFontSize = baseFontSize + 4;
 
-  // Function to add folio to a page
-  const addFolioToPage = (pageNumber: number) => {
+  // Function to add folio + authorization legend to a page
+  const addPageDecorations = (pageNumber: number) => {
     if (includeFolio) {
       const folioNumber = startingFolio + pageNumber - 1;
       doc.setFontSize(baseFontSize + 2);
       doc.setFont(fontFamily, 'bold');
-      // Add folio in top right corner
       doc.text(`Folio: ${folioNumber}`, pageWidth - 14, 10, { align: 'right' });
       doc.setFont(fontFamily, 'normal');
+    }
+    if (authorizationLegend) {
+      doc.setFontSize(Math.max(baseFontSize - 1, 6));
+      doc.setFont(fontFamily, 'normal');
+      const legend = `Autorización: ${authorizationLegend.number} — Fecha: ${authorizationLegend.date}`;
+      doc.text(legend, 14, pageHeight - 6);
     }
   };
 
@@ -117,8 +128,7 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
   doc.setFontSize(subtitleFontSize);
   doc.text(title, 14, 22);
   
-  // Add folio to first page
-  addFolioToPage(1);
+  addPageDecorations(1);
 
   // Tabla
   autoTable(doc, {
@@ -139,15 +149,15 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     alternateRowStyles: {
       fillColor: [245, 247, 250],
     },
+    margin: { bottom: authorizationLegend ? 14 : 10 },
     didParseCell: (cellData) => {
       if (boldRows && boldRows.includes(cellData.row.index)) {
         cellData.cell.styles.fontStyle = 'bold';
       }
     },
     didDrawPage: (data) => {
-      // Add folio to each new page (except first which we already did)
       if (data.pageNumber > 1) {
-        addFolioToPage(data.pageNumber);
+        addPageDecorations(data.pageNumber);
       }
     },
   });
@@ -155,12 +165,9 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
   let currentY = (doc as any).lastAutoTable.finalY + 10;
   let currentPage = doc.getNumberOfPages();
 
-  // Calculate if we have statistics to show side by side
   const hasStatistics = statistics && statistics.length > 0;
   
-  // Totales y Estadísticas lado a lado
   if ((totals && totals.length > 0) || hasStatistics) {
-    // Check if we need a new page
     const requiredHeight = Math.max(
       totals ? (totals.length * 5 + 15) : 0,
       hasStatistics ? (statistics!.reduce((sum, s) => sum + s.items.length * 5 + 10, 0) + 10) : 0
@@ -169,7 +176,7 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     if (currentY + requiredHeight > pageHeight - 20) {
       doc.addPage();
       currentPage++;
-      addFolioToPage(currentPage);
+      addPageDecorations(currentPage);
       currentY = 20;
     }
 
@@ -178,7 +185,6 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     let leftY = currentY;
     let rightY = currentY;
 
-    // Totales en la columna izquierda
     if (totals && totals.length > 0) {
       doc.setFontSize(baseFontSize + 2);
       doc.setFont(fontFamily, 'bold');
@@ -192,7 +198,6 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
       });
     }
 
-    // Estadísticas en la columna derecha
     if (hasStatistics) {
       statistics!.forEach((stat) => {
         doc.setFontSize(baseFontSize + 2);
@@ -213,5 +218,7 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     currentY = Math.max(leftY, rightY) + 5;
   }
 
+  const pageCount = doc.getNumberOfPages();
   doc.save(`${filename}.pdf`);
+  return { pageCount };
 };
