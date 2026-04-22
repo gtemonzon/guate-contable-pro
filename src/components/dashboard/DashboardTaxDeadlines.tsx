@@ -10,10 +10,34 @@ import {
   parseHolidays,
   getDaysUntil,
   formatDueDate,
+  getReferenceDate,
   type TaxDueDateConfig,
   type Holiday,
 } from "@/utils/dueDateCalculations";
+import { subDays, getMonth, getYear } from "date-fns";
 import { cn } from "@/lib/utils";
+
+const TAX_TYPE_MATCHERS: Record<string, string[]> = {
+  iva: ['iva'],
+  iva_mensual: ['iva'],
+  isr_mensual: ['isr'],
+  isr_trimestral: ['isr'],
+  iso: ['iso'],
+  iso_trimestral: ['iso'],
+  retencion_iva: ['ret', 'iva'],
+  retenciones_iva: ['ret', 'iva'],
+  retencion_isr: ['ret', 'isr'],
+  retenciones_isr: ['ret', 'isr'],
+  isr_anual: ['isr', 'anual'],
+};
+
+function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
+  if (!formTaxType) return false;
+  const normalized = formTaxType.toLowerCase().trim();
+  const matchers = TAX_TYPE_MATCHERS[configTaxType] ?? [configTaxType.toLowerCase()];
+  if (matchers.length === 1) return normalized.includes(matchers[0]);
+  return matchers.every((token) => normalized.includes(token));
+}
 
 interface DashboardTaxDeadlinesProps {
   enterpriseId: number | null;
