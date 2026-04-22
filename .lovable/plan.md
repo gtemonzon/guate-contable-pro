@@ -1,195 +1,71 @@
 
-# Plan: PDF Typography Configuration for Tenants
+# Implementación: Nivel 1 — Detección y feedback de conexión
 
-## Overview
-Add a new configuration section in `/configuracion` that allows tenant administrators to customize the typography (font family and size) used when generating PDF reports. This setting will be stored at the tenant level and applied to all PDF exports across the system.
+## Qué se construye
 
----
+Sistema de detección de pérdida de internet con feedback visual claro al usuario y reintentos automáticos, sin alterar el comportamiento de los datos ni la integridad contable.
 
-## Database Changes
+## Cambios
 
-### New Columns in `tab_tenants` Table
-Add two new columns to store PDF typography preferences:
+### Archivos nuevos
 
-| Column | Type | Default | Description |
-|--------|------|---------|-------------|
-| `pdf_font_family` | `text` | `'helvetica'` | Selected font for PDF generation |
-| `pdf_font_size` | `integer` | `8` | Base font size for PDF table content |
+1. **`src/hooks/useOnlineStatus.ts`**
+   - Escucha eventos `online` / `offline` del navegador.
+   - Ping periódico ligero a Supabase cada 30s (`tab_currencies` con `select('id').limit(1)`) para detectar "wifi conectado pero sin internet real".
+   - Devuelve `{ isOnline: boolean, lastChecked: Date }`.
 
----
+2. **`src/components/layout/OfflineBanner.tsx`**
+   - Banner sticky en la parte superior cuando `isOnline === false`.
+   - Estilo de advertencia (fondo ámbar/rojo suave, ícono `WifiOff`).
+   - Texto: "Sin conexión a internet. Tus cambios no se guardarán hasta que se restablezca la conexión."
+   - Toast con `sonner` cuando la conexión se restablece: "Conexión restablecida".
+   - Toast cuando se pierde: "Sin conexión a internet".
 
-## Available Font Options
+3. **`src/utils/networkErrors.ts`**
+   - `isNetworkError(err)`: detecta `Failed to fetch`, `NetworkError`, `TypeError: Load failed`, etc.
+   - `formatNetworkError(err, fallback)`: devuelve mensaje amigable "Sin conexión a internet. Intenta de nuevo en unos momentos." si es error de red, sino el mensaje original.
 
-Based on jsPDF standard fonts that work without additional setup:
+### Archivos modificados
 
-| Font Name | Display Name | Description |
-|-----------|--------------|-------------|
-| `helvetica` | Helvetica | Sans-serif, modern and clean (Default) |
-| `courier` | Courier | Monospace, technical look |
-| `times` | Times | Serif, traditional/formal style |
+4. **`src/App.tsx`**
+   - Configurar `QueryClient` con reintentos exponenciales:
+     ```ts
+     defaultOptions: {
+       queries: {
+         retry: (failureCount, error) => {
+           if (failureCount >= 3) return false;
+           return isNetworkError(error);
+         },
+         retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30000),
+       },
+       mutations: {
+         retry: (failureCount, error) => failureCount < 2 && isNetworkError(error),
+         retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+       },
+     }
+     ```
 
----
+5. **`src/components/layout/MainLayout.tsx`**
+   - Montar `<OfflineBanner />` en la parte superior del layout (fuera de scroll, sticky top).
 
-## Font Size Options
+6. **`src/utils/errorMessages.ts`**
+   - Integrar `formatNetworkError` en el helper central de mensajes para que todos los toasts de error de operaciones fallidas muestren mensaje claro cuando es problema de red.
 
-| Size | Use Case |
-|------|----------|
-| 6 | Extra small - for dense reports |
-| 7 | Very small |
-| 8 | Small (Default) - standard table content |
-| 9 | Medium-small |
-| 10 | Medium |
-| 11 | Medium-large |
-| 12 | Large - for readability |
+7. **`src/pages/Ayuda.tsx`**
+   - Nueva subsección dentro de "Novedades Recientes": **"Trabajo sin conexión"**.
+   - Explica el banner, los toasts, los reintentos automáticos, y advierte que actualmente los formularios en edición sí pueden perder datos si se pierde conexión durante el guardado (anticipo del Nivel 2 futuro).
 
----
+## Detalles técnicos
 
-## New Files to Create
+- **Sin cambios en BD ni edge functions.** Implementación 100% client-side.
+- **Ping endpoint**: se usa `tab_currencies` por ser tabla pública, ligera y siempre presente. Se ignoran errores de RLS (solo nos importa si responde la red).
+- **Anti-flicker**: el estado `isOnline` solo cambia tras 2 intentos fallidos consecutivos del ping para evitar parpadeos por latencia momentánea.
+- **Pausar pings cuando la pestaña está oculta** (`document.hidden`) para ahorrar recursos.
+- **React Query**: solo reintenta errores de red (no errores de validación, RLS o lógica de negocio, que se mostrarían igualmente al usuario).
+- **Compatibilidad**: el hook se monta una sola vez en `MainLayout`, así no se duplican listeners ni pings.
 
-### 1. `src/components/configuracion/PdfTypographyManager.tsx`
-New component for the PDF typography configuration panel:
+## Lo que NO incluye este nivel
 
-- Card with title "Tipografia de PDFs" and description
-- Dropdown to select font family (Helvetica, Courier, Times)
-- Dropdown or slider for font size (6-12)
-- Live preview showing sample text in selected font/size
-- Save button that updates the tenant record
-- Only visible to tenant administrators
-
-### 2. `src/hooks/usePdfConfig.ts`
-Custom hook to fetch and provide PDF configuration:
-
-- Fetches current tenant's PDF settings
-- Returns `{ fontFamily, fontSize }` with defaults
-- Caches configuration for performance
-- Auto-refreshes when tenant changes
-
----
-
-## Files to Modify
-
-### 1. `src/pages/Configuracion.tsx`
-- Import and add new tab "Tipografia PDFs"
-- Add `TabsTrigger` for "pdf-typography"
-- Add `TabsContent` with `PdfTypographyManager` component
-
-### 2. `src/utils/reportExport.ts`
-- Update `exportToPDF` function to accept optional font configuration
-- Apply configured font family using `doc.setFont(fontFamily, style)`
-- Apply configured font size for table content
-- Maintain proportional sizes (headers larger than content)
-
-### 3. `src/pages/Ayuda.tsx`
-- Update PDF export in help section to use tenant font configuration
-
-### 4. `src/contexts/TenantContext.tsx`
-- Add `pdf_font_family` and `pdf_font_size` to Tenant interface
-- Include these fields in tenant fetch query
-
----
-
-## Implementation Flow
-
-```text
-                                    User Interface
-                                         |
-                                         v
-                          +-----------------------------+
-                          |   PdfTypographyManager.tsx  |
-                          |   - Font family dropdown    |
-                          |   - Font size selector      |
-                          |   - Preview panel           |
-                          |   - Save button             |
-                          +-----------------------------+
-                                         |
-                                   Save Config
-                                         |
-                                         v
-                          +-----------------------------+
-                          |     tab_tenants table       |
-                          |   pdf_font_family: text     |
-                          |   pdf_font_size: integer    |
-                          +-----------------------------+
-                                         |
-                                    Load Config
-                                         |
-                                         v
-                          +-----------------------------+
-                          |    usePdfConfig.ts hook     |
-                          |   Returns { fontFamily,     |
-                          |             fontSize }      |
-                          +-----------------------------+
-                                         |
-                                   Apply to PDFs
-                                         |
-                                         v
-                          +-----------------------------+
-                          |    reportExport.ts          |
-                          |   doc.setFont(fontFamily)   |
-                          |   doc.setFontSize(size)     |
-                          +-----------------------------+
-```
-
----
-
-## UI Design
-
-The configuration panel will include:
-
-1. **Font Family Selector**
-   - Label: "Tipo de Fuente"
-   - Radio group or Select with visual preview
-   - Options show font name with sample text
-
-2. **Font Size Selector**  
-   - Label: "Tamano de Fuente"
-   - Numeric input or slider (6-12)
-   - Description: "Tamano base para contenido de tablas"
-
-3. **Preview Section**
-   - Shows sample table row in selected typography
-   - Updates in real-time as user changes settings
-
-4. **Access Control**
-   - Only tenant administrators can modify these settings
-   - Regular users can view but not edit
-
----
-
-## Technical Details
-
-### Font Application in jsPDF:
-```typescript
-// Apply font family
-doc.setFont(config.fontFamily, 'normal');
-
-// Apply font size (proportional)
-const headerSize = config.fontSize + 4;  // Headers larger
-const contentSize = config.fontSize;      // Table content
-const footerSize = config.fontSize - 1;   // Footers smaller
-```
-
-### AutoTable Configuration:
-```typescript
-autoTable(doc, {
-  styles: {
-    font: config.fontFamily,
-    fontSize: config.fontSize,
-  },
-  headStyles: {
-    fontSize: config.fontSize + 2,
-  },
-});
-```
-
----
-
-## Summary of Changes
-
-| Area | Change |
-|------|--------|
-| Database | Add 2 columns to `tab_tenants` |
-| New Components | `PdfTypographyManager.tsx`, `usePdfConfig.ts` |
-| Modified Files | `Configuracion.tsx`, `reportExport.ts`, `Ayuda.tsx`, `TenantContext.tsx` |
-| UI | New tab in configuration page with font/size selectors |
-| PDF Generation | Dynamic font application based on tenant settings |
+- No guarda borradores locales de formularios (eso es Nivel 2).
+- No cachea consultas para uso offline (eso es Nivel 3).
+- No bloquea botones de "Guardar" cuando offline — solo avisa; el intento de guardado fallará con mensaje claro y se reintentará automáticamente.
