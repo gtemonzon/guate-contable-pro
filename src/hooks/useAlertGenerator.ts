@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
+import {
   calculateDueDate, 
   parseHolidays, 
   getDaysUntil, 
@@ -8,9 +8,34 @@ import {
   formatDueDate,
   TaxDueDateConfig,
   Holiday,
-  getDefaultTaxConfigs
+  getDefaultTaxConfigs,
+  getReferenceDate,
 } from '@/utils/dueDateCalculations';
-import { addMonths, subDays, differenceInDays } from 'date-fns';
+import { addMonths, subDays, differenceInDays, getMonth, getYear } from 'date-fns';
+
+/**
+ * Map tax_type code (from tab_tax_due_date_config) to substrings that
+ * may appear in tab_tax_forms.tax_type (free-text written by users).
+ * Match is case-insensitive and includes any of the listed tokens.
+ */
+const TAX_TYPE_MATCHERS: Record<string, string[]> = {
+  iva: ['iva'],
+  isr_mensual: ['isr'],
+  isr_trimestral: ['isr'],
+  iso: ['iso'],
+  retenciones_iva: ['ret', 'iva'],
+  retenciones_isr: ['ret', 'isr'],
+};
+
+function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
+  if (!formTaxType) return false;
+  const normalized = formTaxType.toLowerCase().trim();
+  const matchers = TAX_TYPE_MATCHERS[configTaxType] ?? [configTaxType.toLowerCase()];
+  // For combined matchers (e.g. retenciones_iva needs BOTH 'ret' and 'iva'),
+  // require all tokens to appear; for single-token matchers, just one.
+  if (matchers.length === 1) return normalized.includes(matchers[0]);
+  return matchers.every((token) => normalized.includes(token));
+}
 
 interface AlertConfig {
   alert_type: string;
@@ -116,6 +141,26 @@ export function useAlertGenerator() {
           }))
         : getDefaultTaxConfigs().map(c => ({ ...c, is_active: true }));
 
+      // Pre-fetch presented tax forms (active) for this enterprise to skip
+      // alerts whose underlying tax form has already been filed.
+      const { data: presentedForms } = await supabase
+        .from('tab_tax_forms')
+        .select('tax_type, period_month, period_year')
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_active', true);
+
+      const isFormAlreadyPresented = (
+        configTaxType: string,
+        periodMonth: number,
+        periodYear: number,
+      ): boolean => {
+        return (presentedForms || []).some((f) =>
+          f.period_month === periodMonth &&
+          f.period_year === periodYear &&
+          taxFormMatchesType(f.tax_type, configTaxType)
+        );
+      };
+
       for (const taxConfig of effectiveTaxConfigs) {
         const alertConfig = getAlertConfig(`vencimiento_${taxConfig.tax_type}`);
         if (!alertConfig.is_enabled) continue;
@@ -124,6 +169,26 @@ export function useAlertGenerator() {
         const daysUntil = getDaysUntil(dueDate);
 
         if (daysUntil <= alertConfig.days_before && daysUntil >= -1) {
+          // Determine the reference period (month/year the form would cover).
+          const referenceDate = getReferenceDate(currentMonth, taxConfig.reference_period);
+          // Tax forms typically cover the month BEFORE the due-date reference month
+          // (e.g. IVA con vencimiento 30/04 corresponde al período de marzo).
+          const periodCovered = subDays(new Date(getYear(referenceDate), getMonth(referenceDate), 1), 1);
+          const periodMonth = getMonth(periodCovered) + 1; // 1-indexed
+          const periodYear = getYear(periodCovered);
+
+          // Skip alert if the corresponding tax form has already been filed.
+          if (isFormAlreadyPresented(taxConfig.tax_type, periodMonth, periodYear)) {
+            // Also clean up any stale notifications previously generated for this due date.
+            await supabase
+              .from('tab_notifications')
+              .delete()
+              .eq('enterprise_id', enterpriseId)
+              .eq('notification_type', `vencimiento_${taxConfig.tax_type}`)
+              .eq('event_date', dueDate.toISOString().split('T')[0]);
+            continue;
+          }
+
           const priority = getPriorityFromDays(daysUntil);
           const daysText = daysUntil === 0 ? 'Vence hoy' :
                           daysUntil < 0 ? 'Vencido' :
