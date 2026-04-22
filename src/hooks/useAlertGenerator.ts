@@ -141,6 +141,26 @@ export function useAlertGenerator() {
           }))
         : getDefaultTaxConfigs().map(c => ({ ...c, is_active: true }));
 
+      // Pre-fetch presented tax forms (active) for this enterprise to skip
+      // alerts whose underlying tax form has already been filed.
+      const { data: presentedForms } = await supabase
+        .from('tab_tax_forms')
+        .select('tax_type, period_month, period_year')
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_active', true);
+
+      const isFormAlreadyPresented = (
+        configTaxType: string,
+        periodMonth: number,
+        periodYear: number,
+      ): boolean => {
+        return (presentedForms || []).some((f) =>
+          f.period_month === periodMonth &&
+          f.period_year === periodYear &&
+          taxFormMatchesType(f.tax_type, configTaxType)
+        );
+      };
+
       for (const taxConfig of effectiveTaxConfigs) {
         const alertConfig = getAlertConfig(`vencimiento_${taxConfig.tax_type}`);
         if (!alertConfig.is_enabled) continue;
@@ -149,6 +169,26 @@ export function useAlertGenerator() {
         const daysUntil = getDaysUntil(dueDate);
 
         if (daysUntil <= alertConfig.days_before && daysUntil >= -1) {
+          // Determine the reference period (month/year the form would cover).
+          const referenceDate = getReferenceDate(currentMonth, taxConfig.reference_period);
+          // Tax forms typically cover the month BEFORE the due-date reference month
+          // (e.g. IVA con vencimiento 30/04 corresponde al período de marzo).
+          const periodCovered = subDays(new Date(getYear(referenceDate), getMonth(referenceDate), 1), 1);
+          const periodMonth = getMonth(periodCovered) + 1; // 1-indexed
+          const periodYear = getYear(periodCovered);
+
+          // Skip alert if the corresponding tax form has already been filed.
+          if (isFormAlreadyPresented(taxConfig.tax_type, periodMonth, periodYear)) {
+            // Also clean up any stale notifications previously generated for this due date.
+            await supabase
+              .from('tab_notifications')
+              .delete()
+              .eq('enterprise_id', enterpriseId)
+              .eq('notification_type', `vencimiento_${taxConfig.tax_type}`)
+              .eq('event_date', dueDate.toISOString().split('T')[0]);
+            continue;
+          }
+
           const priority = getPriorityFromDays(daysUntil);
           const daysText = daysUntil === 0 ? 'Vence hoy' :
                           daysUntil < 0 ? 'Vencido' :
