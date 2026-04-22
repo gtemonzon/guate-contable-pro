@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { EnterpriseDocuments } from "./EnterpriseDocuments";
 import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
+import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -256,11 +257,12 @@ export function EnterpriseDialog({
 
         {enterprise ? (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="taxes">Impuestos</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
               <TabsTrigger value="periods">Períodos</TabsTrigger>
+              <TabsTrigger value="books">Libros SAT</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="mt-4">
@@ -478,6 +480,10 @@ export function EnterpriseDialog({
 
             <TabsContent value="periods" className="mt-4">
               <EnterprisePeriods enterpriseId={enterprise.id} />
+            </TabsContent>
+
+            <TabsContent value="books" className="mt-4">
+              <EnterpriseBookAuthorizations enterpriseId={enterprise.id} />
             </TabsContent>
           </Tabs>
         ) : (
