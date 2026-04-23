@@ -374,6 +374,11 @@ export function QuickPurchaseForm({
         if (newBook) purchaseBookId = newBook.id;
       }
 
+      const r = Number(exchangeRate || 1);
+      const totalFunctional = Math.round(total * r * 100) / 100;
+      const baseFunctional = Math.round(base * r * 100) / 100;
+      const vatFunctional = Math.round(vat * r * 100) / 100;
+
       const { data: purchase, error: pErr } = await supabase
         .from("tab_purchase_ledger")
         .insert({
@@ -384,11 +389,18 @@ export function QuickPurchaseForm({
           invoice_number: number,
           supplier_nit: nit,
           supplier_name: supplier || nit,
-          total_amount: total,
-          base_amount: base,
-          net_amount: base,
-          vat_amount: vat,
-          idp_amount: isFuelOperation ? idpAmount : 0,
+          // Montos en moneda funcional (para reportes SAT)
+          total_amount: totalFunctional,
+          base_amount: baseFunctional,
+          net_amount: baseFunctional,
+          vat_amount: vatFunctional,
+          idp_amount: isFuelOperation ? Math.round(idpAmount * r * 100) / 100 : 0,
+          // Multi-moneda: moneda original + tasa + montos originales
+          currency_code: currencyCode,
+          exchange_rate: r,
+          original_total: total,
+          original_subtotal: base,
+          original_vat: vat,
           expense_account_id: expenseAccountId,
           operation_type_id: operationTypeId,
           journal_entry_id: journalEntryId,
