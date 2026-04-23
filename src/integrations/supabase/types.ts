@@ -474,10 +474,13 @@ export type Database = {
           disposal_reason_id: number | null
           disposed_at: string | null
           enterprise_id: number
+          exchange_rate_at_acquisition: number | null
           id: number
           in_service_date: string | null
           location_id: number | null
           notes: string | null
+          original_acquisition_cost: number | null
+          original_residual_value: number | null
           purchase_reference_id: number | null
           residual_value: number
           status: string
@@ -504,10 +507,13 @@ export type Database = {
           disposal_reason_id?: number | null
           disposed_at?: string | null
           enterprise_id: number
+          exchange_rate_at_acquisition?: number | null
           id?: number
           in_service_date?: string | null
           location_id?: number | null
           notes?: string | null
+          original_acquisition_cost?: number | null
+          original_residual_value?: number | null
           purchase_reference_id?: number | null
           residual_value?: number
           status?: string
@@ -534,10 +540,13 @@ export type Database = {
           disposal_reason_id?: number | null
           disposed_at?: string | null
           enterprise_id?: number
+          exchange_rate_at_acquisition?: number | null
           id?: number
           in_service_date?: string | null
           location_id?: number | null
           notes?: string | null
+          original_acquisition_cost?: number | null
+          original_residual_value?: number | null
           purchase_reference_id?: number | null
           residual_value?: number
           status?: string
@@ -891,6 +900,7 @@ export type Database = {
           account_type: string | null
           bank_name: string
           created_at: string | null
+          currency_code: string | null
           currency_id: number | null
           enterprise_id: number | null
           id: number
@@ -902,6 +912,7 @@ export type Database = {
           account_type?: string | null
           bank_name: string
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
           id?: number
@@ -913,6 +924,7 @@ export type Database = {
           account_type?: string | null
           bank_name?: string
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           enterprise_id?: number | null
           id?: number
@@ -1445,9 +1457,13 @@ export type Database = {
           inventory_account_id: number | null
           period_result_account_id: number | null
           purchases_account_id: number | null
+          realized_fx_gain_account_id: number | null
+          realized_fx_loss_account_id: number | null
           retained_earnings_account_id: number | null
           sales_account_id: number | null
           suppliers_account_id: number | null
+          unrealized_fx_gain_account_id: number | null
+          unrealized_fx_loss_account_id: number | null
           vat_credit_account_id: number | null
           vat_debit_account_id: number | null
         }
@@ -1463,9 +1479,13 @@ export type Database = {
           inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
+          realized_fx_gain_account_id?: number | null
+          realized_fx_loss_account_id?: number | null
           retained_earnings_account_id?: number | null
           sales_account_id?: number | null
           suppliers_account_id?: number | null
+          unrealized_fx_gain_account_id?: number | null
+          unrealized_fx_loss_account_id?: number | null
           vat_credit_account_id?: number | null
           vat_debit_account_id?: number | null
         }
@@ -1481,9 +1501,13 @@ export type Database = {
           inventory_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
+          realized_fx_gain_account_id?: number | null
+          realized_fx_loss_account_id?: number | null
           retained_earnings_account_id?: number | null
           sales_account_id?: number | null
           suppliers_account_id?: number | null
+          unrealized_fx_gain_account_id?: number | null
+          unrealized_fx_loss_account_id?: number | null
           vat_credit_account_id?: number | null
           vat_debit_account_id?: number | null
         }
@@ -1510,6 +1534,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tab_enterprise_currencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency_code: string
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency_code: string
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency_code?: string
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          notes?: string | null
+        }
+        Relationships: []
       }
       tab_enterprise_documents: {
         Row: {
@@ -1640,6 +1694,48 @@ export type Database = {
         ]
       }
       tab_exchange_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency_code: string
+          enterprise_id: number
+          id: number
+          month: number
+          notes: string | null
+          rate: number
+          source: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency_code: string
+          enterprise_id: number
+          id?: number
+          month: number
+          notes?: string | null
+          rate: number
+          source?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency_code?: string
+          enterprise_id?: number
+          id?: number
+          month?: number
+          notes?: string | null
+          rate?: number
+          source?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      tab_exchange_rates_legacy: {
         Row: {
           created_at: string | null
           currency_from_id: number | null
@@ -2010,6 +2106,7 @@ export type Database = {
           beneficiary_name: string | null
           created_at: string | null
           created_by: string | null
+          currency_code: string | null
           currency_id: number | null
           deleted_at: string | null
           deleted_by: string | null
@@ -2044,6 +2141,7 @@ export type Database = {
           beneficiary_name?: string | null
           created_at?: string | null
           created_by?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2078,6 +2176,7 @@ export type Database = {
           beneficiary_name?: string | null
           created_at?: string | null
           created_by?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2169,13 +2268,17 @@ export type Database = {
           bank_reference: string | null
           cost_center: string | null
           credit_amount: number | null
+          currency_code: string | null
           debit_amount: number | null
           deleted_at: string | null
           description: string | null
+          exchange_rate: number | null
           id: number
           is_bank_line: boolean
           journal_entry_id: number | null
           line_number: number
+          original_credit: number | null
+          original_debit: number | null
           source_id: number | null
           source_ref: string | null
           source_type: string | null
@@ -2185,13 +2288,17 @@ export type Database = {
           bank_reference?: string | null
           cost_center?: string | null
           credit_amount?: number | null
+          currency_code?: string | null
           debit_amount?: number | null
           deleted_at?: string | null
           description?: string | null
+          exchange_rate?: number | null
           id?: number
           is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number: number
+          original_credit?: number | null
+          original_debit?: number | null
           source_id?: number | null
           source_ref?: string | null
           source_type?: string | null
@@ -2201,13 +2308,17 @@ export type Database = {
           bank_reference?: string | null
           cost_center?: string | null
           credit_amount?: number | null
+          currency_code?: string | null
           debit_amount?: number | null
           deleted_at?: string | null
           description?: string | null
+          exchange_rate?: number | null
           id?: number
           is_bank_line?: boolean
           journal_entry_id?: number | null
           line_number?: number
+          original_credit?: number | null
+          original_debit?: number | null
           source_id?: number | null
           source_ref?: string | null
           source_type?: string | null
@@ -2632,6 +2743,7 @@ export type Database = {
           base_amount: number | null
           batch_reference: string | null
           created_at: string | null
+          currency_code: string | null
           currency_id: number | null
           deleted_at: string | null
           deleted_by: string | null
@@ -2648,6 +2760,9 @@ export type Database = {
           journal_entry_id: number | null
           net_amount: number
           operation_type_id: number | null
+          original_subtotal: number | null
+          original_total: number | null
+          original_vat: number | null
           purchase_book_id: number | null
           purchase_type: string | null
           supplier_name: string
@@ -2661,6 +2776,7 @@ export type Database = {
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2677,6 +2793,9 @@ export type Database = {
           journal_entry_id?: number | null
           net_amount: number
           operation_type_id?: number | null
+          original_subtotal?: number | null
+          original_total?: number | null
+          original_vat?: number | null
           purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name: string
@@ -2690,6 +2809,7 @@ export type Database = {
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2706,6 +2826,9 @@ export type Database = {
           journal_entry_id?: number | null
           net_amount?: number
           operation_type_id?: number | null
+          original_subtotal?: number | null
+          original_total?: number | null
+          original_vat?: number | null
           purchase_book_id?: number | null
           purchase_type?: string | null
           supplier_name?: string
@@ -2815,6 +2938,7 @@ export type Database = {
           accounting_period_id: number | null
           authorization_number: string
           created_at: string | null
+          currency_code: string | null
           currency_id: number | null
           customer_name: string
           customer_nit: string
@@ -2836,6 +2960,9 @@ export type Database = {
           journal_entry_id: number | null
           net_amount: number
           operation_type_id: number | null
+          original_subtotal: number | null
+          original_total: number | null
+          original_vat: number | null
           total_amount: number
           vat_amount: number
         }
@@ -2843,6 +2970,7 @@ export type Database = {
           accounting_period_id?: number | null
           authorization_number: string
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           customer_name: string
           customer_nit: string
@@ -2864,6 +2992,9 @@ export type Database = {
           journal_entry_id?: number | null
           net_amount: number
           operation_type_id?: number | null
+          original_subtotal?: number | null
+          original_total?: number | null
+          original_vat?: number | null
           total_amount: number
           vat_amount: number
         }
@@ -2871,6 +3002,7 @@ export type Database = {
           accounting_period_id?: number | null
           authorization_number?: string
           created_at?: string | null
+          currency_code?: string | null
           currency_id?: number | null
           customer_name?: string
           customer_nit?: string
@@ -2892,6 +3024,9 @@ export type Database = {
           journal_entry_id?: number | null
           net_amount?: number
           operation_type_id?: number | null
+          original_subtotal?: number | null
+          original_total?: number | null
+          original_vat?: number | null
           total_amount?: number
           vat_amount?: number
         }
@@ -3572,8 +3707,16 @@ export type Database = {
           supplier_nit: string
         }[]
       }
+      get_enterprise_functional_currency: {
+        Args: { _enterprise_id: number }
+        Returns: string
+      }
       get_enterprise_tenant_id: {
         Args: { _enterprise_id: number }
+        Returns: number
+      }
+      get_exchange_rate: {
+        Args: { _currency_code: string; _date: string; _enterprise_id: number }
         Returns: number
       }
       get_last_purchase_mapping: {
