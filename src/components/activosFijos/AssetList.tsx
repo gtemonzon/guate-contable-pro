@@ -247,15 +247,43 @@ export default function AssetList() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Costo de adquisición *</Label>
-              <Input type="number" min={0} step="0.01" value={form.acquisition_cost || 0}
-                onChange={(e) => setForm((f) => ({ ...f, acquisition_cost: parseFloat(e.target.value) }))} />
+            <div className={isMultiCurrency ? "col-span-2" : ""}>
+              <CurrencyAmountInput
+                enterpriseId={enterpriseId!}
+                baseCurrencyCode={baseCurrency}
+                date={form.acquisition_date || new Date().toISOString().split("T")[0]}
+                amount={Number(form.original_acquisition_cost ?? form.acquisition_cost ?? 0)}
+                currencyCode={form.currency || baseCurrency}
+                exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
+                label="Costo de adquisición *"
+                onChange={(next) => setForm((f) => ({
+                  ...f,
+                  original_acquisition_cost: next.amount,
+                  currency: next.currencyCode,
+                  exchange_rate_at_acquisition: next.exchangeRate,
+                  // Mantener acquisition_cost en moneda funcional sincronizado
+                  acquisition_cost: Math.round(next.amount * (next.exchangeRate || 1) * 100) / 100,
+                }))}
+              />
             </div>
-            <div>
-              <Label>Valor residual</Label>
-              <Input type="number" min={0} step="0.01" value={form.residual_value || 0}
-                onChange={(e) => setForm((f) => ({ ...f, residual_value: parseFloat(e.target.value) }))} />
+            <div className={isMultiCurrency ? "col-span-2" : ""}>
+              <CurrencyAmountInput
+                enterpriseId={enterpriseId!}
+                baseCurrencyCode={baseCurrency}
+                date={form.acquisition_date || new Date().toISOString().split("T")[0]}
+                amount={Number(form.original_residual_value ?? form.residual_value ?? 0)}
+                currencyCode={form.currency || baseCurrency}
+                exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
+                label="Valor residual"
+                onChange={(next) => setForm((f) => ({
+                  ...f,
+                  original_residual_value: next.amount,
+                  // Hereda moneda y rate del costo de adquisición (un activo = una moneda)
+                  currency: next.currencyCode,
+                  exchange_rate_at_acquisition: next.exchangeRate,
+                  residual_value: Math.round(next.amount * (next.exchangeRate || 1) * 100) / 100,
+                }))}
+              />
             </div>
             <div>
               <Label>Vida útil (meses) *</Label>
@@ -302,16 +330,7 @@ export default function AssetList() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Moneda</Label>
-              <Select value={form.currency || "GTQ"} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="GTQ">GTQ</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Moneda integrada en CurrencyAmountInput de Costo y Valor residual */}
           </div>
           <div>
             <Label>Notas</Label>
