@@ -44,6 +44,7 @@ const helpSections: HelpSection[] = [
     description: "Mejoras y nuevas funcionalidades incorporadas recientemente al sistema.",
     isNew: true,
     steps: [
+      { title: "Autorización de Libros SAT por empresa", description: "Nueva pestaña 'Libros SAT' en la edición de cada empresa para registrar las autorizaciones de libros emitidas por SAT (Libro de Compras, Ventas, Diario, Mayor y Estados Financieros). Cada autorización guarda número, fecha y cantidad de folios autorizados. Al exportar a PDF un libro, el sistema selecciona automáticamente la autorización activa más antigua con folios disponibles (FIFO), imprime la leyenda 'Autorización: {número} — Fecha: {fecha}' al pie de cada página y registra el consumo real de folios. Si quedan ≤ 10 folios o se agotan, se genera automáticamente una notificación en el centro de notificaciones (con anti-spam de 7 días). La columna 'Disponibles' permite hacer ajustes manuales para reconciliar con la cantidad física real, dejando trazabilidad. Si no hay autorización configurada, se exporta sin la leyenda y se muestra una alerta para configurarla." },
       { title: "Detección de pérdida de internet", description: "El sistema ahora detecta automáticamente cuando se pierde la conexión a internet y muestra un banner rojo en la parte superior con el mensaje 'Sin conexión a internet'. Al restablecerse la conexión, aparece una notificación de confirmación. Las consultas fallidas por red se reintentan automáticamente con espera exponencial (hasta 3 veces). IMPORTANTE: actualmente, si pierde conexión mientras llena un formulario y presiona Guardar, el guardado fallará y los datos del formulario podrían perderse — próximamente se agregará protección automática de borradores." },
       { title: "Costos y Gastos Acumulados en ISR Trimestral", description: "El formulario ISR Trimestral ahora incluye el campo 'Costos y gastos acumulados' (Costo de Ventas + Gastos de Operación, ej. cuenta 7) con botón de copiar al portapapeles. Aparece después de 'Gastos de Operación'." },
       { title: "Filtro por defecto de año en /partidas", description: "Al entrar a Partidas, el filtro de año se posiciona automáticamente en el año actual. Si no hay transacciones registradas en el año en curso, el sistema retrocede al año anterior con datos." },
@@ -53,6 +54,8 @@ const helpSections: HelpSection[] = [
       { title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
     ],
     tips: [
+      "Configure las autorizaciones SAT desde Empresas → editar empresa → pestaña 'Libros SAT' antes de imprimir libros oficiales.",
+      "El consumo de folios se registra automáticamente con el número real de páginas generadas en el PDF, no estimado.",
       "Si ve el banner rojo de 'Sin conexión', evite presionar Guardar en formularios largos hasta que la conexión se restablezca.",
       "Use el botón de copiar al portapapeles en el ISR Trimestral para pegar directamente el monto en el formulario SAT.",
       "Las operaciones largas (copiar / eliminar) ya no permiten cerrar el modal accidentalmente mientras están en curso.",

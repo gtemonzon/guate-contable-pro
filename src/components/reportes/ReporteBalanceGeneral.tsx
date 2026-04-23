@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
+import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
+import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import type { ReportLine } from "./reportTypes";
 import { collectDescendantIds } from "./collectDescendantIds";
 import { useReportTreeState } from "./useReportTreeState";
@@ -38,7 +40,9 @@ export default function ReporteBalanceGeneral() {
   const [displayLevel, setDisplayLevel] = useState<number>(0);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { consumePages } = useBookAuthorizations(currentEnterpriseId);
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
     currentEnterpriseId,
@@ -323,7 +327,11 @@ export default function ReporteBalanceGeneral() {
     toast({ title: "Exportado", description: "El reporte se ha exportado a Excel correctamente" });
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async (options: FolioExportOptions) => {
+    if (options.format === 'excel') {
+      handleExportExcel();
+      return;
+    }
     const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
     const levelCount = Math.min(maxLevel, 5);
     const headers = ["Concepto", ...Array.from({ length: levelCount }, (_, i) => `Nivel ${i + 1}`)];
@@ -344,14 +352,30 @@ export default function ReporteBalanceGeneral() {
       return row;
     });
 
-    exportToPDF({
+    const result = exportToPDF({
       filename: `Balance_General_${reportDate}`,
       title: `Balance General al ${new Date(reportDate + 'T00:00:00').toLocaleDateString('es-GT')}`,
       enterpriseName,
       headers,
       data,
       forcePortrait: true,
+      folioOptions: {
+        includeFolio: options.includeFolio,
+        startingFolio: options.startingFolio,
+      },
+      authorizationLegend: options.authorization
+        ? { number: options.authorization.number, date: options.authorization.date }
+        : undefined,
     });
+
+    if (options.authorization && result?.pageCount) {
+      await consumePages(options.authorization.id, result.pageCount, {
+        enterpriseId: options.authorization.enterpriseId,
+        bookType: options.authorization.bookType,
+        reportPeriod: `Balance General al ${reportDate}`,
+        dateTo: reportDate,
+      });
+    }
 
     toast({ title: "Exportado", description: "El reporte se ha exportado a PDF correctamente" });
   };
@@ -420,13 +444,22 @@ export default function ReporteBalanceGeneral() {
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Excel
             </Button>
-            <Button variant="outline" onClick={handleExportPDF} className="flex-1">
-              <FileText className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="flex-1">
+              <Download className="h-4 w-4 mr-2" />
               PDF
             </Button>
           </div>
         )}
       </div>
+
+      <FolioExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExportPDF}
+        title="Exportar Balance General"
+        bookType="libro_estados_financieros"
+        enterpriseId={currentEnterpriseId ?? undefined}
+      />
 
       {!format && !formatLoading && currentEnterpriseId && (
         <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">

@@ -13,6 +13,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
+import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
   Table,
   TableBody,
@@ -359,7 +360,9 @@ export default function ReporteLibroMayor() {
     }
   };
 
-  const handleExport = (options: FolioExportOptions) => {
+  const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
+
+  const handleExport = async (options: FolioExportOptions) => {
     if (accountLedgers.length === 0) return;
 
     const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
@@ -417,7 +420,7 @@ export default function ReporteLibroMayor() {
     if (options.format === 'excel') {
       exportToExcel(exportOptions);
     } else {
-      exportToPDF({
+      const result = exportToPDF({
         ...exportOptions,
         forcePortrait: true,
         boldRows,
@@ -425,7 +428,19 @@ export default function ReporteLibroMayor() {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
         },
+        authorizationLegend: options.authorization
+          ? { number: options.authorization.number, date: options.authorization.date }
+          : undefined,
       });
+      if (options.authorization && result?.pageCount) {
+        await consumePages(options.authorization.id, result.pageCount, {
+          enterpriseId: options.authorization.enterpriseId,
+          bookType: options.authorization.bookType,
+          reportPeriod: `Libro Mayor ${startDate} a ${endDate}`,
+          dateFrom: startDate,
+          dateTo: endDate,
+        });
+      }
     }
 
     toast({
@@ -573,6 +588,8 @@ export default function ReporteLibroMayor() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro Mayor"
+        bookType="libro_mayor"
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
       />
 
       {reportGenerated && accountLedgers.length > 0 && (
