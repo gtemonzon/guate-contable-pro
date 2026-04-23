@@ -101,8 +101,8 @@ export function BookAuthorizationDialog({ open, onOpenChange, enterpriseId, auth
       });
       toast({ title: authorization ? "Autorización actualizada" : "Autorización creada" });
       onOpenChange(false);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
 
