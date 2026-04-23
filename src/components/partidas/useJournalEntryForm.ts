@@ -756,7 +756,7 @@ export function useJournalEntryForm(
       for (const line of validLines) {
         const account = accounts.find(a => a.id === line.account_id);
         if (!account || account.balance_type === 'indiferente') continue;
-        let query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
+        const query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
         // Only consider posted entries for overdraft check
         const { data: postedEntryIds } = await supabase.from("tab_journal_entries")
           .select("id").eq("enterprise_id", parseInt(enterpriseId)).eq("is_posted", true).is("deleted_at", null);
@@ -870,7 +870,7 @@ export function useJournalEntryForm(
 
       } else {
         // ─── Brand new entry: insert header → lines → post ──────
-        let finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
+        const finalEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
         setNextEntryNumber(finalEntryNumber);
 
         const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({

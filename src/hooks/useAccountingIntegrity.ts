@@ -58,7 +58,7 @@ export function useAccountingIntegrity() {
 
     // Shared data across categories
     let entries: any[] = [];
-    let allDetails: any[] = [];
+    const allDetails: any[] = [];
     let accounts: any[] = [];
     let periods: any[] = [];
 

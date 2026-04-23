@@ -428,7 +428,7 @@ export function QuickPurchaseForm({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [canSubmit, handleSave]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canSubmit, handleSave]);  
 
   const effectiveDocTypes = felDocTypes.length > 0 ? felDocTypes : [
     { code: "FACT", name: "Factura" },
