@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useTenant } from "@/contexts/TenantContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
