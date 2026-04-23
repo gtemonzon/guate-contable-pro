@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── Secret / sensitive-file scanning ──────────────────────────────────
       - name: Check for committed .env files
@@ -64,7 +64,7 @@ jobs:
 
       # ── Node / Bun setup ──────────────────────────────────────────────────
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
@@ -84,7 +84,7 @@ jobs:
 
       - name: ESLint regression guard
         run: |
-          BASELINE=281
+          BASELINE=240
           if [ "${lint_issues:-0}" -gt "$BASELINE" ]; then
             echo "::error::Lint errors increased! Current: ${lint_issues}, Baseline: $BASELINE. Fix new issues before merging."
             exit 1
@@ -113,10 +113,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
