@@ -625,10 +625,40 @@ export function QuickPurchaseForm({
         </Select>
       </div>
 
+      {/* Row Multi-currency: Currency selector + Rate (only if enterprise has >1 currency) */}
+      {isMultiCurrency && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Moneda</label>
+            <Select value={currencyCode} onValueChange={setCurrencyCode}>
+              <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={baseCurrency}>{baseCurrency}</SelectItem>
+                {enabledCurrencies.map((c) => (
+                  <SelectItem key={c.currency_code} value={c.currency_code}>{c.currency_code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Tipo de cambio</label>
+            <Input
+              type="number" step="0.000001" min="0"
+              value={exchangeRate || ""}
+              onChange={(e) => setExchangeRate(Number(e.target.value) || 0)}
+              disabled={currencyCode === baseCurrency}
+              className="h-8 text-xs font-mono mt-1"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Row 5: Total + IDP (if fuel) */}
       <div className={`grid gap-2 ${isFuelOperation ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Total Q</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Total {currencyCode === baseCurrency ? `(${baseCurrency})` : currencyCode}
+          </label>
           <Input
             type="number" step="0.01" min="0"
             value={total || ""}
