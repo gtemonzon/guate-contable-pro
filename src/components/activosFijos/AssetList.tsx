@@ -6,6 +6,9 @@ import {
 } from "@/hooks/useFixedAssets";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
+import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { CurrencyAmountInput } from "@/components/shared/CurrencyAmountInput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,12 +36,16 @@ const fmt = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2,
 const EMPTY_ASSET: Partial<FixedAsset> = {
   asset_code: "", asset_name: "", acquisition_cost: 0, residual_value: 0,
   useful_life_months: 60, currency: "GTQ", acquisition_date: "", status: "DRAFT",
+  exchange_rate_at_acquisition: 1, original_acquisition_cost: 0, original_residual_value: 0,
 };
 
 export default function AssetList() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id ?? null;
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const isMultiCurrency = enabledCurrencies.length > 0;
 
   const { data: assets = [], isLoading } = useFixedAssets(enterpriseId);
   const { data: policy } = useAssetPolicy(enterpriseId);
@@ -65,12 +72,29 @@ export default function AssetList() {
     return matchSearch && matchStatus && matchCat;
   });
 
-  const openNew = () => { setForm(EMPTY_ASSET); setFormOpen(true); };
+  const openNew = () => {
+    setForm({ ...EMPTY_ASSET, currency: baseCurrency, exchange_rate_at_acquisition: 1 });
+    setFormOpen(true);
+  };
 
   const save = () => {
     if (!enterpriseId || !tenantId) return;
-    upsert.mutate(
-      { ...form, enterprise_id: enterpriseId, tenant_id: tenantId } as FixedAsset & { enterprise_id: number; tenant_id: number },
+    const rate = Number(form.exchange_rate_at_acquisition || 1);
+    const origCost = Number(form.original_acquisition_cost ?? form.acquisition_cost ?? 0);
+    const origResidual = Number(form.original_residual_value ?? form.residual_value ?? 0);
+    const payload: Partial<FixedAsset> & { enterprise_id: number; tenant_id: number } = {
+      ...form,
+      enterprise_id: enterpriseId,
+      tenant_id: tenantId,
+      // Funcional = original × rate
+      acquisition_cost: Math.round(origCost * rate * 100) / 100,
+      residual_value: Math.round(origResidual * rate * 100) / 100,
+      original_acquisition_cost: origCost,
+      original_residual_value: origResidual,
+      exchange_rate_at_acquisition: rate,
+      currency: form.currency || baseCurrency,
+    };
+    upsert.mutate(payload as FixedAsset & { enterprise_id: number; tenant_id: number },
       { onSuccess: () => setFormOpen(false) }
     );
   };
@@ -223,15 +247,43 @@ export default function AssetList() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Costo de adquisición *</Label>
-              <Input type="number" min={0} step="0.01" value={form.acquisition_cost || 0}
-                onChange={(e) => setForm((f) => ({ ...f, acquisition_cost: parseFloat(e.target.value) }))} />
+            <div className={isMultiCurrency ? "col-span-2" : ""}>
+              <CurrencyAmountInput
+                enterpriseId={enterpriseId!}
+                baseCurrencyCode={baseCurrency}
+                date={form.acquisition_date || new Date().toISOString().split("T")[0]}
+                amount={Number(form.original_acquisition_cost ?? form.acquisition_cost ?? 0)}
+                currencyCode={form.currency || baseCurrency}
+                exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
+                label="Costo de adquisición *"
+                onChange={(next) => setForm((f) => ({
+                  ...f,
+                  original_acquisition_cost: next.amount,
+                  currency: next.currencyCode,
+                  exchange_rate_at_acquisition: next.exchangeRate,
+                  // Mantener acquisition_cost en moneda funcional sincronizado
+                  acquisition_cost: Math.round(next.amount * (next.exchangeRate || 1) * 100) / 100,
+                }))}
+              />
             </div>
-            <div>
-              <Label>Valor residual</Label>
-              <Input type="number" min={0} step="0.01" value={form.residual_value || 0}
-                onChange={(e) => setForm((f) => ({ ...f, residual_value: parseFloat(e.target.value) }))} />
+            <div className={isMultiCurrency ? "col-span-2" : ""}>
+              <CurrencyAmountInput
+                enterpriseId={enterpriseId!}
+                baseCurrencyCode={baseCurrency}
+                date={form.acquisition_date || new Date().toISOString().split("T")[0]}
+                amount={Number(form.original_residual_value ?? form.residual_value ?? 0)}
+                currencyCode={form.currency || baseCurrency}
+                exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
+                label="Valor residual"
+                onChange={(next) => setForm((f) => ({
+                  ...f,
+                  original_residual_value: next.amount,
+                  // Hereda moneda y rate del costo de adquisición (un activo = una moneda)
+                  currency: next.currencyCode,
+                  exchange_rate_at_acquisition: next.exchangeRate,
+                  residual_value: Math.round(next.amount * (next.exchangeRate || 1) * 100) / 100,
+                }))}
+              />
             </div>
             <div>
               <Label>Vida útil (meses) *</Label>
@@ -278,16 +330,7 @@ export default function AssetList() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Moneda</Label>
-              <Select value={form.currency || "GTQ"} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="GTQ">GTQ</SelectItem>
-                  <SelectItem value="USD">USD</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Moneda integrada en CurrencyAmountInput de Costo y Valor residual */}
           </div>
           <div>
             <Label>Notas</Label>

@@ -28,6 +28,12 @@ export interface FixedAsset {
   residual_value: number;
   useful_life_months: number;
   currency: string;
+  /** Tipo de cambio al momento de la adquisición (1 si moneda funcional). */
+  exchange_rate_at_acquisition?: number | null;
+  /** Costo de adquisición en moneda original (== acquisition_cost si funcional). */
+  original_acquisition_cost?: number | null;
+  /** Valor residual en moneda original (== residual_value si funcional). */
+  original_residual_value?: number | null;
   purchase_reference_id: number | null;
   status: AssetStatus;
   activated_at: string | null;

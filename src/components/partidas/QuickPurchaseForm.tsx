@@ -11,6 +11,9 @@ import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
+import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { useExchangeRates } from "@/hooks/useExchangeRates";
 
 interface QuickPurchaseFormProps {
   enterpriseId: number;
@@ -43,6 +46,11 @@ export function QuickPurchaseForm({
   enterpriseId, journalEntryId, entryDate, entryMonth, entryYear,
   accounts, felDocTypes, onCreated,
 }: QuickPurchaseFormProps) {
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const { getRate } = useExchangeRates(enterpriseId);
+  const isMultiCurrency = enabledCurrencies.length > 0;
+
   const [date, setDate] = useState(entryDate);
   const [docType, setDocType] = useState("FACT");
   const [series, setSeries] = useState("");
@@ -52,12 +60,30 @@ export function QuickPurchaseForm({
   const [supplier, setSupplier] = useState("");
   const [total, setTotal] = useState<number>(0);
   const [idpAmount, setIdpAmount] = useState<number>(0);
+  const [currencyCode, setCurrencyCode] = useState<string>(baseCurrency);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [expenseAccountId, setExpenseAccountId] = useState<number | null>(null);
   const [operationTypeId, setOperationTypeId] = useState<number | null>(null);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+
+  // Sync default currency once base loads
+  useEffect(() => {
+    setCurrencyCode((c) => (c === "GTQ" || !c) ? baseCurrency : c);
+  }, [baseCurrency]);
+
+  // Auto-fill rate when currency or date changes
+  useEffect(() => {
+    if (currencyCode === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+    const r = getRate(currencyCode, date);
+    if (r !== null) setExchangeRate(r);
+  }, [currencyCode, date, baseCurrency, getRate]);
+
   
 
   // Duplicate detection state
@@ -348,6 +374,11 @@ export function QuickPurchaseForm({
         if (newBook) purchaseBookId = newBook.id;
       }
 
+      const r = Number(exchangeRate || 1);
+      const totalFunctional = Math.round(total * r * 100) / 100;
+      const baseFunctional = Math.round(base * r * 100) / 100;
+      const vatFunctional = Math.round(vat * r * 100) / 100;
+
       const { data: purchase, error: pErr } = await supabase
         .from("tab_purchase_ledger")
         .insert({
@@ -358,11 +389,18 @@ export function QuickPurchaseForm({
           invoice_number: number,
           supplier_nit: nit,
           supplier_name: supplier || nit,
-          total_amount: total,
-          base_amount: base,
-          net_amount: base,
-          vat_amount: vat,
-          idp_amount: isFuelOperation ? idpAmount : 0,
+          // Montos en moneda funcional (para reportes SAT)
+          total_amount: totalFunctional,
+          base_amount: baseFunctional,
+          net_amount: baseFunctional,
+          vat_amount: vatFunctional,
+          idp_amount: isFuelOperation ? Math.round(idpAmount * r * 100) / 100 : 0,
+          // Multi-moneda: moneda original + tasa + montos originales
+          currency_code: currencyCode,
+          exchange_rate: r,
+          original_total: total,
+          original_subtotal: base,
+          original_vat: vat,
           expense_account_id: expenseAccountId,
           operation_type_id: operationTypeId,
           journal_entry_id: journalEntryId,
@@ -587,10 +625,40 @@ export function QuickPurchaseForm({
         </Select>
       </div>
 
+      {/* Row Multi-currency: Currency selector + Rate (only if enterprise has >1 currency) */}
+      {isMultiCurrency && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Moneda</label>
+            <Select value={currencyCode} onValueChange={setCurrencyCode}>
+              <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={baseCurrency}>{baseCurrency}</SelectItem>
+                {enabledCurrencies.map((c) => (
+                  <SelectItem key={c.currency_code} value={c.currency_code}>{c.currency_code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Tipo de cambio</label>
+            <Input
+              type="number" step="0.000001" min="0"
+              value={exchangeRate || ""}
+              onChange={(e) => setExchangeRate(Number(e.target.value) || 0)}
+              disabled={currencyCode === baseCurrency}
+              className="h-8 text-xs font-mono mt-1"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Row 5: Total + IDP (if fuel) */}
       <div className={`grid gap-2 ${isFuelOperation ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Total Q</label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Total {currencyCode === baseCurrency ? `(${baseCurrency})` : currencyCode}
+          </label>
           <Input
             type="number" step="0.01" min="0"
             value={total || ""}
