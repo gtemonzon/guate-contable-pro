@@ -29,8 +29,8 @@ const MONTHS = [
 ];
 
 export function ExchangeRatesManager() {
-  const { currentEnterpriseId } = useEnterprise();
-  const enterpriseId = currentEnterpriseId;
+  const { selectedEnterpriseId } = useEnterprise();
+  const enterpriseId = selectedEnterpriseId;
   const { items: enabled } = useEnterpriseCurrencies(enterpriseId);
   const { rates, loading, upsert, remove, countTransactionsForRate } = useExchangeRates(enterpriseId);
 
