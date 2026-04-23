@@ -21,7 +21,7 @@ type ViewMode = "cards" | "table";
 
 const Empresas = () => {
   const { toast } = useToast();
-  const { currentTenant, isSuperAdmin } = useTenant();
+  const { currentTenant, isSuperAdmin, allTenants, switchTenant } = useTenant();
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
