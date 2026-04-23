@@ -14,6 +14,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
+import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
   Table,
   TableBody,
@@ -233,7 +234,9 @@ export default function ReportePartidas() {
     );
   }, [entries, entryDetails, searchTerm]);
 
-  const handleExport = (options: FolioExportOptions) => {
+  const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
+
+  const handleExport = async (options: FolioExportOptions) => {
     let data: any[] = [];
     
     // Export only posted entries (entries state already filtered)
@@ -294,14 +297,26 @@ export default function ReportePartidas() {
       if (options.format === 'excel') {
         exportToExcel(exportOptions);
       } else {
-        exportToPDF({
+        const result = exportToPDF({
           ...exportOptions,
           forcePortrait: true,
           folioOptions: {
             includeFolio: options.includeFolio,
             startingFolio: options.startingFolio,
           },
+          authorizationLegend: options.authorization
+            ? { number: options.authorization.number, date: options.authorization.date }
+            : undefined,
         });
+        if (options.authorization && result?.pageCount) {
+          await consumePages(options.authorization.id, result.pageCount, {
+            enterpriseId: options.authorization.enterpriseId,
+            bookType: options.authorization.bookType,
+            reportPeriod: `Libro Diario ${dateFrom} a ${dateTo}`,
+            dateFrom,
+            dateTo,
+          });
+        }
       }
     } else {
       // Simple view without details
@@ -334,14 +349,26 @@ export default function ReportePartidas() {
       if (options.format === 'excel') {
         exportToExcel(exportOptions);
       } else {
-        exportToPDF({
+        const result = exportToPDF({
           ...exportOptions,
           forcePortrait: true,
           folioOptions: {
             includeFolio: options.includeFolio,
             startingFolio: options.startingFolio,
           },
+          authorizationLegend: options.authorization
+            ? { number: options.authorization.number, date: options.authorization.date }
+            : undefined,
         });
+        if (options.authorization && result?.pageCount) {
+          await consumePages(options.authorization.id, result.pageCount, {
+            enterpriseId: options.authorization.enterpriseId,
+            bookType: options.authorization.bookType,
+            reportPeriod: `Libro Diario ${dateFrom} a ${dateTo}`,
+            dateFrom,
+            dateTo,
+          });
+        }
       }
     }
 
@@ -410,6 +437,8 @@ export default function ReportePartidas() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro Diario"
+        bookType="libro_diario"
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
         warningMessage={draftCount > 0 ? `El reporte se emitirá únicamente con partidas contabilizadas. En el período seleccionado hay ${draftCount} partida${draftCount > 1 ? 's' : ''} en estado borrador o pendiente${draftCount > 1 ? 's' : ''} de contabilizar.` : undefined}
       />
 
