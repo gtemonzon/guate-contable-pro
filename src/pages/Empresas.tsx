@@ -34,6 +34,8 @@ const Empresas = () => {
     return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
   });
 
+  const [tenantFilter, setTenantFilter] = useState<string>("current");
+
   const fetchEnterprises = async () => {
     try {
       setLoading(true);
@@ -43,7 +45,12 @@ const Empresas = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (isSuperAdmin && currentTenant?.id) {
+      if (isSuperAdmin) {
+        if (tenantFilter !== "all") {
+          const tenantId = tenantFilter === "current" ? currentTenant?.id : parseInt(tenantFilter);
+          if (tenantId) query = query.eq('tenant_id', tenantId);
+        }
+      } else if (currentTenant?.id) {
         query = query.eq('tenant_id', currentTenant.id);
       }
 
