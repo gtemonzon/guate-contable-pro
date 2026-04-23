@@ -6,6 +6,9 @@ import {
 } from "@/hooks/useFixedAssets";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
+import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { CurrencyAmountInput } from "@/components/shared/CurrencyAmountInput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
