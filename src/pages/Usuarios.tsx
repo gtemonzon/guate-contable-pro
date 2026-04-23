@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Search, UserPlus } from "lucide-react";
 import UserCard from "@/components/usuarios/UserCard";
@@ -30,24 +31,25 @@ interface User {
 }
 
 const Usuarios = () => {
-  const { currentTenant, isSuperAdmin, isTenantAdmin } = useTenant();
+  const { currentTenant, isSuperAdmin, isTenantAdmin, allTenants } = useTenant();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<string>("current");
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
 
-  // Refetch users when tenant changes
+  // Refetch users when tenant or filter changes
   useEffect(() => {
-    if (currentTenant?.id) {
+    if (currentTenant?.id || isSuperAdmin) {
       fetchUsers();
     }
-  }, [currentTenant?.id]);
+  }, [currentTenant?.id, tenantFilter, isSuperAdmin]);
 
   // Suscripción a cambios en tiempo real para actualizar semáforos
   useEffect(() => {
@@ -115,8 +117,13 @@ const Usuarios = () => {
         .eq("is_system_user", false)
         .order("created_at", { ascending: false });
 
-      // Filter by tenant - super admin global uses selected tenant, tenant admin uses their own
-      if (currentTenant?.id) {
+      // Filter by tenant
+      if (isSuperAdmin) {
+        if (tenantFilter !== "all") {
+          const tenantId = tenantFilter === "current" ? currentTenant?.id : parseInt(tenantFilter);
+          if (tenantId) query = query.eq("tenant_id", tenantId);
+        }
+      } else if (currentTenant?.id) {
         query = query.eq("tenant_id", currentTenant.id);
       }
 
@@ -188,10 +195,28 @@ const Usuarios = () => {
             Administra usuarios y asigna empresas
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Nuevo Usuario
-        </Button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && allTenants.length > 0 && (
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Filtrar por tenant" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tenants</SelectItem>
+                {currentTenant && (
+                  <SelectItem value="current">Tenant actual: {currentTenant.tenant_name}</SelectItem>
+                )}
+                {allTenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id.toString()}>{t.tenant_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={handleCreate}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <Card>

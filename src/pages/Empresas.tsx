@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useTenant } from "@/contexts/TenantContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -20,7 +21,7 @@ type ViewMode = "cards" | "table";
 
 const Empresas = () => {
   const { toast } = useToast();
-  const { currentTenant, isSuperAdmin } = useTenant();
+  const { currentTenant, isSuperAdmin, allTenants, switchTenant } = useTenant();
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,6 +34,8 @@ const Empresas = () => {
     return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
   });
 
+  const [tenantFilter, setTenantFilter] = useState<string>("current");
+
   const fetchEnterprises = async () => {
     try {
       setLoading(true);
@@ -42,7 +45,12 @@ const Empresas = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (isSuperAdmin && currentTenant?.id) {
+      if (isSuperAdmin) {
+        if (tenantFilter !== "all") {
+          const tenantId = tenantFilter === "current" ? currentTenant?.id : parseInt(tenantFilter);
+          if (tenantId) query = query.eq('tenant_id', tenantId);
+        }
+      } else if (currentTenant?.id) {
         query = query.eq('tenant_id', currentTenant.id);
       }
 
@@ -63,7 +71,7 @@ const Empresas = () => {
 
   useEffect(() => {
     fetchEnterprises();
-  }, [currentTenant?.id]);
+  }, [currentTenant?.id, tenantFilter, isSuperAdmin]);
 
   useEffect(() => {
     localStorage.setItem("empresasViewMode", viewMode);
@@ -136,10 +144,28 @@ const Empresas = () => {
             Gestiona las empresas registradas en el sistema
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Empresa
-        </Button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && allTenants.length > 0 && (
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Filtrar por tenant" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tenants</SelectItem>
+                {currentTenant && (
+                  <SelectItem value="current">Tenant actual: {currentTenant.tenant_name}</SelectItem>
+                )}
+                {allTenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id.toString()}>{t.tenant_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Empresa
+          </Button>
+        </div>
       </div>
 
       <Card>
