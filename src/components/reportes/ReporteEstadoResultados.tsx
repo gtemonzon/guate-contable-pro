@@ -6,17 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileSpreadsheet, FileText, Loader2, AlertCircle } from "lucide-react";
+import { FileSpreadsheet, Download, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatementFormat";
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
+import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
+import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import type { ReportLine } from "./reportTypes";
 import { collectDescendantIds } from "./collectDescendantIds";
 import { useReportTreeState } from "./useReportTreeState";
@@ -50,9 +52,11 @@ export default function ReporteEstadoResultados() {
   const [cdvBreakdown, setCdvBreakdown] = useState<CdvBreakdown | null>(null);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
+  const { consumePages } = useBookAuthorizations(currentEnterpriseId);
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
     currentEnterpriseId,
@@ -469,7 +473,11 @@ export default function ReporteEstadoResultados() {
     });
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async (options: FolioExportOptions) => {
+    if (options.format === 'excel') {
+      handleExportExcel();
+      return;
+    }
     // Get max account level for dynamic column generation
     const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
     const levelCount = Math.min(maxLevel, 5); // Cap at 5 levels
@@ -513,14 +521,31 @@ export default function ReporteEstadoResultados() {
 
     const footnote = cdvBreakdown ? 'Costo de ventas calculado por método de coeficiente (inventario periódico)' : undefined;
 
-    exportToPDF({
+    const result = exportToPDF({
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
       title: `Estado de Resultados del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}${footnote ? '\n' + footnote : ''}`,
       enterpriseName,
       headers,
       data,
       forcePortrait: true,
+      folioOptions: {
+        includeFolio: options.includeFolio,
+        startingFolio: options.startingFolio,
+      },
+      authorizationLegend: options.authorization
+        ? { number: options.authorization.number, date: options.authorization.date }
+        : undefined,
     });
+
+    if (options.authorization && result?.pageCount) {
+      await consumePages(options.authorization.id, result.pageCount, {
+        enterpriseId: options.authorization.enterpriseId,
+        bookType: options.authorization.bookType,
+        reportPeriod: `Estado de Resultados ${dateFrom} a ${dateTo}`,
+        dateFrom,
+        dateTo,
+      });
+    }
 
     toast({
       title: "Exportado",
@@ -602,13 +627,22 @@ export default function ReporteEstadoResultados() {
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Excel
             </Button>
-            <Button variant="outline" onClick={handleExportPDF} className="flex-1">
-              <FileText className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="flex-1">
+              <Download className="h-4 w-4 mr-2" />
               PDF
             </Button>
           </div>
         )}
       </div>
+
+      <FolioExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExportPDF}
+        title="Exportar Estado de Resultados"
+        bookType="libro_estados_financieros"
+        enterpriseId={currentEnterpriseId ?? undefined}
+      />
 
       {!format && !formatLoading && currentEnterpriseId && (
         <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
