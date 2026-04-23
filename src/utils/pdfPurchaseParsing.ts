@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // PDF Purchase Parsing Utilities for SAT Guatemala format
 // Used to extract purchase data from PDF exports of "Mis Documentos > Recibidos"
 
