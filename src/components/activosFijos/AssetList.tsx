@@ -72,12 +72,29 @@ export default function AssetList() {
     return matchSearch && matchStatus && matchCat;
   });
 
-  const openNew = () => { setForm(EMPTY_ASSET); setFormOpen(true); };
+  const openNew = () => {
+    setForm({ ...EMPTY_ASSET, currency: baseCurrency, exchange_rate_at_acquisition: 1 });
+    setFormOpen(true);
+  };
 
   const save = () => {
     if (!enterpriseId || !tenantId) return;
-    upsert.mutate(
-      { ...form, enterprise_id: enterpriseId, tenant_id: tenantId } as FixedAsset & { enterprise_id: number; tenant_id: number },
+    const rate = Number(form.exchange_rate_at_acquisition || 1);
+    const origCost = Number(form.original_acquisition_cost ?? form.acquisition_cost ?? 0);
+    const origResidual = Number(form.original_residual_value ?? form.residual_value ?? 0);
+    const payload: Partial<FixedAsset> & { enterprise_id: number; tenant_id: number } = {
+      ...form,
+      enterprise_id: enterpriseId,
+      tenant_id: tenantId,
+      // Funcional = original × rate
+      acquisition_cost: Math.round(origCost * rate * 100) / 100,
+      residual_value: Math.round(origResidual * rate * 100) / 100,
+      original_acquisition_cost: origCost,
+      original_residual_value: origResidual,
+      exchange_rate_at_acquisition: rate,
+      currency: form.currency || baseCurrency,
+    };
+    upsert.mutate(payload as FixedAsset & { enterprise_id: number; tenant_id: number },
       { onSuccess: () => setFormOpen(false) }
     );
   };
