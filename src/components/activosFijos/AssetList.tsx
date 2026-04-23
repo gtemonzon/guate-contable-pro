@@ -43,6 +43,9 @@ export default function AssetList() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id ?? null;
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const isMultiCurrency = enabledCurrencies.length > 0;
 
   const { data: assets = [], isLoading } = useFixedAssets(enterpriseId);
   const { data: policy } = useAssetPolicy(enterpriseId);
