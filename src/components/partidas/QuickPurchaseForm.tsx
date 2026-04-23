@@ -46,6 +46,11 @@ export function QuickPurchaseForm({
   enterpriseId, journalEntryId, entryDate, entryMonth, entryYear,
   accounts, felDocTypes, onCreated,
 }: QuickPurchaseFormProps) {
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const { getRate } = useExchangeRates(enterpriseId);
+  const isMultiCurrency = enabledCurrencies.length > 0;
+
   const [date, setDate] = useState(entryDate);
   const [docType, setDocType] = useState("FACT");
   const [series, setSeries] = useState("");
@@ -55,12 +60,30 @@ export function QuickPurchaseForm({
   const [supplier, setSupplier] = useState("");
   const [total, setTotal] = useState<number>(0);
   const [idpAmount, setIdpAmount] = useState<number>(0);
+  const [currencyCode, setCurrencyCode] = useState<string>(baseCurrency);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [expenseAccountId, setExpenseAccountId] = useState<number | null>(null);
   const [operationTypeId, setOperationTypeId] = useState<number | null>(null);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+
+  // Sync default currency once base loads
+  useEffect(() => {
+    setCurrencyCode((c) => (c === "GTQ" || !c) ? baseCurrency : c);
+  }, [baseCurrency]);
+
+  // Auto-fill rate when currency or date changes
+  useEffect(() => {
+    if (currencyCode === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+    const r = getRate(currencyCode, date);
+    if (r !== null) setExchangeRate(r);
+  }, [currencyCode, date, baseCurrency, getRate]);
+
   
 
   // Duplicate detection state
