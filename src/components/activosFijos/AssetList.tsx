@@ -36,6 +36,7 @@ const fmt = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2,
 const EMPTY_ASSET: Partial<FixedAsset> = {
   asset_code: "", asset_name: "", acquisition_cost: 0, residual_value: 0,
   useful_life_months: 60, currency: "GTQ", acquisition_date: "", status: "DRAFT",
+  exchange_rate_at_acquisition: 1, original_acquisition_cost: 0, original_residual_value: 0,
 };
 
 export default function AssetList() {
