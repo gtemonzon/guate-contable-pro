@@ -195,10 +195,28 @@ const Usuarios = () => {
             Administra usuarios y asigna empresas
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Nuevo Usuario
-        </Button>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && allTenants.length > 0 && (
+            <Select value={tenantFilter} onValueChange={setTenantFilter}>
+              <SelectTrigger className="w-[240px]">
+                <SelectValue placeholder="Filtrar por tenant" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tenants</SelectItem>
+                {currentTenant && (
+                  <SelectItem value="current">Tenant actual: {currentTenant.tenant_name}</SelectItem>
+                )}
+                {allTenants.map((t) => (
+                  <SelectItem key={t.id} value={t.id.toString()}>{t.tenant_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={handleCreate}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <Card>
