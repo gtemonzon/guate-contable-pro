@@ -71,7 +71,7 @@ const Empresas = () => {
 
   useEffect(() => {
     fetchEnterprises();
-  }, [currentTenant?.id]);
+  }, [currentTenant?.id, tenantFilter, isSuperAdmin]);
 
   useEffect(() => {
     localStorage.setItem("empresasViewMode", viewMode);
