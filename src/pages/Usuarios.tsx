@@ -117,8 +117,13 @@ const Usuarios = () => {
         .eq("is_system_user", false)
         .order("created_at", { ascending: false });
 
-      // Filter by tenant - super admin global uses selected tenant, tenant admin uses their own
-      if (currentTenant?.id) {
+      // Filter by tenant
+      if (isSuperAdmin) {
+        if (tenantFilter !== "all") {
+          const tenantId = tenantFilter === "current" ? currentTenant?.id : parseInt(tenantFilter);
+          if (tenantId) query = query.eq("tenant_id", tenantId);
+        }
+      } else if (currentTenant?.id) {
         query = query.eq("tenant_id", currentTenant.id);
       }
 
