@@ -15,6 +15,7 @@ import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyMa
 import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreManager";
 import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
+import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
@@ -39,6 +40,7 @@ export default function Configuracion() {
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
           <TabsTrigger value="alerts">Alertas</TabsTrigger>
           <TabsTrigger value="due-dates">Fechas Vencimiento</TabsTrigger>
+          <TabsTrigger value="exchange-rates">Tipos de Cambio</TabsTrigger>
           <TabsTrigger value="pdf-typography">Tipografía PDFs</TabsTrigger>
           <TabsTrigger value="permissions">Roles y Permisos</TabsTrigger>
           <TabsTrigger value="backup">Respaldo</TabsTrigger>
@@ -107,6 +109,10 @@ export default function Configuracion() {
         <TabsContent value="due-dates" className="mt-6 space-y-6">
           <TaxDueDateConfig />
           <HolidaysManager />
+        </TabsContent>
+
+        <TabsContent value="exchange-rates" className="mt-6">
+          <ExchangeRatesManager />
         </TabsContent>
 
         <TabsContent value="pdf-typography" className="mt-6">

@@ -39,6 +39,7 @@ import { EnterpriseDocuments } from "./EnterpriseDocuments";
 import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
+import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -258,8 +259,9 @@ export function EnterpriseDialog({
 
         {enterprise ? (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="currencies">Monedas</TabsTrigger>
               <TabsTrigger value="taxes">Impuestos</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
               <TabsTrigger value="periods">Períodos</TabsTrigger>
@@ -469,6 +471,13 @@ export function EnterpriseDialog({
                   </div>
                 </form>
               </Form>
+            </TabsContent>
+
+            <TabsContent value="currencies" className="mt-4">
+              <EnterpriseCurrencies
+                enterpriseId={enterprise.id}
+                baseCurrencyCode={enterprise.base_currency_code || "GTQ"}
+              />
             </TabsContent>
 
             <TabsContent value="taxes" className="mt-4">
