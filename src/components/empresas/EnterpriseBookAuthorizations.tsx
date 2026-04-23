@@ -105,8 +105,8 @@ export function EnterpriseBookAuthorizations({ enterpriseId }: Props) {
       if (s) setStatuses((p) => ({ ...p, [adjustTarget.id]: s }));
       toast({ title: "Folios ajustados" });
       setAdjustOpen(false);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
 
@@ -127,8 +127,8 @@ export function EnterpriseBookAuthorizations({ enterpriseId }: Props) {
       await remove(toDelete.id);
       toast({ title: "Autorización eliminada" });
       setToDelete(null);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
 

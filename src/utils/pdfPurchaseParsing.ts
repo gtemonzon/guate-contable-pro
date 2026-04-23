@@ -118,7 +118,7 @@ export function parsePdfRowsFromText(text: string): PdfParseResult {
   }
   
   // Process lines after header
-  let currentRow: Partial<ParsedPurchaseRow> = {};
+  const currentRow: Partial<ParsedPurchaseRow> = {};
   let rowBuffer: string[] = [];
   
   for (let i = headerIndex + 1; i < lines.length; i++) {

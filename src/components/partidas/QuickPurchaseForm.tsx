@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -428,7 +429,7 @@ export function QuickPurchaseForm({
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [canSubmit, handleSave]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [canSubmit, handleSave]);  
 
   const effectiveDocTypes = felDocTypes.length > 0 ? felDocTypes : [
     { code: "FACT", name: "Factura" },

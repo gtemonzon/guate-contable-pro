@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -161,7 +162,7 @@ const ConciliacionBancaria = () => {
         ...(periodMovements || []).map(m => m.id)
       ];
 
-      let reconciledMap = new Map<number, { is_reconciled: boolean; reconciliation_id: number | null }>();
+      const reconciledMap = new Map<number, { is_reconciled: boolean; reconciliation_id: number | null }>();
       
       if (allDetailIds.length > 0) {
         const { data: bankMovements } = await supabase

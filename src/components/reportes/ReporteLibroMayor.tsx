@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from "react";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { useSearchParams } from "react-router-dom";

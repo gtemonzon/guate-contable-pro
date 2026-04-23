@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
@@ -58,7 +59,7 @@ export function useAccountingIntegrity() {
 
     // Shared data across categories
     let entries: any[] = [];
-    let allDetails: any[] = [];
+    const allDetails: any[] = [];
     let accounts: any[] = [];
     let periods: any[] = [];
 

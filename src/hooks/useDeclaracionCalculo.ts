@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -458,7 +459,7 @@ export function useDeclaracionCalculo(
     const exentosTypes = ['FPEQ', 'FESP', 'NABN', 'RDON', 'RECI'];
     
     let ventasGravadasLocales = 0;
-    let exportaciones = 0;
+    const exportaciones = 0;
     let ventasExentas = 0;
     let debitoFiscal = 0;
 
