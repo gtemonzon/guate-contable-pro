@@ -31,24 +31,25 @@ interface User {
 }
 
 const Usuarios = () => {
-  const { currentTenant, isSuperAdmin, isTenantAdmin } = useTenant();
+  const { currentTenant, isSuperAdmin, isTenantAdmin, allTenants } = useTenant();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [tenantFilter, setTenantFilter] = useState<string>("current");
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
 
-  // Refetch users when tenant changes
+  // Refetch users when tenant or filter changes
   useEffect(() => {
-    if (currentTenant?.id) {
+    if (currentTenant?.id || isSuperAdmin) {
       fetchUsers();
     }
-  }, [currentTenant?.id]);
+  }, [currentTenant?.id, tenantFilter, isSuperAdmin]);
 
   // Suscripción a cambios en tiempo real para actualizar semáforos
   useEffect(() => {
