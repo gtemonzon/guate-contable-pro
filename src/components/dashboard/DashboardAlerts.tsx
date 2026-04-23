@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, AlertCircle, Info, ArrowRight, RefreshCw, Bell } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, ArrowRight, RefreshCw, Bell, BookOpen } from 'lucide-react';
 import { useNotifications, Notification } from '@/hooks/useNotifications';
 import { useAlertGenerator } from '@/hooks/useAlertGenerator';
 import { useNavigate } from 'react-router-dom';
@@ -42,25 +42,26 @@ export function DashboardAlerts({ enterpriseId }: DashboardAlertsProps) {
   const allDisplayed = [...urgentAlerts, ...importantAlerts, ...infoAlerts].slice(0, 5);
   const totalUnread = notifications.filter(n => !n.is_read).length;
 
-  const getPriorityConfig = (priority: string) => {
+  const getPriorityConfig = (priority: string, notificationType?: string) => {
+    const isFolioAlert = notificationType?.startsWith('folios_');
     switch (priority) {
       case 'urgente':
         return {
-          icon: AlertTriangle,
+          icon: isFolioAlert ? BookOpen : AlertTriangle,
           bg: 'bg-destructive/10',
           border: 'border-destructive/30',
           text: 'text-destructive',
         };
       case 'importante':
         return {
-          icon: AlertCircle,
+          icon: isFolioAlert ? BookOpen : AlertCircle,
           bg: 'bg-yellow-500/10',
           border: 'border-yellow-500/30',
           text: 'text-yellow-700 dark:text-yellow-400',
         };
       default:
         return {
-          icon: Info,
+          icon: isFolioAlert ? BookOpen : Info,
           bg: 'bg-blue-500/10',
           border: 'border-blue-500/30',
           text: 'text-blue-700 dark:text-blue-400',
@@ -124,7 +125,7 @@ export function DashboardAlerts({ enterpriseId }: DashboardAlertsProps) {
         ) : (
           <div className="space-y-3">
             {allDisplayed.map((notification) => {
-              const config = getPriorityConfig(notification.priority);
+              const config = getPriorityConfig(notification.priority, notification.notification_type);
               const Icon = config.icon;
 
               return (
