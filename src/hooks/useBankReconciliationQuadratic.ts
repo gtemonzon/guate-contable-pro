@@ -51,13 +51,15 @@ export function useBankReconciliationQuadratic(reconciliationId: number | null) 
     if (!reconciliationId) return;
     setLoading(true);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
       const [quadResp, adjResp] = await Promise.all([
-        supabase.from('tab_bank_reconciliation_quadratic' as never).select('*').eq('reconciliation_id', reconciliationId).maybeSingle(),
-        supabase.from('tab_bank_reconciliation_adjustments' as never).select('*').eq('reconciliation_id', reconciliationId).order('id'),
+        sb.from('tab_bank_reconciliation_quadratic').select('*').eq('reconciliation_id', reconciliationId).maybeSingle(),
+        sb.from('tab_bank_reconciliation_adjustments').select('*').eq('reconciliation_id', reconciliationId).order('id'),
       ]);
-      if (quadResp.data) setData(quadResp.data as unknown as QuadraticData);
+      if (quadResp.data) setData(quadResp.data as QuadraticData);
       else setData(null);
-      setAdjustments(((adjResp.data as unknown as AdjustmentRecord[]) || []));
+      setAdjustments((adjResp.data as AdjustmentRecord[]) || []);
     } catch (err) {
       console.error('Error loading quadratic data', err);
     } finally {
