@@ -406,8 +406,7 @@ export default function ReportePartidas() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            Vista multi-moneda en preparación. Los montos se muestran en moneda funcional;
-            próximamente se agregarán columnas de moneda original ({currencyView.foreignCode ?? "—"}) por línea.
+            Las líneas en moneda extranjera ({currencyView.foreignCode ?? "—"}) muestran su monto original junto al equivalente en moneda funcional. Activa "Detalles" para verlas.
           </AlertDescription>
         </Alert>
       )}
