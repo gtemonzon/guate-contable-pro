@@ -119,6 +119,7 @@ const App = () => (
               <Route path="/importar" element={<div>Importación (próximamente)</div>} />
               <Route path="/notificaciones" element={<Suspense fallback={<PageLoader />}><Notificaciones /></Suspense>} />
               <Route path="/capacitacion" element={<Suspense fallback={<PageLoader />}><Capacitacion /></Suspense>} />
+              <Route path="/nomina" element={<Suspense fallback={<PageLoader />}><Nomina /></Suspense>} />
               <Route path="/ayuda" element={<Suspense fallback={<PageLoader />}><Ayuda /></Suspense>} />
             </Route>
             
