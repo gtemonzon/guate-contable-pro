@@ -130,7 +130,15 @@ export function PeriodClosingWizard({
   
   // Step: Confirmation
   const [confirmClose, setConfirmClose] = useState(false);
-  
+
+  // FX revaluation gating (Item 9)
+  const [fxCheckLoading, setFxCheckLoading] = useState(false);
+  const [fxNeeded, setFxNeeded] = useState(false);
+  const [fxLastRunMonth, setFxLastRunMonth] = useState<{ year: number; month: number } | null>(null);
+  const [fxMonetaryCount, setFxMonetaryCount] = useState(0);
+  const [skipFxRevaluation, setSkipFxRevaluation] = useState(false);
+  const [fxWizardOpen, setFxWizardOpen] = useState(false);
+
   const { config } = useEnterpriseConfig(enterpriseId);
   
   const cdv = useCostOfSalesCalculation(enterpriseId, period?.id || 0);
