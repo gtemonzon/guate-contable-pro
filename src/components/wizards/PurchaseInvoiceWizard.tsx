@@ -40,6 +40,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
+import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { useExchangeRates } from "@/hooks/useExchangeRates";
+import { Select as CurrencySelect, SelectContent as CurSelContent, SelectItem as CurSelItem, SelectTrigger as CurSelTrigger, SelectValue as CurSelValue } from "@/components/ui/select";
 
 // ── Schema ──────────────────────────────────────────────────────────────────
 
