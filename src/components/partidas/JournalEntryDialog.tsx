@@ -59,7 +59,7 @@ export default function JournalEntryDialog({
   onSuccess,
   entryToEdit = null,
 }: JournalEntryDialogProps) {
-  const form = useJournalEntryForm(open, entryToEdit ?? null, onSuccess, onOpenChange);
+  // form declared below after handleFormSuccess
   const { selectedEnterpriseId } = useEnterprise();
   const { toast } = useToast();
   const { config } = useEnterpriseConfig(selectedEnterpriseId ?? null);
