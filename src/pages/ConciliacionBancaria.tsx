@@ -157,8 +157,94 @@ const ConciliacionBancaria = () => {
   useEffect(() => {
     if (selectedAccount && selectedMonth && selectedYear) {
       fetchMovements();
+      loadExistingReconciliation();
+    } else {
+      setLastExport(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAccount, selectedMonth, selectedYear]);
+
+  const loadExistingReconciliation = async () => {
+    try {
+      if (!selectedAccount || !selectedMonth || !selectedYear) return;
+      const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+      const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+      const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
+
+      const { data: recs, error } = await supabase
+        .from('tab_bank_reconciliations')
+        .select('*')
+        .eq('bank_account_id', parseInt(selectedAccount))
+        .gte('reconciliation_date', startDate)
+        .lte('reconciliation_date', endDate)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      const rec = recs?.[0];
+      if (!rec) {
+        setLastExport(null);
+        return;
+      }
+
+      // Load movements linked to this reconciliation
+      const { data: bms } = await supabase
+        .from('tab_bank_movements')
+        .select('movement_date, description, debit_amount, credit_amount, reference, journal_entry_id')
+        .eq('reconciliation_id', rec.id);
+
+      const journalIds = (bms || []).map((b) => b.journal_entry_id).filter(Boolean) as number[];
+      const beneficiaryMap = new Map<number, { bank_reference: string | null; beneficiary_name: string | null }>();
+      if (journalIds.length > 0) {
+        const { data: jes } = await supabase
+          .from('tab_journal_entries')
+          .select('id, bank_reference, beneficiary_name')
+          .in('id', journalIds);
+        (jes || []).forEach((j) => beneficiaryMap.set(j.id, { bank_reference: j.bank_reference, beneficiary_name: j.beneficiary_name }));
+      }
+
+      const reconciledMovs = (bms || []).map((b) => {
+        const extra = b.journal_entry_id ? beneficiaryMap.get(b.journal_entry_id) : null;
+        return {
+          movement_date: b.movement_date,
+          description: b.description,
+          bank_reference: b.reference || extra?.bank_reference || null,
+          beneficiary_name: extra?.beneficiary_name || null,
+          debit_amount: Number(b.debit_amount || 0),
+          credit_amount: Number(b.credit_amount || 0),
+        };
+      });
+
+      const bankAccount = bankAccounts.find((b) => b.id.toString() === selectedAccount);
+      const monthLabel = months.find((m) => m.value === selectedMonth)?.label || selectedMonth;
+      let entInfo: { business_name?: string; nit?: string } | null = null;
+      if (selectedEnterprise) {
+        const { data } = await supabase
+          .from('tab_enterprises')
+          .select('business_name,nit')
+          .eq('id', parseInt(selectedEnterprise))
+          .maybeSingle();
+        entInfo = data;
+      }
+
+      setLastExport({
+        enterpriseName: entInfo?.business_name || 'Empresa',
+        enterpriseNit: entInfo?.nit || '',
+        bankName: bankAccount?.bank_name || '',
+        accountNumber: bankAccount?.account_number || '',
+        reconciliationDate: rec.reconciliation_date,
+        period: `${monthLabel} ${selectedYear}`,
+        bankStatementBalance: Number(rec.bank_statement_balance || 0),
+        bookBalance: Number(rec.book_balance || 0),
+        difference: Number(rec.book_balance || 0) - Number(rec.bank_statement_balance || 0),
+        notes: rec.notes || undefined,
+        reconciledMovements: reconciledMovs,
+        pendingMovements: [],
+      });
+    } catch (err) {
+      console.error('Error loading existing reconciliation:', err);
+    }
+  };
 
   const fetchBankAccounts = async (enterpriseId: string) => {
     try {
