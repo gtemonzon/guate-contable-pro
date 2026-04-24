@@ -324,7 +324,7 @@ export function useFxRevaluation() {
       }, { onConflict: "enterprise_id,year,month,prefix" });
 
       // Registrar en tab_fx_revaluation_runs
-      await supabase.from("tab_fx_revaluation_runs").insert({
+      await supabase.from("tab_fx_revaluation_runs").insert([{
         enterprise_id: preview.enterprise_id,
         year: preview.year,
         month: preview.month,
@@ -335,7 +335,7 @@ export function useFxRevaluation() {
         total_loss: preview.total_loss,
         details_json: { rows: preview.rows } as any,
         status: "POSTED",
-      });
+      }]);
 
       toast.success(`Partida ${entryNumber} contabilizada (${preview.rows.length} cuentas revaluadas).`);
       return entryId;
