@@ -255,19 +255,22 @@ export function useFxRevaluation() {
       if (entryErr) throw entryErr;
       const entryId = entry.id as number;
 
-      // Construir líneas
+      // Construir líneas (line_number es NOT NULL)
       const lines: any[] = [];
+      let lineNo = 0;
       for (const r of preview.rows) {
         if (r.delta > 0) {
           // Ganancia: cargo a cuenta monetaria (sube), abono a unrealized_fx_gain
           lines.push({
             journal_entry_id: entryId,
+            line_number: ++lineNo,
             account_id: r.account_id,
             debit_amount: r.delta, credit_amount: 0,
             description: `Revaluación ${r.currency_code} @ ${r.cutoff_rate}`,
           });
           lines.push({
             journal_entry_id: entryId,
+            line_number: ++lineNo,
             account_id: cfg.unrealized_fx_gain_account_id,
             debit_amount: 0, credit_amount: r.delta,
             description: `Ganancia cambiaria NR - ${r.account_code}`,
@@ -276,12 +279,14 @@ export function useFxRevaluation() {
           const amt = Math.abs(r.delta);
           lines.push({
             journal_entry_id: entryId,
+            line_number: ++lineNo,
             account_id: cfg.unrealized_fx_loss_account_id,
             debit_amount: amt, credit_amount: 0,
             description: `Pérdida cambiaria NR - ${r.account_code}`,
           });
           lines.push({
             journal_entry_id: entryId,
+            line_number: ++lineNo,
             account_id: r.account_id,
             debit_amount: 0, credit_amount: amt,
             description: `Revaluación ${r.currency_code} @ ${r.cutoff_rate}`,
