@@ -18,7 +18,9 @@ import { QuadraticReconciliationView } from "@/components/conciliacion/Quadratic
 import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
-type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
+type BankAccount = Database['public']['Tables']['tab_bank_accounts']['Row'] & {
+  account: Pick<Account, 'id' | 'account_code' | 'account_name'> | null;
+};
 
 type JournalMovement = {
   id: number;
@@ -37,11 +39,12 @@ type JournalMovement = {
 const ConciliacionBancaria = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [movements, setMovements] = useState<JournalMovement[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<string>("");
+  const [availablePeriods, setAvailablePeriods] = useState<Array<{ year: string; month: string }>>([]);
   const [bankBalance, setBankBalance] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
@@ -126,8 +129,10 @@ const ConciliacionBancaria = () => {
     { value: "12", label: "Diciembre" },
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 10 }, (_, i) => (currentYear - 5 + i).toString());
+  const years = Array.from(new Set(availablePeriods.map((period) => period.year)));
+  const availableMonths = selectedYear
+    ? months.filter((month) => availablePeriods.some((period) => period.year === selectedYear && period.month === month.value))
+    : months;
 
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -138,6 +143,16 @@ const ConciliacionBancaria = () => {
   }, []);
 
   useEffect(() => {
+    if (selectedAccount) {
+      fetchAvailablePeriods(selectedAccount);
+    } else {
+      setAvailablePeriods([]);
+      setSelectedMonth("");
+      setSelectedYear("");
+    }
+  }, [selectedAccount]);
+
+  useEffect(() => {
     if (selectedAccount && selectedMonth && selectedYear) {
       fetchMovements();
     }
@@ -146,15 +161,20 @@ const ConciliacionBancaria = () => {
   const fetchBankAccounts = async (enterpriseId: string) => {
     try {
       const { data, error } = await supabase
-        .from('tab_accounts')
-        .select('*')
+        .from('tab_bank_accounts')
+        .select(`
+          *,
+          account:tab_accounts(id, account_code, account_name)
+        `)
         .eq('enterprise_id', parseInt(enterpriseId))
-        .eq('is_bank_account', true)
-        .eq('is_active', true)
-        .order('account_code');
+        .eq('is_active', true);
 
       if (error) throw error;
-      setBankAccounts(data || []);
+
+      const sorted = ((data || []) as unknown as BankAccount[]).sort((a, b) =>
+        (a.account?.account_code || '').localeCompare(b.account?.account_code || '')
+      );
+      setBankAccounts(sorted);
     } catch (error: unknown) {
       toast({
         variant: "destructive",
@@ -164,16 +184,93 @@ const ConciliacionBancaria = () => {
     }
   };
 
+  const fetchAvailablePeriods = async (bankAccountId: string) => {
+    try {
+      const selectedBankAccount = bankAccounts.find((account) => account.id.toString() === bankAccountId);
+      const ledgerAccountId = selectedBankAccount?.account_id;
+
+      if (!ledgerAccountId) {
+        setAvailablePeriods([]);
+        setSelectedMonth("");
+        setSelectedYear("");
+        return;
+      }
+
+      const { data: firstMovement, error } = await supabase
+        .from('tab_journal_entry_details')
+        .select(`
+          tab_journal_entries!inner(
+            entry_date,
+            is_posted
+          )
+        `)
+        .eq('account_id', ledgerAccountId)
+        .eq('tab_journal_entries.is_posted', true)
+        .order('entry_date', { ascending: true, foreignTable: 'tab_journal_entries' })
+        .limit(1, { foreignTable: 'tab_journal_entries' })
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const firstDate = firstMovement?.tab_journal_entries?.entry_date;
+      if (!firstDate) {
+        setAvailablePeriods([]);
+        setSelectedMonth("");
+        setSelectedYear("");
+        return;
+      }
+
+      const start = new Date(`${firstDate}T00:00:00`);
+      const end = new Date();
+      const periods: Array<{ year: string; month: string }> = [];
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+      while (cursor <= last) {
+        periods.push({
+          year: cursor.getFullYear().toString(),
+          month: (cursor.getMonth() + 1).toString(),
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      setAvailablePeriods(periods);
+
+      const latestPeriod = periods[periods.length - 1];
+      const currentSelectionIsValid = periods.some(
+        (period) => period.year === selectedYear && period.month === selectedMonth,
+      );
+
+      if (!currentSelectionIsValid && latestPeriod) {
+        setSelectedYear(latestPeriod.year);
+        setSelectedMonth(latestPeriod.month);
+      }
+    } catch (error: unknown) {
+      setAvailablePeriods([]);
+      toast({
+        variant: "destructive",
+        title: "Error al cargar períodos",
+        description: getSafeErrorMessage(error),
+      });
+    }
+  };
+
 
   const fetchMovements = async () => {
     try {
       setLoading(true);
+
+      const selectedBankAccount = bankAccounts.find((account) => account.id.toString() === selectedAccount);
+      const ledgerAccountId = selectedBankAccount?.account_id;
+      if (!ledgerAccountId) {
+        setMovements([]);
+        return;
+      }
       
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
       const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
       
-      // Get unreconciled movements from journal entries (previous periods)
       const { data: previousUnreconciled, error: prevError } = await supabase
         .from('tab_journal_entry_details')
         .select(`
@@ -191,13 +288,12 @@ const ConciliacionBancaria = () => {
             beneficiary_name
           )
         `)
-        .eq('account_id', parseInt(selectedAccount))
+        .eq('account_id', ledgerAccountId)
         .eq('tab_journal_entries.is_posted', true)
         .lt('tab_journal_entries.entry_date', startDate);
 
       if (prevError) throw prevError;
 
-      // Get all movements from the selected period
       const { data: periodMovements, error: periodError } = await supabase
         .from('tab_journal_entry_details')
         .select(`
@@ -215,7 +311,7 @@ const ConciliacionBancaria = () => {
             beneficiary_name
           )
         `)
-        .eq('account_id', parseInt(selectedAccount))
+        .eq('account_id', ledgerAccountId)
         .eq('tab_journal_entries.is_posted', true)
         .gte('tab_journal_entries.entry_date', startDate)
         .lte('tab_journal_entries.entry_date', endDate);
@@ -548,7 +644,7 @@ const ConciliacionBancaria = () => {
               <SelectContent>
                 {bankAccounts.map((account) => (
                   <SelectItem key={account.id} value={account.id.toString()}>
-                    {account.account_code} - {account.account_name}
+                    {account.account?.account_code || account.bank_name} - {account.account?.account_name || account.account_number}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -572,7 +668,7 @@ const ConciliacionBancaria = () => {
                   <SelectValue placeholder="Selecciona un mes" />
                 </SelectTrigger>
                 <SelectContent>
-                  {months.map((month) => (
+                  {availableMonths.map((month) => (
                     <SelectItem key={month.value} value={month.value}>
                       {month.label}
                     </SelectItem>
@@ -660,9 +756,6 @@ const ConciliacionBancaria = () => {
                     </div>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <span>{filteredMovements.length} de {movements.length}</span>
-                      <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllFiltered}>
-                        {allFilteredSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
-                      </Button>
                     </div>
                   </div>
                   <Table>
