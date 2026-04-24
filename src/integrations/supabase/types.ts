@@ -4040,6 +4040,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_role_permission: {
+        Args: {
+          _enterprise_id: number
+          _permission_key: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
       initialize_default_permissions: {
         Args: { p_enterprise_id: number }
         Returns: undefined
