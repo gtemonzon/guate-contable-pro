@@ -2189,6 +2189,21 @@ export function PeriodClosingWizard({
           </div>
         )}
       </DialogContent>
+
+      {/* FX Revaluation Wizard (Item 9 — gating en paso Partidas) */}
+      {fxLastRunMonth && (
+        <FxRevaluationWizard
+          open={fxWizardOpen}
+          onOpenChange={setFxWizardOpen}
+          enterpriseId={enterpriseId}
+          defaultYear={fxLastRunMonth.year}
+          defaultMonth={fxLastRunMonth.month}
+          onPosted={() => {
+            setFxWizardOpen(false);
+            checkFxRevaluationStatus();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
