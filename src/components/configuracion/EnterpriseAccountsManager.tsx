@@ -29,6 +29,10 @@ export function EnterpriseAccountsManager() {
     inventory_account_id: null as number | null,
     cost_of_sales_method: 'manual' as 'manual' | 'coeficiente',
     cost_of_sales_account_id: null as number | null,
+    unrealized_fx_gain_account_id: null as number | null,
+    unrealized_fx_loss_account_id: null as number | null,
+    realized_fx_gain_account_id: null as number | null,
+    realized_fx_loss_account_id: null as number | null,
   });
 
   useEffect(() => {
