@@ -1168,6 +1168,127 @@ export type Database = {
           },
         ]
       }
+      tab_bank_reconciliation_adjustments: {
+        Row: {
+          adjustment_date: string | null
+          adjustment_type: string
+          affects_side: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string
+          document_reference: string | null
+          enterprise_id: number
+          id: number
+          reconciliation_id: number
+        }
+        Insert: {
+          adjustment_date?: string | null
+          adjustment_type: string
+          affects_side: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description: string
+          document_reference?: string | null
+          enterprise_id: number
+          id?: number
+          reconciliation_id: number
+        }
+        Update: {
+          adjustment_date?: string | null
+          adjustment_type?: string
+          affects_side?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          document_reference?: string | null
+          enterprise_id?: number
+          id?: number
+          reconciliation_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_bank_reconciliation_adjustments_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "tab_bank_reconciliations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_bank_reconciliation_quadratic: {
+        Row: {
+          auditor_colegiado_number: string | null
+          auditor_name: string | null
+          auditor_signature_date: string | null
+          bank_account_id: number
+          created_at: string
+          created_by: string | null
+          enterprise_id: number
+          final_balance_bank: number
+          final_balance_books: number
+          id: number
+          initial_balance_bank: number
+          initial_balance_books: number
+          reconciliation_id: number
+          total_expenses_bank: number
+          total_expenses_books: number
+          total_income_bank: number
+          total_income_books: number
+          updated_at: string
+        }
+        Insert: {
+          auditor_colegiado_number?: string | null
+          auditor_name?: string | null
+          auditor_signature_date?: string | null
+          bank_account_id: number
+          created_at?: string
+          created_by?: string | null
+          enterprise_id: number
+          final_balance_bank?: number
+          final_balance_books?: number
+          id?: number
+          initial_balance_bank?: number
+          initial_balance_books?: number
+          reconciliation_id: number
+          total_expenses_bank?: number
+          total_expenses_books?: number
+          total_income_bank?: number
+          total_income_books?: number
+          updated_at?: string
+        }
+        Update: {
+          auditor_colegiado_number?: string | null
+          auditor_name?: string | null
+          auditor_signature_date?: string | null
+          bank_account_id?: number
+          created_at?: string
+          created_by?: string | null
+          enterprise_id?: number
+          final_balance_bank?: number
+          final_balance_books?: number
+          id?: number
+          initial_balance_bank?: number
+          initial_balance_books?: number
+          reconciliation_id?: number
+          total_expenses_bank?: number
+          total_expenses_books?: number
+          total_income_bank?: number
+          total_income_books?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_bank_reconciliation_quadratic_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: true
+            referencedRelation: "tab_bank_reconciliations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_bank_reconciliations: {
         Row: {
           adjustments: number | null
@@ -1453,11 +1574,25 @@ export type Database = {
           cost_of_sales_method: string | null
           created_at: string | null
           customers_account_id: number | null
+          default_auditor_colegiado: string | null
+          default_auditor_name: string | null
           enterprise_id: number
           final_inventory_account_id: number | null
           id: number
           initial_inventory_account_id: number | null
           inventory_account_id: number | null
+          payroll_aguinaldo_bono14_provision_account_id: number | null
+          payroll_aguinaldo_expense_account_id: number | null
+          payroll_bonificacion_expense_account_id: number | null
+          payroll_bono14_expense_account_id: number | null
+          payroll_igss_patronal_expense_account_id: number | null
+          payroll_igss_payable_account_id: number | null
+          payroll_indemnizacion_expense_account_id: number | null
+          payroll_indemnizacion_provision_account_id: number | null
+          payroll_isr_payable_account_id: number | null
+          payroll_salaries_expense_account_id: number | null
+          payroll_salaries_payable_account_id: number | null
+          payroll_vacaciones_expense_account_id: number | null
           period_result_account_id: number | null
           purchases_account_id: number | null
           realized_fx_gain_account_id: number | null
@@ -1475,11 +1610,25 @@ export type Database = {
           cost_of_sales_method?: string | null
           created_at?: string | null
           customers_account_id?: number | null
+          default_auditor_colegiado?: string | null
+          default_auditor_name?: string | null
           enterprise_id: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
           inventory_account_id?: number | null
+          payroll_aguinaldo_bono14_provision_account_id?: number | null
+          payroll_aguinaldo_expense_account_id?: number | null
+          payroll_bonificacion_expense_account_id?: number | null
+          payroll_bono14_expense_account_id?: number | null
+          payroll_igss_patronal_expense_account_id?: number | null
+          payroll_igss_payable_account_id?: number | null
+          payroll_indemnizacion_expense_account_id?: number | null
+          payroll_indemnizacion_provision_account_id?: number | null
+          payroll_isr_payable_account_id?: number | null
+          payroll_salaries_expense_account_id?: number | null
+          payroll_salaries_payable_account_id?: number | null
+          payroll_vacaciones_expense_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
           realized_fx_gain_account_id?: number | null
@@ -1497,11 +1646,25 @@ export type Database = {
           cost_of_sales_method?: string | null
           created_at?: string | null
           customers_account_id?: number | null
+          default_auditor_colegiado?: string | null
+          default_auditor_name?: string | null
           enterprise_id?: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
           inventory_account_id?: number | null
+          payroll_aguinaldo_bono14_provision_account_id?: number | null
+          payroll_aguinaldo_expense_account_id?: number | null
+          payroll_bonificacion_expense_account_id?: number | null
+          payroll_bono14_expense_account_id?: number | null
+          payroll_igss_patronal_expense_account_id?: number | null
+          payroll_igss_payable_account_id?: number | null
+          payroll_indemnizacion_expense_account_id?: number | null
+          payroll_indemnizacion_provision_account_id?: number | null
+          payroll_isr_payable_account_id?: number | null
+          payroll_salaries_expense_account_id?: number | null
+          payroll_salaries_payable_account_id?: number | null
+          payroll_vacaciones_expense_account_id?: number | null
           period_result_account_id?: number | null
           purchases_account_id?: number | null
           realized_fx_gain_account_id?: number | null
@@ -2758,6 +2921,125 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tab_payroll_entries: {
+        Row: {
+          base_salary: number
+          bonificacion_decreto: number
+          commissions: number
+          created_at: string
+          employee_dpi: string | null
+          employee_name: string
+          employee_position: string | null
+          enterprise_id: number
+          id: number
+          igss_laboral: number
+          isr_retained: number
+          loans_deduction: number
+          net_pay: number
+          other_deductions: number
+          other_income: number
+          overtime: number
+          payroll_period_id: number
+        }
+        Insert: {
+          base_salary?: number
+          bonificacion_decreto?: number
+          commissions?: number
+          created_at?: string
+          employee_dpi?: string | null
+          employee_name: string
+          employee_position?: string | null
+          enterprise_id: number
+          id?: number
+          igss_laboral?: number
+          isr_retained?: number
+          loans_deduction?: number
+          net_pay?: number
+          other_deductions?: number
+          other_income?: number
+          overtime?: number
+          payroll_period_id: number
+        }
+        Update: {
+          base_salary?: number
+          bonificacion_decreto?: number
+          commissions?: number
+          created_at?: string
+          employee_dpi?: string | null
+          employee_name?: string
+          employee_position?: string | null
+          enterprise_id?: number
+          id?: number
+          igss_laboral?: number
+          isr_retained?: number
+          loans_deduction?: number
+          net_pay?: number
+          other_deductions?: number
+          other_income?: number
+          overtime?: number
+          payroll_period_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_payroll_entries_payroll_period_id_fkey"
+            columns: ["payroll_period_id"]
+            isOneToOne: false
+            referencedRelation: "tab_payroll_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_payroll_periods: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          enterprise_id: number
+          id: number
+          journal_entry_id: number | null
+          notes: string | null
+          payment_date: string
+          period_month: number
+          period_year: number
+          status: string
+          total_deductions: number
+          total_gross: number
+          total_net: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          enterprise_id: number
+          id?: number
+          journal_entry_id?: number | null
+          notes?: string | null
+          payment_date: string
+          period_month: number
+          period_year: number
+          status?: string
+          total_deductions?: number
+          total_gross?: number
+          total_net?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          enterprise_id?: number
+          id?: number
+          journal_entry_id?: number | null
+          notes?: string | null
+          payment_date?: string
+          period_month?: number
+          period_year?: number
+          status?: string
+          total_deductions?: number
+          total_gross?: number
+          total_net?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       tab_period_inventory_closing: {
         Row: {
