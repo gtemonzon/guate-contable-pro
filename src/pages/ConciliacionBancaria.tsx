@@ -684,6 +684,8 @@ const ConciliacionBancaria = () => {
           </Card>
         </>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
