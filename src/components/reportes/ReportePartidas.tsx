@@ -52,6 +52,10 @@ interface JournalEntryDetail {
   debit_amount: number;
   credit_amount: number;
   description: string | null;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  original_debit?: number | null;
+  original_credit?: number | null;
 }
 
 // Separate posted entries from draft entries
@@ -174,6 +178,10 @@ export default function ReportePartidas() {
             debit_amount: detail.debit_amount,
             credit_amount: detail.credit_amount,
             description: detail.description,
+            currency_code: detail.currency_code ?? null,
+            exchange_rate: detail.exchange_rate != null ? Number(detail.exchange_rate) : null,
+            original_debit: detail.original_debit != null ? Number(detail.original_debit) : null,
+            original_credit: detail.original_credit != null ? Number(detail.original_credit) : null,
           });
         });
         setEntryDetails(groupedDetails);
@@ -398,8 +406,7 @@ export default function ReportePartidas() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription className="text-xs">
-            Vista multi-moneda en preparación. Los montos se muestran en moneda funcional;
-            próximamente se agregarán columnas de moneda original ({currencyView.foreignCode ?? "—"}) por línea.
+            Las líneas en moneda extranjera ({currencyView.foreignCode ?? "—"}) muestran su monto original junto al equivalente en moneda funcional. Activa "Detalles" para verlas.
           </AlertDescription>
         </Alert>
       )}
@@ -540,6 +547,12 @@ export default function ReportePartidas() {
                                   </TableCell>
                                   <TableCell className="text-sm" colSpan={2}>
                                     <TruncatedText text={detail.description || '-'} inline />
+                                    {detail.currency_code && detail.currency_code !== 'GTQ' && ((detail.original_debit ?? 0) > 0 || (detail.original_credit ?? 0) > 0) && (
+                                      <span className="ml-2 text-[10px] text-muted-foreground font-mono">
+                                        [{detail.currency_code} {formatCurrency((detail.original_debit ?? 0) || (detail.original_credit ?? 0))}
+                                        {detail.exchange_rate != null && ` @ ${Number(detail.exchange_rate).toFixed(4)}`}]
+                                      </span>
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right text-sm">
                                     {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}

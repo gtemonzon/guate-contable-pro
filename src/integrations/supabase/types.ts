@@ -3954,14 +3954,18 @@ export type Database = {
         Returns: {
           account_id: number
           credit_amount: number
+          currency_code: string
           debit_amount: number
           detail_id: number
           entry_date: string
           entry_description: string
           entry_number: string
+          exchange_rate: number
           journal_entry_id: number
           line_description: string
           opening_balance: number
+          original_credit: number
+          original_debit: number
         }[]
       }
       get_monthly_ledger_summary: {
