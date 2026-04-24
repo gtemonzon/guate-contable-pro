@@ -18,7 +18,9 @@ import { QuadraticReconciliationView } from "@/components/conciliacion/Quadratic
 import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
-type BankAccount = Database['public']['Tables']['tab_bank_accounts']['Row'] & { account: Account | null };
+type BankAccount = Database['public']['Tables']['tab_bank_accounts']['Row'] & {
+  account: Pick<Account, 'id' | 'account_code' | 'account_name'> | null;
+};
 
 type JournalMovement = {
   id: number;
