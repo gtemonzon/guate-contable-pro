@@ -927,6 +927,36 @@ const ConciliacionBancaria = () => {
           </Card>
         </>
       )}
+
+      {lastExport && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-primary" />
+              Última conciliación guardada
+            </CardTitle>
+            <CardDescription>
+              {lastExport.bankName} — {lastExport.accountNumber} · Período {lastExport.period} · Fecha {lastExport.reconciliationDate}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              {lastExport.reconciledMovements.length} movimientos conciliados · Saldo libros Q {lastExport.bookBalance.toFixed(2)} · Saldo banco Q {lastExport.bankStatementBalance.toFixed(2)}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => exportReconciliationPDF(lastExport)}>
+                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+              </Button>
+              <Button variant="outline" onClick={() => exportReconciliationExcel(lastExport)}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar Excel
+              </Button>
+              <Button variant="ghost" onClick={() => setLastExport(null)}>
+                Ocultar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
         </TabsContent>
       </Tabs>
     </div>
