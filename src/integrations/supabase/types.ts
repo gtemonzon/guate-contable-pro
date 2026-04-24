@@ -1916,6 +1916,65 @@ export type Database = {
           },
         ]
       }
+      tab_fx_open_balances: {
+        Row: {
+          created_at: string
+          currency_code: string
+          enterprise_id: number
+          fully_settled: boolean
+          id: number
+          invoice_date: string
+          invoice_id: number
+          invoice_type: string
+          original_open: number
+          original_paid: number
+          original_total: number
+          registered_rate: number
+          settled_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code: string
+          enterprise_id: number
+          fully_settled?: boolean
+          id?: number
+          invoice_date: string
+          invoice_id: number
+          invoice_type: string
+          original_open: number
+          original_paid?: number
+          original_total: number
+          registered_rate: number
+          settled_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string
+          enterprise_id?: number
+          fully_settled?: boolean
+          id?: number
+          invoice_date?: string
+          invoice_id?: number
+          invoice_type?: string
+          original_open?: number
+          original_paid?: number
+          original_total?: number
+          registered_rate?: number
+          settled_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_fx_open_balances_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_fx_revaluation_runs: {
         Row: {
           created_at: string
@@ -1974,6 +2033,69 @@ export type Database = {
             columns: ["journal_entry_id"]
             isOneToOne: false
             referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_fx_settlements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          difc_journal_id: number | null
+          enterprise_id: number
+          fx_difference: number
+          id: number
+          is_gain: boolean
+          notes: string | null
+          open_balance_id: number
+          paid_original_amount: number
+          payment_date: string
+          payment_journal_id: number
+          payment_rate: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          difc_journal_id?: number | null
+          enterprise_id: number
+          fx_difference: number
+          id?: number
+          is_gain: boolean
+          notes?: string | null
+          open_balance_id: number
+          paid_original_amount: number
+          payment_date: string
+          payment_journal_id: number
+          payment_rate: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          difc_journal_id?: number | null
+          enterprise_id?: number
+          fx_difference?: number
+          id?: number
+          is_gain?: boolean
+          notes?: string | null
+          open_balance_id?: number
+          paid_original_amount?: number
+          payment_date?: string
+          payment_journal_id?: number
+          payment_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_fx_settlements_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_fx_settlements_open_balance_id_fkey"
+            columns: ["open_balance_id"]
+            isOneToOne: false
+            referencedRelation: "tab_fx_open_balances"
             referencedColumns: ["id"]
           },
         ]
@@ -3618,6 +3740,27 @@ export type Database = {
         Returns: string
       }
       assert_tenant_context: { Args: never; Returns: undefined }
+      calculate_fx_settlement: {
+        Args: {
+          p_open_balance_id: number
+          p_paid_original: number
+          p_payment_date: string
+          p_payment_rate: number
+        }
+        Returns: {
+          currency_code: string
+          fully_settled: boolean
+          fx_difference: number
+          invoice_id: number
+          invoice_type: string
+          is_gain: boolean
+          open_balance_id: number
+          paid_original: number
+          payment_rate: number
+          registered_rate: number
+          remaining_open: number
+        }[]
+      }
       can_access_tenant: {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean
@@ -3920,6 +4063,19 @@ export type Database = {
           p_entry_type: string
         }
         Returns: string
+      }
+      register_fx_settlement: {
+        Args: {
+          p_difc_journal_id: number
+          p_fx_difference: number
+          p_notes?: string
+          p_open_balance_id: number
+          p_paid_original: number
+          p_payment_date: string
+          p_payment_journal_id: number
+          p_payment_rate: number
+        }
+        Returns: number
       }
       update_posted_entry_metadata: {
         Args: {
