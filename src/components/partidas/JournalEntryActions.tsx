@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle, Coins } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { EntryStatus } from "./useJournalEntryForm";
 
