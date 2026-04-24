@@ -33,7 +33,16 @@ export interface PostingLine {
   credit_amount: number;
 }
 
-export function calculatePayrollPosting(entries: PayrollEntry[], config: Config): { lines: PostingLine[]; warnings: string[] } {
+export interface PayrollPostingOptions {
+  includeVacaciones?: boolean;
+}
+
+export function calculatePayrollPosting(
+  entries: PayrollEntry[],
+  config: Config,
+  options: PayrollPostingOptions = {},
+): { lines: PostingLine[]; warnings: string[] } {
+  const { includeVacaciones = false } = options;
   const warnings: string[] = [];
   const lines: PostingLine[] = [];
 
@@ -48,7 +57,7 @@ export function calculatePayrollPosting(entries: PayrollEntry[], config: Config)
   const indem = totalBase * GT_PAYROLL_RATES.indemnizacion;
   const agui = totalBase * GT_PAYROLL_RATES.aguinaldo;
   const bono14 = totalBase * GT_PAYROLL_RATES.bono14;
-  const vac = totalBase * GT_PAYROLL_RATES.vacaciones;
+  const vac = includeVacaciones ? totalBase * GT_PAYROLL_RATES.vacaciones : 0;
 
   const required: { key: keyof Config; label: string; debit: number }[] = [
     { key: 'payroll_salaries_expense_account_id', label: 'Sueldos', debit: totalBase },
