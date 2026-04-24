@@ -470,6 +470,7 @@ export default function ReporteLibroBancos() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro de Bancos"
+        estimatePageCount={rowsWithBalance.length === 0 ? undefined : () => estimatePdfPageCount(buildExportOptions())}
       />
     </div>
   );
