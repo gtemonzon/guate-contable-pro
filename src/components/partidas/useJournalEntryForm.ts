@@ -506,6 +506,8 @@ export function useJournalEntryForm(
       total_credit: 0,
       is_posted: false,
       status: 'borrador',
+      currency_code: currencyCode,
+      exchange_rate: exchangeRate || 1,
       created_by: user.id,
     } as any).select().single();
 
@@ -814,6 +816,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null,
           updated_by: user.id, updated_at: new Date().toISOString(), status: 'borrador',
         } as any).eq("id", entryToEdit.id);
@@ -852,6 +855,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null,
           updated_by: user.id, updated_at: new Date().toISOString(),
           status: 'borrador',
@@ -889,6 +893,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null, created_by: user.id,
           status: 'borrador',
         } as any).select().single();
