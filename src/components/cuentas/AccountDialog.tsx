@@ -44,6 +44,7 @@ const formSchema = z.object({
   level: z.number().min(1).max(10),
   allows_movement: z.boolean().default(true),
   is_bank_account: z.boolean().default(false),
+  is_monetary: z.boolean().default(false),
   is_active: z.boolean().default(true),
 });
 
@@ -89,6 +90,7 @@ export function AccountDialog({
       level: 1,
       allows_movement: true,
       is_bank_account: false,
+      is_monetary: false,
       is_active: true,
     },
   });
@@ -140,6 +142,7 @@ export function AccountDialog({
         level: account.level,
         allows_movement: account.allows_movement ?? true,
         is_bank_account: account.is_bank_account ?? false,
+        is_monetary: (account as any).is_monetary ?? false,
         is_active: account.is_active ?? true,
       });
     } else if (presetConfig) {
@@ -153,6 +156,7 @@ export function AccountDialog({
         level: presetConfig.level,
         allows_movement: presetConfig.allowsMovement,
         is_bank_account: false,
+        is_monetary: false,
         is_active: true,
       });
     } else {
@@ -168,6 +172,7 @@ export function AccountDialog({
         level: level,
         allows_movement: true,
         is_bank_account: false,
+        is_monetary: false,
         is_active: true,
       });
     }
@@ -216,6 +221,7 @@ export function AccountDialog({
         level: values.level,
         allows_movement: values.allows_movement,
         is_bank_account: values.is_bank_account,
+        is_monetary: values.is_bank_account ? true : values.is_monetary,
         is_active: values.is_active,
       };
 
@@ -405,7 +411,7 @@ export function AccountDialog({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4 rounded-lg border p-4">
+            <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
               <FormField
                 control={form.control}
                 name="allows_movement"
@@ -431,7 +437,29 @@ export function AccountDialog({
                     <FormControl>
                       <Switch
                         checked={field.value || false}
+                        onCheckedChange={(v) => {
+                          field.onChange(v);
+                          if (v) form.setValue("is_monetary", true);
+                        }}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="is_monetary"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col items-center gap-2">
+                    <FormLabel className="text-sm" title="Saldo en moneda extranjera se revalúa al cierre de mes (Bancos, CxC, CxP)">
+                      Cuenta Monetaria
+                    </FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value || false}
                         onCheckedChange={field.onChange}
+                        disabled={form.watch("is_bank_account")}
                       />
                     </FormControl>
                   </FormItem>

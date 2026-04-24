@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit, RefreshCw } from "lucide-react";
+import { FxRevaluationWizard } from "@/components/partidas/FxRevaluationWizard";
 import { ReferenceBadges } from "@/components/partidas/ReferenceBadges";
 import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
@@ -98,6 +99,7 @@ export default function Partidas() {
   const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
   const [metadataEntry, setMetadataEntry] = useState<JournalEntry | null>(null);
   const [showMetadataDialog, setShowMetadataDialog] = useState(false);
+  const [showFxWizard, setShowFxWizard] = useState(false);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [openPeriods, setOpenPeriods] = useState<AccountingPeriod[]>([]);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
@@ -431,13 +433,29 @@ export default function Partidas() {
               <TooltipContent>{splitViewOpen ? "Cerrar panel" : "Abrir panel de detalle"}</TooltipContent>
             </Tooltip>
             {permissions.canCreateEntries && (
-              <Button size="sm" onClick={() => setShowEditDialog(true)}>
-                <Plus className="mr-1.5 h-4 w-4" />
-                Nueva
-                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
-                  Alt+N
-                </kbd>
-              </Button>
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowFxWizard(true)}
+                      disabled={!currentEnterpriseId}
+                    >
+                      <RefreshCw className="mr-1.5 h-4 w-4" />
+                      Revaluación FX
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Revaluación cambiaria — Diferencial NO realizado</TooltipContent>
+                </Tooltip>
+                <Button size="sm" onClick={() => setShowEditDialog(true)}>
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Nueva
+                  <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                    Alt+N
+                  </kbd>
+                </Button>
+              </>
             )}
           </div>
         </div>
