@@ -35,6 +35,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import EntityLink from "@/components/ui/entity-link";
+import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 interface Account {
   id: number;
@@ -80,6 +83,7 @@ export default function ReporteLibroMayor() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
 
   const { toast } = useToast();
 
@@ -463,6 +467,22 @@ export default function ReporteLibroMayor() {
 
   return (
     <div className="space-y-6">
+      <ReportCurrencySelector
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
+        value={currencyView}
+        onChange={setCurrencyView}
+      />
+
+      {currencyView.mode !== "FUNCTIONAL" && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Vista multi-moneda en preparación. Los montos se siguen mostrando en moneda funcional;
+            la próxima iteración añadirá las columnas de moneda original ({currencyView.foreignCode ?? "—"}).
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <Label>Cuentas Contables</Label>
