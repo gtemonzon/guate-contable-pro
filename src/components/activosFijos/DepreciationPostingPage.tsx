@@ -12,7 +12,8 @@ import { sumDepreciationForPeriod } from "@/domain/fixedAssets/calculations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import DepreciationHistoryCard from "./DepreciationHistoryCard";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = (t: string) => (supabase as any).from(t);
@@ -25,13 +26,14 @@ const FREQ_LABELS: Record<string, string> = {
   MONTHLY: "Mensual", QUARTERLY: "Trimestral", SEMIANNUAL: "Semestral", ANNUAL: "Anual",
 };
 
-// A row that summarises what would be posted for a single asset
 interface PostingPreviewRow {
   asset: FixedAsset;
-  amount: number;
+  amountPlanned: number;
+  amountPosted: number;
+  hasPlanned: boolean;
+  hasPosted: boolean;
   months: Array<{ year: number; month: number }>;
   scheduleRows: DepreciationScheduleRow[];
-  alreadyPosted: boolean;
 }
 
 function AssetScheduleFetcher({
@@ -45,13 +47,16 @@ function AssetScheduleFetcher({
   targetYear: number;
   targetMonth: number;
   frequency: "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL";
-  onResult: (row: PostingPreviewRow) => void;
+  onResult: (row: PostingPreviewRow | null, assetId: number) => void;
 }) {
   const { data: schedule = [] } = useDepreciationSchedule(asset.id);
 
   useEffect(() => {
-    if (!schedule.length) return;
-    const { amount, months } = sumDepreciationForPeriod(
+    if (!schedule.length) {
+      onResult(null, asset.id);
+      return;
+    }
+    const result = sumDepreciationForPeriod(
       schedule.map((r) => ({
         year: r.year,
         month: r.month,
@@ -65,11 +70,25 @@ function AssetScheduleFetcher({
       frequency
     );
     const relevantRows = schedule.filter((r) =>
-      months.some((m) => m.year === r.year && m.month === r.month)
+      result.months.some((m) => m.year === r.year && m.month === r.month)
     );
-    const alreadyPosted = relevantRows.some((r) => r.status === "POSTED");
-    onResult({ asset, amount, months, scheduleRows: relevantRows, alreadyPosted });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (relevantRows.length === 0) {
+      onResult(null, asset.id);
+      return;
+    }
+    onResult(
+      {
+        asset,
+        amountPlanned: result.amountPlanned,
+        amountPosted: result.amountPosted,
+        hasPlanned: result.hasPlanned,
+        hasPosted: result.hasPosted,
+        months: result.months,
+        scheduleRows: relevantRows,
+      },
+      asset.id
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule, targetYear, targetMonth, frequency]);
 
   return null;
@@ -91,51 +110,72 @@ export default function DepreciationPostingPage() {
   const activeAssets = assets.filter((a) => a.status === "ACTIVE");
   const frequency = policy?.posting_frequency ?? "MONTHLY";
 
-  const handleResult = (row: PostingPreviewRow) => {
+  // Reset preview when period or enterprise changes
+  useEffect(() => {
+    setPreviewRows(new Map());
+  }, [targetYear, targetMonth, enterpriseId, frequency]);
+
+  const handleResult = (row: PostingPreviewRow | null, assetId: number) => {
     setPreviewRows((prev) => {
       const next = new Map(prev);
-      if (row.amount > 0) next.set(row.asset.id, row);
+      if (row) next.set(assetId, row);
+      else next.delete(assetId);
       return next;
     });
   };
 
   const rows = Array.from(previewRows.values());
-  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
-  const toPostRows = rows.filter((r) => !r.alreadyPosted && r.amount > 0);
+  const pendingRows = rows.filter((r) => r.hasPlanned);
+  const postedOnlyRows = rows.filter((r) => !r.hasPlanned && r.hasPosted);
+  const totalPending = pendingRows.reduce((s, r) => s + r.amountPlanned, 0);
+  const totalPosted = postedOnlyRows.reduce((s, r) => s + r.amountPosted, 0);
 
   const handlePost = async () => {
-    if (!enterpriseId || toPostRows.length === 0) return;
+    if (!enterpriseId || pendingRows.length === 0) return;
     setPosting(true);
     try {
       const runId = `DEP-${targetYear}${String(targetMonth).padStart(2, "0")}-${Date.now()}`;
 
-      for (const row of toPostRows) {
-        const scheduleIds = row.scheduleRows.filter((r) => r.status === "PLANNED").map((r) => r.id);
+      for (const row of pendingRows) {
+        const scheduleIds = row.scheduleRows
+          .filter((r) => r.status === "PLANNED")
+          .map((r) => r.id);
         if (scheduleIds.length === 0) continue;
 
-        // Mark schedule rows as POSTED
         const { error } = await db("fixed_asset_depreciation_schedule")
           .update({
             status: "POSTED",
-            posted_depreciation_amount: row.amount,
+            posted_depreciation_amount: row.amountPlanned,
             posting_run_id: runId,
             posted_at: new Date().toISOString(),
           })
           .in("id", scheduleIds);
         if (error) throw error;
 
-        // Log event
         await db("fixed_asset_event_log").insert({
           asset_id: row.asset.id,
           enterprise_id: enterpriseId,
           event_type: "POST_DEPRECIATION",
-          metadata_json: { run_id: runId, amount: row.amount, year: targetYear, month: targetMonth, frequency },
+          metadata_json: {
+            run_id: runId,
+            amount: row.amountPlanned,
+            year: targetYear,
+            month: targetMonth,
+            frequency,
+          },
         });
       }
 
+      // Invalidate ALL depreciation_schedule queries (per-asset cache)
+      qc.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "depreciation_schedule",
+      });
       qc.invalidateQueries({ queryKey: ["fixed_assets", enterpriseId] });
-      qc.invalidateQueries({ queryKey: ["depreciation_schedule"] });
-      toast.success(`Depreciación contabilizada: Q ${fmt(toPostRows.reduce((s, r) => s + r.amount, 0))} — ${toPostRows.length} activos`);
+      qc.invalidateQueries({ queryKey: ["depreciation_runs", enterpriseId] });
+
+      toast.success(
+        `Depreciación contabilizada: Q ${fmt(totalPending)} — ${pendingRows.length} activos`
+      );
       setPreviewRows(new Map());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Error al contabilizar");
@@ -207,11 +247,44 @@ export default function DepreciationPostingPage() {
         />
       ))}
 
+      {/* Summary */}
+      {rows.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Pendientes de contabilizar
+              </div>
+              <div className="mt-2 text-2xl font-bold">{pendingRows.length}</div>
+              <div className="text-sm text-muted-foreground">
+                Q {fmt(totalPending)}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                Ya contabilizados
+              </div>
+              <div className="mt-2 text-2xl font-bold">{postedOnlyRows.length}</div>
+              <div className="text-sm text-muted-foreground">
+                Q {fmt(totalPosted)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Preview table */}
       {rows.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Vista previa de contabilización</CardTitle>
+            <CardTitle>Detalle por activo</CardTitle>
+            <CardDescription>
+              Estado de la depreciación de cada activo para el período seleccionado.
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -224,29 +297,32 @@ export default function DepreciationPostingPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.asset.id}>
-                    <TableCell>{row.asset.asset_name}</TableCell>
-                    <TableCell className="font-mono text-muted-foreground">{row.asset.asset_code}</TableCell>
-                    <TableCell className="text-right font-mono">Q {fmt(row.amount)}</TableCell>
-                    <TableCell>
-                      {row.alreadyPosted ? (
-                        <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                          <CheckCircle className="h-3 w-3 text-green-600" /> Ya contabilizado
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-amber-700 border-amber-300">Pendiente</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="font-semibold bg-muted/30">
-                  <TableCell colSpan={2}>Total a contabilizar</TableCell>
-                  <TableCell className="text-right font-mono">
-                    Q {fmt(toPostRows.reduce((s, r) => s + r.amount, 0))}
-                  </TableCell>
-                  <TableCell>{toPostRows.length} activos</TableCell>
-                </TableRow>
+                {rows.map((row) => {
+                  const isPosted = !row.hasPlanned && row.hasPosted;
+                  const amount = isPosted ? row.amountPosted : row.amountPlanned;
+                  return (
+                    <TableRow key={row.asset.id}>
+                      <TableCell>{row.asset.asset_name}</TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{row.asset.asset_code}</TableCell>
+                      <TableCell className="text-right font-mono">Q {fmt(amount)}</TableCell>
+                      <TableCell>
+                        {isPosted ? (
+                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
+                            <CheckCircle className="h-3 w-3 text-green-600" /> Ya contabilizado
+                          </Badge>
+                        ) : row.hasPosted ? (
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit text-amber-700 border-amber-300">
+                            <Clock className="h-3 w-3" /> Parcial
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit text-amber-700 border-amber-300">
+                            <Clock className="h-3 w-3" /> Pendiente
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -260,14 +336,32 @@ export default function DepreciationPostingPage() {
         </Alert>
       )}
 
-      {toPostRows.length > 0 && (
-        <div className="flex justify-end">
-          <Button onClick={handlePost} disabled={posting} size="lg">
+      {/* Action button */}
+      {rows.length > 0 && (
+        <div className="flex justify-end items-center gap-3">
+          {pendingRows.length === 0 && (
+            <Alert className="flex-1">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                Este período ya fue contabilizado completamente. No hay nada pendiente.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Button
+            onClick={handlePost}
+            disabled={posting || pendingRows.length === 0}
+            size="lg"
+          >
             {posting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Contabilizar Q {fmt(toPostRows.reduce((s, r) => s + r.amount, 0))}
+            {pendingRows.length === 0
+              ? "Período contabilizado"
+              : `Contabilizar Q ${fmt(totalPending)}`}
           </Button>
         </div>
       )}
+
+      {/* History */}
+      <DepreciationHistoryCard enterpriseId={enterpriseId} />
     </div>
   );
 }
