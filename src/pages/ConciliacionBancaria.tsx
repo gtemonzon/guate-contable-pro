@@ -576,6 +576,10 @@ const ConciliacionBancaria = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Usuario no autenticado");
 
+      const bookBalance = movements
+        .filter((m) => selectedMovements.has(m.id))
+        .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
+
       const periodRange = getSelectedPeriodRange();
       if (!periodRange) throw new Error("Período inválido");
 
