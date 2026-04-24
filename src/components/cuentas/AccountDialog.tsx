@@ -418,77 +418,117 @@ export function AccountDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
-              <FormField
-                control={form.control}
-                name="allows_movement"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col items-center gap-2">
-                    <FormLabel className="text-sm">Permite Movimiento</FormLabel>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+            <TooltipProvider delayDuration={150}>
+              <div className="grid grid-cols-2 gap-4 rounded-lg border p-4 sm:grid-cols-4">
+                <FormField
+                  control={form.control}
+                  name="allows_movement"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <FormLabel className="text-sm">Permite Movimiento</FormLabel>
+                        <Tooltip>
+                          <TooltipTrigger type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            Si está activo, la cuenta puede recibir movimientos directos en partidas. Las cuentas título o de agrupación deben mantenerlo desactivado.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="is_bank_account"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col items-center gap-2">
-                    <FormLabel className="text-sm">Cuenta Bancaria</FormLabel>
-                    <FormControl>
-                      <Switch
-                        checked={field.value || false}
-                        onCheckedChange={(v) => {
-                          field.onChange(v);
-                          if (v) form.setValue("is_monetary", true);
-                        }}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="is_bank_account"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <FormLabel className="text-sm">Cuenta Bancaria</FormLabel>
+                        <Tooltip>
+                          <TooltipTrigger type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            Marca la cuenta como un banco real. Permite vincularla en el módulo de Bancos, conciliarla con estados de cuenta, generarla en el Libro de Bancos y activar la sección bancaria automática (cheque, transferencia, depósito) en partidas. Al activarla se marca también como Monetaria.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value || false}
+                          onCheckedChange={(v) => {
+                            field.onChange(v);
+                            if (v) form.setValue("is_monetary", true);
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="is_monetary"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col items-center gap-2">
-                    <FormLabel className="text-sm" title="Saldo en moneda extranjera se revalúa al cierre de mes (Bancos, CxC, CxP)">
-                      Cuenta Monetaria
-                    </FormLabel>
-                    <FormControl>
-                      <Switch
-                        checked={field.value || false}
-                        onCheckedChange={field.onChange}
-                        disabled={form.watch("is_bank_account")}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="is_monetary"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <FormLabel className="text-sm">Cuenta Monetaria</FormLabel>
+                        <Tooltip>
+                          <TooltipTrigger type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            No tiene relación con bancos. Indica que el saldo en moneda extranjera (USD, EUR, etc.) debe revaluarse al tipo de cambio de cierre cada mes (NIIF). Aplica a Bancos en USD, Cuentas por Cobrar/Pagar en USD, Préstamos en moneda extranjera. No se marca en inventarios, activos fijos, capital, ingresos ni gastos.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value || false}
+                          onCheckedChange={field.onChange}
+                          disabled={form.watch("is_bank_account")}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="is_active"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col items-center gap-2">
-                    <FormLabel className="text-sm">Cuenta Activa</FormLabel>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <FormLabel className="text-sm">Cuenta Activa</FormLabel>
+                        <Tooltip>
+                          <TooltipTrigger type="button" className="text-muted-foreground hover:text-foreground">
+                            <Info className="h-3.5 w-3.5" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            Si está desactivada, la cuenta no aparece en selectores de partidas ni reportes operativos, pero conserva su historial.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </TooltipProvider>
 
             <div className="flex justify-end gap-3 pt-4">
               <Button
