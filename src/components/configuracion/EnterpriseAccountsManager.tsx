@@ -107,6 +107,10 @@ export function EnterpriseAccountsManager() {
       inventory_account_id: formData.inventory_account_id,
       cost_of_sales_method: formData.cost_of_sales_method,
       cost_of_sales_account_id: formData.cost_of_sales_account_id,
+      unrealized_fx_gain_account_id: formData.unrealized_fx_gain_account_id,
+      unrealized_fx_loss_account_id: formData.unrealized_fx_loss_account_id,
+      realized_fx_gain_account_id: formData.realized_fx_gain_account_id,
+      realized_fx_loss_account_id: formData.realized_fx_loss_account_id,
     });
   };
 
