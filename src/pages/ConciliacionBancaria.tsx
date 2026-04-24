@@ -576,29 +576,43 @@ const ConciliacionBancaria = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Usuario no autenticado");
 
-      // Calculate book balance from selected movements
-      const bookBalance = movements
-        .filter(m => selectedMovements.has(m.id))
-        .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
+      const periodRange = getSelectedPeriodRange();
+      if (!periodRange) throw new Error("Período inválido");
 
-      // Create reconciliation record
-      const { data: reconciliation, error: recError } = await supabase
-        .from('tab_bank_reconciliations')
-        .insert([{
-          bank_account_id: parseInt(selectedAccount),
-          reconciliation_date: new Date().toISOString().split('T')[0],
-          bank_statement_balance: parseFloat(bankBalance),
-          book_balance: bookBalance,
-          adjustments: 0,
-          reconciled_balance: bookBalance,
-          status: 'conciliado',
-          created_by: user.user.id,
-          notes: notes || null,
-        }])
-        .select()
-        .single();
+      const existingReconciliation = await findExistingReconciliation();
+      const reconciliationPayload = {
+        bank_account_id: parseInt(selectedAccount),
+        reconciliation_date: periodRange.endDate,
+        bank_statement_balance: parseFloat(bankBalance),
+        book_balance: bookBalance,
+        adjustments: 0,
+        reconciled_balance: bookBalance,
+        status: 'conciliado',
+        created_by: user.user.id,
+        notes: notes || null,
+      };
 
-      if (recError) throw recError;
+      let reconciliation: { id: number };
+      if (existingReconciliation) {
+        const { data, error } = await supabase
+          .from('tab_bank_reconciliations')
+          .update(reconciliationPayload)
+          .eq('id', existingReconciliation.id)
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        reconciliation = data;
+      } else {
+        const { data, error } = await supabase
+          .from('tab_bank_reconciliations')
+          .insert([reconciliationPayload])
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        reconciliation = data;
+      }
 
       // Update selected movements - insert or update in tab_bank_movements
       const movementIds = Array.from(selectedMovements);
