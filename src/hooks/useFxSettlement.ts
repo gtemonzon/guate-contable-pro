@@ -82,20 +82,22 @@ export function useFxSettlement() {
           ? supabase.from("tab_purchase_ledger")
               .select("id, invoice_number, supplier_nit, supplier_name")
               .in("id", purchaseIds)
-          : Promise.resolve({ data: [] as any[] }),
+          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
         salesIds.length
           ? supabase.from("tab_sales_ledger")
               .select("id, invoice_series, invoice_number, customer_nit, customer_name")
               .in("id", salesIds)
-          : Promise.resolve({ data: [] as any[] }),
+          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
       ]);
 
-      const purchaseMap = new Map((purchasesRes.data || []).map((p: any) => [p.id, p]));
-      const salesMap = new Map((salesRes.data || []).map((s: any) => [s.id, s]));
+      type PurchaseRow = { id: number; invoice_number?: string; supplier_nit?: string; supplier_name?: string };
+      type SalesRow = { id: number; invoice_series?: string; invoice_number?: string; customer_nit?: string; customer_name?: string };
+      const purchaseMap = new Map(((purchasesRes.data || []) as PurchaseRow[]).map((p) => [p.id, p]));
+      const salesMap = new Map(((salesRes.data || []) as SalesRow[]).map((s) => [s.id, s]));
 
       const enriched = rows.map(r => {
         if (r.invoice_type === "purchase") {
-          const p = purchaseMap.get(r.invoice_id) as any;
+          const p = purchaseMap.get(r.invoice_id);
           return {
             ...r,
             invoice_number: p?.invoice_number,
@@ -103,7 +105,7 @@ export function useFxSettlement() {
             counterpart_nit: p?.supplier_nit,
           } as FxOpenBalance & { counterpart_nit?: string };
         }
-        const s = salesMap.get(r.invoice_id) as any;
+        const s = salesMap.get(r.invoice_id);
         return {
           ...r,
           invoice_number: [s?.invoice_series, s?.invoice_number].filter(Boolean).join("-"),
@@ -114,12 +116,12 @@ export function useFxSettlement() {
 
       // Filtro por contraparte (si llega)
       const filtered = params.counterpartNit
-        ? enriched.filter((r: any) => r.counterpart_nit === params.counterpartNit)
+        ? enriched.filter((r) => r.counterpart_nit === params.counterpartNit)
         : enriched;
 
       return filtered;
-    } catch (e: any) {
-      toast.error("Error cargando facturas con saldo abierto: " + e.message);
+    } catch (e: unknown) {
+      toast.error("Error cargando facturas con saldo abierto: " + (e instanceof Error ? e.message : String(e)));
       return [];
     } finally {
       setLoading(false);
@@ -156,8 +158,8 @@ export function useFxSettlement() {
         remaining_open: Number(row.remaining_open),
         fully_settled: Boolean(row.fully_settled),
       };
-    } catch (e: any) {
-      toast.error("Error calculando diferencial: " + e.message);
+    } catch (e: unknown) {
+      toast.error("Error calculando diferencial: " + (e instanceof Error ? e.message : String(e)));
       return null;
     }
   }, []);
@@ -272,7 +274,7 @@ export function useFxSettlement() {
         if (entryErr) throw entryErr;
         difcEntryId = entry.id as number;
 
-        const lines: any[] = [];
+        const lines: Array<{ journal_entry_id: number; line_number: number; account_id: number; debit_amount: number; credit_amount: number; description: string }> = [];
         let lineNo = 0;
 
         // Una línea por factura tocando la cuenta de contraparte (clientes o proveedores)
@@ -378,8 +380,8 @@ export function useFxSettlement() {
         toast.success(`Liquidaciones registradas (sin diferencial cambiario).`);
       }
       return difcEntryId;
-    } catch (e: any) {
-      toast.error("Error registrando diferencial realizado: " + e.message);
+    } catch (e: unknown) {
+      toast.error("Error registrando diferencial realizado: " + (e instanceof Error ? e.message : String(e)));
       return null;
     } finally {
       setPosting(false);

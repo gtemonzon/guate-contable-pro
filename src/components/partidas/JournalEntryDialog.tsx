@@ -102,7 +102,7 @@ export default function JournalEntryDialog({
       // configured Customers/Suppliers accounts in foreign currency.
       const customerAccId = config?.customers_account_id ?? null;
       const supplierAccId = config?.suppliers_account_id ?? null;
-      const touchesAR_AP = (entry.tab_journal_entry_details || []).some((d: any) =>
+      const touchesAR_AP = (entry.tab_journal_entry_details || []).some((d: { account_id: number }) =>
         (customerAccId && d.account_id === customerAccId) ||
         (supplierAccId && d.account_id === supplierAccId),
       );

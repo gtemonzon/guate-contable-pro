@@ -143,8 +143,8 @@ export function LiquidateForeignInvoiceDialog({
       }, { onConflict: "enterprise_id,currency_code,year,month" });
       if (error) throw error;
       toast.success(`Tasa ${currencyCode} ${paymentRate} guardada para ${year}/${String(month).padStart(2, "0")}.`);
-    } catch (e: any) {
-      toast.error("Error guardando tasa: " + e.message);
+    } catch (e: unknown) {
+      toast.error("Error guardando tasa: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setSavingRate(false);
     }
