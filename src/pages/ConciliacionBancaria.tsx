@@ -143,6 +143,16 @@ const ConciliacionBancaria = () => {
   }, []);
 
   useEffect(() => {
+    if (selectedAccount) {
+      fetchAvailablePeriods(selectedAccount);
+    } else {
+      setAvailablePeriods([]);
+      setSelectedMonth("");
+      setSelectedYear("");
+    }
+  }, [selectedAccount]);
+
+  useEffect(() => {
     if (selectedAccount && selectedMonth && selectedYear) {
       fetchMovements();
     }
@@ -151,19 +161,95 @@ const ConciliacionBancaria = () => {
   const fetchBankAccounts = async (enterpriseId: string) => {
     try {
       const { data, error } = await supabase
-        .from('tab_accounts')
-        .select('*')
+        .from('tab_bank_accounts')
+        .select(`
+          *,
+          account:tab_accounts(id, account_code, account_name)
+        `)
         .eq('enterprise_id', parseInt(enterpriseId))
-        .eq('is_bank_account', true)
-        .eq('is_active', true)
-        .order('account_code');
+        .eq('is_active', true);
 
       if (error) throw error;
-      setBankAccounts(data || []);
+
+      const sorted = ((data || []) as unknown as BankAccount[]).sort((a, b) =>
+        (a.account?.account_code || '').localeCompare(b.account?.account_code || '')
+      );
+      setBankAccounts(sorted);
     } catch (error: unknown) {
       toast({
         variant: "destructive",
         title: "Error al cargar cuentas bancarias",
+        description: getSafeErrorMessage(error),
+      });
+    }
+  };
+
+  const fetchAvailablePeriods = async (bankAccountId: string) => {
+    try {
+      const selectedBankAccount = bankAccounts.find((account) => account.id.toString() === bankAccountId);
+      const ledgerAccountId = selectedBankAccount?.account_id;
+
+      if (!ledgerAccountId) {
+        setAvailablePeriods([]);
+        setSelectedMonth("");
+        setSelectedYear("");
+        return;
+      }
+
+      const { data: firstMovement, error } = await supabase
+        .from('tab_journal_entry_details')
+        .select(`
+          tab_journal_entries!inner(
+            entry_date,
+            is_posted
+          )
+        `)
+        .eq('account_id', ledgerAccountId)
+        .eq('tab_journal_entries.is_posted', true)
+        .order('entry_date', { ascending: true, foreignTable: 'tab_journal_entries' })
+        .limit(1, { foreignTable: 'tab_journal_entries' })
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const firstDate = firstMovement?.tab_journal_entries?.entry_date;
+      if (!firstDate) {
+        setAvailablePeriods([]);
+        setSelectedMonth("");
+        setSelectedYear("");
+        return;
+      }
+
+      const start = new Date(`${firstDate}T00:00:00`);
+      const end = new Date();
+      const periods: Array<{ year: string; month: string }> = [];
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+      while (cursor <= last) {
+        periods.push({
+          year: cursor.getFullYear().toString(),
+          month: (cursor.getMonth() + 1).toString(),
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      setAvailablePeriods(periods);
+
+      const latestPeriod = periods[periods.length - 1];
+      const currentSelectionIsValid = periods.some(
+        (period) => period.year === selectedYear && period.month === selectedMonth,
+      );
+
+      if (!currentSelectionIsValid && latestPeriod) {
+        setSelectedYear(latestPeriod.year);
+        setSelectedMonth(latestPeriod.month);
+      }
+    } catch (error: unknown) {
+      setAvailablePeriods([]);
+      toast({
+        variant: "destructive",
+        title: "Error al cargar períodos",
         description: getSafeErrorMessage(error),
       });
     }
