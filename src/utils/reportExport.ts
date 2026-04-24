@@ -219,7 +219,17 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
     currentY = Math.max(leftY, rightY) + 5;
   }
 
+  return doc;
+};
+
+export const exportToPDF = (options: ExportOptions): { pageCount: number } => {
+  const doc = buildPdfDocument(options);
   const pageCount = doc.getNumberOfPages();
-  doc.save(`${filename}.pdf`);
+  doc.save(`${options.filename}.pdf`);
   return { pageCount };
+};
+
+export const estimatePdfPageCount = (options: Omit<ExportOptions, 'filename'>): number => {
+  const doc = buildPdfDocument(options);
+  return doc.getNumberOfPages();
 };
