@@ -210,8 +210,10 @@ const ConciliacionBancaria = () => {
 
   useEffect(() => {
     if (selectedAccount && selectedMonth && selectedYear) {
-      fetchMovements();
-      loadExistingReconciliation();
+      (async () => {
+        await fetchMovements();
+        await loadExistingReconciliation();
+      })();
     } else {
       setLastExport(null);
     }
