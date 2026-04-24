@@ -56,6 +56,10 @@ export function EnterpriseAccountsManager() {
         inventory_account_id: config.inventory_account_id,
         cost_of_sales_method: config.cost_of_sales_method || 'manual',
         cost_of_sales_account_id: config.cost_of_sales_account_id,
+        unrealized_fx_gain_account_id: config.unrealized_fx_gain_account_id ?? null,
+        unrealized_fx_loss_account_id: config.unrealized_fx_loss_account_id ?? null,
+        realized_fx_gain_account_id: config.realized_fx_gain_account_id ?? null,
+        realized_fx_loss_account_id: config.realized_fx_loss_account_id ?? null,
       });
     }
   }, [config]);
