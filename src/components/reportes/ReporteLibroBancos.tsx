@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download, Loader2, Landmark } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FolioExportDialog, type FolioExportOptions } from "./FolioExportDialog";
@@ -252,7 +252,7 @@ export default function ReporteLibroBancos() {
     ? `Libro de Bancos — ${selectedBank.account_name} (${selectedBank.account_code})`
     : "Libro de Bancos";
 
-  const handleExport = (options: FolioExportOptions) => {
+  const buildExportOptions = () => {
     const headers = ["Fecha", "Doc #", "Beneficiario", "Concepto", "Dir.", "Debe", "Haber", "Saldo", "Estado", "Partida"];
     const data = rowsWithBalance.map(r => [
       new Date(r.date + "T00:00:00").toLocaleDateString("es-GT"),
@@ -267,7 +267,7 @@ export default function ReporteLibroBancos() {
       r.journal_entry_number || "",
     ]);
 
-    const exportOpts = {
+    return {
       filename: `libro-bancos-${selectedBank?.account_code || ""}`,
       title: reportTitle,
       enterpriseName,
@@ -279,6 +279,12 @@ export default function ReporteLibroBancos() {
         { label: "Total Haber", value: `Q${formatCurrency(totalCredit)}` },
         { label: "Saldo Final", value: `Q${formatCurrency(finalBalance)}` },
       ],
+    };
+  };
+
+  const handleExport = (options: FolioExportOptions) => {
+    const exportOpts = {
+      ...buildExportOptions(),
       folioOptions: options.includeFolio ? { includeFolio: true, startingFolio: options.startingFolio } : undefined,
     };
 
