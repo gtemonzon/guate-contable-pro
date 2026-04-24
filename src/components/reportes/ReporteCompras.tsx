@@ -385,6 +385,7 @@ export default function ReporteCompras() {
         title="Exportar Libro de Compras"
         bookType="libro_compras"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
 
       {purchases.length > 0 && (
