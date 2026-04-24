@@ -259,12 +259,18 @@ const ConciliacionBancaria = () => {
   const fetchMovements = async () => {
     try {
       setLoading(true);
+
+      const selectedBankAccount = bankAccounts.find((account) => account.id.toString() === selectedAccount);
+      const ledgerAccountId = selectedBankAccount?.account_id;
+      if (!ledgerAccountId) {
+        setMovements([]);
+        return;
+      }
       
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
       const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
       
-      // Get unreconciled movements from journal entries (previous periods)
       const { data: previousUnreconciled, error: prevError } = await supabase
         .from('tab_journal_entry_details')
         .select(`
@@ -282,13 +288,12 @@ const ConciliacionBancaria = () => {
             beneficiary_name
           )
         `)
-        .eq('account_id', parseInt(selectedAccount))
+        .eq('account_id', ledgerAccountId)
         .eq('tab_journal_entries.is_posted', true)
         .lt('tab_journal_entries.entry_date', startDate);
 
       if (prevError) throw prevError;
 
-      // Get all movements from the selected period
       const { data: periodMovements, error: periodError } = await supabase
         .from('tab_journal_entry_details')
         .select(`
@@ -306,7 +311,7 @@ const ConciliacionBancaria = () => {
             beneficiary_name
           )
         `)
-        .eq('account_id', parseInt(selectedAccount))
+        .eq('account_id', ledgerAccountId)
         .eq('tab_journal_entries.is_posted', true)
         .gte('tab_journal_entries.entry_date', startDate)
         .lte('tab_journal_entries.entry_date', endDate);
