@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Calculator, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, Calculator, FileText, Loader2, AlertCircle, Info } from 'lucide-react';
 import { usePayrollEntries, type PayrollPeriod } from '@/hooks/usePayrollPeriods';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { calculatePayrollPosting, postPayroll } from '@/hooks/usePayrollPosting';
 import { ImportPayrollDialog } from './ImportPayrollDialog';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { useEffect } from 'react';
 
 interface Props {
@@ -30,6 +32,7 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
   const { config } = useEnterpriseConfig(period.enterprise_id);
   const [importOpen, setImportOpen] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [includeVacaciones, setIncludeVacaciones] = useState(false);
   const [accountsMap, setAccountsMap] = useState<Map<number, AccountInfo>>(new Map());
 
   useEffect(() => {
@@ -42,13 +45,13 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
   }, [open, period.enterprise_id]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { lines, warnings } = config ? calculatePayrollPosting(entries, config as any) : { lines: [], warnings: [] };
+  const { lines, warnings } = config ? calculatePayrollPosting(entries, config as any, { includeVacaciones }) : { lines: [], warnings: [] };
 
   const handlePost = async () => {
     if (!config) return;
     setPosting(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ok = await postPayroll(period, entries, config as any);
+    const ok = await postPayroll(period, entries, config as any, { includeVacaciones });
     setPosting(false);
     if (ok) { onUpdated(); onOpenChange(false); }
   };
@@ -111,9 +114,40 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
               </div>
 
               <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <Calculator className="h-4 w-4" />
-                  <h3 className="font-semibold">Vista previa de la póliza contable</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-4 w-4" />
+                    <h3 className="font-semibold">Vista previa de la póliza contable</h3>
+                  </div>
+                  {period.status !== 'posted' && (
+                    <TooltipProvider>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="vacaciones-switch"
+                          checked={includeVacaciones}
+                          onCheckedChange={setIncludeVacaciones}
+                        />
+                        <Label htmlFor="vacaciones-switch" className="text-sm cursor-pointer">
+                          Provisionar vacaciones (4.17%)
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm">
+                            <p className="text-xs leading-relaxed">
+                              <strong>Deducibilidad SAT (Guatemala):</strong> Las vacaciones se reconocen
+                              normalmente como gasto deducible <em>cuando se pagan o gozan efectivamente</em>
+                              por el trabajador, soportadas con planilla de pago, recibo firmado y registro
+                              en libro de salarios. La provisión contable mensual (NIIF) puede no ser
+                              deducible hasta su pago efectivo según el art. 21 LAT. Active esta opción solo
+                              si su política contable y soporte documental así lo respaldan.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
+                  )}
                 </div>
 
                 {warnings.length > 0 && (

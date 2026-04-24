@@ -33,7 +33,16 @@ export interface PostingLine {
   credit_amount: number;
 }
 
-export function calculatePayrollPosting(entries: PayrollEntry[], config: Config): { lines: PostingLine[]; warnings: string[] } {
+export interface PayrollPostingOptions {
+  includeVacaciones?: boolean;
+}
+
+export function calculatePayrollPosting(
+  entries: PayrollEntry[],
+  config: Config,
+  options: PayrollPostingOptions = {},
+): { lines: PostingLine[]; warnings: string[] } {
+  const { includeVacaciones = false } = options;
   const warnings: string[] = [];
   const lines: PostingLine[] = [];
 
@@ -48,7 +57,7 @@ export function calculatePayrollPosting(entries: PayrollEntry[], config: Config)
   const indem = totalBase * GT_PAYROLL_RATES.indemnizacion;
   const agui = totalBase * GT_PAYROLL_RATES.aguinaldo;
   const bono14 = totalBase * GT_PAYROLL_RATES.bono14;
-  const vac = totalBase * GT_PAYROLL_RATES.vacaciones;
+  const vac = includeVacaciones ? totalBase * GT_PAYROLL_RATES.vacaciones : 0;
 
   const required: { key: keyof Config; label: string; debit: number }[] = [
     { key: 'payroll_salaries_expense_account_id', label: 'Sueldos', debit: totalBase },
@@ -73,7 +82,7 @@ export function calculatePayrollPosting(entries: PayrollEntry[], config: Config)
     { key: 'payroll_isr_payable_account_id', label: 'ISR retenido por pagar', amount: totalIsr },
     { key: 'payroll_salaries_payable_account_id', label: 'Sueldos por pagar (líquido + otros desc.)', amount: totalNet + totalOtherDed },
     { key: 'payroll_indemnizacion_provision_account_id', label: 'Provisión indemnización', amount: indem },
-    { key: 'payroll_aguinaldo_bono14_provision_account_id', label: 'Provisión aguinaldo + bono 14 + vacaciones', amount: agui + bono14 + vac },
+    { key: 'payroll_aguinaldo_bono14_provision_account_id', label: includeVacaciones ? 'Provisión aguinaldo + bono 14 + vacaciones' : 'Provisión aguinaldo + bono 14', amount: agui + bono14 + vac },
   ];
 
   for (const c of credits) {
@@ -86,8 +95,8 @@ export function calculatePayrollPosting(entries: PayrollEntry[], config: Config)
   return { lines, warnings };
 }
 
-export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[], config: Config): Promise<boolean> {
-  const { lines, warnings } = calculatePayrollPosting(entries, config);
+export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[], config: Config, options: PayrollPostingOptions = {}): Promise<boolean> {
+  const { lines, warnings } = calculatePayrollPosting(entries, config, options);
   if (warnings.length > 0) {
     toast.error(`Configura las cuentas faltantes: ${warnings.join(', ')}`);
     return false;
