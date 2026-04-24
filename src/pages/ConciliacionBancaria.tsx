@@ -648,22 +648,49 @@ const ConciliacionBancaria = () => {
                 </p>
               ) : (
                 <div className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por descripción, ref., beneficiario, monto o tipo..."
+                        value={movementSearch}
+                        onChange={(e) => setMovementSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <span>{filteredMovements.length} de {movements.length}</span>
+                      <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllFiltered}>
+                        {allFilteredSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                      </Button>
+                    </div>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">
-                          <BadgeCheck className="h-4 w-4" />
+                          <Checkbox
+                            checked={allFilteredSelected}
+                            onCheckedChange={toggleSelectAllFiltered}
+                            aria-label="Seleccionar todo"
+                          />
                         </TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Ref. Bancaria</TableHead>
-                        <TableHead>Beneficiario</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
+                        <TableHead><SortButton k="movement_date" label="Fecha" /></TableHead>
+                        <TableHead><SortButton k="description" label="Descripción" /></TableHead>
+                        <TableHead><SortButton k="bank_reference" label="Ref. Bancaria" /></TableHead>
+                        <TableHead><SortButton k="beneficiary_name" label="Beneficiario" /></TableHead>
+                        <TableHead><SortButton k="type" label="Tipo" /></TableHead>
+                        <TableHead className="text-right"><SortButton k="amount" label="Monto" align="right" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {movements.map((movement) => (
+                      {filteredMovements.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                            No se encontraron movimientos con ese criterio
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredMovements.map((movement) => (
                         <TableRow key={movement.id}>
                           <TableCell>
                             <Checkbox
