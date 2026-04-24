@@ -29,6 +29,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 interface JournalEntryData {
   id: number;
@@ -70,6 +73,7 @@ export default function ReportePartidas() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
+  const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -384,6 +388,22 @@ export default function ReportePartidas() {
 
   return (
     <div className="space-y-6">
+      <ReportCurrencySelector
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
+        value={currencyView}
+        onChange={setCurrencyView}
+      />
+
+      {currencyView.mode !== "FUNCTIONAL" && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Vista multi-moneda en preparación. Los montos se muestran en moneda funcional;
+            próximamente se agregarán columnas de moneda original ({currencyView.foreignCode ?? "—"}) por línea.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <Label htmlFor="dateFrom">Fecha Desde</Label>

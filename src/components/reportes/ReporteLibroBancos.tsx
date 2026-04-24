@@ -16,6 +16,9 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency, cn } from "@/lib/utils";
 import { FolioExportDialog, type FolioExportOptions } from "./FolioExportDialog";
 import EntityLink from "@/components/ui/entity-link";
+import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Info } from "lucide-react";
 
 interface BankAccount {
   id: number;
@@ -64,6 +67,7 @@ export default function ReporteLibroBancos() {
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
   const { toast } = useToast();
 
   // Load enterprise + bank accounts + URL params
@@ -288,6 +292,22 @@ export default function ReporteLibroBancos() {
 
   return (
     <div className="space-y-6">
+      <ReportCurrencySelector
+        enterpriseId={enterpriseId ? parseInt(enterpriseId) : null}
+        value={currencyView}
+        onChange={setCurrencyView}
+      />
+
+      {currencyView.mode !== "FUNCTIONAL" && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Vista multi-moneda en preparación. Los montos se muestran en moneda funcional;
+            próximamente se agregarán columnas en {currencyView.foreignCode ?? "—"} para cuentas bancarias en ME.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
         <div>
