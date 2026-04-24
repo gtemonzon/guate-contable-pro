@@ -305,6 +305,11 @@ export default function JournalEntryDialog({
                 onVoidCheque={() => setVoidChequeOpen(true)}
                 onEditMetadata={form.entryStatus === 'contabilizado' ? () => setMetadataEditOpen(true) : undefined}
                 onLinkPurchases={!form.isReadOnly ? handleOpenLinkManager : undefined}
+                onLiquidateForeignInvoice={
+                  form.entryStatus === 'contabilizado' && form.currencyCode && form.currencyCode !== baseCurrency
+                    ? () => setLiquidateOpen(true)
+                    : undefined
+                }
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
