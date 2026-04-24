@@ -434,6 +434,39 @@ const ConciliacionBancaria = () => {
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
       const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+
+      const fiscalFloor = selectedEnterprise
+        ? await getFiscalFloorDate(parseInt(selectedEnterprise), startDate)
+        : null;
+
+      let previousBalanceQuery = supabase
+        .from('tab_journal_entry_details')
+        .select(`
+          debit_amount,
+          credit_amount,
+          tab_journal_entries!inner(
+            entry_date,
+            is_posted,
+            enterprise_id
+          )
+        `)
+        .eq('account_id', ledgerAccountId)
+        .eq('tab_journal_entries.is_posted', true)
+        .lt('tab_journal_entries.entry_date', startDate);
+
+      if (selectedEnterprise) {
+        previousBalanceQuery = previousBalanceQuery.eq('tab_journal_entries.enterprise_id', parseInt(selectedEnterprise));
+      }
+
+      if (fiscalFloor) {
+        previousBalanceQuery = previousBalanceQuery.gte('tab_journal_entries.entry_date', fiscalFloor);
+      }
+
+      const previousBalanceDetails = await fetchAllRecords<any>(previousBalanceQuery);
+      const openingBalance = (previousBalanceDetails || []).reduce(
+        (sum, detail) => sum + (Number(detail.debit_amount) || 0) - (Number(detail.credit_amount) || 0),
+        0,
+      );
       
       const { data: previousUnreconciled, error: prevError } = await supabase
         .from('tab_journal_entry_details')
@@ -534,6 +567,12 @@ const ConciliacionBancaria = () => {
         .map(transformMovement);
 
       const allMovements = [...previousUnreconciledTransformed, ...periodMovementsTransformed];
+
+      const periodNetMovement = periodMovementsTransformed.reduce(
+        (sum, movement) => sum + (movement.debit_amount - movement.credit_amount),
+        0,
+      );
+      setBookEndingBalance(openingBalance + periodNetMovement);
       
       // Sort by date descending
       allMovements.sort((a, b) => 
@@ -549,6 +588,7 @@ const ConciliacionBancaria = () => {
       setSelectedMovements(reconciledIds);
     } catch (error: unknown) {
       console.error('Error fetching movements:', error);
+      setBookEndingBalance(0);
       toast({
         variant: "destructive",
         title: "Error al cargar movimientos",
@@ -570,7 +610,7 @@ const ConciliacionBancaria = () => {
   };
 
   const calculateBalances = () => {
-    const reconciled = movements
+    const reconciledMovementNet = movements
       .filter(m => selectedMovements.has(m.id))
       .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
     
@@ -578,7 +618,13 @@ const ConciliacionBancaria = () => {
       .filter(m => !selectedMovements.has(m.id))
       .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
     
-    return { reconciled, pending };
+    return {
+      reconciledMovementNet,
+      pending,
+      bookEndingBalance,
+      reconciledExpectedBankBalance: bookEndingBalance - pending,
+      difference: parseFloat(bankBalance || '0') - (bookEndingBalance - pending),
+    };
   };
 
   const handleReconcile = async () => {
@@ -597,9 +643,12 @@ const ConciliacionBancaria = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Usuario no autenticado");
 
-      const bookBalance = movements
-        .filter((m) => selectedMovements.has(m.id))
+      const pendingBalance = movements
+        .filter((m) => !selectedMovements.has(m.id))
         .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
+
+      const bookBalance = bookEndingBalance;
+      const reconciledBalance = bookEndingBalance - pendingBalance;
 
       const periodRange = getSelectedPeriodRange();
       if (!periodRange) throw new Error("Período inválido");
@@ -611,7 +660,7 @@ const ConciliacionBancaria = () => {
         bank_statement_balance: parseFloat(bankBalance),
         book_balance: bookBalance,
         adjustments: 0,
-        reconciled_balance: bookBalance,
+        reconciled_balance: reconciledBalance,
         status: 'conciliado',
         created_by: user.user.id,
         notes: notes || null,
@@ -751,7 +800,7 @@ const ConciliacionBancaria = () => {
         period: `${monthLabel} ${selectedYear}`,
         bankStatementBalance: parseFloat(bankBalance),
         bookBalance,
-        difference: bookBalance - parseFloat(bankBalance),
+        difference: parseFloat(bankBalance) - reconciledBalance,
         notes: notes || undefined,
         reconciledMovements: reconciledMovs.map((m) => ({
           movement_date: m.movement_date,
