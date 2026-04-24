@@ -13,6 +13,9 @@ import { BadgeCheck, Building2, Calendar, Landmark, Upload } from "lucide-react"
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { QuadraticReconciliationView } from "@/components/conciliacion/QuadraticReconciliationView";
+import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
@@ -442,6 +445,29 @@ const ConciliacionBancaria = () => {
         }}
       />
 
+      <Tabs defaultValue="conciliar" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="conciliar">Conciliación</TabsTrigger>
+          <TabsTrigger value="auto-match">Sugerencias automáticas</TabsTrigger>
+          <TabsTrigger value="cuadratica">Cuadrática SAT</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="auto-match">
+          <AutoMatchPanel
+            enterpriseId={parseInt(selectedEnterprise)}
+            bankAccountId={selectedAccount ? parseInt(selectedAccount) : null}
+            year={selectedYear ? parseInt(selectedYear) : null}
+            month={selectedMonth ? parseInt(selectedMonth) : null}
+            onApplied={() => { if (selectedAccount && selectedMonth && selectedYear) fetchMovements(); }}
+          />
+        </TabsContent>
+
+        <TabsContent value="cuadratica">
+          <QuadraticReconciliationView enterpriseId={parseInt(selectedEnterprise)} />
+        </TabsContent>
+
+        <TabsContent value="conciliar" className="space-y-6">
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -658,6 +684,8 @@ const ConciliacionBancaria = () => {
           </Card>
         </>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

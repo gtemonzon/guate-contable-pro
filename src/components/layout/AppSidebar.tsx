@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, CalendarDays, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog } from "lucide-react";
 import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink } from "react-router-dom";
 import {
@@ -39,6 +39,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText, requiredPermission: "canViewAccounts" },
       { title: "Compras y Ventas", url: "/libros-fiscales", icon: ShoppingCart, requiredPermission: "canViewAccounts" },
       { title: "Activos Fijos", url: "/activos-fijos", icon: Package, requiredPermission: "canViewAccounts" },
+      { title: "Nómina", url: "/nomina", icon: UserCog, requiredPermission: "canViewAccounts" },
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote, requiredPermission: "canBankReconciliation" },
       { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
       { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
