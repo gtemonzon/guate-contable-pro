@@ -34,6 +34,20 @@ export function EnterpriseAccountsManager() {
     unrealized_fx_loss_account_id: null as number | null,
     realized_fx_gain_account_id: null as number | null,
     realized_fx_loss_account_id: null as number | null,
+    default_auditor_name: '' as string,
+    default_auditor_colegiado: '' as string,
+    payroll_salaries_expense_account_id: null as number | null,
+    payroll_bonificacion_expense_account_id: null as number | null,
+    payroll_igss_patronal_expense_account_id: null as number | null,
+    payroll_indemnizacion_expense_account_id: null as number | null,
+    payroll_aguinaldo_expense_account_id: null as number | null,
+    payroll_bono14_expense_account_id: null as number | null,
+    payroll_vacaciones_expense_account_id: null as number | null,
+    payroll_igss_payable_account_id: null as number | null,
+    payroll_isr_payable_account_id: null as number | null,
+    payroll_salaries_payable_account_id: null as number | null,
+    payroll_indemnizacion_provision_account_id: null as number | null,
+    payroll_aguinaldo_bono14_provision_account_id: null as number | null,
   });
 
   useEffect(() => {
