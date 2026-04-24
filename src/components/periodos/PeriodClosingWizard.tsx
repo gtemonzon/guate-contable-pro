@@ -262,10 +262,64 @@ export function PeriodClosingWizard({
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
+      setSkipFxRevaluation(false);
+      setFxNeeded(false);
+      setFxLastRunMonth(null);
+      setFxMonetaryCount(0);
       loadPendingEntries();
       syncExistingEntries();
+      checkFxRevaluationStatus();
     }
   }, [open, period, syncExistingEntries]);
+
+  // Detecta si hay cuentas monetarias activas y verifica que exista una corrida
+  // de revaluación NO realizada para el último mes del período.
+  const checkFxRevaluationStatus = useCallback(async () => {
+    if (!period) return;
+    setFxCheckLoading(true);
+    try {
+      const { count: monetaryCount } = await supabase
+        .from('tab_accounts')
+        .select('id', { count: 'exact', head: true })
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_monetary', true)
+        .eq('is_active', true)
+        .is('deleted_at', null);
+
+      setFxMonetaryCount(monetaryCount || 0);
+      if (!monetaryCount) {
+        setFxNeeded(false);
+        return;
+      }
+
+      // Último mes del período
+      const endDate = new Date(period.end_date);
+      const lastYear = endDate.getFullYear();
+      const lastMonth = endDate.getMonth() + 1;
+
+      const { data: run } = await supabase
+        .from('tab_fx_revaluation_runs')
+        .select('id, year, month')
+        .eq('enterprise_id', enterpriseId)
+        .eq('revaluation_type', 'UNREALIZED')
+        .eq('year', lastYear)
+        .eq('month', lastMonth)
+        .eq('status', 'POSTED')
+        .maybeSingle();
+
+      if (run) {
+        setFxLastRunMonth({ year: run.year, month: run.month });
+        setFxNeeded(false);
+      } else {
+        setFxLastRunMonth({ year: lastYear, month: lastMonth });
+        setFxNeeded(true);
+      }
+    } catch (err) {
+      console.error('Error verificando estado FX:', err);
+    } finally {
+      setFxCheckLoading(false);
+    }
+  }, [period, enterpriseId]);
 
   const loadPendingEntries = async () => {
     if (!period) return;
