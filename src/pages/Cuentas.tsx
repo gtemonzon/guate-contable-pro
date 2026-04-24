@@ -184,28 +184,36 @@ const Cuentas = () => {
     }
   };
 
-  // Calculate the next sibling code
+  // Calculate the next sibling code based on the highest existing sibling under the SAME parent prefix
   const calculateNextSiblingCode = (referenceAccount: Account): string => {
-    const siblings = accounts
-      .filter(acc => acc.parent_account_id === referenceAccount.parent_account_id)
-      .sort((a, b) => a.account_code.localeCompare(b.account_code));
-    
+    const refParts = referenceAccount.account_code.split('.');
+    const parentPrefix = refParts.slice(0, -1).join('.'); // ej. "6.1" para "6.1.11"
+    const refDepth = refParts.length;
+
+    // Filtrar hermanos por prefijo de código (más confiable que parent_account_id)
+    // y mismo nivel (misma cantidad de segmentos)
+    const siblings = accounts.filter(acc => {
+      const parts = acc.account_code.split('.');
+      if (parts.length !== refDepth) return false;
+      const accParentPrefix = parts.slice(0, -1).join('.');
+      return accParentPrefix === parentPrefix;
+    });
+
     if (siblings.length === 0) return referenceAccount.account_code;
-    
-    const lastSibling = siblings[siblings.length - 1];
-    const parts = lastSibling.account_code.split('.');
-    const lastPart = parts[parts.length - 1];
-    const numericPart = parseInt(lastPart);
-    
-    if (isNaN(numericPart)) {
-      // Non-numeric last part, just append 1
-      return lastSibling.account_code + ".1";
+
+    // Encontrar el número más alto entre los hermanos (no por orden alfabético)
+    const refLastPart = refParts[refParts.length - 1];
+    const paddingLength = refLastPart.length;
+    let maxNum = 0;
+    for (const sib of siblings) {
+      const sibParts = sib.account_code.split('.');
+      const lastPart = sibParts[sibParts.length - 1];
+      const num = parseInt(lastPart, 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
     }
-    
-    const paddingLength = lastPart.length;
-    const nextNum = (numericPart + 1).toString().padStart(paddingLength, '0');
-    parts[parts.length - 1] = nextNum;
-    return parts.join('.');
+
+    const nextNum = (maxNum + 1).toString().padStart(paddingLength, '0');
+    return [...refParts.slice(0, -1), nextNum].join('.');
   };
 
   // Calculate the next child code
