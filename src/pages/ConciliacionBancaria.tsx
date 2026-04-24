@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BadgeCheck, Building2, Calendar, Landmark, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, BadgeCheck, Building2, Calendar, Landmark, Search, Upload } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
@@ -47,6 +47,69 @@ const ConciliacionBancaria = () => {
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
   const [selectedEnterprise, setSelectedEnterprise] = useState<string | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [movementSearch, setMovementSearch] = useState("");
+  type SortKey = 'movement_date' | 'description' | 'bank_reference' | 'beneficiary_name' | 'type' | 'amount';
+  const [sortKey, setSortKey] = useState<SortKey>('movement_date');
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc((v) => !v);
+    else { setSortKey(key); setSortAsc(true); }
+  };
+
+  const filteredMovements = useMemo(() => {
+    const q = movementSearch.trim().toLowerCase();
+    let list = movements;
+    if (q) {
+      list = movements.filter((m) => {
+        const amount = (m.debit_amount || m.credit_amount).toFixed(2);
+        const type = m.debit_amount > 0 ? 'depósito deposito' : 'retiro';
+        return (
+          (m.description || '').toLowerCase().includes(q) ||
+          (m.bank_reference || '').toLowerCase().includes(q) ||
+          (m.beneficiary_name || '').toLowerCase().includes(q) ||
+          amount.includes(q) ||
+          type.includes(q)
+        );
+      });
+    }
+    const sorted = [...list].sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortKey) {
+        case 'movement_date': av = a.movement_date; bv = b.movement_date; break;
+        case 'description': av = a.description || ''; bv = b.description || ''; break;
+        case 'bank_reference': av = a.bank_reference || ''; bv = b.bank_reference || ''; break;
+        case 'beneficiary_name': av = a.beneficiary_name || ''; bv = b.beneficiary_name || ''; break;
+        case 'type': av = a.debit_amount > 0 ? 'Depósito' : 'Retiro'; bv = b.debit_amount > 0 ? 'Depósito' : 'Retiro'; break;
+        case 'amount': av = a.debit_amount || a.credit_amount; bv = b.debit_amount || b.credit_amount; break;
+      }
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    return sorted;
+  }, [movements, movementSearch, sortKey, sortAsc]);
+
+  const allFilteredSelected = filteredMovements.length > 0 && filteredMovements.every((m) => selectedMovements.has(m.id));
+  const toggleSelectAllFiltered = () => {
+    setSelectedMovements((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) filteredMovements.forEach((m) => next.delete(m.id));
+      else filteredMovements.forEach((m) => next.add(m.id));
+      return next;
+    });
+  };
+
+  const SortButton = ({ k, label, align = 'left' }: { k: SortKey; label: string; align?: 'left' | 'right' }) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(k)}
+      className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${align === 'right' ? 'justify-end w-full' : ''}`}
+    >
+      {label}
+      {sortKey === k ? (sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+    </button>
+  );
 
   const months = [
     { value: "1", label: "Enero" },
@@ -288,7 +351,7 @@ const ConciliacionBancaria = () => {
           book_balance: bookBalance,
           adjustments: 0,
           reconciled_balance: bookBalance,
-          status: 'completed',
+          status: 'conciliado',
           created_by: user.user.id,
           notes: notes || null,
         }])
@@ -585,22 +648,49 @@ const ConciliacionBancaria = () => {
                 </p>
               ) : (
                 <div className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="relative w-full sm:max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por descripción, ref., beneficiario, monto o tipo..."
+                        value={movementSearch}
+                        onChange={(e) => setMovementSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <span>{filteredMovements.length} de {movements.length}</span>
+                      <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllFiltered}>
+                        {allFilteredSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                      </Button>
+                    </div>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">
-                          <BadgeCheck className="h-4 w-4" />
+                          <Checkbox
+                            checked={allFilteredSelected}
+                            onCheckedChange={toggleSelectAllFiltered}
+                            aria-label="Seleccionar todo"
+                          />
                         </TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead>Ref. Bancaria</TableHead>
-                        <TableHead>Beneficiario</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
+                        <TableHead><SortButton k="movement_date" label="Fecha" /></TableHead>
+                        <TableHead><SortButton k="description" label="Descripción" /></TableHead>
+                        <TableHead><SortButton k="bank_reference" label="Ref. Bancaria" /></TableHead>
+                        <TableHead><SortButton k="beneficiary_name" label="Beneficiario" /></TableHead>
+                        <TableHead><SortButton k="type" label="Tipo" /></TableHead>
+                        <TableHead className="text-right"><SortButton k="amount" label="Monto" align="right" /></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {movements.map((movement) => (
+                      {filteredMovements.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                            No se encontraron movimientos con ese criterio
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredMovements.map((movement) => (
                         <TableRow key={movement.id}>
                           <TableCell>
                             <Checkbox

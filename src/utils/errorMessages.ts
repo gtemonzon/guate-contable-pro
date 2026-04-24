@@ -54,6 +54,7 @@ export function getSafeErrorMessage(error: unknown): string {
   if (errorCode === '23503') return 'Referencia inválida o dato relacionado no encontrado';
   if (errorCode === '23502') return 'Falta información requerida';
   if (errorCode === '22P02') return 'Formato de datos inválido';
+  if (errorCode === '23514') return errorMessage ? `Valor inválido: ${errorMessage}` : 'Valor inválido para uno de los campos';
   if (errorCode === '42501') return 'Sin permisos para realizar esta operación';
   if (errorCode === 'P0001') {
     // P0001 is RAISE EXCEPTION from triggers - show the message
