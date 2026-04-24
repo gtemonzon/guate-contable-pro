@@ -75,6 +75,20 @@ export function EnterpriseAccountsManager() {
         unrealized_fx_loss_account_id: config.unrealized_fx_loss_account_id ?? null,
         realized_fx_gain_account_id: config.realized_fx_gain_account_id ?? null,
         realized_fx_loss_account_id: config.realized_fx_loss_account_id ?? null,
+        default_auditor_name: config.default_auditor_name ?? '',
+        default_auditor_colegiado: config.default_auditor_colegiado ?? '',
+        payroll_salaries_expense_account_id: config.payroll_salaries_expense_account_id ?? null,
+        payroll_bonificacion_expense_account_id: config.payroll_bonificacion_expense_account_id ?? null,
+        payroll_igss_patronal_expense_account_id: config.payroll_igss_patronal_expense_account_id ?? null,
+        payroll_indemnizacion_expense_account_id: config.payroll_indemnizacion_expense_account_id ?? null,
+        payroll_aguinaldo_expense_account_id: config.payroll_aguinaldo_expense_account_id ?? null,
+        payroll_bono14_expense_account_id: config.payroll_bono14_expense_account_id ?? null,
+        payroll_vacaciones_expense_account_id: config.payroll_vacaciones_expense_account_id ?? null,
+        payroll_igss_payable_account_id: config.payroll_igss_payable_account_id ?? null,
+        payroll_isr_payable_account_id: config.payroll_isr_payable_account_id ?? null,
+        payroll_salaries_payable_account_id: config.payroll_salaries_payable_account_id ?? null,
+        payroll_indemnizacion_provision_account_id: config.payroll_indemnizacion_provision_account_id ?? null,
+        payroll_aguinaldo_bono14_provision_account_id: config.payroll_aguinaldo_bono14_provision_account_id ?? null,
       });
     }
   }, [config]);
