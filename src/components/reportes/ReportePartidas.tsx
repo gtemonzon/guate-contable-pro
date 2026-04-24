@@ -52,6 +52,10 @@ interface JournalEntryDetail {
   debit_amount: number;
   credit_amount: number;
   description: string | null;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  original_debit?: number | null;
+  original_credit?: number | null;
 }
 
 // Separate posted entries from draft entries
@@ -174,6 +178,10 @@ export default function ReportePartidas() {
             debit_amount: detail.debit_amount,
             credit_amount: detail.credit_amount,
             description: detail.description,
+            currency_code: detail.currency_code ?? null,
+            exchange_rate: detail.exchange_rate != null ? Number(detail.exchange_rate) : null,
+            original_debit: detail.original_debit != null ? Number(detail.original_debit) : null,
+            original_credit: detail.original_credit != null ? Number(detail.original_credit) : null,
           });
         });
         setEntryDetails(groupedDetails);
