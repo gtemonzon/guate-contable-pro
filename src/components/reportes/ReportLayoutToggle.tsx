@@ -1,7 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-export type ReportLayout = 'hierarchical' | 'columnar' | 'stepped';
+export type ReportLayout = 'hierarchical' | 'stepped';
 
 interface ReportLayoutToggleProps {
   value: ReportLayout;
@@ -18,7 +18,6 @@ export default function ReportLayoutToggle({ value, onChange }: ReportLayoutTogg
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="hierarchical">Jerárquico</SelectItem>
-          <SelectItem value="columnar">Columnar</SelectItem>
           <SelectItem value="stepped">Escalonado</SelectItem>
         </SelectContent>
       </Select>

@@ -13,7 +13,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
-import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
+
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
@@ -301,11 +301,7 @@ export default function ReporteBalanceGeneral() {
     let headers: string[];
     let data: string[][];
 
-    if (layout === 'columnar') {
-      const result = toColumnarExcelData(filteredReportLines);
-      headers = result.headers;
-      data = result.data;
-    } else if (layout === 'stepped') {
+    if (layout === 'stepped') {
       const result = toSteppedExcelData(filteredReportLines);
       headers = result.headers;
       data = result.data;
@@ -484,9 +480,7 @@ export default function ReporteBalanceGeneral() {
               Balance General al {new Date(reportDate + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
           </div>
-          {layout === 'columnar' ? (
-            <ColumnarReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
-          ) : layout === 'stepped' ? (
+          {layout === 'stepped' ? (
             <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
             <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
