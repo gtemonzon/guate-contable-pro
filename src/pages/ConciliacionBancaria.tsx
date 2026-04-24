@@ -554,12 +554,56 @@ const ConciliacionBancaria = () => {
         }
       }
 
+      // Build export payload BEFORE resetting
+      const bankAccount = bankAccounts.find((b) => b.id.toString() === selectedAccount);
+      const monthLabel = months.find((m) => m.value === selectedMonth)?.label || selectedMonth;
+      const reconciledMovs = movements.filter((m) => selectedMovements.has(m.id));
+      const pendingMovs = movements.filter((m) => !selectedMovements.has(m.id));
+      let entInfo: { business_name?: string; nit?: string } | null = null;
+      if (selectedEnterprise) {
+        const { data } = await supabase
+          .from('tab_enterprises')
+          .select('business_name,nit')
+          .eq('id', parseInt(selectedEnterprise))
+          .maybeSingle();
+        entInfo = data;
+      }
+      const exportPayload: ReconciliationExportInput = {
+        enterpriseName: entInfo?.business_name || 'Empresa',
+        enterpriseNit: entInfo?.nit || '',
+        bankName: bankAccount?.bank_name || '',
+        accountNumber: bankAccount?.account_number || '',
+        reconciliationDate: new Date().toISOString().split('T')[0],
+        period: `${monthLabel} ${selectedYear}`,
+        bankStatementBalance: parseFloat(bankBalance),
+        bookBalance,
+        difference: bookBalance - parseFloat(bankBalance),
+        notes: notes || undefined,
+        reconciledMovements: reconciledMovs.map((m) => ({
+          movement_date: m.movement_date,
+          description: m.description,
+          bank_reference: m.bank_reference,
+          beneficiary_name: m.beneficiary_name,
+          debit_amount: m.debit_amount,
+          credit_amount: m.credit_amount,
+        })),
+        pendingMovements: pendingMovs.map((m) => ({
+          movement_date: m.movement_date,
+          description: m.description,
+          bank_reference: m.bank_reference,
+          beneficiary_name: m.beneficiary_name,
+          debit_amount: m.debit_amount,
+          credit_amount: m.credit_amount,
+        })),
+      };
+      setLastExport(exportPayload);
+
       toast({
         title: "Conciliación completada",
-        description: `Se conciliaron ${movementIds.length} movimientos`,
+        description: `Se conciliaron ${movementIds.length} movimientos. Puede exportar PDF o Excel desde el panel inferior.`,
       });
 
-      // Reset form
+      // Reset form (keep lastExport so the user can download)
       setSelectedAccount("");
       setSelectedMonth("");
       setSelectedYear("");
