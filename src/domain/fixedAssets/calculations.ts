@@ -112,15 +112,26 @@ export function computeDisposalGainLoss(
 }
 
 /**
- * Sum the planned depreciation for a set of months (for batch posting).
- * Respects posting frequency: MONTHLY | QUARTERLY | SEMIANNUAL | ANNUAL
+ * Sum depreciation for a set of months (for batch posting).
+ * Respects posting frequency: MONTHLY | QUARTERLY | SEMIANNUAL | ANNUAL.
+ *
+ * Returns separate sums for PLANNED (pending) and POSTED rows so the UI can
+ * show what's still pending vs already booked, and decide whether anything
+ * remains to be posted for the period.
  */
 export function sumDepreciationForPeriod(
   schedule: DepreciationScheduleRow[],
   targetYear: number,
   targetMonth: number, // last month of the posting period
   frequency: 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL'
-): { amount: number; months: Array<{ year: number; month: number }> } {
+): {
+  amount: number; // backwards-compat alias for amountPlanned
+  amountPlanned: number;
+  amountPosted: number;
+  hasPlanned: boolean;
+  hasPosted: boolean;
+  months: Array<{ year: number; month: number }>;
+} {
   const windowSize: Record<string, number> = {
     MONTHLY: 1,
     QUARTERLY: 3,
@@ -129,7 +140,6 @@ export function sumDepreciationForPeriod(
   };
   const size = windowSize[frequency] ?? 1;
 
-  // Build list of months in the posting window (going backwards from targetMonth)
   const months: Array<{ year: number; month: number }> = [];
   let y = targetYear;
   let m = targetMonth;
@@ -139,13 +149,28 @@ export function sumDepreciationForPeriod(
     if (m === 0) { m = 12; y--; }
   }
 
-  const amount = schedule
-    .filter(
-      (row) =>
-        row.status === 'PLANNED' &&
-        months.some((mo) => mo.year === row.year && mo.month === row.month)
-    )
-    .reduce((sum, row) => sum + row.planned_depreciation_amount, 0);
+  const inWindow = schedule.filter((row) =>
+    months.some((mo) => mo.year === row.year && mo.month === row.month)
+  );
 
-  return { amount: Math.round(amount * 100) / 100, months };
+  const round = (n: number) => Math.round(n * 100) / 100;
+
+  const plannedRows = inWindow.filter((r) => r.status === 'PLANNED');
+  const postedRows = inWindow.filter((r) => r.status === 'POSTED');
+
+  const amountPlanned = round(
+    plannedRows.reduce((s, r) => s + r.planned_depreciation_amount, 0)
+  );
+  const amountPosted = round(
+    postedRows.reduce((s, r) => s + r.planned_depreciation_amount, 0)
+  );
+
+  return {
+    amount: amountPlanned,
+    amountPlanned,
+    amountPosted,
+    hasPlanned: plannedRows.length > 0,
+    hasPosted: postedRows.length > 0,
+    months,
+  };
 }
