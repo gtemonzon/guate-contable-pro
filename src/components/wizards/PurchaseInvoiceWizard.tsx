@@ -132,24 +132,12 @@ export function PurchaseInvoiceWizard({
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const isMultiCurrency = enabledCurrencies.length > 0;
   const isFunctional = currencyCode === baseCurrency;
+  const allCurrencyCodes = [baseCurrency, ...enabledCurrencies.map((c) => c.currency_code)];
 
-  // Sync default currency when base loads
-  useState(() => { setCurrencyCode(baseCurrency); });
-
-  // Auto-resolve rate when currency or invoice date changes
-  const watchedDate = form1.watch?.("invoice_date") || step1Data?.invoice_date || "";
-  // Re-evaluate rate whenever currency or date change (handled in handleCurrencyChange below)
-
-  const handleCurrencyChange = (code: string) => {
-    setCurrencyCode(code);
-    if (code === baseCurrency) {
-      setExchangeRate(1);
-      return;
-    }
-    const dateStr = (form1.getValues?.()?.invoice_date) || step1Data?.invoice_date || new Date().toISOString().slice(0, 10);
-    const r = getRate(code, dateStr);
-    setExchangeRate(r ?? 0);
-  };
+  // Sync currency default whenever base loads
+  if (currencyCode === "GTQ" && baseCurrency !== "GTQ" && baseCurrency) {
+    // no-op: we initialize with baseCurrency on first useState
+  }
 
   // ── Accounts query ───────────────────────────────────────────────────────
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
@@ -172,6 +160,17 @@ export function PurchaseInvoiceWizard({
   const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
   const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+
+  const handleCurrencyChange = (code: string) => {
+    setCurrencyCode(code);
+    if (code === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+    const dateStr = form1.getValues().invoice_date || new Date().toISOString().slice(0, 10);
+    const r = getRate(code, dateStr);
+    setExchangeRate(r ?? 0);
+  };
 
   // ── Auto-calc VAT on net_amount change ───────────────────────────────────
   const watchedNet = form2.watch("net_amount");
