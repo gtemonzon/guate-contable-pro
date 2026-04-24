@@ -42,7 +42,8 @@ const modKey = isMac ? "⌘" : "Ctrl";
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
   hasBankAccount, hasBankReference, totalDebit, totalCredit, imbalanceAmount,
-  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, auditInfo, formatDateTime,
+  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, onLiquidateForeignInvoice,
+  auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
   // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
   const showVoidCheque = hasBankAccount && hasBankReference;
