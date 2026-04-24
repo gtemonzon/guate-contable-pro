@@ -1093,8 +1093,11 @@ export function PeriodClosingWizard({
   // ---- Navigation Logic ----
   const canAdvance = () => {
     switch (currentStepId) {
-      case 'partidas':
-        return pendingEntries.length === 0 || continueDespitePending;
+      case 'partidas': {
+        const pendingOk = pendingEntries.length === 0 || continueDespitePending;
+        const fxOk = !fxNeeded || skipFxRevaluation;
+        return pendingOk && fxOk;
+      }
       case 'cdv':
         if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
         return cdv.finalInventory !== null &&
