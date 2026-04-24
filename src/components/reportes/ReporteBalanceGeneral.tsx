@@ -480,9 +480,7 @@ export default function ReporteBalanceGeneral() {
               Balance General al {new Date(reportDate + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
           </div>
-          {layout === 'columnar' ? (
-            <ColumnarReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
-          ) : layout === 'stepped' ? (
+          {layout === 'stepped' ? (
             <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
             <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
