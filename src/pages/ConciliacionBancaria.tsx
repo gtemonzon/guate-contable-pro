@@ -288,7 +288,7 @@ const ConciliacionBancaria = () => {
           book_balance: bookBalance,
           adjustments: 0,
           reconciled_balance: bookBalance,
-          status: 'completed',
+          status: 'conciliado',
           created_by: user.user.id,
           notes: notes || null,
         }])
