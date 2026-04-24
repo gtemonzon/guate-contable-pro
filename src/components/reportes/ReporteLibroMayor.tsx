@@ -57,6 +57,10 @@ interface LedgerEntry {
   balance: number;
   previous_balance?: number;
   account_id: number;
+  currency_code?: string | null;
+  exchange_rate?: number | null;
+  original_debit?: number | null;
+  original_credit?: number | null;
 }
 
 interface AccountLedger {
@@ -327,6 +331,10 @@ export default function ReporteLibroMayor() {
             balance: runningBalance,
             previous_balance: previousBalance,
             account_id: accountId,
+            currency_code: row.currency_code ?? null,
+            exchange_rate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
+            original_debit: row.original_debit != null ? Number(row.original_debit) : null,
+            original_credit: row.original_credit != null ? Number(row.original_credit) : null,
           };
         });
 
