@@ -431,6 +431,9 @@ export default function ReporteVentas() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro de Ventas"
+        bookType="libro_ventas"
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
 
       {sales.length > 0 && (
