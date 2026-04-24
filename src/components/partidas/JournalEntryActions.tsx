@@ -95,6 +95,13 @@ export function JournalEntryActions({
             </Button>
           )}
 
+          {onLiquidateForeignInvoice && entryStatus === 'contabilizado' && (
+            <Button variant="outline" onClick={onLiquidateForeignInvoice} disabled={loading} size="sm" title="Liquidar factura en moneda extranjera">
+              <Coins className="mr-2 h-4 w-4" />
+              Liquidar factura ME
+            </Button>
+          )}
+
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
 
           {showVoidCheque && !isReadOnly && (
