@@ -23,6 +23,7 @@ interface JournalEntryActionsProps {
   onVoidCheque: () => void;
   onEditMetadata?: () => void;
   onLinkPurchases?: () => void;
+  onLiquidateForeignInvoice?: () => void;
   auditInfo: { createdBy: string | null; createdAt: string | null; updatedBy: string | null; updatedAt: string | null; } | null;
   formatDateTime: (d: string | null) => string;
 }
