@@ -803,6 +803,17 @@ export default function Partidas() {
           }}
         />
       )}
+
+      {currentEnterpriseId && (
+        <FxRevaluationWizard
+          open={showFxWizard}
+          onOpenChange={setShowFxWizard}
+          enterpriseId={Number(currentEnterpriseId)}
+          onPosted={() => {
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          }}
+        />
+      )}
     </div>
   );
 }
