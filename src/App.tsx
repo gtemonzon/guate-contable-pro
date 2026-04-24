@@ -108,7 +108,7 @@ const App = () => (
               <Route path="/formularios-impuestos" element={<Suspense fallback={<PageLoader />}><FormulariosImpuestos /></Suspense>} />
               <Route path="/generar-declaracion" element={<Suspense fallback={<PageLoader />}><GenerarDeclaracion /></Suspense>} />
               <Route path="/saldos" element={<Suspense fallback={<PageLoader />}><BalanceSaldos /></Suspense>} />
-              <Route path="/saldos-mensuales" element={<Suspense fallback={<PageLoader />}><SaldosMensuales /></Suspense>} />
+              <Route path="/saldos-mensuales" element={<Navigate to="/saldos?tab=mensual" replace />} />
               <Route path="/mayor" element={<Suspense fallback={<PageLoader />}><MayorGeneral /></Suspense>} />
               <Route path="/reportes" element={<Suspense fallback={<PageLoader />}><Reportes /></Suspense>} />
               <Route path="/configuracion" element={<Suspense fallback={<PageLoader />}><Configuracion /></Suspense>} />
