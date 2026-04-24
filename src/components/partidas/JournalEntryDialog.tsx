@@ -419,6 +419,24 @@ export default function JournalEntryDialog({
           onApplyToEntry={handleApplyToEntry}
         />
       )}
+
+      {/* Liquidar Factura ME — diferencial cambiario realizado */}
+      {currentEntryId && form.currencyCode && form.currencyCode !== baseCurrency && (
+        <LiquidateForeignInvoiceDialog
+          open={liquidateOpen}
+          onOpenChange={setLiquidateOpen}
+          enterpriseId={enterpriseId}
+          baseCurrency={baseCurrency}
+          paymentJournalId={currentEntryId}
+          paymentDate={form.entryDate}
+          defaultPaymentRate={Number(form.exchangeRate) || undefined}
+          currencyCode={form.currencyCode}
+          counterpartNit={null}
+          onCompleted={() => {
+            onSuccess(currentEntryId);
+          }}
+        />
+      )}
     </>
   );
 }
