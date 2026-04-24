@@ -104,48 +104,62 @@ export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[]
     const { data: userResp } = await supabase.auth.getUser();
     if (!userResp.user) throw new Error('No auth');
 
-    // Obtener próximo número con prefijo NOM
-    const { data: numData, error: numErr } = await supabase.rpc('get_next_journal_entry_number', {
+    // Buscar período contable que contiene la fecha de pago
+    const { data: periodRow } = await supabase
+      .from('tab_accounting_periods')
+      .select('id')
+      .eq('enterprise_id', period.enterprise_id)
+      .lte('start_date', period.payment_date)
+      .gte('end_date', period.payment_date)
+      .maybeSingle();
+
+    // Reservar número (tipo='ajuste' como base y usaremos description con marca NOMINA)
+    const { data: numData, error: numErr } = await supabase.rpc('allocate_journal_entry_number', {
       p_enterprise_id: period.enterprise_id,
-      p_year: period.period_year,
-      p_month: period.period_month,
-      p_prefix: 'NOM',
+      p_entry_type: 'ajuste',
+      p_entry_date: period.payment_date,
     });
     if (numErr) throw numErr;
     const entryNumber = numData as string;
 
-    const entryDate = period.payment_date;
+    const totalDebitAmt = lines.reduce((s, l) => s + l.debit_amount, 0);
 
-    // Header
-    const { data: header, error: hErr } = await supabase
-      .from('tab_journal_entries')
-      .insert({
-        enterprise_id: period.enterprise_id,
-        entry_number: entryNumber,
-        entry_date: entryDate,
-        description: `Provisión de nómina ${String(period.period_month).padStart(2, '0')}/${period.period_year}`,
-        is_posted: false,
-        created_by: userResp.user.id,
-      })
-      .select()
-      .single();
+    // Header (siguiendo patrón de useJournalEntryForm)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: header, error: hErr } = await supabase.from('tab_journal_entries').insert({
+      enterprise_id: period.enterprise_id,
+      entry_number: entryNumber,
+      entry_date: period.payment_date,
+      entry_type: 'ajuste',
+      accounting_period_id: periodRow?.id || null,
+      description: `[NÓMINA] Provisión nómina ${String(period.period_month).padStart(2, '0')}/${period.period_year}`,
+      total_debit: totalDebitAmt,
+      total_credit: totalDebitAmt,
+      is_posted: false,
+      status: 'borrador',
+      currency_code: 'GTQ',
+      exchange_rate: 1,
+      created_by: userResp.user.id,
+    } as any).select().single();
     if (hErr) throw hErr;
 
-    // Lines
-    const lineRows = lines.map((l) => ({
+    // Lines con line_number
+    const lineRows = lines.map((l, i) => ({
       journal_entry_id: header.id,
+      line_number: i + 1,
       account_id: l.account_id,
       description: l.description,
       debit_amount: l.debit_amount,
       credit_amount: l.credit_amount,
     }));
-    const { error: lErr } = await supabase.from('tab_journal_entry_details').insert(lineRows);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: lErr } = await supabase.from('tab_journal_entry_details').insert(lineRows as any);
     if (lErr) throw lErr;
 
     // Posted
     const { error: pErr } = await supabase
       .from('tab_journal_entries')
-      .update({ is_posted: true })
+      .update({ is_posted: true, status: 'publicada' })
       .eq('id', header.id);
     if (pErr) throw pErr;
 
