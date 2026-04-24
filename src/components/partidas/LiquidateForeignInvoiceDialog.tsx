@@ -301,7 +301,7 @@ export function LiquidateForeignInvoiceDialog({
                     {r.calcLoading ? (
                       <Loader2 className="h-3 w-3 animate-spin inline" />
                     ) : r.calc ? (
-                      <span className={r.calc.is_gain ? "text-green-600" : "text-red-600"}>
+                      <span className={r.calc.is_gain ? "text-success" : "text-destructive"}>
                         {r.calc.is_gain ? <TrendingUp className="h-3 w-3 inline mr-1" /> : <TrendingDown className="h-3 w-3 inline mr-1" />}
                         {(r.calc.is_gain ? "+" : "-")}{r.calc.fx_difference.toFixed(2)} {baseCurrency}
                       </span>
@@ -320,15 +320,15 @@ export function LiquidateForeignInvoiceDialog({
           <div className="grid grid-cols-3 gap-3 p-3 rounded-md bg-muted/40 border">
             <div>
               <div className="text-xs text-muted-foreground">Ganancia FX</div>
-              <div className="text-lg font-semibold text-green-600">+{totals.gain.toFixed(2)} {baseCurrency}</div>
+              <div className="text-lg font-semibold text-success">+{totals.gain.toFixed(2)} {baseCurrency}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Pérdida FX</div>
-              <div className="text-lg font-semibold text-red-600">-{totals.loss.toFixed(2)} {baseCurrency}</div>
+              <div className="text-lg font-semibold text-destructive">-{totals.loss.toFixed(2)} {baseCurrency}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Efecto neto ({totals.count} facturas)</div>
-              <div className={`text-lg font-bold ${totals.net >= 0 ? "text-green-600" : "text-red-600"}`}>
+              <div className={`text-lg font-bold ${totals.net >= 0 ? "text-success" : "text-destructive"}`}>
                 {totals.net >= 0 ? "+" : ""}{totals.net.toFixed(2)} {baseCurrency}
               </div>
             </div>
