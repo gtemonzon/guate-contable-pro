@@ -72,16 +72,13 @@ export function useBankReconciliationQuadratic(reconciliationId: number | null) 
   const save = async (input: Omit<QuadraticData, 'id'>) => {
     setLoading(true);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
       if (data?.id) {
-        const { error } = await supabase
-          .from('tab_bank_reconciliation_quadratic' as never)
-          .update(input as never)
-          .eq('id', data.id);
+        const { error } = await sb.from('tab_bank_reconciliation_quadratic').update(input).eq('id', data.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('tab_bank_reconciliation_quadratic' as never)
-          .insert(input as never);
+        const { error } = await sb.from('tab_bank_reconciliation_quadratic').insert(input);
         if (error) throw error;
       }
       toast.success('Cuadrática guardada');
@@ -97,7 +94,9 @@ export function useBankReconciliationQuadratic(reconciliationId: number | null) 
   };
 
   const addAdjustment = async (adj: Omit<AdjustmentRecord, 'id'>) => {
-    const { error } = await supabase.from('tab_bank_reconciliation_adjustments' as never).insert(adj as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = await sb.from('tab_bank_reconciliation_adjustments').insert(adj);
     if (error) {
       toast.error('Error al agregar ajuste');
       return false;
@@ -107,7 +106,9 @@ export function useBankReconciliationQuadratic(reconciliationId: number | null) 
   };
 
   const deleteAdjustment = async (id: number) => {
-    const { error } = await supabase.from('tab_bank_reconciliation_adjustments' as never).delete().eq('id', id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = await sb.from('tab_bank_reconciliation_adjustments').delete().eq('id', id);
     if (error) {
       toast.error('Error al eliminar ajuste');
       return false;
