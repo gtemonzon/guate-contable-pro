@@ -13,6 +13,9 @@ import { BadgeCheck, Building2, Calendar, Landmark, Upload } from "lucide-react"
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { QuadraticReconciliationView } from "@/components/conciliacion/QuadraticReconciliationView";
+import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankMovement = Database['public']['Tables']['tab_bank_movements']['Row'];
