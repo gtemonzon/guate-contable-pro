@@ -347,7 +347,49 @@ export function useFxRevaluation() {
     }
   }, []);
 
-  return { loading, posting, buildPreview, postRevaluation };
+  /**
+   * Lista las corridas de revaluación NO realizadas de la empresa, indicando si ya fueron reversadas.
+   */
+  const listRuns = useCallback(async (enterpriseId: number) => {
+    const { data, error } = await supabase
+      .from("tab_fx_revaluation_runs")
+      .select(`
+        id, year, month, cutoff_date, total_gain, total_loss, status,
+        reversed_at, journal_entry_id, revaluation_type,
+        tab_journal_entries:journal_entry_id (entry_number, reversed_by_entry_id)
+      `)
+      .eq("enterprise_id", enterpriseId)
+      .eq("revaluation_type", "UNREALIZED")
+      .order("cutoff_date", { ascending: false })
+      .limit(24);
+    if (error) {
+      toast.error("Error cargando historial: " + error.message);
+      return [];
+    }
+    return data || [];
+  }, []);
+
+  /**
+   * Genera la partida espejo de reverso (DIFC-) el día 1 del mes siguiente al corte.
+   * Invoca la función SQL reverse_fx_revaluation que valida período abierto y vincula bidireccional.
+   */
+  const reverseRun = useCallback(async (runId: number): Promise<number | null> => {
+    setPosting(true);
+    try {
+      const { data, error } = await supabase.rpc("reverse_fx_revaluation", { p_run_id: runId });
+      if (error) throw error;
+      const newEntryId = Number(data);
+      toast.success("Partida de reverso contabilizada exitosamente.");
+      return newEntryId;
+    } catch (e: any) {
+      toast.error("Error generando reverso: " + (e.message || e));
+      return null;
+    } finally {
+      setPosting(false);
+    }
+  }, []);
+
+  return { loading, posting, buildPreview, postRevaluation, listRuns, reverseRun };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;

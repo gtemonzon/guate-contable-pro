@@ -4077,6 +4077,7 @@ export type Database = {
         }
         Returns: number
       }
+      reverse_fx_revaluation: { Args: { p_run_id: number }; Returns: number }
       update_posted_entry_metadata: {
         Args: {
           p_bank_reference?: string
