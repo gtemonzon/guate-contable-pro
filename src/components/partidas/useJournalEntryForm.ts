@@ -88,6 +88,10 @@ export function useJournalEntryForm(
   const [beneficiaryName, setBeneficiaryName] = useState("");
   const [bankDirection, setBankDirection] = useState<BankDirection>('OUT');
 
+  // Currency fields (per-entry header)
+  const [currencyCode, setCurrencyCode] = useState<string>("GTQ");
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+
   // Lines
   const [detailLines, setDetailLines] = useState<DetailLine[]>([
     { id: crypto.randomUUID(), account_id: null, description: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
