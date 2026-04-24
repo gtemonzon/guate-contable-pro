@@ -27,8 +27,10 @@ import {
   Package,
   RefreshCw,
   ArrowRightLeft,
-  BookOpen
+  BookOpen,
+  Coins
 } from 'lucide-react';
+import { FxRevaluationWizard } from '@/components/partidas/FxRevaluationWizard';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
