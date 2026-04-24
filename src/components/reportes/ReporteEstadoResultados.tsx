@@ -643,6 +643,7 @@ export default function ReporteEstadoResultados() {
         title="Exportar Estado de Resultados"
         bookType="libro_estados_financieros"
         enterpriseId={currentEnterpriseId ?? undefined}
+        estimatePageCount={reportLines.length === 0 ? undefined : () => estimatePdfPageCount(buildPdfExportOptions())}
       />
 
       {!format && !formatLoading && currentEnterpriseId && (
