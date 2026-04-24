@@ -229,6 +229,86 @@ export function EnterpriseAccountsManager() {
               )}
             </div>
 
+            <Separator />
+
+            {/* Diferencial Cambiario Section */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold">Diferencial Cambiario</h3>
+                <p className="text-sm text-muted-foreground">
+                  Cuentas usadas para registrar ganancias y pérdidas por tipo de cambio en operaciones en moneda extranjera.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium">No Realizado (revaluación de saldos al cierre del mes)</h4>
+                <p className="text-xs text-muted-foreground">
+                  Se usan en la partida <code className="text-[10px] bg-muted px-1 rounded">DIFC-NR-YYYY-MM</code> generada por el wizard de Revaluación FX.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Ganancia Cambiaria NO Realizada</Label>
+                  <AccountCombobox
+                    accounts={accounts}
+                    value={formData.unrealized_fx_gain_account_id}
+                    onValueChange={(v) => setFormData(p => ({ ...p, unrealized_fx_gain_account_id: v }))}
+                    placeholder="Seleccionar cuenta de ingreso"
+                  />
+                  <p className="text-xs text-muted-foreground">Típicamente cuenta de ingreso "Ganancia por diferencial cambiario no realizado".</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Pérdida Cambiaria NO Realizada</Label>
+                  <AccountCombobox
+                    accounts={accounts}
+                    value={formData.unrealized_fx_loss_account_id}
+                    onValueChange={(v) => setFormData(p => ({ ...p, unrealized_fx_loss_account_id: v }))}
+                    placeholder="Seleccionar cuenta de gasto"
+                  />
+                  <p className="text-xs text-muted-foreground">Típicamente cuenta de gasto "Pérdida por diferencial cambiario no realizado".</p>
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-2">
+                <h4 className="text-sm font-medium">Realizado (al liquidar facturas en moneda extranjera)</h4>
+                <p className="text-xs text-muted-foreground">
+                  Se usan en la partida <code className="text-[10px] bg-muted px-1 rounded">DIFC-R-YYYY-MM</code> generada al pagar/cobrar facturas en USD u otra moneda.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Ganancia Cambiaria Realizada</Label>
+                  <AccountCombobox
+                    accounts={accounts}
+                    value={formData.realized_fx_gain_account_id}
+                    onValueChange={(v) => setFormData(p => ({ ...p, realized_fx_gain_account_id: v }))}
+                    placeholder="Seleccionar cuenta de ingreso"
+                  />
+                  <p className="text-xs text-muted-foreground">Típicamente cuenta de ingreso "Ganancia por diferencial cambiario realizado".</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Pérdida Cambiaria Realizada</Label>
+                  <AccountCombobox
+                    accounts={accounts}
+                    value={formData.realized_fx_loss_account_id}
+                    onValueChange={(v) => setFormData(p => ({ ...p, realized_fx_loss_account_id: v }))}
+                    placeholder="Seleccionar cuenta de gasto"
+                  />
+                  <p className="text-xs text-muted-foreground">Típicamente cuenta de gasto "Pérdida por diferencial cambiario realizado".</p>
+                </div>
+              </div>
+
+              {(!formData.realized_fx_gain_account_id || !formData.realized_fx_loss_account_id ||
+                !formData.unrealized_fx_gain_account_id || !formData.unrealized_fx_loss_account_id) && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Configura las cuatro cuentas para que el sistema pueda generar partidas de diferencial cambiario automáticamente. Sin ellas, los wizards de Revaluación FX y Liquidación de facturas en moneda extranjera mostrarán un error.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
             <div className="flex justify-end">
               <Button onClick={handleSave} disabled={loading}>
                 {loading ? (
