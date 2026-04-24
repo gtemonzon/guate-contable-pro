@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { validateNIT } from "@/utils/nitValidation";
@@ -134,10 +134,13 @@ export function PurchaseInvoiceWizard({
   const isFunctional = currencyCode === baseCurrency;
   const allCurrencyCodes = [baseCurrency, ...enabledCurrencies.map((c) => c.currency_code)];
 
-  // Sync currency default whenever base loads
-  if (currencyCode === "GTQ" && baseCurrency !== "GTQ" && baseCurrency) {
-    // no-op: we initialize with baseCurrency on first useState
-  }
+  // Initialize currency to base when it loads
+  useEffect(() => {
+    if (baseCurrency && currencyCode !== baseCurrency && exchangeRate === 1) {
+      setCurrencyCode(baseCurrency);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCurrency]);
 
   // ── Accounts query ───────────────────────────────────────────────────────
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
