@@ -13,7 +13,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
-import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
+
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
