@@ -23,6 +23,22 @@ export interface EnterpriseConfig {
   unrealized_fx_loss_account_id: number | null;
   realized_fx_gain_account_id: number | null;
   realized_fx_loss_account_id: number | null;
+  // Auditor (conciliación cuadrática SAT)
+  default_auditor_name: string | null;
+  default_auditor_colegiado: string | null;
+  // Nómina (12 cuentas)
+  payroll_salaries_expense_account_id: number | null;
+  payroll_bonificacion_expense_account_id: number | null;
+  payroll_igss_patronal_expense_account_id: number | null;
+  payroll_indemnizacion_expense_account_id: number | null;
+  payroll_aguinaldo_expense_account_id: number | null;
+  payroll_bono14_expense_account_id: number | null;
+  payroll_vacaciones_expense_account_id: number | null;
+  payroll_igss_payable_account_id: number | null;
+  payroll_isr_payable_account_id: number | null;
+  payroll_salaries_payable_account_id: number | null;
+  payroll_indemnizacion_provision_account_id: number | null;
+  payroll_aguinaldo_bono14_provision_account_id: number | null;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
