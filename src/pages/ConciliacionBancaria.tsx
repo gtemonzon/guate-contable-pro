@@ -37,11 +37,12 @@ type JournalMovement = {
 const ConciliacionBancaria = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<Account[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [movements, setMovements] = useState<JournalMovement[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState<string>("");
+  const [availablePeriods, setAvailablePeriods] = useState<Array<{ year: string; month: string }>>([]);
   const [bankBalance, setBankBalance] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
