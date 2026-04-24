@@ -96,6 +96,10 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         inventory_account_id: newConfig.inventory_account_id,
         cost_of_sales_method: newConfig.cost_of_sales_method,
         cost_of_sales_account_id: newConfig.cost_of_sales_account_id,
+        unrealized_fx_gain_account_id: newConfig.unrealized_fx_gain_account_id,
+        unrealized_fx_loss_account_id: newConfig.unrealized_fx_loss_account_id,
+        realized_fx_gain_account_id: newConfig.realized_fx_gain_account_id,
+        realized_fx_loss_account_id: newConfig.realized_fx_loss_account_id,
       };
 
       const { data: existing } = await supabase
