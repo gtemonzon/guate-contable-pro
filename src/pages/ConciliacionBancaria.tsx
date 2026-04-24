@@ -472,12 +472,12 @@ const ConciliacionBancaria = () => {
       ));
       
       // First, check which movements already have entries in tab_bank_movements
-      const { data: existingBankMovements } = selectedJournalEntryIds.length > 0
-        ? await supabase
+      const existingBankMovements = selectedJournalEntryIds.length > 0
+        ? (await supabase
             .from('tab_bank_movements')
             .select('id, journal_entry_id')
-            .in('journal_entry_id', selectedJournalEntryIds)
-        : { data: [], error: null };
+            .in('journal_entry_id', selectedJournalEntryIds)).data
+        : [];
 
       const existingMap = new Map(
         (existingBankMovements || []).map(bm => [bm.journal_entry_id, bm.id])
