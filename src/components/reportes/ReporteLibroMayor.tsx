@@ -611,6 +611,7 @@ export default function ReporteLibroMayor() {
         title="Exportar Libro Mayor"
         bookType="libro_mayor"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={accountLedgers.length === 0 ? undefined : () => estimatePdfPageCount({ ...buildExportOptions(), forcePortrait: true })}
       />
 
       {reportGenerated && accountLedgers.length > 0 && (
