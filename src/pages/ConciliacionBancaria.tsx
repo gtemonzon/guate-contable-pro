@@ -55,6 +55,7 @@ const ConciliacionBancaria = () => {
   type SortKey = 'movement_date' | 'description' | 'bank_reference' | 'beneficiary_name' | 'type' | 'amount';
   const [sortKey, setSortKey] = useState<SortKey>('movement_date');
   const [sortAsc, setSortAsc] = useState(true);
+  const [lastExport, setLastExport] = useState<ReconciliationExportInput | null>(null);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v);
