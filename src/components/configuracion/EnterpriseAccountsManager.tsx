@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AccountCombobox, Account } from '@/components/ui/account-combobox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,6 +34,20 @@ export function EnterpriseAccountsManager() {
     unrealized_fx_loss_account_id: null as number | null,
     realized_fx_gain_account_id: null as number | null,
     realized_fx_loss_account_id: null as number | null,
+    default_auditor_name: '' as string,
+    default_auditor_colegiado: '' as string,
+    payroll_salaries_expense_account_id: null as number | null,
+    payroll_bonificacion_expense_account_id: null as number | null,
+    payroll_igss_patronal_expense_account_id: null as number | null,
+    payroll_indemnizacion_expense_account_id: null as number | null,
+    payroll_aguinaldo_expense_account_id: null as number | null,
+    payroll_bono14_expense_account_id: null as number | null,
+    payroll_vacaciones_expense_account_id: null as number | null,
+    payroll_igss_payable_account_id: null as number | null,
+    payroll_isr_payable_account_id: null as number | null,
+    payroll_salaries_payable_account_id: null as number | null,
+    payroll_indemnizacion_provision_account_id: null as number | null,
+    payroll_aguinaldo_bono14_provision_account_id: null as number | null,
   });
 
   useEffect(() => {
@@ -60,6 +75,20 @@ export function EnterpriseAccountsManager() {
         unrealized_fx_loss_account_id: config.unrealized_fx_loss_account_id ?? null,
         realized_fx_gain_account_id: config.realized_fx_gain_account_id ?? null,
         realized_fx_loss_account_id: config.realized_fx_loss_account_id ?? null,
+        default_auditor_name: config.default_auditor_name ?? '',
+        default_auditor_colegiado: config.default_auditor_colegiado ?? '',
+        payroll_salaries_expense_account_id: config.payroll_salaries_expense_account_id ?? null,
+        payroll_bonificacion_expense_account_id: config.payroll_bonificacion_expense_account_id ?? null,
+        payroll_igss_patronal_expense_account_id: config.payroll_igss_patronal_expense_account_id ?? null,
+        payroll_indemnizacion_expense_account_id: config.payroll_indemnizacion_expense_account_id ?? null,
+        payroll_aguinaldo_expense_account_id: config.payroll_aguinaldo_expense_account_id ?? null,
+        payroll_bono14_expense_account_id: config.payroll_bono14_expense_account_id ?? null,
+        payroll_vacaciones_expense_account_id: config.payroll_vacaciones_expense_account_id ?? null,
+        payroll_igss_payable_account_id: config.payroll_igss_payable_account_id ?? null,
+        payroll_isr_payable_account_id: config.payroll_isr_payable_account_id ?? null,
+        payroll_salaries_payable_account_id: config.payroll_salaries_payable_account_id ?? null,
+        payroll_indemnizacion_provision_account_id: config.payroll_indemnizacion_provision_account_id ?? null,
+        payroll_aguinaldo_bono14_provision_account_id: config.payroll_aguinaldo_bono14_provision_account_id ?? null,
       });
     }
   }, [config]);
@@ -111,6 +140,20 @@ export function EnterpriseAccountsManager() {
       unrealized_fx_loss_account_id: formData.unrealized_fx_loss_account_id,
       realized_fx_gain_account_id: formData.realized_fx_gain_account_id,
       realized_fx_loss_account_id: formData.realized_fx_loss_account_id,
+      default_auditor_name: formData.default_auditor_name || null,
+      default_auditor_colegiado: formData.default_auditor_colegiado || null,
+      payroll_salaries_expense_account_id: formData.payroll_salaries_expense_account_id,
+      payroll_bonificacion_expense_account_id: formData.payroll_bonificacion_expense_account_id,
+      payroll_igss_patronal_expense_account_id: formData.payroll_igss_patronal_expense_account_id,
+      payroll_indemnizacion_expense_account_id: formData.payroll_indemnizacion_expense_account_id,
+      payroll_aguinaldo_expense_account_id: formData.payroll_aguinaldo_expense_account_id,
+      payroll_bono14_expense_account_id: formData.payroll_bono14_expense_account_id,
+      payroll_vacaciones_expense_account_id: formData.payroll_vacaciones_expense_account_id,
+      payroll_igss_payable_account_id: formData.payroll_igss_payable_account_id,
+      payroll_isr_payable_account_id: formData.payroll_isr_payable_account_id,
+      payroll_salaries_payable_account_id: formData.payroll_salaries_payable_account_id,
+      payroll_indemnizacion_provision_account_id: formData.payroll_indemnizacion_provision_account_id,
+      payroll_aguinaldo_bono14_provision_account_id: formData.payroll_aguinaldo_bono14_provision_account_id,
     });
   };
 
@@ -307,6 +350,100 @@ export function EnterpriseAccountsManager() {
                   </AlertDescription>
                 </Alert>
               )}
+            </div>
+
+            <Separator />
+
+            {/* Nómina Section */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold">Nómina</h3>
+                <p className="text-sm text-muted-foreground">
+                  Cuentas usadas por el módulo de Nómina para generar la póliza mensual con prefijo <code className="text-[10px] bg-muted px-1 rounded">NOM-YYYY-MM</code>. Tasas: IGSS Patronal 12.67%, Indemnización 9.72%, Aguinaldo 8.33%, Bono 14 8.33%, Vacaciones 4.17%.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium">Cuentas de Gasto</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { key: 'payroll_salaries_expense_account_id', label: 'Gasto Sueldos', desc: 'Cuenta de gasto para sueldos base.' },
+                  { key: 'payroll_bonificacion_expense_account_id', label: 'Gasto Bonificación / Otros Ingresos', desc: 'Bonificación decreto, comisiones, horas extra.' },
+                  { key: 'payroll_igss_patronal_expense_account_id', label: 'Gasto IGSS Patronal (12.67%)', desc: 'Cuota patronal del IGSS.' },
+                  { key: 'payroll_indemnizacion_expense_account_id', label: 'Gasto Indemnización (9.72%)', desc: 'Provisión mensual de indemnización.' },
+                  { key: 'payroll_aguinaldo_expense_account_id', label: 'Gasto Aguinaldo (8.33%)', desc: 'Provisión mensual de aguinaldo.' },
+                  { key: 'payroll_bono14_expense_account_id', label: 'Gasto Bono 14 (8.33%)', desc: 'Provisión mensual de bono 14.' },
+                  { key: 'payroll_vacaciones_expense_account_id', label: 'Gasto Vacaciones (4.17%)', desc: 'Provisión mensual de vacaciones.' },
+                ].map(({ key, label, desc }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={formData[key as keyof typeof formData] as number | null}
+                      onValueChange={(v) => setFormData(p => ({ ...p, [key]: v }))}
+                      placeholder="Seleccionar cuenta de gasto"
+                    />
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-1 pt-2">
+                <h4 className="text-sm font-medium">Cuentas por Pagar y Provisiones</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { key: 'payroll_salaries_payable_account_id', label: 'Sueldos por Pagar', desc: 'Líquido por pagar a empleados.' },
+                  { key: 'payroll_igss_payable_account_id', label: 'IGSS por Pagar', desc: 'Cuota laboral 4.83% + cuota patronal 12.67%.' },
+                  { key: 'payroll_isr_payable_account_id', label: 'ISR Retenido por Pagar', desc: 'Retención de ISR a empleados.' },
+                  { key: 'payroll_indemnizacion_provision_account_id', label: 'Provisión Indemnización por Pagar', desc: 'Pasivo acumulado de indemnización.' },
+                  { key: 'payroll_aguinaldo_bono14_provision_account_id', label: 'Provisión Aguinaldo / Bono 14 por Pagar', desc: 'Pasivo acumulado de aguinaldo y bono 14.' },
+                ].map(({ key, label, desc }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={formData[key as keyof typeof formData] as number | null}
+                      onValueChange={(v) => setFormData(p => ({ ...p, [key]: v }))}
+                      placeholder="Seleccionar cuenta de pasivo"
+                    />
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Auditor Section */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold">Auditor (Conciliación Cuadrática SAT)</h3>
+                <p className="text-sm text-muted-foreground">
+                  Datos del Contador Público y Auditor que firma el formato de conciliación bancaria cuadrática requerido por la SAT. Pre-llenan el reporte PDF.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="auditor_name">Nombre del Auditor</Label>
+                  <Input
+                    id="auditor_name"
+                    value={formData.default_auditor_name}
+                    onChange={(e) => setFormData(p => ({ ...p, default_auditor_name: e.target.value }))}
+                    placeholder="Ej. Juan Pérez González"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="auditor_colegiado">Número de Colegiado Activo</Label>
+                  <Input
+                    id="auditor_colegiado"
+                    value={formData.default_auditor_colegiado}
+                    onChange={(e) => setFormData(p => ({ ...p, default_auditor_colegiado: e.target.value }))}
+                    placeholder="Ej. 12345"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end">

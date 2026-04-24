@@ -23,6 +23,22 @@ export interface EnterpriseConfig {
   unrealized_fx_loss_account_id: number | null;
   realized_fx_gain_account_id: number | null;
   realized_fx_loss_account_id: number | null;
+  // Auditor (conciliación cuadrática SAT)
+  default_auditor_name: string | null;
+  default_auditor_colegiado: string | null;
+  // Nómina (12 cuentas)
+  payroll_salaries_expense_account_id: number | null;
+  payroll_bonificacion_expense_account_id: number | null;
+  payroll_igss_patronal_expense_account_id: number | null;
+  payroll_indemnizacion_expense_account_id: number | null;
+  payroll_aguinaldo_expense_account_id: number | null;
+  payroll_bono14_expense_account_id: number | null;
+  payroll_vacaciones_expense_account_id: number | null;
+  payroll_igss_payable_account_id: number | null;
+  payroll_isr_payable_account_id: number | null;
+  payroll_salaries_payable_account_id: number | null;
+  payroll_indemnizacion_provision_account_id: number | null;
+  payroll_aguinaldo_bono14_provision_account_id: number | null;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
@@ -44,6 +60,20 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   unrealized_fx_loss_account_id: null,
   realized_fx_gain_account_id: null,
   realized_fx_loss_account_id: null,
+  default_auditor_name: null,
+  default_auditor_colegiado: null,
+  payroll_salaries_expense_account_id: null,
+  payroll_bonificacion_expense_account_id: null,
+  payroll_igss_patronal_expense_account_id: null,
+  payroll_indemnizacion_expense_account_id: null,
+  payroll_aguinaldo_expense_account_id: null,
+  payroll_bono14_expense_account_id: null,
+  payroll_vacaciones_expense_account_id: null,
+  payroll_igss_payable_account_id: null,
+  payroll_isr_payable_account_id: null,
+  payroll_salaries_payable_account_id: null,
+  payroll_indemnizacion_provision_account_id: null,
+  payroll_aguinaldo_bono14_provision_account_id: null,
 });
 
 export function useEnterpriseConfig(enterpriseId: number | null) {
@@ -100,6 +130,20 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         unrealized_fx_loss_account_id: newConfig.unrealized_fx_loss_account_id,
         realized_fx_gain_account_id: newConfig.realized_fx_gain_account_id,
         realized_fx_loss_account_id: newConfig.realized_fx_loss_account_id,
+        default_auditor_name: newConfig.default_auditor_name,
+        default_auditor_colegiado: newConfig.default_auditor_colegiado,
+        payroll_salaries_expense_account_id: newConfig.payroll_salaries_expense_account_id,
+        payroll_bonificacion_expense_account_id: newConfig.payroll_bonificacion_expense_account_id,
+        payroll_igss_patronal_expense_account_id: newConfig.payroll_igss_patronal_expense_account_id,
+        payroll_indemnizacion_expense_account_id: newConfig.payroll_indemnizacion_expense_account_id,
+        payroll_aguinaldo_expense_account_id: newConfig.payroll_aguinaldo_expense_account_id,
+        payroll_bono14_expense_account_id: newConfig.payroll_bono14_expense_account_id,
+        payroll_vacaciones_expense_account_id: newConfig.payroll_vacaciones_expense_account_id,
+        payroll_igss_payable_account_id: newConfig.payroll_igss_payable_account_id,
+        payroll_isr_payable_account_id: newConfig.payroll_isr_payable_account_id,
+        payroll_salaries_payable_account_id: newConfig.payroll_salaries_payable_account_id,
+        payroll_indemnizacion_provision_account_id: newConfig.payroll_indemnizacion_provision_account_id,
+        payroll_aguinaldo_bono14_provision_account_id: newConfig.payroll_aguinaldo_bono14_provision_account_id,
       };
 
       const { data: existing } = await supabase
