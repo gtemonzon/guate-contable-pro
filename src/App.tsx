@@ -54,6 +54,7 @@ const Bitacora = lazyRetry(() => import("./pages/Bitacora"));
 const ActivosFijos = lazyRetry(() => import("./pages/ActivosFijos"));
 const Inbox = lazyRetry(() => import("./pages/Inbox"));
 const Soporte = lazyRetry(() => import("./pages/Soporte"));
+const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -116,6 +117,7 @@ const App = () => (
               <Route path="/soporte" element={<Suspense fallback={<PageLoader />}><Soporte /></Suspense>} />
               <Route path="/importar" element={<div>Importación (próximamente)</div>} />
               <Route path="/notificaciones" element={<Suspense fallback={<PageLoader />}><Notificaciones /></Suspense>} />
+              <Route path="/capacitacion" element={<Suspense fallback={<PageLoader />}><Capacitacion /></Suspense>} />
               <Route path="/ayuda" element={<Suspense fallback={<PageLoader />}><Ayuda /></Suspense>} />
             </Route>
             
