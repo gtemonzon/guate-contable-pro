@@ -156,7 +156,7 @@ export function CurrencyAmountInput({
         </p>
       )}
       {!isFunctional && exchangeRate === 0 && (
-        <p className="text-xs text-amber-600 flex items-center gap-1">
+        <p className="text-xs text-warning flex items-center gap-1">
           <AlertCircle className="h-3 w-3" /> Falta registrar tipo de cambio
         </p>
       )}
