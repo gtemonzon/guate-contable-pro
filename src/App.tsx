@@ -55,6 +55,7 @@ const ActivosFijos = lazyRetry(() => import("./pages/ActivosFijos"));
 const Inbox = lazyRetry(() => import("./pages/Inbox"));
 const Soporte = lazyRetry(() => import("./pages/Soporte"));
 const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
+const Nomina = lazyRetry(() => import("./pages/Nomina"));
 
 // Loading fallback component
 const PageLoader = () => (
