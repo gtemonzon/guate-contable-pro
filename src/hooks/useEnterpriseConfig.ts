@@ -18,6 +18,11 @@ export interface EnterpriseConfig {
   inventory_account_id: number | null;
   cost_of_sales_method: 'manual' | 'coeficiente';
   cost_of_sales_account_id: number | null;
+  // Diferencial cambiario
+  unrealized_fx_gain_account_id: number | null;
+  unrealized_fx_loss_account_id: number | null;
+  realized_fx_gain_account_id: number | null;
+  realized_fx_loss_account_id: number | null;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
@@ -35,6 +40,10 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   inventory_account_id: null,
   cost_of_sales_method: 'manual',
   cost_of_sales_account_id: null,
+  unrealized_fx_gain_account_id: null,
+  unrealized_fx_loss_account_id: null,
+  realized_fx_gain_account_id: null,
+  realized_fx_loss_account_id: null,
 });
 
 export function useEnterpriseConfig(enterpriseId: number | null) {
@@ -87,6 +96,10 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         inventory_account_id: newConfig.inventory_account_id,
         cost_of_sales_method: newConfig.cost_of_sales_method,
         cost_of_sales_account_id: newConfig.cost_of_sales_account_id,
+        unrealized_fx_gain_account_id: newConfig.unrealized_fx_gain_account_id,
+        unrealized_fx_loss_account_id: newConfig.unrealized_fx_loss_account_id,
+        realized_fx_gain_account_id: newConfig.realized_fx_gain_account_id,
+        realized_fx_loss_account_id: newConfig.realized_fx_loss_account_id,
       };
 
       const { data: existing } = await supabase
