@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { BalanceTreeView } from "@/components/balance/BalanceTreeView";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
+
+const SaldosMensuales = lazy(() => import("./SaldosMensuales"));
 
 interface Account {
   id: number;
@@ -217,99 +220,123 @@ export default function BalanceSaldos() {
     );
   }
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "mensual" ? "mensual" : "anual";
+
+  const handleTabChange = (value: string) => {
+    setSearchParams(value === "mensual" ? { tab: "mensual" } : {}, { replace: true });
+  };
+
   return (
     <div className="p-8 space-y-6">
-      <div className="sticky top-0 z-10 bg-background pb-4 -mx-8 px-8 pt-0 border-b mb-2">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Balance de Saldos</h1>
-            <p className="text-muted-foreground">Saldos de cuentas por período contable</p>
-            
-            <div className="mt-4 flex gap-6 text-sm">
-              <div>
-                <span className="text-muted-foreground">Total Debe: </span>
-                <span className="font-semibold">Q {totals.totalDebit}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total Haber: </span>
-                <span className="font-semibold">Q {totals.totalCredit}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex gap-4 items-end flex-wrap">
-            <div>
-              <Label htmlFor="period-select">Período Contable</Label>
-              <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
-                <SelectTrigger id="period-select" className="w-[200px]">
-                  <SelectValue placeholder="Seleccionar período" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periods.map((period) => (
-                    <SelectItem key={period.id} value={String(period.id)}>
-                      {period.year} ({period.status})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="start-date">Desde</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-[150px]"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="end-date">Hasta</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-[150px]"
-              />
-            </div>
-
-            <Button onClick={handleDateFilterChange} variant="outline">
-              Filtrar
-            </Button>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">Saldos de Cuentas</h1>
+        <p className="text-muted-foreground">Consulta saldos contables anuales o desglose mensual</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cuentas y Saldos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-center text-muted-foreground py-8">Cargando...</p>
-          ) : filteredAccounts.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No hay cuentas para mostrar</p>
-          ) : (
-            <div className="space-y-4">
-              <BalanceTreeView accounts={filteredAccounts} onViewDetails={handleViewDetails} />
-              
-              <div className="flex justify-end gap-8 pt-4 pr-3 border-t-2 bg-muted/30 rounded-lg p-4">
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Total Debe</div>
-                  <div className="text-lg font-semibold font-mono">Q {totals.totalDebit}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Total Haber</div>
-                  <div className="text-lg font-semibold font-mono">Q {totals.totalCredit}</div>
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+        <TabsList>
+          <TabsTrigger value="anual">Anual / Por Período</TabsTrigger>
+          <TabsTrigger value="mensual">Mensual</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="anual" className="mt-6 space-y-6">
+          <div className="sticky top-0 z-10 bg-background pb-4 -mx-8 px-8 pt-0 border-b mb-2">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex gap-6 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Total Debe: </span>
+                    <span className="font-semibold">Q {totals.totalDebit}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Total Haber: </span>
+                    <span className="font-semibold">Q {totals.totalCredit}</span>
+                  </div>
                 </div>
               </div>
+
+              <div className="flex gap-4 items-end flex-wrap">
+                <div>
+                  <Label htmlFor="period-select">Período Contable</Label>
+                  <Select value={selectedPeriod} onValueChange={handlePeriodChange}>
+                    <SelectTrigger id="period-select" className="w-[200px]">
+                      <SelectValue placeholder="Seleccionar período" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {periods.map((period) => (
+                        <SelectItem key={period.id} value={String(period.id)}>
+                          {period.year} ({period.status})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="start-date">Desde</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-[150px]"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="end-date">Hasta</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-[150px]"
+                  />
+                </div>
+
+                <Button onClick={handleDateFilterChange} variant="outline">
+                  Filtrar
+                </Button>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Cuentas y Saldos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <p className="text-center text-muted-foreground py-8">Cargando...</p>
+              ) : filteredAccounts.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No hay cuentas para mostrar</p>
+              ) : (
+                <div className="space-y-4">
+                  <BalanceTreeView accounts={filteredAccounts} onViewDetails={handleViewDetails} />
+
+                  <div className="flex justify-end gap-8 pt-4 pr-3 border-t-2 bg-muted/30 rounded-lg p-4">
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">Total Debe</div>
+                      <div className="text-lg font-semibold font-mono">Q {totals.totalDebit}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">Total Haber</div>
+                      <div className="text-lg font-semibold font-mono">Q {totals.totalCredit}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="mensual" className="mt-6">
+          <Suspense fallback={<p className="text-center text-muted-foreground py-8">Cargando vista mensual...</p>}>
+            <SaldosMensuales />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
