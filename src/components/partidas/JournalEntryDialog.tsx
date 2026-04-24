@@ -20,6 +20,8 @@ import VoidChequeDialog from "./VoidChequeDialog";
 import { MetadataEditDialog } from "./MetadataEditDialog";
 import { PurchaseLinkManager } from "./PurchaseLinkManager";
 import { ReferenceBadges } from "./ReferenceBadges";
+import { LiquidateForeignInvoiceDialog } from "./LiquidateForeignInvoiceDialog";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useJournalEntryForm, type EntryStatus } from "./useJournalEntryForm";
 import { JournalEntryHeader } from "./JournalEntryHeader";
 import { JournalEntryBankSection } from "./JournalEntryBankSection";
@@ -63,6 +65,8 @@ export default function JournalEntryDialog({
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
   const [metadataEditOpen, setMetadataEditOpen] = useState(false);
   const [linkManagerOpen, setLinkManagerOpen] = useState(false);
+  const [liquidateOpen, setLiquidateOpen] = useState(false);
+  const baseCurrency = useEnterpriseBaseCurrency(selectedEnterpriseId ?? null);
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
@@ -301,6 +305,11 @@ export default function JournalEntryDialog({
                 onVoidCheque={() => setVoidChequeOpen(true)}
                 onEditMetadata={form.entryStatus === 'contabilizado' ? () => setMetadataEditOpen(true) : undefined}
                 onLinkPurchases={!form.isReadOnly ? handleOpenLinkManager : undefined}
+                onLiquidateForeignInvoice={
+                  form.entryStatus === 'contabilizado' && form.currencyCode && form.currencyCode !== baseCurrency
+                    ? () => setLiquidateOpen(true)
+                    : undefined
+                }
                 auditInfo={form.auditInfo}
                 formatDateTime={form.formatDateTime}
               />
@@ -408,6 +417,24 @@ export default function JournalEntryDialog({
           bankAccountId={form.bankAccountId}
           onLinksChanged={() => {}} 
           onApplyToEntry={handleApplyToEntry}
+        />
+      )}
+
+      {/* Liquidar Factura ME — diferencial cambiario realizado */}
+      {currentEntryId && form.currencyCode && form.currencyCode !== baseCurrency && (
+        <LiquidateForeignInvoiceDialog
+          open={liquidateOpen}
+          onOpenChange={setLiquidateOpen}
+          enterpriseId={enterpriseId}
+          baseCurrency={baseCurrency}
+          paymentJournalId={currentEntryId}
+          paymentDate={form.entryDate}
+          defaultPaymentRate={Number(form.exchangeRate) || undefined}
+          currencyCode={form.currencyCode}
+          counterpartNit={null}
+          onCompleted={() => {
+            onSuccess(currentEntryId);
+          }}
         />
       )}
     </>

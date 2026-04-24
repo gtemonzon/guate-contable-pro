@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle, Coins } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { EntryStatus } from "./useJournalEntryForm";
 
@@ -23,6 +23,7 @@ interface JournalEntryActionsProps {
   onVoidCheque: () => void;
   onEditMetadata?: () => void;
   onLinkPurchases?: () => void;
+  onLiquidateForeignInvoice?: () => void;
   auditInfo: { createdBy: string | null; createdAt: string | null; updatedBy: string | null; updatedAt: string | null; } | null;
   formatDateTime: (d: string | null) => string;
 }
@@ -41,7 +42,8 @@ const modKey = isMac ? "⌘" : "Ctrl";
 export function JournalEntryActions({
   entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
   hasBankAccount, hasBankReference, totalDebit, totalCredit, imbalanceAmount,
-  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, auditInfo, formatDateTime,
+  onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, onLiquidateForeignInvoice,
+  auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
   // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
   const showVoidCheque = hasBankAccount && hasBankReference;
@@ -90,6 +92,13 @@ export function JournalEntryActions({
               <Link2 className="mr-2 h-4 w-4" />
               Vincular Facturas
               <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">Alt+V</kbd>
+            </Button>
+          )}
+
+          {onLiquidateForeignInvoice && entryStatus === 'contabilizado' && (
+            <Button variant="outline" onClick={onLiquidateForeignInvoice} disabled={loading} size="sm" title="Liquidar factura en moneda extranjera">
+              <Coins className="mr-2 h-4 w-4" />
+              Liquidar factura ME
             </Button>
           )}
 
