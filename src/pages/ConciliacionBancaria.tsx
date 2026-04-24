@@ -325,18 +325,18 @@ const ConciliacionBancaria = () => {
       if (periodError) throw periodError;
 
       // Check which movements are reconciled in tab_bank_movements
-      const allDetailIds = [
-        ...(previousUnreconciled || []).map(m => m.id),
-        ...(periodMovements || []).map(m => m.id)
-      ];
+      const allJournalEntryIds = Array.from(new Set([
+        ...(previousUnreconciled || []).map((m: any) => m.tab_journal_entries?.id),
+        ...(periodMovements || []).map((m: any) => m.tab_journal_entries?.id),
+      ].filter(Boolean)));
 
       const reconciledMap = new Map<number, { is_reconciled: boolean; reconciliation_id: number | null }>();
       
-      if (allDetailIds.length > 0) {
+      if (allJournalEntryIds.length > 0) {
         const { data: bankMovements } = await supabase
           .from('tab_bank_movements')
           .select('journal_entry_id, is_reconciled, reconciliation_id')
-          .in('journal_entry_id', allDetailIds);
+          .in('journal_entry_id', allJournalEntryIds);
 
         if (bankMovements) {
           bankMovements.forEach(bm => {
@@ -350,7 +350,8 @@ const ConciliacionBancaria = () => {
 
       // Transform data to JournalMovement format
       const transformMovement = (m: any): JournalMovement => {
-        const reconcilationInfo = reconciledMap.get(m.id) || { is_reconciled: false, reconciliation_id: null };
+        const journalEntryId = m.tab_journal_entries.id;
+        const reconcilationInfo = reconciledMap.get(journalEntryId) || { is_reconciled: false, reconciliation_id: null };
         return {
           id: m.id,
           movement_date: m.tab_journal_entries.entry_date,
@@ -360,7 +361,7 @@ const ConciliacionBancaria = () => {
           entry_number: m.tab_journal_entries.entry_number,
           is_reconciled: reconcilationInfo.is_reconciled,
           reconciliation_id: reconcilationInfo.reconciliation_id,
-          journal_entry_id: m.id,
+          journal_entry_id: journalEntryId,
           bank_reference: m.tab_journal_entries.bank_reference || null,
           beneficiary_name: m.tab_journal_entries.beneficiary_name || null,
         };
@@ -464,12 +465,19 @@ const ConciliacionBancaria = () => {
 
       // Update selected movements - insert or update in tab_bank_movements
       const movementIds = Array.from(selectedMovements);
+      const selectedJournalEntryIds = Array.from(new Set(
+        movements
+          .filter((m) => selectedMovements.has(m.id))
+          .map((m) => m.journal_entry_id)
+      ));
       
       // First, check which movements already have entries in tab_bank_movements
-      const { data: existingBankMovements } = await supabase
-        .from('tab_bank_movements')
-        .select('id, journal_entry_id')
-        .in('journal_entry_id', movementIds);
+      const existingBankMovements = selectedJournalEntryIds.length > 0
+        ? (await supabase
+            .from('tab_bank_movements')
+            .select('id, journal_entry_id')
+            .in('journal_entry_id', selectedJournalEntryIds)).data
+        : [];
 
       const existingMap = new Map(
         (existingBankMovements || []).map(bm => [bm.journal_entry_id, bm.id])
@@ -483,8 +491,8 @@ const ConciliacionBancaria = () => {
         const movement = movements.find(m => m.id === detailId);
         if (!movement) return;
 
-        if (existingMap.has(detailId)) {
-          toUpdate.push(existingMap.get(detailId)!);
+        if (existingMap.has(movement.journal_entry_id)) {
+          toUpdate.push(existingMap.get(movement.journal_entry_id)!);
         } else {
           toInsert.push({
             bank_account_id: parseInt(selectedAccount),
@@ -492,7 +500,7 @@ const ConciliacionBancaria = () => {
             description: movement.description,
             debit_amount: movement.debit_amount,
             credit_amount: movement.credit_amount,
-            journal_entry_id: detailId,
+            journal_entry_id: movement.journal_entry_id,
             is_reconciled: true,
             reconciliation_id: reconciliation.id
           });
@@ -522,9 +530,9 @@ const ConciliacionBancaria = () => {
       }
 
       // Update unselected movements
-      const unselectedIds = movements
+       const unselectedIds = Array.from(new Set(movements
         .filter(m => !selectedMovements.has(m.id))
-        .map(m => m.id);
+         .map(m => m.journal_entry_id)));
       
       if (unselectedIds.length > 0) {
         // Only update those that exist in tab_bank_movements
