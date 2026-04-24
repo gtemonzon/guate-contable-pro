@@ -88,6 +88,10 @@ export function useJournalEntryForm(
   const [beneficiaryName, setBeneficiaryName] = useState("");
   const [bankDirection, setBankDirection] = useState<BankDirection>('OUT');
 
+  // Currency fields (per-entry header)
+  const [currencyCode, setCurrencyCode] = useState<string>("GTQ");
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+
   // Lines
   const [detailLines, setDetailLines] = useState<DetailLine[]>([
     { id: crypto.randomUUID(), account_id: null, description: "", cost_center: "", debit_amount: 0, credit_amount: 0 },
@@ -140,6 +144,7 @@ export function useJournalEntryForm(
     setNextEntryNumber(""); setEntryDate(""); setEntryType(""); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
     setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
+    setCurrencyCode("GTQ"); setExchangeRate(1);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
     draftEntryIdRef.current = null;
@@ -159,6 +164,7 @@ export function useJournalEntryForm(
     setEntryDate(freshDate); setEntryType("diario"); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
     setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
+    setCurrencyCode("GTQ"); setExchangeRate(1);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
     draftEntryIdRef.current = null;
@@ -220,6 +226,8 @@ export function useJournalEntryForm(
       setBankReference(entry.bank_reference || "");
       setBeneficiaryName(entry.beneficiary_name || "");
       setBankDirection((entry as any).bank_direction || 'OUT');
+      setCurrencyCode((entry as any).currency_code || "GTQ");
+      setExchangeRate(Number((entry as any).exchange_rate ?? 1));
 
       if (entry.accounting_period_id) {
         const { data: periodData } = await supabase.from('tab_accounting_periods').select('status').eq('id', entry.accounting_period_id).single();
@@ -498,6 +506,8 @@ export function useJournalEntryForm(
       total_credit: 0,
       is_posted: false,
       status: 'borrador',
+      currency_code: currencyCode,
+      exchange_rate: exchangeRate || 1,
       created_by: user.id,
     } as any).select().single();
 
@@ -806,6 +816,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null,
           updated_by: user.id, updated_at: new Date().toISOString(), status: 'borrador',
         } as any).eq("id", entryToEdit.id);
@@ -844,6 +855,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null,
           updated_by: user.id, updated_at: new Date().toISOString(),
           status: 'borrador',
@@ -881,6 +893,7 @@ export function useJournalEntryForm(
           bank_account_id: bankAccountId || null, bank_reference: bankReference || null,
           beneficiary_name: beneficiaryName || null, bank_direction: bankDirectionValue,
           total_debit: getTotalDebit(), total_credit: getTotalCredit(),
+          currency_code: currencyCode, exchange_rate: exchangeRate || 1,
           is_posted: false, posted_at: null, created_by: user.id,
           status: 'borrador',
         } as any).select().single();
@@ -935,6 +948,7 @@ export function useJournalEntryForm(
     documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
+    currencyCode, setCurrencyCode, exchangeRate, setExchangeRate,
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,
     showCloseConfirm, setShowCloseConfirm, showRejectDialog, setShowRejectDialog,
     rejectionReason, setRejectionReason, entryStatus,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { validateNIT } from "@/utils/nitValidation";
@@ -40,6 +40,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
+import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { useExchangeRates } from "@/hooks/useExchangeRates";
+import { formatCurrency } from "@/hooks/useCurrencies";
+import { AlertCircle } from "lucide-react";
 
 // ── Schema ──────────────────────────────────────────────────────────────────
 
@@ -119,6 +124,24 @@ export function PurchaseInvoiceWizard({
   const [step3Data, setStep3Data] = useState<Step3Data | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Multi-currency state
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const { getRate } = useExchangeRates(enterpriseId);
+  const [currencyCode, setCurrencyCode] = useState<string>(baseCurrency);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const isMultiCurrency = enabledCurrencies.length > 0;
+  const isFunctional = currencyCode === baseCurrency;
+  const allCurrencyCodes = [baseCurrency, ...enabledCurrencies.map((c) => c.currency_code)];
+
+  // Initialize currency to base when it loads
+  useEffect(() => {
+    if (baseCurrency && currencyCode !== baseCurrency && exchangeRate === 1) {
+      setCurrencyCode(baseCurrency);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCurrency]);
+
   // ── Accounts query ───────────────────────────────────────────────────────
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["expense-accounts", enterpriseId],
@@ -140,6 +163,17 @@ export function PurchaseInvoiceWizard({
   const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) });
   const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
   const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+
+  const handleCurrencyChange = (code: string) => {
+    setCurrencyCode(code);
+    if (code === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+    const dateStr = form1.getValues().invoice_date || new Date().toISOString().slice(0, 10);
+    const r = getRate(code, dateStr);
+    setExchangeRate(r ?? 0);
+  };
 
   // ── Auto-calc VAT on net_amount change ───────────────────────────────────
   const watchedNet = form2.watch("net_amount");
@@ -174,9 +208,18 @@ export function PurchaseInvoiceWizard({
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (asDraft = false) => {
     if (!step1Data || !step2Data || !step3Data) return;
+    if (!isFunctional && (!exchangeRate || exchangeRate <= 0)) {
+      toast({ title: "Tipo de cambio requerido", description: `Registra el tipo de cambio para ${currencyCode} antes de guardar.`, variant: "destructive" });
+      return;
+    }
     setIsSubmitting(true);
 
     try {
+      const rate = isFunctional ? 1 : exchangeRate;
+      const fxNet = Math.round(step2Data.net_amount * rate * 100) / 100;
+      const fxVat = Math.round(step2Data.vat_amount * rate * 100) / 100;
+      const fxTotal = Math.round(step2Data.total_amount * rate * 100) / 100;
+
       const { error } = await supabase.from("tab_purchase_ledger").insert({
         enterprise_id: enterpriseId,
         accounting_period_id: periodId ?? null,
@@ -186,19 +229,24 @@ export function PurchaseInvoiceWizard({
         invoice_date: step1Data.invoice_date,
         invoice_series: step1Data.invoice_series ?? null,
         fel_document_type: step1Data.fel_document_type,
-        net_amount: step2Data.net_amount,
-        vat_amount: step2Data.vat_amount,
-        total_amount: step2Data.total_amount,
+        net_amount: fxNet,
+        vat_amount: fxVat,
+        total_amount: fxTotal,
         purchase_type: step2Data.purchase_type,
         expense_account_id: step3Data.expense_account_id,
-        base_amount: step2Data.net_amount,
+        base_amount: fxNet,
+        currency_code: currencyCode,
+        exchange_rate: rate,
+        original_subtotal: isFunctional ? null : step2Data.net_amount,
+        original_vat: isFunctional ? null : step2Data.vat_amount,
+        original_total: isFunctional ? null : step2Data.total_amount,
       });
 
       if (error) throw error;
 
       toast({
         title: asDraft ? "Compra guardada como borrador" : "Compra registrada exitosamente",
-        description: `Factura ${step1Data.invoice_number} de ${step1Data.supplier_name} — Q ${step2Data.total_amount.toFixed(2)}`,
+        description: `Factura ${step1Data.invoice_number} de ${step1Data.supplier_name} — ${formatCurrency(fxTotal, baseCurrency)}`,
       });
       onClose();
       resetWizard();
@@ -368,6 +416,44 @@ export function PurchaseInvoiceWizard({
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                   Montos y Tipo de Compra
                 </h3>
+
+                {isMultiCurrency && (
+                  <div className="grid grid-cols-12 gap-3 items-end p-3 rounded-md border bg-muted/30">
+                    <div className="col-span-4">
+                      <Label className="text-xs">Moneda</Label>
+                      <Select value={currencyCode} onValueChange={handleCurrencyChange}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {allCurrencyCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-4">
+                      <Label className="text-xs">Tipo de cambio</Label>
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        value={exchangeRate || ""}
+                        onChange={(e) => setExchangeRate(Number(e.target.value))}
+                        disabled={isFunctional}
+                        className={cn("h-9", isFunctional && "bg-muted")}
+                      />
+                    </div>
+                    <div className="col-span-4 text-xs">
+                      {!isFunctional && exchangeRate > 0 && watchedNet > 0 && (
+                        <p className="text-muted-foreground">
+                          Equivale a <strong>{formatCurrency(watchedNet * exchangeRate, baseCurrency)}</strong>
+                        </p>
+                      )}
+                      {!isFunctional && (!exchangeRate || exchangeRate <= 0) && (
+                        <p className="text-warning flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" /> Falta tipo de cambio
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1 col-span-2">
                     <Label className="text-xs">Monto Neto (sin IVA) *</Label>

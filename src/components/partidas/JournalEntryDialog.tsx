@@ -208,6 +208,11 @@ export default function JournalEntryDialog({
                 headerDescription={form.headerDescription}
                 setHeaderDescription={form.setHeaderDescription}
                 propagateDescriptionToLines={form.propagateDescriptionToLines}
+                enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0") || null}
+                currencyCode={form.currencyCode}
+                setCurrencyCode={form.setCurrencyCode}
+                exchangeRate={form.exchangeRate}
+                setExchangeRate={form.setExchangeRate}
               />
 
               <JournalEntryBankSection
