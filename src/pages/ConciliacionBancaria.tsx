@@ -196,23 +196,29 @@ const ConciliacionBancaria = () => {
         return;
       }
 
-      const { data: firstMovement, error } = await supabase
+      const { data: detailRows, error } = await supabase
         .from('tab_journal_entry_details')
-        .select(`
-          tab_journal_entries!inner(
-            entry_date,
-            is_posted
-          )
-        `)
-        .eq('account_id', ledgerAccountId)
-        .eq('tab_journal_entries.is_posted', true)
-        .order('entry_date', { ascending: true, foreignTable: 'tab_journal_entries' })
-        .limit(1, { foreignTable: 'tab_journal_entries' })
-        .maybeSingle();
+        .select('journal_entry_id')
+        .eq('account_id', ledgerAccountId);
 
       if (error) throw error;
 
-      const firstDate = firstMovement?.tab_journal_entries?.entry_date;
+      const entryIds = (detailRows ?? []).map((r) => r.journal_entry_id).filter(Boolean) as number[];
+
+      let firstDate: string | null = null;
+      if (entryIds.length > 0) {
+        const { data: firstEntry, error: entryError } = await supabase
+          .from('tab_journal_entries')
+          .select('entry_date')
+          .in('id', entryIds)
+          .eq('is_posted', true)
+          .order('entry_date', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (entryError) throw entryError;
+        firstDate = firstEntry?.entry_date ?? null;
+      }
       if (!firstDate) {
         setAvailablePeriods([]);
         setSelectedMonth("");
