@@ -668,7 +668,7 @@ const ConciliacionBancaria = () => {
                   <SelectValue placeholder="Selecciona un mes" />
                 </SelectTrigger>
                 <SelectContent>
-                  {months.map((month) => (
+                  {availableMonths.map((month) => (
                     <SelectItem key={month.value} value={month.value}>
                       {month.label}
                     </SelectItem>
