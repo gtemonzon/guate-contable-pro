@@ -32,7 +32,8 @@ export function FxRevaluationWizard({ open, onOpenChange, enterpriseId, defaultY
   const [month, setMonth] = useState(defaultMonth ?? today.getMonth() + 1);
   const [preview, setPreview] = useState<FxRevaluationPreview | null>(null);
   const [tab, setTab] = useState<"calculate" | "history">("calculate");
-  const [runs, setRuns] = useState<Array<Record<string, unknown>>>([]);
+  type RunRow = { id: number; year: number; month: number; cutoff_date: string; total_gain: number | null; total_loss: number | null; reversed_at: string | null; tab_journal_entries?: { entry_number?: string } | null };
+  const [runs, setRuns] = useState<RunRow[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const { loading, posting, buildPreview, postRevaluation, listRuns, reverseRun } = useFxRevaluation();
 
