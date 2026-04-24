@@ -62,13 +62,70 @@ export default function JournalEntryDialog({
   const form = useJournalEntryForm(open, entryToEdit ?? null, onSuccess, onOpenChange);
   const { selectedEnterpriseId } = useEnterprise();
   const { toast } = useToast();
+  const { config } = useEnterpriseConfig(selectedEnterpriseId ?? null);
+  const baseCurrency = useEnterpriseBaseCurrency(selectedEnterpriseId ?? null);
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
   const [metadataEditOpen, setMetadataEditOpen] = useState(false);
   const [linkManagerOpen, setLinkManagerOpen] = useState(false);
   const [liquidateOpen, setLiquidateOpen] = useState(false);
-  const baseCurrency = useEnterpriseBaseCurrency(selectedEnterpriseId ?? null);
+  // Auto-suggest liquidation context (Item 10E)
+  const [pendingLiquidationEntryId, setPendingLiquidationEntryId] = useState<number | null>(null);
+
+  // Wrap onSuccess to auto-detect FX-payment scenarios that need realized FX differential
+  const handleFormSuccess = useCallback(async (savedEntryId?: number) => {
+    if (!savedEntryId || !selectedEnterpriseId || !baseCurrency) {
+      onSuccess(savedEntryId);
+      return;
+    }
+    try {
+      // Re-fetch the saved entry with its details + accounts to evaluate criteria
+      const { data: entry } = await supabase
+        .from("tab_journal_entries")
+        .select(`
+          id, entry_type, currency_code, status, is_posted,
+          tab_journal_entry_details (
+            account_id,
+            tab_accounts:account_id (id, account_code, account_name)
+          )
+        `)
+        .eq("id", savedEntryId)
+        .maybeSingle();
+
+      if (!entry || !entry.is_posted || (entry.currency_code || baseCurrency) === baseCurrency) {
+        onSuccess(savedEntryId);
+        return;
+      }
+
+      // Trigger heuristic: payment-type entries OR entries that touch
+      // configured Customers/Suppliers accounts in foreign currency.
+      const customerAccId = config?.customers_account_id ?? null;
+      const supplierAccId = config?.suppliers_account_id ?? null;
+      const touchesAR_AP = (entry.tab_journal_entry_details || []).some((d: any) =>
+        (customerAccId && d.account_id === customerAccId) ||
+        (supplierAccId && d.account_id === supplierAccId),
+      );
+      const isPayment = ["pago", "ingreso", "egreso", "cobro"].includes(String(entry.entry_type).toLowerCase());
+
+      if (touchesAR_AP || isPayment) {
+        toast({
+          title: "Posible diferencial cambiario",
+          description: "Esta partida en moneda extranjera afecta cuentas por cobrar/pagar. Revisa si necesitas registrar el diferencial realizado.",
+        });
+        setPendingLiquidationEntryId(savedEntryId);
+        setLiquidateOpen(true);
+        // Defer the parent's onSuccess until liquidation dialog closes
+        return;
+      }
+    } catch (err) {
+      console.error("Auto-FX detection failed:", err);
+    }
+    onSuccess(savedEntryId);
+  }, [onSuccess, selectedEnterpriseId, baseCurrency, config?.customers_account_id, config?.suppliers_account_id, toast]);
+
+  const form = useJournalEntryForm(open, entryToEdit ?? null, handleFormSuccess, onOpenChange);
+
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
