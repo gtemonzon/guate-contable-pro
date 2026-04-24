@@ -948,6 +948,7 @@ export function useJournalEntryForm(
     documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
+    currencyCode, setCurrencyCode, exchangeRate, setExchangeRate,
     accountSearch, setAccountSearch, accountPopoverOpen, setAccountPopoverOpen,
     showCloseConfirm, setShowCloseConfirm, showRejectDialog, setShowRejectDialog,
     rejectionReason, setRejectionReason, entryStatus,
