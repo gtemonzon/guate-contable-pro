@@ -65,6 +65,8 @@ export default function JournalEntryDialog({
   const [voidChequeOpen, setVoidChequeOpen] = useState(false);
   const [metadataEditOpen, setMetadataEditOpen] = useState(false);
   const [linkManagerOpen, setLinkManagerOpen] = useState(false);
+  const [liquidateOpen, setLiquidateOpen] = useState(false);
+  const baseCurrency = useEnterpriseBaseCurrency(selectedEnterpriseId ?? null);
 
   const totalDebit = form.getTotalDebit();
   const totalCredit = form.getTotalCredit();
