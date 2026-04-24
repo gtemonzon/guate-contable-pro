@@ -929,29 +929,29 @@ const ConciliacionBancaria = () => {
       )}
 
       {lastExport && (
-        <Card className="border-primary/40">
+        <Card id="reconciliation-print-panel" className="border-primary border-2 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BadgeCheck className="h-5 w-5 text-primary" />
-              Última conciliación guardada
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <BadgeCheck className="h-6 w-6" />
+              Conciliación guardada — Imprimir / Exportar
             </CardTitle>
             <CardDescription>
               {lastExport.bankName} — {lastExport.accountNumber} · Período {lastExport.period} · Fecha {lastExport.reconciliationDate}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+          <CardContent className="space-y-4">
             <div className="text-sm text-muted-foreground">
               {lastExport.reconciledMovements.length} movimientos conciliados · Saldo libros Q {lastExport.bookBalance.toFixed(2)} · Saldo banco Q {lastExport.bankStatementBalance.toFixed(2)}
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => exportReconciliationPDF(lastExport)}>
-                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => exportReconciliationPDF(lastExport)}>
+                <Printer className="h-4 w-4 mr-2" /> Imprimir / PDF
               </Button>
               <Button variant="outline" onClick={() => exportReconciliationExcel(lastExport)}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar Excel
               </Button>
               <Button variant="ghost" onClick={() => setLastExport(null)}>
-                Ocultar
+                Cerrar
               </Button>
             </div>
           </CardContent>
