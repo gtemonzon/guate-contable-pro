@@ -144,6 +144,7 @@ export function useJournalEntryForm(
     setNextEntryNumber(""); setEntryDate(""); setEntryType(""); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
     setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines([]);
+    setCurrencyCode("GTQ"); setExchangeRate(1);
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
     draftEntryIdRef.current = null;
@@ -163,6 +164,7 @@ export function useJournalEntryForm(
     setEntryDate(freshDate); setEntryType("diario"); setPeriodId(null);
     setDocumentReference(""); setHeaderDescription(""); setDocumentReferences([]);
     setBankAccountId(null); setBankReference(""); setBeneficiaryName(""); setBankDirection('OUT'); setDetailLines(freshLines);
+    setCurrencyCode("GTQ"); setExchangeRate(1);
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
     draftEntryIdRef.current = null;
@@ -224,6 +226,8 @@ export function useJournalEntryForm(
       setBankReference(entry.bank_reference || "");
       setBeneficiaryName(entry.beneficiary_name || "");
       setBankDirection((entry as any).bank_direction || 'OUT');
+      setCurrencyCode((entry as any).currency_code || "GTQ");
+      setExchangeRate(Number((entry as any).exchange_rate ?? 1));
 
       if (entry.accounting_period_id) {
         const { data: periodData } = await supabase.from('tab_accounting_periods').select('status').eq('id', entry.accounting_period_id).single();
