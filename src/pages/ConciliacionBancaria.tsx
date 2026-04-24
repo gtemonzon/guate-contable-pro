@@ -17,6 +17,8 @@ import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankS
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QuadraticReconciliationView } from "@/components/conciliacion/QuadraticReconciliationView";
 import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { getFiscalFloorDate } from "@/utils/fiscalFloor";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankAccount = Database['public']['Tables']['tab_bank_accounts']['Row'] & {
@@ -56,6 +58,7 @@ const ConciliacionBancaria = () => {
   const [sortKey, setSortKey] = useState<SortKey>('movement_date');
   const [sortAsc, setSortAsc] = useState(true);
   const [lastExport, setLastExport] = useState<ReconciliationExportInput | null>(null);
+  const [bookEndingBalance, setBookEndingBalance] = useState(0);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v);
@@ -205,6 +208,7 @@ const ConciliacionBancaria = () => {
       setBankBalance("");
       setNotes("");
       setLastExport(null);
+      setBookEndingBalance(0);
     }
   }, [selectedAccount]);
 
@@ -406,7 +410,7 @@ const ConciliacionBancaria = () => {
         period: `${monthLabel} ${selectedYear}`,
         bankStatementBalance: Number(rec.bank_statement_balance || 0),
         bookBalance: Number(rec.book_balance || 0),
-        difference: Number(rec.book_balance || 0) - Number(rec.bank_statement_balance || 0),
+        difference: Number(rec.bank_statement_balance || 0) - Number(rec.reconciled_balance || 0),
         notes: rec.notes || undefined,
         reconciledMovements: reconciledMovs,
         pendingMovements: pendingMovs,
@@ -431,6 +435,39 @@ const ConciliacionBancaria = () => {
       const lastDay = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
       const endDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-${lastDay}`;
       const startDate = `${selectedYear}-${selectedMonth.padStart(2, '0')}-01`;
+
+      const fiscalFloor = selectedEnterprise
+        ? await getFiscalFloorDate(parseInt(selectedEnterprise), startDate)
+        : null;
+
+      let previousBalanceQuery = supabase
+        .from('tab_journal_entry_details')
+        .select(`
+          debit_amount,
+          credit_amount,
+          tab_journal_entries!inner(
+            entry_date,
+            is_posted,
+            enterprise_id
+          )
+        `)
+        .eq('account_id', ledgerAccountId)
+        .eq('tab_journal_entries.is_posted', true)
+        .lt('tab_journal_entries.entry_date', startDate);
+
+      if (selectedEnterprise) {
+        previousBalanceQuery = previousBalanceQuery.eq('tab_journal_entries.enterprise_id', parseInt(selectedEnterprise));
+      }
+
+      if (fiscalFloor) {
+        previousBalanceQuery = previousBalanceQuery.gte('tab_journal_entries.entry_date', fiscalFloor);
+      }
+
+      const previousBalanceDetails = await fetchAllRecords<any>(previousBalanceQuery);
+      const openingBalance = (previousBalanceDetails || []).reduce(
+        (sum, detail) => sum + (Number(detail.debit_amount) || 0) - (Number(detail.credit_amount) || 0),
+        0,
+      );
       
       const { data: previousUnreconciled, error: prevError } = await supabase
         .from('tab_journal_entry_details')
@@ -531,6 +568,12 @@ const ConciliacionBancaria = () => {
         .map(transformMovement);
 
       const allMovements = [...previousUnreconciledTransformed, ...periodMovementsTransformed];
+
+      const periodNetMovement = periodMovementsTransformed.reduce(
+        (sum, movement) => sum + (movement.debit_amount - movement.credit_amount),
+        0,
+      );
+      setBookEndingBalance(openingBalance + periodNetMovement);
       
       // Sort by date descending
       allMovements.sort((a, b) => 
@@ -546,6 +589,7 @@ const ConciliacionBancaria = () => {
       setSelectedMovements(reconciledIds);
     } catch (error: unknown) {
       console.error('Error fetching movements:', error);
+      setBookEndingBalance(0);
       toast({
         variant: "destructive",
         title: "Error al cargar movimientos",
@@ -567,7 +611,7 @@ const ConciliacionBancaria = () => {
   };
 
   const calculateBalances = () => {
-    const reconciled = movements
+    const reconciledMovementNet = movements
       .filter(m => selectedMovements.has(m.id))
       .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
     
@@ -575,7 +619,13 @@ const ConciliacionBancaria = () => {
       .filter(m => !selectedMovements.has(m.id))
       .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
     
-    return { reconciled, pending };
+    return {
+      reconciledMovementNet,
+      pending,
+      bookEndingBalance,
+      reconciledExpectedBankBalance: bookEndingBalance - pending,
+      difference: parseFloat(bankBalance || '0') - (bookEndingBalance - pending),
+    };
   };
 
   const handleReconcile = async () => {
@@ -594,9 +644,12 @@ const ConciliacionBancaria = () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) throw new Error("Usuario no autenticado");
 
-      const bookBalance = movements
-        .filter((m) => selectedMovements.has(m.id))
+      const pendingBalance = movements
+        .filter((m) => !selectedMovements.has(m.id))
         .reduce((sum, m) => sum + (m.debit_amount - m.credit_amount), 0);
+
+      const bookBalance = bookEndingBalance;
+      const reconciledBalance = bookEndingBalance - pendingBalance;
 
       const periodRange = getSelectedPeriodRange();
       if (!periodRange) throw new Error("Período inválido");
@@ -608,7 +661,7 @@ const ConciliacionBancaria = () => {
         bank_statement_balance: parseFloat(bankBalance),
         book_balance: bookBalance,
         adjustments: 0,
-        reconciled_balance: bookBalance,
+        reconciled_balance: reconciledBalance,
         status: 'conciliado',
         created_by: user.user.id,
         notes: notes || null,
@@ -748,7 +801,7 @@ const ConciliacionBancaria = () => {
         period: `${monthLabel} ${selectedYear}`,
         bankStatementBalance: parseFloat(bankBalance),
         bookBalance,
-        difference: bookBalance - parseFloat(bankBalance),
+        difference: parseFloat(bankBalance) - reconciledBalance,
         notes: notes || undefined,
         reconciledMovements: reconciledMovs.map((m) => ({
           movement_date: m.movement_date,
@@ -1052,12 +1105,12 @@ const ConciliacionBancaria = () => {
                   <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
                     <Card>
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium">Movimientos Conciliados</CardTitle>
+                        <CardTitle className="text-sm font-medium">Saldo Contable</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">Q {balances.reconciled.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">Q {balances.bookEndingBalance.toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {selectedMovements.size} movimientos
+                          Saldo final en libros del período
                         </p>
                       </CardContent>
                     </Card>
@@ -1079,11 +1132,11 @@ const ConciliacionBancaria = () => {
                         <CardTitle className="text-sm font-medium">Diferencia</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className={`text-2xl font-bold ${Math.abs(balances.reconciled - parseFloat(bankBalance || '0')) < 0.01 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          Q {(balances.reconciled - parseFloat(bankBalance || '0')).toFixed(2)}
+                        <div className={`text-2xl font-bold ${Math.abs(balances.difference) < 0.01 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          Q {balances.difference.toFixed(2)}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          vs. Saldo bancario
+                          Saldo banco - saldo esperado conciliado
                         </p>
                       </CardContent>
                     </Card>
