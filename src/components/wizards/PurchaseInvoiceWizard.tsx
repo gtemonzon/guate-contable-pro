@@ -416,6 +416,44 @@ export function PurchaseInvoiceWizard({
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                   Montos y Tipo de Compra
                 </h3>
+
+                {isMultiCurrency && (
+                  <div className="grid grid-cols-12 gap-3 items-end p-3 rounded-md border bg-muted/30">
+                    <div className="col-span-4">
+                      <Label className="text-xs">Moneda</Label>
+                      <Select value={currencyCode} onValueChange={handleCurrencyChange}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {allCurrencyCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-4">
+                      <Label className="text-xs">Tipo de cambio</Label>
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        value={exchangeRate || ""}
+                        onChange={(e) => setExchangeRate(Number(e.target.value))}
+                        disabled={isFunctional}
+                        className={cn("h-9", isFunctional && "bg-muted")}
+                      />
+                    </div>
+                    <div className="col-span-4 text-xs">
+                      {!isFunctional && exchangeRate > 0 && watchedNet > 0 && (
+                        <p className="text-muted-foreground">
+                          Equivale a <strong>{formatCurrency(watchedNet * exchangeRate, baseCurrency)}</strong>
+                        </p>
+                      )}
+                      {!isFunctional && (!exchangeRate || exchangeRate <= 0) && (
+                        <p className="text-amber-600 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" /> Falta tipo de cambio
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1 col-span-2">
                     <Label className="text-xs">Monto Neto (sin IVA) *</Label>
