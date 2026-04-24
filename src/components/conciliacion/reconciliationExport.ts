@@ -62,13 +62,18 @@ export function exportReconciliationPDF(input: ReconciliationExportInput) {
   doc.text(`Período conciliado: ${input.period}`, 40, y);
   y += 16;
 
+  const pendingDebits = input.pendingMovements.reduce((s, m) => s + (m.debit_amount || 0), 0);
+  const pendingCredits = input.pendingMovements.reduce((s, m) => s + (m.credit_amount || 0), 0);
+  const pendingNet = pendingDebits - pendingCredits;
+  const realDifference = input.bookBalance - input.bankStatementBalance;
+
   autoTable(doc, {
     startY: y,
     head: [['Concepto', 'Monto (Q)']],
     body: [
+      ['Saldo según libros', fmt(input.bookBalance)],
       ['Saldo según estado de cuenta bancario', fmt(input.bankStatementBalance)],
-      ['Saldo según libros (movimientos conciliados)', fmt(input.bookBalance)],
-      ['Diferencia', fmt(input.difference)],
+      ['Diferencia (Libros - Banco)', fmt(realDifference)],
     ],
     theme: 'grid',
     headStyles: { fillColor: [40, 40, 40] },
@@ -76,41 +81,59 @@ export function exportReconciliationPDF(input: ReconciliationExportInput) {
   });
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
 
+  if (y > doc.internal.pageSize.getHeight() - 120) {
+    doc.addPage();
+    y = 40;
+  }
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Movimientos conciliados (${input.reconciledMovements.length})`, 40, y);
-  y += 6;
-
-  autoTable(doc, {
-    startY: y,
-    head: [['Fecha', 'Ref.', 'Beneficiario', 'Descripción', 'Débito', 'Crédito']],
-    body: input.reconciledMovements.map(movRow),
-    theme: 'striped',
-    styles: { fontSize: 8 },
-    headStyles: { fillColor: [40, 40, 40] },
-    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' } },
-  });
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
+  doc.text(`Movimientos pendientes / no conciliados (${input.pendingMovements.length})`, 40, y);
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Cheques en circulación y/o depósitos pendientes de reflejar en el banco.', 40, y + 8);
+  y += 12;
 
   if (input.pendingMovements.length > 0) {
-    if (y > doc.internal.pageSize.getHeight() - 100) {
-      doc.addPage();
-      y = 40;
-    }
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Movimientos pendientes (${input.pendingMovements.length})`, 40, y);
-    y += 6;
     autoTable(doc, {
       startY: y,
       head: [['Fecha', 'Ref.', 'Beneficiario', 'Descripción', 'Débito', 'Crédito']],
       body: input.pendingMovements.map(movRow),
+      foot: [[
+        '', '', '', 'Totales',
+        pendingDebits > 0 ? `Q ${fmt(pendingDebits)}` : '',
+        pendingCredits > 0 ? `Q ${fmt(pendingCredits)}` : '',
+      ]],
       theme: 'striped',
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [120, 120, 120] },
+      headStyles: { fillColor: [40, 40, 40] },
+      footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
       columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' } },
     });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20;
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const netLabel = pendingNet >= 0
+      ? `Neto pendiente (Débitos - Créditos): Q ${fmt(pendingNet)}`
+      : `Neto pendiente (Débitos - Créditos): (Q ${fmt(Math.abs(pendingNet))})`;
+    doc.text(netLabel, 40, y);
+    y += 12;
+
+    const cuadra = Math.abs(realDifference - pendingNet) < 0.01;
+    doc.setTextColor(cuadra ? 0 : 200, cuadra ? 128 : 0, 0);
+    doc.text(
+      `Diferencia vs. movimientos pendientes: Q ${fmt(Math.abs(realDifference - pendingNet))} ${cuadra ? '(CUADRA)' : '(REVISAR)'}`,
+      40,
+      y,
+    );
+    doc.setTextColor(0, 0, 0);
+    y += 16;
+  } else {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('No existen movimientos pendientes en el período.', 40, y);
+    y += 16;
   }
 
   if (input.notes) {
