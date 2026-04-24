@@ -124,6 +124,33 @@ export function PurchaseInvoiceWizard({
   const [step3Data, setStep3Data] = useState<Step3Data | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Multi-currency state
+  const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
+  const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
+  const { getRate } = useExchangeRates(enterpriseId);
+  const [currencyCode, setCurrencyCode] = useState<string>(baseCurrency);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const isMultiCurrency = enabledCurrencies.length > 0;
+  const isFunctional = currencyCode === baseCurrency;
+
+  // Sync default currency when base loads
+  useState(() => { setCurrencyCode(baseCurrency); });
+
+  // Auto-resolve rate when currency or invoice date changes
+  const watchedDate = form1.watch?.("invoice_date") || step1Data?.invoice_date || "";
+  // Re-evaluate rate whenever currency or date change (handled in handleCurrencyChange below)
+
+  const handleCurrencyChange = (code: string) => {
+    setCurrencyCode(code);
+    if (code === baseCurrency) {
+      setExchangeRate(1);
+      return;
+    }
+    const dateStr = (form1.getValues?.()?.invoice_date) || step1Data?.invoice_date || new Date().toISOString().slice(0, 10);
+    const r = getRate(code, dateStr);
+    setExchangeRate(r ?? 0);
+  };
+
   // ── Accounts query ───────────────────────────────────────────────────────
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["expense-accounts", enterpriseId],
