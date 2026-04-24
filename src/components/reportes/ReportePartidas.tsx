@@ -433,6 +433,7 @@ export default function ReportePartidas() {
         bookType="libro_diario"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
         warningMessage={draftCount > 0 ? `El reporte se emitirá únicamente con partidas contabilizadas. En el período seleccionado hay ${draftCount} partida${draftCount > 1 ? 's' : ''} en estado borrador o pendiente${draftCount > 1 ? 's' : ''} de contabilizar.` : undefined}
+        estimatePageCount={() => estimatePdfPageCount({ ...buildExportOptions('pdf'), forcePortrait: true })}
       />
 
       {entries.length > 0 && (
