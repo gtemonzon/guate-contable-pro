@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileSpreadsheet, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section, SectionAccount } from "@/hooks/useFinancialStatementFormat";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
@@ -328,11 +328,7 @@ export default function ReporteBalanceGeneral() {
     toast({ title: "Exportado", description: "El reporte se ha exportado a Excel correctamente" });
   };
 
-  const handleExportPDF = async (options: FolioExportOptions) => {
-    if (options.format === 'excel') {
-      handleExportExcel();
-      return;
-    }
+  const buildPdfExportOptions = () => {
     const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
     const levelCount = Math.min(maxLevel, 5);
     const headers = ["Concepto", ...Array.from({ length: levelCount }, (_, i) => `Nivel ${i + 1}`)];
@@ -353,13 +349,24 @@ export default function ReporteBalanceGeneral() {
       return row;
     });
 
-    const result = exportToPDF({
+    return {
       filename: `Balance_General_${reportDate}`,
       title: `Balance General al ${new Date(reportDate + 'T00:00:00').toLocaleDateString('es-GT')}`,
       enterpriseName,
       headers,
       data,
       forcePortrait: true,
+    };
+  };
+
+  const handleExportPDF = async (options: FolioExportOptions) => {
+    if (options.format === 'excel') {
+      handleExportExcel();
+      return;
+    }
+
+    const result = exportToPDF({
+      ...buildPdfExportOptions(),
       folioOptions: {
         includeFolio: options.includeFolio,
         startingFolio: options.startingFolio,
@@ -460,6 +467,7 @@ export default function ReporteBalanceGeneral() {
         title="Exportar Balance General"
         bookType="libro_estados_financieros"
         enterpriseId={currentEnterpriseId ?? undefined}
+        estimatePageCount={reportLines.length === 0 ? undefined : () => estimatePdfPageCount(buildPdfExportOptions())}
       />
 
       {!format && !formatLoading && currentEnterpriseId && (

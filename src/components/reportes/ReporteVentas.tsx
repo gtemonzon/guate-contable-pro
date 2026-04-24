@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
@@ -281,7 +281,7 @@ export default function ReporteVentas() {
 
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
-  const handleExport = async (options: FolioExportOptions) => {
+  const buildExportOptions = (format: 'excel' | 'pdf') => {
     const activeSales = sales.filter(s => !s.is_annulled);
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Cliente", "Neto", "IVA", "Total"];
     const data = activeSales.map(s => {
@@ -294,19 +294,19 @@ export default function ReporteVentas() {
         s.fel_document_type,
         s.customer_nit,
         s.customer_name,
-        options.format === 'excel'
+        format === 'excel'
           ? (s.net_amount * multiplier).toFixed(2)
           : `Q ${(s.net_amount * multiplier).toFixed(2)}`,
-        options.format === 'excel'
+        format === 'excel'
           ? (s.vat_amount * multiplier).toFixed(2)
           : `Q ${(s.vat_amount * multiplier).toFixed(2)}`,
-        options.format === 'excel'
+        format === 'excel'
           ? (s.total_amount * multiplier).toFixed(2)
           : `Q ${(s.total_amount * multiplier).toFixed(2)}`,
       ];
     });
 
-    const exportOptions = {
+    return {
       filename: `Ventas_${monthNames[selectedMonth - 1]}_${selectedYear}`,
       title: `Libro de Ventas - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       enterpriseName,
@@ -321,6 +321,10 @@ export default function ReporteVentas() {
       ],
       statistics: getStatistics(),
     };
+  };
+
+  const handleExport = async (options: FolioExportOptions) => {
+    const exportOptions = buildExportOptions(options.format);
 
     if (options.format === 'excel') {
       exportToExcel(exportOptions);
@@ -427,6 +431,9 @@ export default function ReporteVentas() {
         onOpenChange={setExportDialogOpen}
         onExport={handleExport}
         title="Exportar Libro de Ventas"
+        bookType="libro_ventas"
+        enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
 
       {sales.length > 0 && (

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileSpreadsheet, Download, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatementFormat";
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
@@ -474,22 +474,13 @@ export default function ReporteEstadoResultados() {
     });
   };
 
-  const handleExportPDF = async (options: FolioExportOptions) => {
-    if (options.format === 'excel') {
-      handleExportExcel();
-      return;
-    }
-    // Get max account level for dynamic column generation
+  const buildPdfExportOptions = () => {
     const maxLevel = Math.max(...filteredReportLines.filter(l => l.type === 'account').map(l => l.accountLevel || 1), 1);
-    const levelCount = Math.min(maxLevel, 5); // Cap at 5 levels
-    
-    // Create headers with level columns
+    const levelCount = Math.min(maxLevel, 5);
     const headers = ["Concepto", ...Array.from({ length: levelCount }, (_, i) => `Nivel ${i + 1}`)];
-    
-    // Transform data to multi-column format
+
     const data = filteredReportLines.map(line => {
       const row: string[] = [line.type === 'account' ? `  ${line.label}` : line.label];
-      
       for (let i = 0; i < levelCount; i++) {
         if (line.type === 'section') {
           row.push('');
@@ -501,11 +492,9 @@ export default function ReporteEstadoResultados() {
           row.push('');
         }
       }
-      
       return row;
     });
 
-    // Append CDV breakdown to PDF
     if (cdvBreakdown) {
       const emptyLevels = Array(levelCount).fill('');
       const lastLevel = (val: string) => { const cols = Array(levelCount).fill(''); cols[levelCount - 1] = val; return cols; };
@@ -522,13 +511,24 @@ export default function ReporteEstadoResultados() {
 
     const footnote = cdvBreakdown ? 'Costo de ventas calculado por método de coeficiente (inventario periódico)' : undefined;
 
-    const result = exportToPDF({
+    return {
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
       title: `Estado de Resultados del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}${footnote ? '\n' + footnote : ''}`,
       enterpriseName,
       headers,
       data,
       forcePortrait: true,
+    };
+  };
+
+  const handleExportPDF = async (options: FolioExportOptions) => {
+    if (options.format === 'excel') {
+      handleExportExcel();
+      return;
+    }
+
+    const result = exportToPDF({
+      ...buildPdfExportOptions(),
       folioOptions: {
         includeFolio: options.includeFolio,
         startingFolio: options.startingFolio,
@@ -643,6 +643,7 @@ export default function ReporteEstadoResultados() {
         title="Exportar Estado de Resultados"
         bookType="libro_estados_financieros"
         enterpriseId={currentEnterpriseId ?? undefined}
+        estimatePageCount={reportLines.length === 0 ? undefined : () => estimatePdfPageCount(buildPdfExportOptions())}
       />
 
       {!format && !formatLoading && currentEnterpriseId && (

@@ -87,7 +87,7 @@ interface PdfOrientationOptions {
   forcePortrait?: boolean;
 }
 
-export const exportToPDF = ({ filename, title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend }: ExportOptions): { pageCount: number } => {
+const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend }: Omit<ExportOptions, 'filename'>): jsPDF => {
   const doc = new jsPDF({
     orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
@@ -219,7 +219,17 @@ export const exportToPDF = ({ filename, title, enterpriseName, headers, data, to
     currentY = Math.max(leftY, rightY) + 5;
   }
 
+  return doc;
+};
+
+export const exportToPDF = (options: ExportOptions): { pageCount: number } => {
+  const doc = buildPdfDocument(options);
   const pageCount = doc.getNumberOfPages();
-  doc.save(`${filename}.pdf`);
+  doc.save(`${options.filename}.pdf`);
   return { pageCount };
+};
+
+export const estimatePdfPageCount = (options: Omit<ExportOptions, 'filename'>): number => {
+  const doc = buildPdfDocument(options);
+  return doc.getNumberOfPages();
 };

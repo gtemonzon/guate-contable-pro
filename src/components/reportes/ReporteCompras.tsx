@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Download, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
@@ -254,7 +254,7 @@ export default function ReporteCompras() {
 
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
-  const handleExport = async (options: FolioExportOptions) => {
+  const buildExportOptions = (format: 'excel' | 'pdf') => {
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Proveedor", "Base", "IVA", "Total"];
     const data = purchases.map(p => {
       const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
@@ -266,19 +266,19 @@ export default function ReporteCompras() {
         p.fel_document_type,
         p.supplier_nit,
         p.supplier_name,
-        options.format === 'excel' 
-          ? (p.base_amount * multiplier).toFixed(2) 
+        format === 'excel'
+          ? (p.base_amount * multiplier).toFixed(2)
           : `Q ${(p.base_amount * multiplier).toFixed(2)}`,
-        options.format === 'excel' 
-          ? (p.vat_amount * multiplier).toFixed(2) 
+        format === 'excel'
+          ? (p.vat_amount * multiplier).toFixed(2)
           : `Q ${(p.vat_amount * multiplier).toFixed(2)}`,
-        options.format === 'excel' 
-          ? (p.total_amount * multiplier).toFixed(2) 
+        format === 'excel'
+          ? (p.total_amount * multiplier).toFixed(2)
           : `Q ${(p.total_amount * multiplier).toFixed(2)}`,
       ];
     });
 
-    const exportOptions = {
+    return {
       filename: `Compras_${monthNames[selectedMonth - 1]}_${selectedYear}`,
       title: `Libro de Compras - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
       enterpriseName,
@@ -292,6 +292,10 @@ export default function ReporteCompras() {
       ],
       statistics: getStatistics(),
     };
+  };
+
+  const handleExport = async (options: FolioExportOptions) => {
+    const exportOptions = buildExportOptions(options.format);
 
     if (options.format === 'excel') {
       exportToExcel(exportOptions);
@@ -381,6 +385,7 @@ export default function ReporteCompras() {
         title="Exportar Libro de Compras"
         bookType="libro_compras"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
 
       {purchases.length > 0 && (

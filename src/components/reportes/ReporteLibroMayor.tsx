@@ -12,7 +12,7 @@ import { Download, Loader2, ChevronsUpDown, ChevronDown, ChevronRight } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
@@ -375,26 +375,19 @@ export default function ReporteLibroMayor() {
 
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
-  const handleExport = async (options: FolioExportOptions) => {
-    if (accountLedgers.length === 0) return;
-
+  const buildExportOptions = () => {
     const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
     const data: any[][] = [];
     const boldRows: number[] = [];
 
     accountLedgers.forEach(ledger => {
-      // Agregar encabezado de cuenta (bold) - spans full width
       boldRows.push(data.length);
       data.push([
         `${ledger.account.account_code} - ${ledger.account.account_name}`,
         "",
         `Saldo Anterior: ${formatCurrency(Math.abs(ledger.previousBalance))}`,
-        "",
-        "",
-        ""
+        "", "", ""
       ]);
-
-      // Agregar movimientos
       ledger.entries.forEach(entry => {
         data.push([
           entry.entry_date,
@@ -405,30 +398,30 @@ export default function ReporteLibroMayor() {
           formatCurrency(Math.abs(entry.balance)),
         ]);
       });
-
-      // Agregar totales de la cuenta (bold)
       boldRows.push(data.length);
       data.push([
-        "",
-        "",
-        "TOTALES:",
+        "", "", "TOTALES:",
         formatCurrency(ledger.totalDebit),
         formatCurrency(ledger.totalCredit),
         formatCurrency(Math.abs(ledger.finalBalance)),
       ]);
-
-      // Línea en blanco entre cuentas
       data.push(["", "", "", "", "", ""]);
     });
 
-    const exportOptions = {
+    return {
       filename: `Libro_Mayor_${startDate}_${endDate}`,
       title: `Libro Mayor - Del ${startDate} al ${endDate}`,
-      enterpriseName: enterpriseName,
+      enterpriseName,
       headers,
       data,
       boldRows,
     };
+  };
+
+  const handleExport = async (options: FolioExportOptions) => {
+    if (accountLedgers.length === 0) return;
+
+    const exportOptions = buildExportOptions();
 
     if (options.format === 'excel') {
       exportToExcel(exportOptions);
@@ -436,7 +429,6 @@ export default function ReporteLibroMayor() {
       const result = exportToPDF({
         ...exportOptions,
         forcePortrait: true,
-        boldRows,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
@@ -619,6 +611,7 @@ export default function ReporteLibroMayor() {
         title="Exportar Libro Mayor"
         bookType="libro_mayor"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
+        estimatePageCount={accountLedgers.length === 0 ? undefined : () => estimatePdfPageCount({ ...buildExportOptions(), forcePortrait: true })}
       />
 
       {reportGenerated && accountLedgers.length > 0 && (
