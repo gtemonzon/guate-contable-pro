@@ -597,6 +597,9 @@ const ConciliacionBancaria = () => {
         })),
       };
       setLastExport(exportPayload);
+      setTimeout(() => {
+        document.getElementById('reconciliation-print-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
 
       toast({
         title: "Conciliación completada",
