@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Calculator, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, Calculator, FileText, Loader2, AlertCircle, Info } from 'lucide-react';
 import { usePayrollEntries, type PayrollPeriod } from '@/hooks/usePayrollPeriods';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { calculatePayrollPosting, postPayroll } from '@/hooks/usePayrollPosting';
 import { ImportPayrollDialog } from './ImportPayrollDialog';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { useEffect } from 'react';
 
 interface Props {
@@ -30,6 +32,7 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
   const { config } = useEnterpriseConfig(period.enterprise_id);
   const [importOpen, setImportOpen] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [includeVacaciones, setIncludeVacaciones] = useState(false);
   const [accountsMap, setAccountsMap] = useState<Map<number, AccountInfo>>(new Map());
 
   useEffect(() => {
@@ -42,13 +45,13 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
   }, [open, period.enterprise_id]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { lines, warnings } = config ? calculatePayrollPosting(entries, config as any) : { lines: [], warnings: [] };
+  const { lines, warnings } = config ? calculatePayrollPosting(entries, config as any, { includeVacaciones }) : { lines: [], warnings: [] };
 
   const handlePost = async () => {
     if (!config) return;
     setPosting(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ok = await postPayroll(period, entries, config as any);
+    const ok = await postPayroll(period, entries, config as any, { includeVacaciones });
     setPosting(false);
     if (ok) { onUpdated(); onOpenChange(false); }
   };
