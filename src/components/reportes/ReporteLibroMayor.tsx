@@ -690,13 +690,22 @@ export default function ReporteLibroMayor() {
                 </CollapsibleTrigger>
                 
                 <CollapsibleContent>
-                  {ledger.entries.length > 0 ? (
+                  {ledger.entries.length > 0 ? (() => {
+                    const showForeign = ledger.entries.some(
+                      (e) => e.currency_code && e.currency_code !== "GTQ" && ((e.original_debit ?? 0) > 0 || (e.original_credit ?? 0) > 0)
+                    );
+                    return (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[120px]">Fecha</TableHead>
                           <TableHead className="w-[150px]">No. Partida</TableHead>
                           <TableHead className="min-w-[250px]">Descripción</TableHead>
+                          {showForeign && (
+                            <TableHead className="w-[160px] text-right" title="Monto en la moneda original de la transacción">
+                              Moneda original
+                            </TableHead>
+                          )}
                           <TableHead className="w-[120px] text-right">Debe</TableHead>
                           <TableHead className="w-[120px] text-right">Haber</TableHead>
                           <TableHead className="w-[120px] text-right">Saldo</TableHead>
@@ -715,6 +724,18 @@ export default function ReporteLibroMayor() {
                               />
                             </TableCell>
                             <TableCell><TruncatedText text={entry.description} inline /></TableCell>
+                            {showForeign && (
+                              <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                                {entry.currency_code && entry.currency_code !== "GTQ" && ((entry.original_debit ?? 0) > 0 || (entry.original_credit ?? 0) > 0) ? (
+                                  <>
+                                    <div>{entry.currency_code} {formatCurrency((entry.original_debit ?? 0) || (entry.original_credit ?? 0))}</div>
+                                    {entry.exchange_rate != null && (
+                                      <div className="text-[10px] opacity-70">TC {Number(entry.exchange_rate).toFixed(4)}</div>
+                                    )}
+                                  </>
+                                ) : "-"}
+                              </TableCell>
+                            )}
                             <TableCell className="text-right font-mono">
                               {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-"}
                             </TableCell>
@@ -728,7 +749,8 @@ export default function ReporteLibroMayor() {
                         ))}
                       </TableBody>
                     </Table>
-                  ) : (
+                    );
+                  })() : (
                     <div className="p-4 text-center text-muted-foreground">
                       Sin movimientos en el período seleccionado
                     </div>
