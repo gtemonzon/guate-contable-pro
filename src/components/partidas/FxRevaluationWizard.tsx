@@ -32,7 +32,8 @@ export function FxRevaluationWizard({ open, onOpenChange, enterpriseId, defaultY
   const [month, setMonth] = useState(defaultMonth ?? today.getMonth() + 1);
   const [preview, setPreview] = useState<FxRevaluationPreview | null>(null);
   const [tab, setTab] = useState<"calculate" | "history">("calculate");
-  const [runs, setRuns] = useState<any[]>([]);
+  type RunRow = { id: number; year: number; month: number; cutoff_date: string; total_gain: number | null; total_loss: number | null; reversed_at: string | null; tab_journal_entries?: { entry_number?: string } | null };
+  const [runs, setRuns] = useState<RunRow[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(false);
   const { loading, posting, buildPreview, postRevaluation, listRuns, reverseRun } = useFxRevaluation();
 
@@ -90,7 +91,7 @@ export function FxRevaluationWizard({ open, onOpenChange, enterpriseId, defaultY
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "calculate" | "history")}>
           <TabsList className="grid grid-cols-2 w-full">
             <TabsTrigger value="calculate"><Sparkles className="h-4 w-4 mr-2" />Calcular nueva</TabsTrigger>
             <TabsTrigger value="history"><History className="h-4 w-4 mr-2" />Historial y reverso</TabsTrigger>
@@ -288,7 +289,7 @@ export function FxRevaluationWizard({ open, onOpenChange, enterpriseId, defaultY
   );
 }
 
-function SummaryCard({ label, value, icon: Icon, positive, negative }: { label: string; value: number; icon: any; positive?: boolean; negative?: boolean }) {
+function SummaryCard({ label, value, icon: Icon, positive, negative }: { label: string; value: number; icon: React.ComponentType<{ className?: string }>; positive?: boolean; negative?: boolean }) {
   const colorClass = positive ? "text-success" : negative ? "text-destructive" : "text-foreground";
   return (
     <div className="rounded-lg border bg-card p-3">
