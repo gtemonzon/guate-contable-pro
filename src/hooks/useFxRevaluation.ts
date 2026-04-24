@@ -292,10 +292,22 @@ export function useFxRevaluation() {
       const { error: linesErr } = await supabase.from("tab_journal_entry_details").insert(lines);
       if (linesErr) throw linesErr;
 
+      // Calcular totales
+      const totals = lines.reduce(
+        (acc, l) => ({ d: acc.d + (l.debit_amount || 0), c: acc.c + (l.credit_amount || 0) }),
+        { d: 0, c: 0 },
+      );
+
       // Contabilizar
       const { error: postErr } = await supabase
         .from("tab_journal_entries")
-        .update({ status: "contabilizada" })
+        .update({
+          status: "contabilizada",
+          is_posted: true,
+          posted_at: new Date().toISOString(),
+          total_debit: totals.d,
+          total_credit: totals.c,
+        })
         .eq("id", entryId);
       if (postErr) throw postErr;
 
