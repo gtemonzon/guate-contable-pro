@@ -82,7 +82,7 @@ export function calculatePayrollPosting(
     { key: 'payroll_isr_payable_account_id', label: 'ISR retenido por pagar', amount: totalIsr },
     { key: 'payroll_salaries_payable_account_id', label: 'Sueldos por pagar (líquido + otros desc.)', amount: totalNet + totalOtherDed },
     { key: 'payroll_indemnizacion_provision_account_id', label: 'Provisión indemnización', amount: indem },
-    { key: 'payroll_aguinaldo_bono14_provision_account_id', label: 'Provisión aguinaldo + bono 14 + vacaciones', amount: agui + bono14 + vac },
+    { key: 'payroll_aguinaldo_bono14_provision_account_id', label: includeVacaciones ? 'Provisión aguinaldo + bono 14 + vacaciones' : 'Provisión aguinaldo + bono 14', amount: agui + bono14 + vac },
   ];
 
   for (const c of credits) {
