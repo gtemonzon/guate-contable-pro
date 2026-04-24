@@ -114,9 +114,40 @@ export function PayrollDetailDialog({ open, onOpenChange, period, onUpdated }: P
               </div>
 
               <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
-                <div className="flex items-center gap-2">
-                  <Calculator className="h-4 w-4" />
-                  <h3 className="font-semibold">Vista previa de la póliza contable</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-4 w-4" />
+                    <h3 className="font-semibold">Vista previa de la póliza contable</h3>
+                  </div>
+                  {period.status !== 'posted' && (
+                    <TooltipProvider>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="vacaciones-switch"
+                          checked={includeVacaciones}
+                          onCheckedChange={setIncludeVacaciones}
+                        />
+                        <Label htmlFor="vacaciones-switch" className="text-sm cursor-pointer">
+                          Provisionar vacaciones (4.17%)
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm">
+                            <p className="text-xs leading-relaxed">
+                              <strong>Deducibilidad SAT (Guatemala):</strong> Las vacaciones se reconocen
+                              normalmente como gasto deducible <em>cuando se pagan o gozan efectivamente</em>
+                              por el trabajador, soportadas con planilla de pago, recibo firmado y registro
+                              en libro de salarios. La provisión contable mensual (NIIF) puede no ser
+                              deducible hasta su pago efectivo según el art. 21 LAT. Active esta opción solo
+                              si su política contable y soporte documental así lo respaldan.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TooltipProvider>
+                  )}
                 </div>
 
                 {warnings.length > 0 && (
