@@ -208,9 +208,18 @@ export function PurchaseInvoiceWizard({
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (asDraft = false) => {
     if (!step1Data || !step2Data || !step3Data) return;
+    if (!isFunctional && (!exchangeRate || exchangeRate <= 0)) {
+      toast({ title: "Tipo de cambio requerido", description: `Registra el tipo de cambio para ${currencyCode} antes de guardar.`, variant: "destructive" });
+      return;
+    }
     setIsSubmitting(true);
 
     try {
+      const rate = isFunctional ? 1 : exchangeRate;
+      const fxNet = Math.round(step2Data.net_amount * rate * 100) / 100;
+      const fxVat = Math.round(step2Data.vat_amount * rate * 100) / 100;
+      const fxTotal = Math.round(step2Data.total_amount * rate * 100) / 100;
+
       const { error } = await supabase.from("tab_purchase_ledger").insert({
         enterprise_id: enterpriseId,
         accounting_period_id: periodId ?? null,
@@ -220,19 +229,24 @@ export function PurchaseInvoiceWizard({
         invoice_date: step1Data.invoice_date,
         invoice_series: step1Data.invoice_series ?? null,
         fel_document_type: step1Data.fel_document_type,
-        net_amount: step2Data.net_amount,
-        vat_amount: step2Data.vat_amount,
-        total_amount: step2Data.total_amount,
+        net_amount: fxNet,
+        vat_amount: fxVat,
+        total_amount: fxTotal,
         purchase_type: step2Data.purchase_type,
         expense_account_id: step3Data.expense_account_id,
-        base_amount: step2Data.net_amount,
+        base_amount: fxNet,
+        currency_code: currencyCode,
+        exchange_rate: rate,
+        original_subtotal: isFunctional ? null : step2Data.net_amount,
+        original_vat: isFunctional ? null : step2Data.vat_amount,
+        original_total: isFunctional ? null : step2Data.total_amount,
       });
 
       if (error) throw error;
 
       toast({
         title: asDraft ? "Compra guardada como borrador" : "Compra registrada exitosamente",
-        description: `Factura ${step1Data.invoice_number} de ${step1Data.supplier_name} — Q ${step2Data.total_amount.toFixed(2)}`,
+        description: `Factura ${step1Data.invoice_number} de ${step1Data.supplier_name} — ${formatCurrency(fxTotal, baseCurrency)}`,
       });
       onClose();
       resetWizard();
