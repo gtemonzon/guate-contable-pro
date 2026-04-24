@@ -756,9 +756,6 @@ const ConciliacionBancaria = () => {
                     </div>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <span>{filteredMovements.length} de {movements.length}</span>
-                      <Button type="button" variant="outline" size="sm" onClick={toggleSelectAllFiltered}>
-                        {allFilteredSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
-                      </Button>
                     </div>
                   </div>
                   <Table>
