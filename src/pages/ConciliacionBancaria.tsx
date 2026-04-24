@@ -367,6 +367,22 @@ const ConciliacionBancaria = () => {
         };
       });
 
+      // Pending = movements del período en libros que NO quedaron conciliados (cheques en circulación / depósitos en tránsito)
+      const reconciledJournalIds = new Set(
+        (bms || []).map((b) => b.journal_entry_id).filter(Boolean) as number[],
+      );
+      const pendingMovs = movements
+        .filter((m) => m.movement_date >= periodRange.startDate && m.movement_date <= periodRange.endDate)
+        .filter((m) => !reconciledJournalIds.has(m.journal_entry_id))
+        .map((m) => ({
+          movement_date: m.movement_date,
+          description: m.description,
+          bank_reference: m.bank_reference,
+          beneficiary_name: m.beneficiary_name,
+          debit_amount: m.debit_amount,
+          credit_amount: m.credit_amount,
+        }));
+
       const bankAccount = bankAccounts.find((b) => b.id.toString() === selectedAccount);
       const monthLabel = months.find((m) => m.value === selectedMonth)?.label || selectedMonth;
       let entInfo: { business_name?: string; nit?: string } | null = null;
@@ -393,7 +409,7 @@ const ConciliacionBancaria = () => {
         difference: Number(rec.book_balance || 0) - Number(rec.bank_statement_balance || 0),
         notes: rec.notes || undefined,
         reconciledMovements: reconciledMovs,
-        pendingMovements: [],
+        pendingMovements: pendingMovs,
       });
     } catch (err) {
       console.error('Error loading existing reconciliation:', err);
