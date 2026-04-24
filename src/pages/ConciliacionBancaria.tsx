@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, BadgeCheck, Building2, Calendar, Landmark, Search, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, BadgeCheck, Building2, Calendar, FileSpreadsheet, FileText, Landmark, Search, Upload } from "lucide-react";
+import { exportReconciliationPDF, exportReconciliationExcel, type ReconciliationExportInput } from "@/components/conciliacion/reconciliationExport";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
@@ -54,6 +55,7 @@ const ConciliacionBancaria = () => {
   type SortKey = 'movement_date' | 'description' | 'bank_reference' | 'beneficiary_name' | 'type' | 'amount';
   const [sortKey, setSortKey] = useState<SortKey>('movement_date');
   const [sortAsc, setSortAsc] = useState(true);
+  const [lastExport, setLastExport] = useState<ReconciliationExportInput | null>(null);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v);
@@ -552,12 +554,56 @@ const ConciliacionBancaria = () => {
         }
       }
 
+      // Build export payload BEFORE resetting
+      const bankAccount = bankAccounts.find((b) => b.id.toString() === selectedAccount);
+      const monthLabel = months.find((m) => m.value === selectedMonth)?.label || selectedMonth;
+      const reconciledMovs = movements.filter((m) => selectedMovements.has(m.id));
+      const pendingMovs = movements.filter((m) => !selectedMovements.has(m.id));
+      let entInfo: { business_name?: string; nit?: string } | null = null;
+      if (selectedEnterprise) {
+        const { data } = await supabase
+          .from('tab_enterprises')
+          .select('business_name,nit')
+          .eq('id', parseInt(selectedEnterprise))
+          .maybeSingle();
+        entInfo = data;
+      }
+      const exportPayload: ReconciliationExportInput = {
+        enterpriseName: entInfo?.business_name || 'Empresa',
+        enterpriseNit: entInfo?.nit || '',
+        bankName: bankAccount?.bank_name || '',
+        accountNumber: bankAccount?.account_number || '',
+        reconciliationDate: new Date().toISOString().split('T')[0],
+        period: `${monthLabel} ${selectedYear}`,
+        bankStatementBalance: parseFloat(bankBalance),
+        bookBalance,
+        difference: bookBalance - parseFloat(bankBalance),
+        notes: notes || undefined,
+        reconciledMovements: reconciledMovs.map((m) => ({
+          movement_date: m.movement_date,
+          description: m.description,
+          bank_reference: m.bank_reference,
+          beneficiary_name: m.beneficiary_name,
+          debit_amount: m.debit_amount,
+          credit_amount: m.credit_amount,
+        })),
+        pendingMovements: pendingMovs.map((m) => ({
+          movement_date: m.movement_date,
+          description: m.description,
+          bank_reference: m.bank_reference,
+          beneficiary_name: m.beneficiary_name,
+          debit_amount: m.debit_amount,
+          credit_amount: m.credit_amount,
+        })),
+      };
+      setLastExport(exportPayload);
+
       toast({
         title: "Conciliación completada",
-        description: `Se conciliaron ${movementIds.length} movimientos`,
+        description: `Se conciliaron ${movementIds.length} movimientos. Puede exportar PDF o Excel desde el panel inferior.`,
       });
 
-      // Reset form
+      // Reset form (keep lastExport so the user can download)
       setSelectedAccount("");
       setSelectedMonth("");
       setSelectedYear("");
@@ -880,6 +926,36 @@ const ConciliacionBancaria = () => {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {lastExport && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-primary" />
+              Última conciliación guardada
+            </CardTitle>
+            <CardDescription>
+              {lastExport.bankName} — {lastExport.accountNumber} · Período {lastExport.period} · Fecha {lastExport.reconciliationDate}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              {lastExport.reconciledMovements.length} movimientos conciliados · Saldo libros Q {lastExport.bookBalance.toFixed(2)} · Saldo banco Q {lastExport.bankStatementBalance.toFixed(2)}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => exportReconciliationPDF(lastExport)}>
+                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+              </Button>
+              <Button variant="outline" onClick={() => exportReconciliationExcel(lastExport)}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar Excel
+              </Button>
+              <Button variant="ghost" onClick={() => setLastExport(null)}>
+                Ocultar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
         </TabsContent>
       </Tabs>
