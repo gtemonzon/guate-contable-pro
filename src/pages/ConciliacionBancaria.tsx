@@ -127,8 +127,10 @@ const ConciliacionBancaria = () => {
     { value: "12", label: "Diciembre" },
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 10 }, (_, i) => (currentYear - 5 + i).toString());
+  const years = Array.from(new Set(availablePeriods.map((period) => period.year)));
+  const availableMonths = selectedYear
+    ? months.filter((month) => availablePeriods.some((period) => period.year === selectedYear && period.month === month.value))
+    : months;
 
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
