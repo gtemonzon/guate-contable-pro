@@ -15,7 +15,7 @@ import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatem
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
-import ColumnarReportView, { toColumnarExcelData } from "./ColumnarReportView";
+
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
 import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
