@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Download, Loader2, ChevronRight, ChevronDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
@@ -249,52 +249,39 @@ export default function ReportePartidas() {
 
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
-  const handleExport = async (options: FolioExportOptions) => {
+  const buildExportOptions = (format: 'excel' | 'pdf') => {
     let data: any[] = [];
-    
-    // Export only posted entries (entries state already filtered)
-    // New layout: details first, then description and totals at the end of each entry
+
     if (includeDetails) {
-      // Headers for detailed view: Cuenta, Descripción Línea, Debe, Haber
       const headers = ["Cuenta", "Concepto", "Debe", "Haber"];
-      
       entries.forEach(e => {
-        // First: Entry header row with number, date, type (no totals yet)
         data.push([
           `${e.entry_number} - ${new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT')} - ${e.entry_type}`,
-          '',
-          '',
-          '',
+          '', '', '',
         ]);
-        
-        // Second: Detail lines
         if (entryDetails[e.id]) {
           entryDetails[e.id].forEach(detail => {
             data.push([
               `${detail.account_code} - ${detail.account_name}`,
               detail.description || '',
-              detail.debit_amount > 0 ? (options.format === 'excel' ? detail.debit_amount.toFixed(2) : formatCurrency(detail.debit_amount)) : '',
-              detail.credit_amount > 0 ? (options.format === 'excel' ? detail.credit_amount.toFixed(2) : formatCurrency(detail.credit_amount)) : '',
+              detail.debit_amount > 0 ? (format === 'excel' ? detail.debit_amount.toFixed(2) : formatCurrency(detail.debit_amount)) : '',
+              detail.credit_amount > 0 ? (format === 'excel' ? detail.credit_amount.toFixed(2) : formatCurrency(detail.credit_amount)) : '',
             ]);
           });
         }
-        
-        // Third: Description and totals at the end of the entry
         data.push([
           e.description,
           'TOTALES:',
-          options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
-          options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
+          format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
+          format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
         ]);
-        
-        // Add empty row separator between entries
         data.push(['', '', '', '']);
       });
 
       const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
       const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
 
-      const exportOptions = {
+      return {
         filename: `Libro_Diario_${dateFrom}_${dateTo}`,
         title: `Libro Diario con Detalle - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
         enterpriseName,
@@ -306,82 +293,60 @@ export default function ReportePartidas() {
           { label: "Cantidad de Partidas", value: entries.length.toString() },
         ],
       };
+    }
 
-      if (options.format === 'excel') {
-        exportToExcel(exportOptions);
-      } else {
-        const result = exportToPDF({
-          ...exportOptions,
-          forcePortrait: true,
-          folioOptions: {
-            includeFolio: options.includeFolio,
-            startingFolio: options.startingFolio,
-          },
-          authorizationLegend: options.authorization
-            ? { number: options.authorization.number, date: options.authorization.date }
-            : undefined,
-        });
-        if (options.authorization && result?.pageCount) {
-          await consumePages(options.authorization.id, result.pageCount, {
-            enterpriseId: options.authorization.enterpriseId,
-            bookType: options.authorization.bookType,
-            reportPeriod: `Libro Diario ${dateFrom} a ${dateTo}`,
-            dateFrom,
-            dateTo,
-          });
-        }
-      }
+    const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber"];
+    data = entries.map(e => [
+      e.entry_number,
+      new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
+      e.entry_type,
+      e.description,
+      format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
+      format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
+    ]);
+
+    const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
+    const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
+
+    return {
+      filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+      title: `Libro Diario - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
+      enterpriseName,
+      headers,
+      data,
+      totals: [
+        { label: "Total Debe", value: formatCurrency(totalDebit) },
+        { label: "Total Haber", value: formatCurrency(totalCredit) },
+        { label: "Cantidad de Partidas", value: entries.length.toString() },
+      ],
+    };
+  };
+
+  const handleExport = async (options: FolioExportOptions) => {
+    const exportOptions = buildExportOptions(options.format);
+
+    if (options.format === 'excel') {
+      exportToExcel(exportOptions);
     } else {
-      // Simple view without details
-      const headers = ["Número", "Fecha", "Tipo", "Descripción", "Debe", "Haber"];
-      data = entries.map(e => [
-        e.entry_number,
-        new Date(e.entry_date + 'T00:00:00').toLocaleDateString('es-GT'),
-        e.entry_type,
-        e.description,
-        options.format === 'excel' ? e.total_debit.toFixed(2) : formatCurrency(e.total_debit),
-        options.format === 'excel' ? e.total_credit.toFixed(2) : formatCurrency(e.total_credit),
-      ]);
-
-      const totalDebit = entries.reduce((sum, e) => sum + e.total_debit, 0);
-      const totalCredit = entries.reduce((sum, e) => sum + e.total_credit, 0);
-
-      const exportOptions = {
-        filename: `Libro_Diario_${dateFrom}_${dateTo}`,
-        title: `Libro Diario - Del ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}`,
-        enterpriseName,
-        headers,
-        data,
-        totals: [
-          { label: "Total Debe", value: formatCurrency(totalDebit) },
-          { label: "Total Haber", value: formatCurrency(totalCredit) },
-          { label: "Cantidad de Partidas", value: entries.length.toString() },
-        ],
-      };
-
-      if (options.format === 'excel') {
-        exportToExcel(exportOptions);
-      } else {
-        const result = exportToPDF({
-          ...exportOptions,
-          forcePortrait: true,
-          folioOptions: {
-            includeFolio: options.includeFolio,
-            startingFolio: options.startingFolio,
-          },
-          authorizationLegend: options.authorization
-            ? { number: options.authorization.number, date: options.authorization.date }
-            : undefined,
+      const result = exportToPDF({
+        ...exportOptions,
+        forcePortrait: true,
+        folioOptions: {
+          includeFolio: options.includeFolio,
+          startingFolio: options.startingFolio,
+        },
+        authorizationLegend: options.authorization
+          ? { number: options.authorization.number, date: options.authorization.date }
+          : undefined,
+      });
+      if (options.authorization && result?.pageCount) {
+        await consumePages(options.authorization.id, result.pageCount, {
+          enterpriseId: options.authorization.enterpriseId,
+          bookType: options.authorization.bookType,
+          reportPeriod: `Libro Diario ${dateFrom} a ${dateTo}`,
+          dateFrom,
+          dateTo,
         });
-        if (options.authorization && result?.pageCount) {
-          await consumePages(options.authorization.id, result.pageCount, {
-            enterpriseId: options.authorization.enterpriseId,
-            bookType: options.authorization.bookType,
-            reportPeriod: `Libro Diario ${dateFrom} a ${dateTo}`,
-            dateFrom,
-            dateTo,
-          });
-        }
       }
     }
 
