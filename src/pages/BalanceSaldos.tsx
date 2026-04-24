@@ -48,6 +48,12 @@ export default function BalanceSaldos() {
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "mensual" ? "mensual" : "anual";
+
+  const handleTabChange = (value: string) => {
+    setSearchParams(value === "mensual" ? { tab: "mensual" } : {}, { replace: true });
+  };
 
   const totals = useMemo(() => {
     // Solo sumar cuentas detalle (que no tienen hijos)
@@ -219,13 +225,6 @@ export default function BalanceSaldos() {
       </div>
     );
   }
-
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "mensual" ? "mensual" : "anual";
-
-  const handleTabChange = (value: string) => {
-    setSearchParams(value === "mensual" ? { tab: "mensual" } : {}, { replace: true });
-  };
 
   return (
     <div className="p-8 space-y-6">
