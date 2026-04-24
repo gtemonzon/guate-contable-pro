@@ -140,6 +140,20 @@ export function EnterpriseAccountsManager() {
       unrealized_fx_loss_account_id: formData.unrealized_fx_loss_account_id,
       realized_fx_gain_account_id: formData.realized_fx_gain_account_id,
       realized_fx_loss_account_id: formData.realized_fx_loss_account_id,
+      default_auditor_name: formData.default_auditor_name || null,
+      default_auditor_colegiado: formData.default_auditor_colegiado || null,
+      payroll_salaries_expense_account_id: formData.payroll_salaries_expense_account_id,
+      payroll_bonificacion_expense_account_id: formData.payroll_bonificacion_expense_account_id,
+      payroll_igss_patronal_expense_account_id: formData.payroll_igss_patronal_expense_account_id,
+      payroll_indemnizacion_expense_account_id: formData.payroll_indemnizacion_expense_account_id,
+      payroll_aguinaldo_expense_account_id: formData.payroll_aguinaldo_expense_account_id,
+      payroll_bono14_expense_account_id: formData.payroll_bono14_expense_account_id,
+      payroll_vacaciones_expense_account_id: formData.payroll_vacaciones_expense_account_id,
+      payroll_igss_payable_account_id: formData.payroll_igss_payable_account_id,
+      payroll_isr_payable_account_id: formData.payroll_isr_payable_account_id,
+      payroll_salaries_payable_account_id: formData.payroll_salaries_payable_account_id,
+      payroll_indemnizacion_provision_account_id: formData.payroll_indemnizacion_provision_account_id,
+      payroll_aguinaldo_bono14_provision_account_id: formData.payroll_aguinaldo_bono14_provision_account_id,
     });
   };
 
