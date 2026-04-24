@@ -548,6 +548,12 @@ export default function ReportePartidas() {
                                   </TableCell>
                                   <TableCell className="text-sm" colSpan={2}>
                                     <TruncatedText text={detail.description || '-'} inline />
+                                    {detail.currency_code && detail.currency_code !== 'GTQ' && ((detail.original_debit ?? 0) > 0 || (detail.original_credit ?? 0) > 0) && (
+                                      <span className="ml-2 text-[10px] text-muted-foreground font-mono">
+                                        [{detail.currency_code} {formatCurrency((detail.original_debit ?? 0) || (detail.original_credit ?? 0))}
+                                        {detail.exchange_rate != null && ` @ ${Number(detail.exchange_rate).toFixed(4)}`}]
+                                      </span>
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right text-sm">
                                     {detail.debit_amount > 0 ? formatCurrency(detail.debit_amount) : '-'}
