@@ -726,7 +726,7 @@ const ConciliacionBancaria = () => {
         enterpriseNit: entInfo?.nit || '',
         bankName: bankAccount?.bank_name || '',
         accountNumber: bankAccount?.account_number || '',
-        reconciliationDate: new Date().toISOString().split('T')[0],
+        reconciliationDate: periodRange.endDate,
         period: `${monthLabel} ${selectedYear}`,
         bankStatementBalance: parseFloat(bankBalance),
         bookBalance,
