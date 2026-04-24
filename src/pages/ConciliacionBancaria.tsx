@@ -644,7 +644,7 @@ const ConciliacionBancaria = () => {
               <SelectContent>
                 {bankAccounts.map((account) => (
                   <SelectItem key={account.id} value={account.id.toString()}>
-                    {account.account_code} - {account.account_name}
+                    {account.account?.account_code || account.bank_name} - {account.account?.account_name || account.account_number}
                   </SelectItem>
                 ))}
               </SelectContent>
