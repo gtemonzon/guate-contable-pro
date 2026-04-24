@@ -95,8 +95,8 @@ export function calculatePayrollPosting(
   return { lines, warnings };
 }
 
-export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[], config: Config): Promise<boolean> {
-  const { lines, warnings } = calculatePayrollPosting(entries, config);
+export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[], config: Config, options: PayrollPostingOptions = {}): Promise<boolean> {
+  const { lines, warnings } = calculatePayrollPosting(entries, config, options);
   if (warnings.length > 0) {
     toast.error(`Configura las cuentas faltantes: ${warnings.join(', ')}`);
     return false;
