@@ -446,6 +446,7 @@ export function EnterpriseAccountsManager() {
               </div>
             </div>
 
+            <div className="flex justify-end">
               <Button onClick={handleSave} disabled={loading}>
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
