@@ -30,7 +30,9 @@ import { JournalEntryTotalsBar } from "./JournalEntryTotalsBar";
 import { JournalEntryActions } from "./JournalEntryActions";
 import { useFormShortcuts } from "@/hooks/useFormShortcuts";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface JournalEntryDialogProps {
   open: boolean;
