@@ -705,6 +705,7 @@ export type Database = {
           id: number
           is_active: boolean | null
           is_bank_account: boolean | null
+          is_monetary: boolean
           level: number
           parent_account_id: number | null
           requires_cost_center: boolean | null
@@ -722,6 +723,7 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           is_bank_account?: boolean | null
+          is_monetary?: boolean
           level: number
           parent_account_id?: number | null
           requires_cost_center?: boolean | null
@@ -739,6 +741,7 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           is_bank_account?: boolean | null
+          is_monetary?: boolean
           level?: number
           parent_account_id?: number | null
           requires_cost_center?: boolean | null
@@ -1909,6 +1912,68 @@ export type Database = {
             columns: ["format_id"]
             isOneToOne: false
             referencedRelation: "tab_financial_statement_formats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_fx_revaluation_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cutoff_date: string
+          details_json: Json | null
+          enterprise_id: number
+          id: number
+          journal_entry_id: number | null
+          month: number
+          notes: string | null
+          revaluation_type: string
+          reversed_at: string | null
+          status: string
+          total_gain: number
+          total_loss: number
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cutoff_date: string
+          details_json?: Json | null
+          enterprise_id: number
+          id?: number
+          journal_entry_id?: number | null
+          month: number
+          notes?: string | null
+          revaluation_type?: string
+          reversed_at?: string | null
+          status?: string
+          total_gain?: number
+          total_loss?: number
+          year: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cutoff_date?: string
+          details_json?: Json | null
+          enterprise_id?: number
+          id?: number
+          journal_entry_id?: number | null
+          month?: number
+          notes?: string | null
+          revaluation_type?: string
+          reversed_at?: string | null
+          status?: string
+          total_gain?: number
+          total_loss?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_fx_revaluation_runs_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -3630,6 +3695,14 @@ export type Database = {
           total_credit: number
           total_debit: number
         }[]
+      }
+      get_account_fx_balance: {
+        Args: {
+          _account_id: number
+          _currency_code: string
+          _cutoff_date: string
+        }
+        Returns: number
       }
       get_account_ledger_as_of: {
         Args: {
