@@ -17,6 +17,8 @@ import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankS
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QuadraticReconciliationView } from "@/components/conciliacion/QuadraticReconciliationView";
 import { AutoMatchPanel } from "@/components/conciliacion/AutoMatchPanel";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { getFiscalFloorDate } from "@/utils/fiscalFloor";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 type BankAccount = Database['public']['Tables']['tab_bank_accounts']['Row'] & {
@@ -56,6 +58,7 @@ const ConciliacionBancaria = () => {
   const [sortKey, setSortKey] = useState<SortKey>('movement_date');
   const [sortAsc, setSortAsc] = useState(true);
   const [lastExport, setLastExport] = useState<ReconciliationExportInput | null>(null);
+  const [bookEndingBalance, setBookEndingBalance] = useState(0);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((v) => !v);
