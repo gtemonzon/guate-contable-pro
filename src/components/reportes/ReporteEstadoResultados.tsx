@@ -441,11 +441,7 @@ export default function ReporteEstadoResultados() {
     let headers: string[];
     let data: string[][];
 
-    if (layout === 'columnar') {
-      const result = toColumnarExcelData(filteredReportLines);
-      headers = result.headers;
-      data = result.data;
-    } else if (layout === 'stepped') {
+    if (layout === 'stepped') {
       const result = toSteppedExcelData(filteredReportLines);
       headers = result.headers;
       data = result.data;
