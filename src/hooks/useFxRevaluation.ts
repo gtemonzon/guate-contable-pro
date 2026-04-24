@@ -217,18 +217,39 @@ export function useFxRevaluation() {
       const nextNumber = (counter?.last_number || 0) + 1;
       const entryNumber = `${prefix}-${preview.year}-${String(preview.month).padStart(2, "0")}-${String(nextNumber).padStart(4, "0")}`;
 
+      // Buscar período activo que contenga la fecha de corte
+      const { data: period } = await supabase
+        .from("tab_accounting_periods")
+        .select("id, status")
+        .eq("enterprise_id", preview.enterprise_id)
+        .lte("start_date", preview.cutoff_date)
+        .gte("end_date", preview.cutoff_date)
+        .maybeSingle();
+      if (!period) {
+        toast.error("No hay un período contable que contenga la fecha de corte. Crea el período antes de revaluar.");
+        return null;
+      }
+      if (period.status === "cerrado") {
+        toast.error("El período está cerrado. Reabre el período para registrar la revaluación.");
+        return null;
+      }
+
       // Crear partida (sin contabilizar aún)
       const { data: entry, error: entryErr } = await supabase
         .from("tab_journal_entries")
-        .insert({
+        .insert([{
           enterprise_id: preview.enterprise_id,
+          accounting_period_id: period.id,
           entry_number: entryNumber,
           entry_date: preview.cutoff_date,
+          entry_type: "ajuste",
           description: `Revaluación cambiaria NO realizada - ${preview.year}/${String(preview.month).padStart(2, "0")}`,
           status: "borrador",
           currency_code: preview.base_currency,
           exchange_rate: 1,
-        })
+          total_debit: 0,
+          total_credit: 0,
+        }])
         .select("id")
         .single();
       if (entryErr) throw entryErr;
