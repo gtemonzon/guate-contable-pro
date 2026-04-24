@@ -445,6 +445,29 @@ const ConciliacionBancaria = () => {
         }}
       />
 
+      <Tabs defaultValue="conciliar" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="conciliar">Conciliación</TabsTrigger>
+          <TabsTrigger value="auto-match">Sugerencias automáticas</TabsTrigger>
+          <TabsTrigger value="cuadratica">Cuadrática SAT</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="auto-match">
+          <AutoMatchPanel
+            enterpriseId={parseInt(selectedEnterprise)}
+            bankAccountId={selectedAccount ? parseInt(selectedAccount) : null}
+            year={selectedYear ? parseInt(selectedYear) : null}
+            month={selectedMonth ? parseInt(selectedMonth) : null}
+            onApplied={() => { if (selectedAccount && selectedMonth && selectedYear) fetchMovements(); }}
+          />
+        </TabsContent>
+
+        <TabsContent value="cuadratica">
+          <QuadraticReconciliationView enterpriseId={parseInt(selectedEnterprise)} />
+        </TabsContent>
+
+        <TabsContent value="conciliar" className="space-y-6">
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
