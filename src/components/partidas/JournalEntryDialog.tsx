@@ -479,11 +479,19 @@ export default function JournalEntryDialog({
         />
       )}
 
-      {/* Liquidar Factura ME — diferencial cambiario realizado */}
+      {/* Liquidar Factura ME — diferencial cambiario realizado (manual + auto-detección Item 10E) */}
       {currentEntryId && form.currencyCode && form.currencyCode !== baseCurrency && (
         <LiquidateForeignInvoiceDialog
           open={liquidateOpen}
-          onOpenChange={setLiquidateOpen}
+          onOpenChange={(o) => {
+            setLiquidateOpen(o);
+            // If user closes the auto-suggested dialog without acting, still propagate the original onSuccess
+            if (!o && pendingLiquidationEntryId) {
+              const id = pendingLiquidationEntryId;
+              setPendingLiquidationEntryId(null);
+              onSuccess(id);
+            }
+          }}
           enterpriseId={enterpriseId}
           baseCurrency={baseCurrency}
           paymentJournalId={currentEntryId}
@@ -492,7 +500,9 @@ export default function JournalEntryDialog({
           currencyCode={form.currencyCode}
           counterpartNit={null}
           onCompleted={() => {
-            onSuccess(currentEntryId);
+            const id = pendingLiquidationEntryId ?? currentEntryId;
+            setPendingLiquidationEntryId(null);
+            onSuccess(id);
           }}
         />
       )}
