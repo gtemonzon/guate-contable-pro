@@ -446,7 +446,7 @@ export function PurchaseInvoiceWizard({
                         </p>
                       )}
                       {!isFunctional && (!exchangeRate || exchangeRate <= 0) && (
-                        <p className="text-amber-600 flex items-center gap-1">
+                        <p className="text-warning flex items-center gap-1">
                           <AlertCircle className="h-3 w-3" /> Falta tipo de cambio
                         </p>
                       )}
