@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Calendar, Landmark, Search, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, BadgeCheck, Building2, Calendar, Landmark, Search, Upload } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { ImportBankStatementDialog } from "@/components/conciliacion/ImportBankStatementDialog";
