@@ -1407,6 +1407,62 @@ export function PeriodClosingWizard({
                     </div>
                   </>
                 )}
+
+                {/* FX Revaluation gating (Item 9) */}
+                {fxCheckLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Verificando estado de revaluación cambiaria...
+                  </div>
+                ) : fxMonetaryCount === 0 ? null : fxNeeded ? (
+                  <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                    <CardContent className="pt-6 space-y-3">
+                      <div className="flex items-start gap-3 text-amber-700 dark:text-amber-400">
+                        <Coins className="h-6 w-6 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium">Revaluación cambiaria pendiente</p>
+                          <p className="text-sm text-amber-600 dark:text-amber-500">
+                            Esta empresa tiene <strong>{fxMonetaryCount}</strong> cuenta{fxMonetaryCount !== 1 ? 's' : ''} monetaria{fxMonetaryCount !== 1 ? 's' : ''} en moneda extranjera y aún no se ha registrado la partida DIFC-NR
+                            {fxLastRunMonth && ` para ${String(fxLastRunMonth.month).padStart(2, '0')}/${fxLastRunMonth.year}`}.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 ml-9">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setFxWizardOpen(true)}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Ejecutar revaluación ahora
+                        </Button>
+                        <div className="flex items-center gap-2 px-3 py-1 border rounded-md bg-background">
+                          <Checkbox
+                            id="skip-fx"
+                            checked={skipFxRevaluation}
+                            onCheckedChange={(checked) => setSkipFxRevaluation(checked === true)}
+                          />
+                          <Label htmlFor="skip-fx" className="text-xs cursor-pointer">
+                            Omitir revaluación (no recomendado)
+                          </Label>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-green-200 bg-green-50 dark:bg-green-950/20">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="h-6 w-6" />
+                        <div>
+                          <p className="font-medium">Revaluación cambiaria al día</p>
+                          <p className="text-sm text-green-600 dark:text-green-500">
+                            La partida DIFC-NR del último mes del período ya fue contabilizada.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
 
