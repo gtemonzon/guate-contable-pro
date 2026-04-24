@@ -47,6 +47,69 @@ const ConciliacionBancaria = () => {
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
   const [selectedEnterprise, setSelectedEnterprise] = useState<string | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [movementSearch, setMovementSearch] = useState("");
+  type SortKey = 'movement_date' | 'description' | 'bank_reference' | 'beneficiary_name' | 'type' | 'amount';
+  const [sortKey, setSortKey] = useState<SortKey>('movement_date');
+  const [sortAsc, setSortAsc] = useState(true);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc((v) => !v);
+    else { setSortKey(key); setSortAsc(true); }
+  };
+
+  const filteredMovements = useMemo(() => {
+    const q = movementSearch.trim().toLowerCase();
+    let list = movements;
+    if (q) {
+      list = movements.filter((m) => {
+        const amount = (m.debit_amount || m.credit_amount).toFixed(2);
+        const type = m.debit_amount > 0 ? 'depósito deposito' : 'retiro';
+        return (
+          (m.description || '').toLowerCase().includes(q) ||
+          (m.bank_reference || '').toLowerCase().includes(q) ||
+          (m.beneficiary_name || '').toLowerCase().includes(q) ||
+          amount.includes(q) ||
+          type.includes(q)
+        );
+      });
+    }
+    const sorted = [...list].sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortKey) {
+        case 'movement_date': av = a.movement_date; bv = b.movement_date; break;
+        case 'description': av = a.description || ''; bv = b.description || ''; break;
+        case 'bank_reference': av = a.bank_reference || ''; bv = b.bank_reference || ''; break;
+        case 'beneficiary_name': av = a.beneficiary_name || ''; bv = b.beneficiary_name || ''; break;
+        case 'type': av = a.debit_amount > 0 ? 'Depósito' : 'Retiro'; bv = b.debit_amount > 0 ? 'Depósito' : 'Retiro'; break;
+        case 'amount': av = a.debit_amount || a.credit_amount; bv = b.debit_amount || b.credit_amount; break;
+      }
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+    return sorted;
+  }, [movements, movementSearch, sortKey, sortAsc]);
+
+  const allFilteredSelected = filteredMovements.length > 0 && filteredMovements.every((m) => selectedMovements.has(m.id));
+  const toggleSelectAllFiltered = () => {
+    setSelectedMovements((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) filteredMovements.forEach((m) => next.delete(m.id));
+      else filteredMovements.forEach((m) => next.add(m.id));
+      return next;
+    });
+  };
+
+  const SortButton = ({ k, label, align = 'left' }: { k: SortKey; label: string; align?: 'left' | 'right' }) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(k)}
+      className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${align === 'right' ? 'justify-end w-full' : ''}`}
+    >
+      {label}
+      {sortKey === k ? (sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+    </button>
+  );
 
   const months = [
     { value: "1", label: "Enero" },
