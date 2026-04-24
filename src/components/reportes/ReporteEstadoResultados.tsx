@@ -656,9 +656,7 @@ export default function ReporteEstadoResultados() {
               Estado de Resultados del {new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al {new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
           </div>
-          {layout === 'columnar' ? (
-            <ColumnarReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
-          ) : layout === 'stepped' ? (
+          {layout === 'stepped' ? (
             <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
             <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
