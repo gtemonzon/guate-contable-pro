@@ -27,8 +27,10 @@ import {
   Package,
   RefreshCw,
   ArrowRightLeft,
-  BookOpen
+  BookOpen,
+  Coins
 } from 'lucide-react';
+import { FxRevaluationWizard } from '@/components/partidas/FxRevaluationWizard';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
@@ -128,7 +130,15 @@ export function PeriodClosingWizard({
   
   // Step: Confirmation
   const [confirmClose, setConfirmClose] = useState(false);
-  
+
+  // FX revaluation gating (Item 9)
+  const [fxCheckLoading, setFxCheckLoading] = useState(false);
+  const [fxNeeded, setFxNeeded] = useState(false);
+  const [fxLastRunMonth, setFxLastRunMonth] = useState<{ year: number; month: number } | null>(null);
+  const [fxMonetaryCount, setFxMonetaryCount] = useState(0);
+  const [skipFxRevaluation, setSkipFxRevaluation] = useState(false);
+  const [fxWizardOpen, setFxWizardOpen] = useState(false);
+
   const { config } = useEnterpriseConfig(enterpriseId);
   
   const cdv = useCostOfSalesCalculation(enterpriseId, period?.id || 0);
@@ -252,10 +262,64 @@ export function PeriodClosingWizard({
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
+      setSkipFxRevaluation(false);
+      setFxNeeded(false);
+      setFxLastRunMonth(null);
+      setFxMonetaryCount(0);
       loadPendingEntries();
       syncExistingEntries();
+      checkFxRevaluationStatus();
     }
   }, [open, period, syncExistingEntries]);
+
+  // Detecta si hay cuentas monetarias activas y verifica que exista una corrida
+  // de revaluación NO realizada para el último mes del período.
+  const checkFxRevaluationStatus = useCallback(async () => {
+    if (!period) return;
+    setFxCheckLoading(true);
+    try {
+      const { count: monetaryCount } = await supabase
+        .from('tab_accounts')
+        .select('id', { count: 'exact', head: true })
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_monetary', true)
+        .eq('is_active', true)
+        .is('deleted_at', null);
+
+      setFxMonetaryCount(monetaryCount || 0);
+      if (!monetaryCount) {
+        setFxNeeded(false);
+        return;
+      }
+
+      // Último mes del período
+      const endDate = new Date(period.end_date);
+      const lastYear = endDate.getFullYear();
+      const lastMonth = endDate.getMonth() + 1;
+
+      const { data: run } = await supabase
+        .from('tab_fx_revaluation_runs')
+        .select('id, year, month')
+        .eq('enterprise_id', enterpriseId)
+        .eq('revaluation_type', 'UNREALIZED')
+        .eq('year', lastYear)
+        .eq('month', lastMonth)
+        .eq('status', 'POSTED')
+        .maybeSingle();
+
+      if (run) {
+        setFxLastRunMonth({ year: run.year, month: run.month });
+        setFxNeeded(false);
+      } else {
+        setFxLastRunMonth({ year: lastYear, month: lastMonth });
+        setFxNeeded(true);
+      }
+    } catch (err) {
+      console.error('Error verificando estado FX:', err);
+    } finally {
+      setFxCheckLoading(false);
+    }
+  }, [period, enterpriseId]);
 
   const loadPendingEntries = async () => {
     if (!period) return;
@@ -1029,8 +1093,11 @@ export function PeriodClosingWizard({
   // ---- Navigation Logic ----
   const canAdvance = () => {
     switch (currentStepId) {
-      case 'partidas':
-        return pendingEntries.length === 0 || continueDespitePending;
+      case 'partidas': {
+        const pendingOk = pendingEntries.length === 0 || continueDespitePending;
+        const fxOk = !fxNeeded || skipFxRevaluation;
+        return pendingOk && fxOk;
+      }
       case 'cdv':
         if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
         return cdv.finalInventory !== null &&
@@ -1339,6 +1406,62 @@ export function PeriodClosingWizard({
                       </Label>
                     </div>
                   </>
+                )}
+
+                {/* FX Revaluation gating (Item 9) */}
+                {fxCheckLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Verificando estado de revaluación cambiaria...
+                  </div>
+                ) : fxMonetaryCount === 0 ? null : fxNeeded ? (
+                  <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                    <CardContent className="pt-6 space-y-3">
+                      <div className="flex items-start gap-3 text-amber-700 dark:text-amber-400">
+                        <Coins className="h-6 w-6 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium">Revaluación cambiaria pendiente</p>
+                          <p className="text-sm text-amber-600 dark:text-amber-500">
+                            Esta empresa tiene <strong>{fxMonetaryCount}</strong> cuenta{fxMonetaryCount !== 1 ? 's' : ''} monetaria{fxMonetaryCount !== 1 ? 's' : ''} en moneda extranjera y aún no se ha registrado la partida DIFC-NR
+                            {fxLastRunMonth && ` para ${String(fxLastRunMonth.month).padStart(2, '0')}/${fxLastRunMonth.year}`}.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 ml-9">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setFxWizardOpen(true)}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Ejecutar revaluación ahora
+                        </Button>
+                        <div className="flex items-center gap-2 px-3 py-1 border rounded-md bg-background">
+                          <Checkbox
+                            id="skip-fx"
+                            checked={skipFxRevaluation}
+                            onCheckedChange={(checked) => setSkipFxRevaluation(checked === true)}
+                          />
+                          <Label htmlFor="skip-fx" className="text-xs cursor-pointer">
+                            Omitir revaluación (no recomendado)
+                          </Label>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-green-200 bg-green-50 dark:bg-green-950/20">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="h-6 w-6" />
+                        <div>
+                          <p className="font-medium">Revaluación cambiaria al día</p>
+                          <p className="text-sm text-green-600 dark:text-green-500">
+                            La partida DIFC-NR del último mes del período ya fue contabilizada.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
             )}
@@ -2066,6 +2189,21 @@ export function PeriodClosingWizard({
           </div>
         )}
       </DialogContent>
+
+      {/* FX Revaluation Wizard (Item 9 — gating en paso Partidas) */}
+      {fxLastRunMonth && (
+        <FxRevaluationWizard
+          open={fxWizardOpen}
+          onOpenChange={setFxWizardOpen}
+          enterpriseId={enterpriseId}
+          defaultYear={fxLastRunMonth.year}
+          defaultMonth={fxLastRunMonth.month}
+          onPosted={() => {
+            setFxWizardOpen(false);
+            checkFxRevaluationStatus();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
