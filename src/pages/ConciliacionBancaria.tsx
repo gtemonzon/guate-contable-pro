@@ -208,6 +208,7 @@ const ConciliacionBancaria = () => {
       setBankBalance("");
       setNotes("");
       setLastExport(null);
+      setBookEndingBalance(0);
     }
   }, [selectedAccount]);
 
@@ -409,7 +410,7 @@ const ConciliacionBancaria = () => {
         period: `${monthLabel} ${selectedYear}`,
         bankStatementBalance: Number(rec.bank_statement_balance || 0),
         bookBalance: Number(rec.book_balance || 0),
-        difference: Number(rec.book_balance || 0) - Number(rec.bank_statement_balance || 0),
+        difference: Number(rec.bank_statement_balance || 0) - Number(rec.reconciled_balance || 0),
         notes: rec.notes || undefined,
         reconciledMovements: reconciledMovs,
         pendingMovements: pendingMovs,
