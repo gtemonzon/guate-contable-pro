@@ -1105,12 +1105,12 @@ const ConciliacionBancaria = () => {
                   <div className="grid gap-4 md:grid-cols-3 pt-4 border-t">
                     <Card>
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-medium">Movimientos Conciliados</CardTitle>
+                        <CardTitle className="text-sm font-medium">Saldo Contable</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-2xl font-bold">Q {balances.reconciled.toFixed(2)}</div>
+                        <div className="text-2xl font-bold">Q {balances.bookEndingBalance.toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {selectedMovements.size} movimientos
+                          Saldo final en libros del período
                         </p>
                       </CardContent>
                     </Card>
@@ -1132,11 +1132,11 @@ const ConciliacionBancaria = () => {
                         <CardTitle className="text-sm font-medium">Diferencia</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className={`text-2xl font-bold ${Math.abs(balances.reconciled - parseFloat(bankBalance || '0')) < 0.01 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          Q {(balances.reconciled - parseFloat(bankBalance || '0')).toFixed(2)}
+                        <div className={`text-2xl font-bold ${Math.abs(balances.difference) < 0.01 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          Q {balances.difference.toFixed(2)}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          vs. Saldo bancario
+                          Saldo banco - saldo esperado conciliado
                         </p>
                       </CardContent>
                     </Card>
