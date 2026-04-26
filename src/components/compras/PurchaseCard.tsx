@@ -44,7 +44,7 @@ export interface PurchaseCardProps {
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
   bankAccounts: { id: number; account_code: string; account_name: string }[];
-  onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
+  onUpdate: (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => void;
   onSave: (index: number) => void;
   onDelete: (index: number) => void;
   recommendedFields?: string[];
@@ -137,8 +137,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
           p_enterprise_id: enterpriseId,
           p_supplier_nit: nit,
         });
-        if (mapping && (mapping as any).operation_type_id) {
-          const m = mapping as any;
+        if (mapping && (mapping as { operation_type_id?: number; expense_account_id?: number }).operation_type_id) {
+          const m = mapping as { operation_type_id?: number; expense_account_id?: number };
           if (!touchedFields.has("operation_type_id") && m.operation_type_id) {
             onUpdate(index, "operation_type_id", m.operation_type_id);
           }
@@ -173,7 +173,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   };
 
-  const handleFieldChange = (field: keyof PurchaseEntry, value: any) => {
+  const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
