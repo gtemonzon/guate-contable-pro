@@ -608,6 +608,8 @@ export default function LibrosFiscales() {
         .eq("year", year)
         .maybeSingle();
 
+      let book = bookData;
+
       if (fetchError) throw fetchError;
 
       if (!book) {

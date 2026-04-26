@@ -281,6 +281,7 @@ export default function LibroCompras() {
         .maybeSingle();
 
       if (fetchError) throw fetchError;
+      let book = bookData;
 
       // Si no existe, crear uno nuevo
       if (!book) {
