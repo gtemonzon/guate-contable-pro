@@ -102,7 +102,7 @@ export function usePurchaseJournalLinks() {
       .select("purchase_id")
       .eq("enterprise_id", enterpriseId);
 
-    const linkedIds = (linked || []).map((l: any) => l.purchase_id);
+    const linkedIds = ((linked || []) as Array<{ purchase_id: number }>).map((l) => l.purchase_id);
 
     let query = supabase
       .from("tab_purchase_ledger")
@@ -129,7 +129,7 @@ export function usePurchaseJournalLinks() {
     if (error) throw error;
 
     // Filter out any that are in the links table
-    return (data || []).filter((p: any) => !linkedIds.includes(p.id));
+    return (data || []).filter((p: { id: number }) => !linkedIds.includes(p.id));
   }, []);
 
   const getLinkForPurchase = useCallback(async (enterpriseId: number, purchaseId: number) => {
