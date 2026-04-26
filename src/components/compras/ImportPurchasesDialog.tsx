@@ -671,7 +671,7 @@ export function ImportPurchasesDialog({
         if (existingRecords && existingRecords.length > 0) {
           // Create a set of existing keys for fast lookup
           const existingKeys = new Set(
-            existingRecords.map((r: any) =>
+            existingRecords.map((r) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -691,7 +691,7 @@ export function ImportPurchasesDialog({
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
               // Find the existing record to show details
-              const existing = existingRecords.find((r: any) =>
+              const existing = existingRecords.find((r) =>
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&
@@ -917,7 +917,7 @@ export function ImportPurchasesDialog({
         
         if (existingRecords && existingRecords.length > 0) {
           const existingKeys = new Set(
-            existingRecords.map((r: any) =>
+            existingRecords.map((r) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -935,7 +935,7 @@ export function ImportPurchasesDialog({
 
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
-              const existing = existingRecords.find((r: any) =>
+              const existing = existingRecords.find((r) =>
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&
