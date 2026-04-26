@@ -200,14 +200,14 @@ function extractDataFromText(text: string): ExtractedData {
   // Strategy 1: Direct patterns in full text for "Mes: ENERO" or "Mes ENERO" format
   const directMonthPatterns = [
     // "Mes: ENERO" or "Mes ENERO" 
-    /\bMes\s*[:|\-]?\s*(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/i,
+    /\bMes\s*[:|-]?\s*(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/i,
     // "Mes: 1" or "Mes 12"
-    /\bMes\s*[:|\-]?\s*(\d{1,2})\b/i,
+    /\bMes\s*[:|-]?\s*(\d{1,2})\b/i,
   ];
   
   const directYearPatterns = [
     // "Año: 2024" or "Año 2024"
-    /\bA[ñn]o\s*[:|\-]?\s*(20\d{2})\b/i,
+    /\bA[ñn]o\s*[:|-]?\s*(20\d{2})\b/i,
   ];
   
   // Try to find month directly in text first
