@@ -600,13 +600,15 @@ export default function LibrosFiscales() {
         setIsRefreshing(true);
       }
       
-      let { data: book, error: fetchError } = await supabase
+      const { data: bookData, error: fetchError } = await supabase
         .from("tab_purchase_books")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("month", month)
         .eq("year", year)
         .maybeSingle();
+
+      let book = bookData;
 
       if (fetchError) throw fetchError;
 

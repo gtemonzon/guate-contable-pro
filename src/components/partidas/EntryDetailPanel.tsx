@@ -210,7 +210,9 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
         .eq("journal_entry_id", id)
         .is("deleted_at", null);
       setLinkedPurchases(data || []);
-    } catch {}
+    } catch {
+      // ignore - non-critical lookup
+    }
   };
 
   if (!entryId) {

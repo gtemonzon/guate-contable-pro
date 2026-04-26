@@ -272,7 +272,7 @@ export default function LibroCompras() {
       setLoading(true);
       
       // Buscar libro existente
-      let { data: book, error: fetchError } = await supabase
+      const { data: bookData, error: fetchError } = await supabase
         .from("tab_purchase_books")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
@@ -281,6 +281,7 @@ export default function LibroCompras() {
         .maybeSingle();
 
       if (fetchError) throw fetchError;
+      let book = bookData;
 
       // Si no existe, crear uno nuevo
       if (!book) {
