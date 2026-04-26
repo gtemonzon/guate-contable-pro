@@ -173,8 +173,9 @@ export function useFxRevaluation() {
         total_loss: round2(totalLoss),
         net_effect: round2(totalGain - totalLoss),
       };
-    } catch (e: any) {
-      toast.error("Error calculando revaluación: " + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error calculando revaluación: " + msg);
       return null;
     } finally {
       setLoading(false);
