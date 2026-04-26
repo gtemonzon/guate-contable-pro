@@ -68,7 +68,7 @@ function extractBetween(text: string, start: RegExp, end: RegExp): string | null
 
 function parseDate(dateStr: string): string | null {
   // Try formats: dd/mm/yyyy or dd-mm-yyyy
-  const match = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  const match = dateStr.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
   if (match) {
     const [, day, month, year] = match;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
@@ -106,9 +106,9 @@ function extractDataFromText(text: string): ExtractedData {
   // Fallback regex patterns if block extraction failed
   if (!result.formNumber) {
     const formNumberPatterns = [
-      /N[úu]mero\s+de\s+Formulario[:\s\|]*([\d\s]+)/i,
-      /No\.?\s*de\s*Formulario[:\s\|]*([\d\s]+)/i,
-      /Formulario\s+No\.?[:\s\|]*([\d\s]+)/i,
+      /N[úu]mero\s+de\s+Formulario[:\s|]*([\d\s]+)/i,
+      /No\.?\s*de\s*Formulario[:\s|]*([\d\s]+)/i,
+      /Formulario\s+No\.?[:\s|]*([\d\s]+)/i,
       /(\d{2}\s+\d{3}\s+\d{3}\s+\d{3})/i, // "49 078 843 961"
       /(\d{2}\s+\d{3}\s+\d{3})/i, // "49 078 669" (sometimes line breaks)
     ];
@@ -155,8 +155,8 @@ function extractDataFromText(text: string): ExtractedData {
   // Fallback Access Code patterns
   if (!result.accessCode) {
     const accessCodePatterns = [
-      /N[úu]mero\s+de\s+Acceso[:\s\|]*([\d\s]+)/i,
-      /C[óo]digo\s+de\s+Acceso[:\s\|]*([\d\s]+)/i,
+      /N[úu]mero\s+de\s+Acceso[:\s|]*([\d\s]+)/i,
+      /C[óo]digo\s+de\s+Acceso[:\s|]*([\d\s]+)/i,
       /N[úu]mero\s+de\s+Acceso\s*\n\s*([\d\s]+)/i,
       /(\d{3}\s+\d{3}\s+\d{3})/i, // "406 410 915"
     ];
@@ -200,14 +200,14 @@ function extractDataFromText(text: string): ExtractedData {
   // Strategy 1: Direct patterns in full text for "Mes: ENERO" or "Mes ENERO" format
   const directMonthPatterns = [
     // "Mes: ENERO" or "Mes ENERO" 
-    /\bMes\s*[:\|\-]?\s*(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/i,
+    /\bMes\s*[:|-]?\s*(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/i,
     // "Mes: 1" or "Mes 12"
-    /\bMes\s*[:\|\-]?\s*(\d{1,2})\b/i,
+    /\bMes\s*[:|-]?\s*(\d{1,2})\b/i,
   ];
   
   const directYearPatterns = [
     // "Año: 2024" or "Año 2024"
-    /\bA[ñn]o\s*[:\|\-]?\s*(20\d{2})\b/i,
+    /\bA[ñn]o\s*[:|-]?\s*(20\d{2})\b/i,
   ];
   
   // Try to find month directly in text first
@@ -253,7 +253,7 @@ function extractDataFromText(text: string): ExtractedData {
 
     // Quarter (Trimestral)
     if (!result.periodMonth) {
-      const quarterMatch = periodText.match(/TRIMESTRE\s*[:\-\|\s]*([1-4])\b/i);
+      const quarterMatch = periodText.match(/TRIMESTRE\s*[:\-|\s]*([1-4])\b/i);
       if (quarterMatch) {
         const q = parseInt(quarterMatch[1]);
         result.periodType = "trimestral";
@@ -431,9 +431,9 @@ function extractDataFromText(text: string): ExtractedData {
 
   // Extract Payment/Presentation Date
   const datePatterns = [
-    /Fecha\s+de\s+(?:presentaci[óo]n|pago)[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/i,
-    /Fecha[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/i,
-    /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/,
+    /Fecha\s+de\s+(?:presentaci[óo]n|pago)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i,
+    /Fecha[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{4})/i,
+    /(\d{1,2}[/-]\d{1,2}[/-]\d{4})/,
   ];
   
   for (const pattern of datePatterns) {
@@ -462,9 +462,9 @@ function extractDataFromText(text: string): ExtractedData {
   // Strategy 2: Look for inline patterns if not found
   if (result.amountPaid === undefined) {
     const amountPatterns = [
-      /TOTAL\s+A\s+PAGAR[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
-      /MONTO\s+A\s+PAGAR[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
-      /Impuesto\s+a\s+pagar[:\s\|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+      /TOTAL\s+A\s+PAGAR[:\s|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+      /MONTO\s+A\s+PAGAR[:\s|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
+      /Impuesto\s+a\s+pagar[:\s|]+Q?\s*([\d]+(?:[.,]\d{1,2})?)\b/i,
     ];
     
     for (const pattern of amountPatterns) {
