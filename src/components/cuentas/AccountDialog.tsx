@@ -218,7 +218,7 @@ export function AccountDialog({
     }
 
     try {
-      const dataToSave: any = {
+      const dataToSave: Database['public']['Tables']['tab_accounts']['Insert'] = {
         enterprise_id: enterpriseId,
         account_code: values.account_code,
         account_name: values.account_name,
