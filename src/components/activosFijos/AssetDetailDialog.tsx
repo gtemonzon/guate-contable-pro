@@ -18,7 +18,8 @@ const fmt = (n: number) =>
 
 const MONTH_NAMES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-const STATUS_BADGE: Record<string, string> = {
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+const STATUS_BADGE: Record<string, BadgeVariant> = {
   PLANNED: "secondary", POSTED: "default", SKIPPED: "outline",
 };
 
