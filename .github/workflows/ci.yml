@@ -107,7 +107,7 @@ jobs:
 
       - name: ESLint regression guard
         env:
-          BASELINE: "229"
+          BASELINE: "198"
         run: |
           ERRORS=$(jq '[.[].errorCount] | add // 0' eslint-report.json)
           WARNINGS=$(jq '[.[].warningCount] | add // 0' eslint-report.json)
