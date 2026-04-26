@@ -143,13 +143,13 @@ export function AccountDialog({
       form.reset({
         account_code: account.account_code,
         account_name: account.account_name,
-        account_type: account.account_type as any,
-        balance_type: (account.balance_type as any) || "deudor",
+        account_type: account.account_type as FormValues["account_type"],
+        balance_type: (account.balance_type as FormValues["balance_type"]) || "deudor",
         parent_account_id: account.parent_account_id,
         level: account.level,
         allows_movement: account.allows_movement ?? true,
         is_bank_account: account.is_bank_account ?? false,
-        is_monetary: (account as any).is_monetary ?? false,
+        is_monetary: account.is_monetary ?? false,
         is_active: account.is_active ?? true,
       });
     } else if (presetConfig) {
@@ -157,8 +157,8 @@ export function AccountDialog({
       form.reset({
         account_code: presetConfig.suggestedCode,
         account_name: "",
-        account_type: presetConfig.accountType as any,
-        balance_type: presetConfig.balanceType as any,
+        account_type: presetConfig.accountType as FormValues["account_type"],
+        balance_type: presetConfig.balanceType as FormValues["balance_type"],
         parent_account_id: presetConfig.parentAccountId,
         level: presetConfig.level,
         allows_movement: presetConfig.allowsMovement,
