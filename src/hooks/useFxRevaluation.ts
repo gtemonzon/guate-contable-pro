@@ -383,8 +383,9 @@ export function useFxRevaluation() {
       const newEntryId = Number(data);
       toast.success("Partida de reverso contabilizada exitosamente.");
       return newEntryId;
-    } catch (e: any) {
-      toast.error("Error generando reverso: " + (e.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error generando reverso: " + msg);
       return null;
     } finally {
       setPosting(false);
