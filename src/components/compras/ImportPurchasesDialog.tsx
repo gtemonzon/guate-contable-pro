@@ -176,6 +176,7 @@ async function findOrCreatePurchaseBook(
 }
 
 // Parse file (CSV or Excel) and return rows as 2D array
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function parseFile(file: File): Promise<any[][]> {
   const extension = file.name.split(".").pop()?.toLowerCase();
   
@@ -183,6 +184,7 @@ async function parseFile(file: File): Promise<any[][]> {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false }) as any[][];
     return data.filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ""));
   } else {
@@ -229,7 +231,7 @@ async function extractTextFromPdf(
     onProgress?.({ currentPage: i, totalPages: pdf.numPages });
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item: any) => item.str).join(" ");
+    const pageText = textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ");
     fullText += pageText + "\n";
   }
 
@@ -669,7 +671,7 @@ export function ImportPurchasesDialog({
         if (existingRecords && existingRecords.length > 0) {
           // Create a set of existing keys for fast lookup
           const existingKeys = new Set(
-            existingRecords.map((r: any) =>
+            existingRecords.map((r) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -689,7 +691,7 @@ export function ImportPurchasesDialog({
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
               // Find the existing record to show details
-              const existing = existingRecords.find((r: any) =>
+              const existing = existingRecords.find((r) =>
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&
@@ -915,7 +917,7 @@ export function ImportPurchasesDialog({
         
         if (existingRecords && existingRecords.length > 0) {
           const existingKeys = new Set(
-            existingRecords.map((r: any) =>
+            existingRecords.map((r) =>
               `${r.supplier_nit}|${r.fel_document_type}|${r.invoice_series || ''}|${r.invoice_number}`
             )
           );
@@ -933,7 +935,7 @@ export function ImportPurchasesDialog({
 
             if (existingKeys.has(key)) {
               duplicateRecords.push(record);
-              const existing = existingRecords.find((r: any) =>
+              const existing = existingRecords.find((r) =>
                 r.supplier_nit === record.supplier_nit &&
                 r.fel_document_type === record.fel_document_type &&
                 (r.invoice_series || '') === (record.invoice_series || '') &&

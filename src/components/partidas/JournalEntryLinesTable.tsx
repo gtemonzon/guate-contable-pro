@@ -26,7 +26,7 @@ interface JournalEntryLinesTableProps {
   isBalanced: boolean;
   onAddLine: () => void;
   onRemoveLine: (id: string) => void;
-  onUpdateLine: (id: string, field: keyof DetailLine, value: any) => void;
+  onUpdateLine: (id: string, field: keyof DetailLine, value: DetailLine[keyof DetailLine]) => void;
   onOpenBalanceInspector: () => void;
   entryDate: string;
 }
@@ -135,7 +135,7 @@ export function JournalEntryLinesTable({
                                 <ScrollArea className="h-[300px]">
                                   {accounts.filter(acc => { const s = (accountSearch[line.id] || "").toLowerCase(); return !s || `${acc.account_code} ${acc.account_name}`.toLowerCase().includes(s); })
                                     .map((acc) => (
-                                      <CommandItem key={acc.id} value={`${acc.account_code} ${acc.account_name}`} onSelect={() => { onUpdateLine(line.id, "account_id" as keyof DetailLine, acc.id as any); setAccountSearch(prev => ({ ...prev, [line.id]: "" })); setAccountPopoverOpen(prev => ({ ...prev, [line.id]: false })); }}>
+                                      <CommandItem key={acc.id} value={`${acc.account_code} ${acc.account_name}`} onSelect={() => { onUpdateLine(line.id, "account_id" as keyof DetailLine, acc.id); setAccountSearch(prev => ({ ...prev, [line.id]: "" })); setAccountPopoverOpen(prev => ({ ...prev, [line.id]: false })); }}>
                                         <Check className={cn("mr-2 h-4 w-4", line.account_id === acc.id ? "opacity-100" : "opacity-0")} />
                                         {acc.account_code} - {acc.account_name}
                                       </CommandItem>
@@ -226,7 +226,7 @@ export function JournalEntryLinesTable({
                         {line.debit_amount > 0 ? formatCurrency(line.debit_amount) : "-"}
                       </span>
                     ) : isActive ? (
-                      <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono"
+                      <Input type="number" step="0.01" min="0" value={line.debit_amount || ""} onChange={(e) => onUpdateLine(line.id, "debit_amount" as keyof DetailLine, parseFloat(e.target.value) || 0)} disabled={line.credit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
                           if ((e.key === 'Tab' && !e.shiftKey || e.key === 'Enter') && line.debit_amount > 0) {
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
@@ -254,7 +254,7 @@ export function JournalEntryLinesTable({
                         {line.credit_amount > 0 ? formatCurrency(line.credit_amount) : "-"}
                       </span>
                     ) : isActive ? (
-                      <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, (parseFloat(e.target.value) || 0) as any)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
+                      <Input type="number" step="0.01" min="0" value={line.credit_amount || ""} onChange={(e) => onUpdateLine(line.id, "credit_amount" as keyof DetailLine, parseFloat(e.target.value) || 0)} disabled={line.debit_amount > 0} className="h-9 text-right font-mono"
                         onKeyDown={(e) => {
                           if ((e.key === 'Tab' && !e.shiftKey || e.key === 'Enter') && line.credit_amount > 0) {
                             const nonBankLines = detailLines.filter(l => !l.is_bank_line);
