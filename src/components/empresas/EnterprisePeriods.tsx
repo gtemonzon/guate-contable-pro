@@ -10,6 +10,9 @@ import { es } from "date-fns/locale";
 import PeriodDialog from "@/components/periodos/PeriodDialog";
 import { PeriodClosingWizard } from "@/components/periodos/PeriodClosingWizard";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import type { Database } from "@/integrations/supabase/types";
+
+type AccountingPeriod = Database['public']['Tables']['tab_accounting_periods']['Row'];
 
 interface EnterprisePeriodsProps {
   enterpriseId: number;
@@ -17,12 +20,12 @@ interface EnterprisePeriodsProps {
 
 export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
   const { toast } = useToast();
-  const [periods, setPeriods] = useState<any[]>([]);
+  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
   const [activePeriodId, setActivePeriodId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<any>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<AccountingPeriod | null>(null);
   const [loading, setLoading] = useState(true);
-  const [closingWizardPeriod, setClosingWizardPeriod] = useState<any>(null);
+  const [closingWizardPeriod, setClosingWizardPeriod] = useState<AccountingPeriod | null>(null);
 
   useEffect(() => {
     fetchPeriods();
@@ -56,7 +59,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
     if (saved) setActivePeriodId(parseInt(saved));
   };
 
-  const handleSetActivePeriod = async (periodId: number, period: any) => {
+  const handleSetActivePeriod = async (periodId: number, period: AccountingPeriod) => {
     if (period.status !== "abierto") {
       toast({
         variant: "destructive",
@@ -82,7 +85,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
     });
   };
 
-  const handleEdit = (period: any) => {
+  const handleEdit = (period: AccountingPeriod) => {
     setSelectedPeriod(period);
     setDialogOpen(true);
   };
@@ -92,7 +95,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
     setDialogOpen(true);
   };
 
-  const handleClosePeriod = async (periodId: number, period: any) => {
+  const handleClosePeriod = async (periodId: number, period: AccountingPeriod) => {
     try {
       const { error } = await supabase
         .from("tab_accounting_periods")
@@ -131,7 +134,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
     }
   };
 
-  const handleReopenPeriod = async (periodId: number, period: any) => {
+  const handleReopenPeriod = async (periodId: number, period: AccountingPeriod) => {
     try {
       const { error } = await supabase
         .from("tab_accounting_periods")

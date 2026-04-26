@@ -74,7 +74,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     const allEntries = [...(entriesBefore || []), ...(openingEntries || [])];
     if (allEntries.length === 0) return 0;
 
-    const entryIds = allEntries.map((e: any) => e.id);
+    const entryIds = allEntries.map((e: { id: number }) => e.id);
     
     // Fetch details in batches
     let totalBalance = 0;
@@ -90,7 +90,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       if (detailsError) throw detailsError;
       
-      (details || []).forEach((d: any) => {
+      (details || []).forEach((d: { debit_amount: number | null; credit_amount: number | null }) => {
         totalBalance += (Number(d.debit_amount) || 0) - (Number(d.credit_amount) || 0);
       });
     }
@@ -116,7 +116,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
     if (!entries || entries.length === 0) return 0;
 
-    const entryIds = entries.map((e: any) => e.id);
+    const entryIds = entries.map((e: { id: number }) => e.id);
     
     let totalBalance = 0;
     const batchSize = 100;
@@ -131,7 +131,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       if (detailsError) throw detailsError;
       
-      (details || []).forEach((d: any) => {
+      (details || []).forEach((d: { debit_amount: number | null; credit_amount: number | null }) => {
         totalBalance += (Number(d.debit_amount) || 0) - (Number(d.credit_amount) || 0);
       });
     }
@@ -157,7 +157,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
     if (!entries || entries.length === 0) return 0;
 
-    const entryIds = entries.map((e: any) => e.id);
+    const entryIds = entries.map((e: { id: number }) => e.id);
     
     let totalBalance = 0;
     const batchSize = 100;
@@ -172,7 +172,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
       if (detailsError) throw detailsError;
       
-      (details || []).forEach((d: any) => {
+      (details || []).forEach((d: { debit_amount: number | null; credit_amount: number | null }) => {
         totalBalance += (Number(d.credit_amount) || 0) - (Number(d.debit_amount) || 0);
       });
     }
@@ -386,7 +386,13 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       const entryNumber = `CDV-${year}-${String(nextNumber).padStart(4, '0')}`;
 
       // Build detail lines first to calculate accurate totals
-      const detailLines: any[] = [];
+      const detailLines: Array<{
+        line_number: number;
+        account_id: number | null | undefined;
+        description: string;
+        debit_amount: number;
+        credit_amount: number;
+      }> = [];
       let lineNumber = 1;
       let calcDebits = 0;
       let calcCredits = 0;
