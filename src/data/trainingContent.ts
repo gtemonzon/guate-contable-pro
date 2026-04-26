@@ -88,7 +88,7 @@ export const TRAINING_PHASES: Phase[] = [
         route: "/usuarios",
         content: [
           "Los usuarios pueden tener acceso a una o varias empresas.",
-          "Roles disponibles: super_admin, enterprise_admin, contador_senior, contador_junior, auxiliar y solo_lectura.",
+          "Roles disponibles: Administrador de Empresa, Contador Senior, Auxiliar Contable y Cliente. Cada rol se asigna por empresa.",
           "Los permisos por rol son personalizables desde la matriz en Configuración > Roles y Permisos.",
         ],
       },
