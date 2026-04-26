@@ -156,7 +156,9 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
       const stored = localStorage.getItem(getRecentSearchesKey(enterpriseId));
       if (stored) setRecentSearches(JSON.parse(stored));
       else setRecentSearches([]);
-    } catch {}
+    } catch {
+      // ignore - corrupt localStorage
+    }
   }, [enterpriseId]);
 
   // Cmd+K / Ctrl+K listener

@@ -64,11 +64,12 @@ export function getReferenceDate(periodDate: Date, referencePeriod: string): Dat
   switch (referencePeriod) {
     case 'next_month':
       return addMonths(periodDate, 1);
-    case 'quarter_end_next_month':
+    case 'quarter_end_next_month': {
       const month = getMonth(periodDate);
       const quarterEndMonth = Math.floor(month / 3) * 3 + 2; // 2, 5, 8, 11
       const quarterEnd = new Date(getYear(periodDate), quarterEndMonth, 1);
       return addMonths(quarterEnd, 1);
+    }
     case 'current_month':
     default:
       return periodDate;
@@ -91,7 +92,7 @@ export function calculateDueDate(
       return getLastBusinessDay(referenceDate, holidaysToConsider);
     case 'business_days_after':
       return addBusinessDays(referenceDate, config.days_value, holidaysToConsider);
-    case 'fixed_day':
+    case 'fixed_day': {
       const year = getYear(referenceDate);
       const month = getMonth(referenceDate);
       let dueDate = new Date(year, month, config.days_value);
@@ -100,6 +101,7 @@ export function calculateDueDate(
         dueDate = endOfMonth(referenceDate);
       }
       return dueDate;
+    }
     default:
       return endOfMonth(referenceDate);
   }
