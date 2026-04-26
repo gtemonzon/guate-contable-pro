@@ -90,7 +90,11 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
     const fetchStats = async () => {
       setLoading(true);
       try {
-        let allRows: any[] = [];
+        type LedgerStatRow = Record<string, unknown> & {
+          total_amount?: number | string | null;
+          invoice_date?: string | null;
+        };
+        let allRows: LedgerStatRow[] = [];
 
         for (const year of selectedYears) {
           const months = selectedMonths.length > 0 ? selectedMonths : Array.from({ length: 12 }, (_, i) => i + 1);
@@ -98,7 +102,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
             const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
             const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
-            let query: any = supabase
+            let query = supabase
               .from(tableName)
               .select(`${nitField}, ${nameField}, total_amount, invoice_date`)
               .eq("enterprise_id", parseInt(enterpriseId))
@@ -109,7 +113,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
               query = query.eq("is_annulled", false);
             }
 
-            const rows = await fetchAllRecords<any>(query);
+            const rows = await fetchAllRecords<LedgerStatRow>(query as unknown as Parameters<typeof fetchAllRecords<LedgerStatRow>>[0]);
             allRows = allRows.concat(rows);
           }
         }
