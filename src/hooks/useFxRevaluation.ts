@@ -173,8 +173,9 @@ export function useFxRevaluation() {
         total_loss: round2(totalLoss),
         net_effect: round2(totalGain - totalLoss),
       };
-    } catch (e: any) {
-      toast.error("Error calculando revaluación: " + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error calculando revaluación: " + msg);
       return null;
     } finally {
       setLoading(false);
@@ -339,8 +340,9 @@ export function useFxRevaluation() {
 
       toast.success(`Partida ${entryNumber} contabilizada (${preview.rows.length} cuentas revaluadas).`);
       return entryId;
-    } catch (e: any) {
-      toast.error("Error contabilizando revaluación: " + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error contabilizando revaluación: " + msg);
       return null;
     } finally {
       setPosting(false);
@@ -381,8 +383,9 @@ export function useFxRevaluation() {
       const newEntryId = Number(data);
       toast.success("Partida de reverso contabilizada exitosamente.");
       return newEntryId;
-    } catch (e: any) {
-      toast.error("Error generando reverso: " + (e.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error generando reverso: " + msg);
       return null;
     } finally {
       setPosting(false);

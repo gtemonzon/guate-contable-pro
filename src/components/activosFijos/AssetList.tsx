@@ -20,7 +20,8 @@ import { Loader2, Plus, Search, Eye, Zap } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import AssetDetailDialog from "./AssetDetailDialog";
 
-const STATUS_COLORS: Record<string, string> = {
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+const STATUS_COLORS: Record<string, BadgeVariant> = {
   DRAFT: "secondary",
   ACTIVE: "default",
   DISPOSED: "outline",
@@ -185,7 +186,7 @@ export default function AssetList() {
                   <TableCell className="text-right font-mono">{fmt(asset.residual_value)}</TableCell>
                   <TableCell>{asset.useful_life_months} m</TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_COLORS[asset.status] as any}>
+                    <Badge variant={STATUS_COLORS[asset.status]}>
                       {STATUS_LABELS[asset.status]}
                     </Badge>
                   </TableCell>
