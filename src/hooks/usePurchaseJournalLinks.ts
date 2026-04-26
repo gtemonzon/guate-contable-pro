@@ -102,7 +102,7 @@ export function usePurchaseJournalLinks() {
       .select("purchase_id")
       .eq("enterprise_id", enterpriseId);
 
-    const linkedIds = ((linked || []) as Array<{ purchase_id: number }>).map((l) => l.purchase_id);
+    const linkedIds = ((linked || []) as unknown as Array<{ purchase_id: number }>).map((l) => l.purchase_id);
 
     let query = supabase
       .from("tab_purchase_ledger")

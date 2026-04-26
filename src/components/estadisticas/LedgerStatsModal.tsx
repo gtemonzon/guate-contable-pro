@@ -76,7 +76,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
         .order("invoice_date", { ascending: true });
 
       if (rows && rows.length > 0) {
-        const years = [...new Set(rows.map((r: any) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
+        const years = [...new Set(rows.map((r: { invoice_date: string }) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
         setAvailableYears(years);
         if (selectedYears.length === 0) setSelectedYears(years.length > 0 ? [years[0]] : []);
       }
