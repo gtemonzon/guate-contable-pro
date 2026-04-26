@@ -262,7 +262,7 @@ export default function SaldosMensuales() {
 
       type DetailRow = { account_id: number; debit_amount: number | null; credit_amount: number | null };
       type EntryRow = { id: number; entry_date: string; entry_type: string; tab_journal_entry_details: DetailRow[] | null };
-      type AccountRow = { id: number; level: number; parent_account_id: number | null; balance_type: string | null; account_code?: string; account_name?: string; account_type?: string };
+      type AccountRow = MonthlyAccount & { id: number; level: number; parent_account_id: number | null; balance_type: string | null };
 
       // Fetch movements within selected months (excluding opening entries)
       const entries = await fetchAllRecords<EntryRow>(
