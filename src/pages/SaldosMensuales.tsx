@@ -260,8 +260,12 @@ export default function SaldosMensuales() {
       // each selected account plus its full ancestor and descendant chain).
       const accountsToQuery = allAccounts;
 
+      type DetailRow = { account_id: number; debit_amount: number | null; credit_amount: number | null };
+      type EntryRow = { id: number; entry_date: string; entry_type: string; tab_journal_entry_details: DetailRow[] | null };
+      type AccountRow = { id: number; level: number; parent_account_id: number | null; balance_type: string | null; account_code?: string; account_name?: string; account_type?: string };
+
       // Fetch movements within selected months (excluding opening entries)
-      const entries = await fetchAllRecords<any>(
+      const entries = await fetchAllRecords<EntryRow>(
         supabase
           .from("tab_journal_entries")
           .select(`
@@ -285,10 +289,10 @@ export default function SaldosMensuales() {
       // Fetch previous balance entries:
       // 1. All entries before startDate (if not January)
       // 2. Opening entries ("apertura") always count as initial balance
-      let prevEntries: any[] = [];
+      let prevEntries: EntryRow[] = [];
       
       // Always fetch opening entries as they're part of initial balance
-      const openingEntries = await fetchAllRecords<any>(
+      const openingEntries = await fetchAllRecords<EntryRow>(
         supabase
           .from("tab_journal_entries")
           .select(`
@@ -311,7 +315,7 @@ export default function SaldosMensuales() {
       
       // Also fetch non-opening entries before the selected start date
       if (dateRange.initialBalanceEndDate) {
-        const priorEntries = await fetchAllRecords<any>(
+        const priorEntries = await fetchAllRecords<EntryRow>(
           supabase
             .from("tab_journal_entries")
             .select(`
@@ -336,8 +340,8 @@ export default function SaldosMensuales() {
 
       // Calculate previous balances by detail account
       const previousBalances: Record<number, { debit: number; credit: number }> = {};
-      prevEntries?.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
+      prevEntries?.forEach((entry) => {
+        entry.tab_journal_entry_details?.forEach((detail) => {
           if (!previousBalances[detail.account_id]) {
             previousBalances[detail.account_id] = { debit: 0, credit: 0 };
           }
@@ -350,9 +354,9 @@ export default function SaldosMensuales() {
       const currentBalances: Record<number, { debit: number; credit: number }> = {};
       const monthlyBreakdown: Record<number, Record<number, { debit: number; credit: number }>> = {};
 
-      entries?.forEach((entry: any) => {
+      entries?.forEach((entry) => {
         const month = new Date(entry.entry_date + "T00:00:00").getMonth() + 1;
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
+        entry.tab_journal_entry_details?.forEach((detail) => {
           if (!currentBalances[detail.account_id]) {
             currentBalances[detail.account_id] = { debit: 0, credit: 0 };
           }
@@ -371,8 +375,12 @@ export default function SaldosMensuales() {
       });
 
       // Create account map (include monthly breakdown so it propagates up the tree)
-      const accountMap: Record<number, any> = {};
-      accountsToQuery.forEach((account: any) => {
+      type AccountAgg = AccountRow & {
+        prev_debit: number; prev_credit: number; debit: number; credit: number;
+        monthly: Record<number, { debit: number; credit: number }>;
+      };
+      const accountMap: Record<number, AccountAgg> = {};
+      (accountsToQuery as AccountRow[]).forEach((account) => {
         const prevBal = previousBalances[account.id] || { debit: 0, credit: 0 };
         const currBal = currentBalances[account.id] || { debit: 0, credit: 0 };
         const monthly: Record<number, { debit: number; credit: number }> = {};
@@ -392,9 +400,9 @@ export default function SaldosMensuales() {
       });
 
       // Propagate balances up the hierarchy
-      const sortedAccounts = [...accountsToQuery].sort((a, b) => b.level - a.level);
+      const sortedAccounts = [...(accountsToQuery as AccountRow[])].sort((a, b) => b.level - a.level);
       
-      sortedAccounts.forEach((account: any) => {
+      sortedAccounts.forEach((account) => {
         const currentAccount = accountMap[account.id];
         if (account.parent_account_id && accountMap[account.parent_account_id]) {
           const parent = accountMap[account.parent_account_id];
@@ -411,7 +419,7 @@ export default function SaldosMensuales() {
       });
 
       // Calculate final values
-      const monthlyAccountsResult: MonthlyAccount[] = accountsToQuery.map((account: any) => {
+      const monthlyAccountsResult: MonthlyAccount[] = (accountsToQuery as AccountRow[]).map((account) => {
         const data = accountMap[account.id];
         const isDebit = account.balance_type === "deudor";
         
