@@ -363,7 +363,23 @@ export default function MayorGeneral() {
       }
 
       // Obtener detalles de partidas que afectan las cuentas (con paginación automática)
-      const details = await fetchAllRecords<any>(
+      type DetailWithEntry = {
+        id: number;
+        account_id: number;
+        debit_amount: number | string | null;
+        credit_amount: number | string | null;
+        description: string | null;
+        journal_entry_id: number;
+        tab_journal_entries: {
+          id: number;
+          entry_number: string;
+          entry_date: string;
+          description: string | null;
+          is_posted: boolean;
+          enterprise_id: number;
+        };
+      };
+      const details = await fetchAllRecords<DetailWithEntry>(
         supabase
           .from("tab_journal_entry_details")
           .select(`
@@ -413,11 +429,12 @@ export default function MayorGeneral() {
         previousQuery = previousQuery.gte("tab_journal_entries.entry_date", fiscalFloor);
       }
 
-      const previousDetails = await fetchAllRecords<any>(previousQuery);
+      type PrevDetailRow = { account_id: number; debit_amount: number | string | null; credit_amount: number | string | null };
+      const previousDetails = await fetchAllRecords<PrevDetailRow>(previousQuery);
 
       // Calcular saldo anterior por cuenta de detalle
       const previousBalanceByAccount: Record<number, number> = {};
-      (previousDetails || []).forEach((detail: any) => {
+      (previousDetails || []).forEach((detail) => {
         const debit = Number(detail.debit_amount) || 0;
         const credit = Number(detail.credit_amount) || 0;
         if (!previousBalanceByAccount[detail.account_id]) {
@@ -434,12 +451,12 @@ export default function MayorGeneral() {
         if (!accountInfo) continue;
 
         // Filtrar detalles que pertenecen a esta cuenta (o sus hijas)
-        const accountDetails = (details || []).filter((d: any) => 
+        const accountDetails = (details || []).filter((d) => 
           detailAccountIds.includes(d.account_id)
         );
 
         // Ordenar por fecha
-        const sortedDetails = accountDetails.sort((a: any, b: any) => {
+        const sortedDetails = accountDetails.sort((a, b) => {
           const dateA = new Date(a.tab_journal_entries.entry_date).getTime();
           const dateB = new Date(b.tab_journal_entries.entry_date).getTime();
           return dateA - dateB;
@@ -453,7 +470,7 @@ export default function MayorGeneral() {
 
         // Calcular balance acumulado comenzando con el saldo anterior
         let runningBalance = previousBalance;
-        const entries: LedgerEntry[] = sortedDetails.map((detail: any) => {
+        const entries: LedgerEntry[] = sortedDetails.map((detail) => {
           const debit = Number(detail.debit_amount) || 0;
           const credit = Number(detail.credit_amount) || 0;
           runningBalance += debit - credit;
@@ -540,7 +557,7 @@ export default function MayorGeneral() {
         created_at: entry.created_at,
         updated_by_name: entry.modifier?.full_name,
         updated_at: entry.updated_at,
-        details: (details || []).map((d: any) => ({
+        details: (details || []).map((d: { line_number: number; tab_accounts: { account_code: string; account_name: string }; description: string | null; debit_amount: number | string | null; credit_amount: number | string | null }) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
           account_name: d.tab_accounts.account_name,
