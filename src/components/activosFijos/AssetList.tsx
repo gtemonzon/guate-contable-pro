@@ -186,7 +186,7 @@ export default function AssetList() {
                   <TableCell className="text-right font-mono">{fmt(asset.residual_value)}</TableCell>
                   <TableCell>{asset.useful_life_months} m</TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_COLORS[asset.status] as any}>
+                    <Badge variant={STATUS_COLORS[asset.status]}>
                       {STATUS_LABELS[asset.status]}
                     </Badge>
                   </TableCell>
