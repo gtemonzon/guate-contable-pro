@@ -11,12 +11,12 @@ import MainLayout from "./components/layout/MainLayout";
 import { isNetworkError } from "@/utils/networkErrors";
 
 // Retry wrapper for dynamic imports (handles transient network failures)
-function lazyRetry(factory: () => Promise<{ default: React.ComponentType<any> }>, retries = 2) {
+function lazyRetry(factory: () => Promise<{ default: React.ComponentType<unknown> }>, retries = 2) {
   return lazy(() => {
-    const attempt = (remaining: number): Promise<{ default: React.ComponentType<any> }> =>
+    const attempt = (remaining: number): Promise<{ default: React.ComponentType<unknown> }> =>
       factory().catch((err) => {
         if (remaining > 0) {
-          return new Promise<{ default: React.ComponentType<any> }>((resolve) =>
+          return new Promise<{ default: React.ComponentType<unknown> }>((resolve) =>
             setTimeout(() => resolve(attempt(remaining - 1)), 1000)
           );
         }
