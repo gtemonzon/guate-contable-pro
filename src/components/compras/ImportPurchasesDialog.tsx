@@ -176,14 +176,16 @@ async function findOrCreatePurchaseBook(
 }
 
 // Parse file (CSV or Excel) and return rows as 2D array
-async function parseFile(file: File): Promise<unknown[][]> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function parseFile(file: File): Promise<any[][]> {
   const extension = file.name.split(".").pop()?.toLowerCase();
   
   if (extension === "xls" || extension === "xlsx") {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false }) as unknown[][];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false }) as any[][];
     return data.filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ""));
   } else {
     const text = await file.text();
@@ -229,7 +231,7 @@ async function extractTextFromPdf(
     onProgress?.({ currentPage: i, totalPages: pdf.numPages });
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item: { str: string }) => item.str).join(" ");
+    const pageText = textContent.items.map((item) => ('str' in item ? item.str : '')).join(" ");
     fullText += pageText + "\n";
   }
 
