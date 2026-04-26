@@ -131,7 +131,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                           {fmt(row.net_book_value)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={STATUS_BADGE[row.status] as any} className="text-xs">
+                          <Badge variant={STATUS_BADGE[row.status]} className="text-xs">
                             {STATUS_LABEL[row.status]}
                           </Badge>
                         </TableCell>
