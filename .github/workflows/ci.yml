@@ -75,21 +75,59 @@ jobs:
       - name: TypeScript type check
         run: bun run tsc --noEmit
 
-      - name: ESLint (baseline audit)
+      # Run ESLint once with JSON output for accurate counting + a human-readable
+      # stylish report for log inspection. We never `grep` for the word "error"
+      # (that matched unrelated lines like "0 errors" and "error: script ...").
+      - name: ESLint — run and capture report
+        id: eslint
         run: |
-          LINT_COUNT=$(bun run lint 2>&1 | grep -c "error" || true)
-          echo "::notice::Current ESLint issues: $LINT_COUNT"
-          echo "lint_issues=$LINT_COUNT" >> "$GITHUB_ENV"
-          bun run lint 2>&1 || true
+          set +e
+          bun run lint --format json --output-file eslint-report.json
+          ESLINT_EXIT=$?
+          set -e
+          echo "eslint_exit=$ESLINT_EXIT" >> "$GITHUB_OUTPUT"
+          echo "::group::ESLint stylish report"
+          bunx eslint . || true
+          echo "::endgroup::"
+          ls -la eslint-report.json
+
+      - name: ESLint — diagnostics (top rules & files)
+        run: |
+          echo "📊 Top 15 rules by error count:"
+          jq -r '[.[].messages[] | select(.severity == 2) | .ruleId] 
+                 | group_by(.) | map({rule: .[0], count: length}) 
+                 | sort_by(-.count) | .[:15] 
+                 | .[] | "  \(.count)\t\(.rule)"' eslint-report.json || true
+
+          echo ""
+          echo "📁 Top 15 files by error count:"
+          jq -r '[.[] | select(.errorCount > 0) | {file: .filePath, count: .errorCount}] 
+                 | sort_by(-.count) | .[:15] 
+                 | .[] | "  \(.count)\t\(.file)"' eslint-report.json || true
 
       - name: ESLint regression guard
+        env:
+          BASELINE: "241"
         run: |
-          BASELINE=240
-          if [ "${lint_issues:-0}" -gt "$BASELINE" ]; then
-            echo "::error::Lint errors increased! Current: ${lint_issues}, Baseline: $BASELINE. Fix new issues before merging."
+          ERRORS=$(jq '[.[].errorCount] | add // 0' eslint-report.json)
+          WARNINGS=$(jq '[.[].warningCount] | add // 0' eslint-report.json)
+
+          echo "──────────────────────────────────────────"
+          echo "  Baseline: $BASELINE"
+          echo "  Current:  $ERRORS errors, $WARNINGS warnings"
+          echo "──────────────────────────────────────────"
+
+          if [ "$ERRORS" -gt "$BASELINE" ]; then
+            DIFF=$((ERRORS - BASELINE))
+            echo "::error::Status: FAIL — ESLint errors increased by $DIFF (current: $ERRORS, baseline: $BASELINE). Fix new issues before merging."
             exit 1
           fi
-          echo "✅ Lint errors at or below baseline ($BASELINE)."
+
+          if [ "$ERRORS" -lt "$BASELINE" ]; then
+            echo "::notice::🎉 Status: PASS — ESLint errors reduced by $((BASELINE - ERRORS)). Consider lowering BASELINE in ci.yml to $ERRORS to lock in the improvement."
+          else
+            echo "✅ Status: PASS — ESLint errors at baseline ($BASELINE)."
+          fi
 
       # ── Build ─────────────────────────────────────────────────────────────
       - name: Build
