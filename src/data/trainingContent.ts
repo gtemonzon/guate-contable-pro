@@ -25,21 +25,8 @@ export const TRAINING_PHASES: Phase[] = [
     number: 1,
     title: "Fundamentos y Configuración Inicial",
     subtitle: "Prepara tu empresa antes de operar",
-    description: "Aprende a configurar tu organización: tenants, empresas, catálogo de cuentas, períodos contables y parámetros básicos. Sin esta base, los módulos siguientes no funcionarán correctamente.",
+    description: "Aprende a configurar tu organización: empresas, catálogo de cuentas, períodos contables y parámetros básicos. Sin esta base, los módulos siguientes no funcionarán correctamente.",
     lessons: [
-      {
-        id: "1.1-tenants",
-        title: "Tenants (Organizaciones)",
-        description: "Concepto multi-inquilino y administración de oficinas contables.",
-        icon: Building2,
-        route: "/tenants",
-        content: [
-          "Un Tenant representa una oficina contable o firma independiente. Cada tenant aísla completamente sus empresas, usuarios y datos.",
-          "Solo los Super Administradores pueden crear y gestionar tenants.",
-          "Cada tenant puede tener su propia marca: logo, favicon y dominio personalizado.",
-        ],
-        tips: ["Si eres contador independiente, normalmente tendrás un solo tenant con varias empresas."],
-      },
       {
         id: "1.2-empresas",
         title: "Empresas",
@@ -63,7 +50,7 @@ export const TRAINING_PHASES: Phase[] = [
           "El catálogo es jerárquico: el nivel se deriva automáticamente de la cantidad de segmentos del código (1, 1.1, 1.1.01...).",
           "Marca las cuentas que permiten movimiento (hojas) y las que son de título (totalizadoras).",
           "Define cuentas como bancarias, monetarias en moneda extranjera o de tipo indiferente según sea necesario.",
-          "Puedes copiar el catálogo de otra empresa del mismo tenant para acelerar la configuración.",
+          "Puedes copiar el catálogo de otra empresa para acelerar la configuración.",
         ],
         tips: ["Importa tu catálogo desde Excel/CSV si ya lo tienes preparado."],
       },
@@ -100,7 +87,7 @@ export const TRAINING_PHASES: Phase[] = [
         icon: Users,
         route: "/usuarios",
         content: [
-          "Los usuarios pertenecen a un tenant y pueden tener acceso a una o varias empresas.",
+          "Los usuarios pueden tener acceso a una o varias empresas.",
           "Roles disponibles: super_admin, enterprise_admin, contador_senior, contador_junior, auxiliar y solo_lectura.",
           "Los permisos por rol son personalizables desde la matriz en Configuración > Roles y Permisos.",
         ],
@@ -290,7 +277,7 @@ export const TRAINING_PHASES: Phase[] = [
         route: "/soporte",
         content: [
           "Crea tickets con adjuntos (imágenes comprimidas automáticamente).",
-          "Conversación en tiempo real con el equipo de soporte de tu tenant.",
+          "Conversación en tiempo real con el equipo de soporte.",
           "El badge en el sidebar muestra la cantidad de tickets abiertos.",
         ],
       },

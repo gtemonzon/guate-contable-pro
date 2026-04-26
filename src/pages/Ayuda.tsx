@@ -181,7 +181,7 @@ const helpSections: HelpSection[] = [
         steps: [
           { title: "Ver Usuarios", description: "La lista muestra todos los usuarios con nombre, correo, rol, última actividad y estado (activo/inactivo)." },
           { title: "Indicador de Actividad", description: "Verde (activo recientemente), amarillo (inactivo por horas) o gris (inactivo por días)." },
-          { title: "Crear Usuario y Asignar Rol", description: "Haga clic en 'Nuevo Usuario'. Asigne roles: Super Admin, Admin Tenant, Admin Empresa, Contador Senior, Junior o Auxiliar." },
+          { title: "Crear Usuario y Asignar Rol", description: "Haga clic en 'Nuevo Usuario'. Asigne roles: Admin Empresa, Contador Senior, Junior o Auxiliar." },
           { title: "Asignar Empresas", description: "Vincule al usuario con las empresas a las que tendrá acceso. Un usuario puede acceder a múltiples empresas." },
         ],
         tips: ["Los usuarios inactivos no pueden iniciar sesión.", "Use la matriz de permisos en Configuración para personalizar los accesos por rol."],
