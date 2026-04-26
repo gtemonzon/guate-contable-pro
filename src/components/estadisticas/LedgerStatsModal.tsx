@@ -76,7 +76,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
         .order("invoice_date", { ascending: true });
 
       if (rows && rows.length > 0) {
-        const years = [...new Set(rows.map((r: any) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
+        const years = [...new Set(rows.map((r: { invoice_date: string }) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
         setAvailableYears(years);
         if (selectedYears.length === 0) setSelectedYears(years.length > 0 ? [years[0]] : []);
       }
@@ -90,6 +90,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
     const fetchStats = async () => {
       setLoading(true);
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let allRows: any[] = [];
 
         for (const year of selectedYears) {
@@ -98,6 +99,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
             const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
             const endDate = new Date(year, month, 0).toISOString().split("T")[0];
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let query: any = supabase
               .from(tableName)
               .select(`${nitField}, ${nameField}, total_amount, invoice_date`)
@@ -109,6 +111,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
               query = query.eq("is_annulled", false);
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const rows = await fetchAllRecords<any>(query);
             allRows = allRows.concat(rows);
           }
