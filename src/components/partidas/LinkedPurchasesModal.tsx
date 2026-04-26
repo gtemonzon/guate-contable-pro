@@ -199,7 +199,7 @@ export default function LinkedPurchasesModal({
 
   const loadExistingPurchases = async (entryId: number) => {
     try {
-      let data: any[] | null = null;
+      let data: PurchaseEntry[] | null = null;
       
       // Try by journal_entry_id first
       const { data: d1, error: e1 } = await supabase
@@ -300,7 +300,7 @@ export default function LinkedPurchasesModal({
     return { ...p, base_amount: base, vat_amount: vat };
   };
 
-  const updatePurchase = (index: number, field: keyof PurchaseEntry, value: any) => {
+  const updatePurchase = (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setIsDirty(true);
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
