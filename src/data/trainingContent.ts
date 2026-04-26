@@ -1,4 +1,4 @@
-import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, LucideIcon } from "lucide-react";
+import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, LucideIcon } from "lucide-react";
 
 export interface Lesson {
   id: string;
@@ -99,7 +99,7 @@ export const TRAINING_PHASES: Phase[] = [
     number: 2,
     title: "Operación Contable Diaria",
     subtitle: "Registra transacciones y libros fiscales",
-    description: "Domina el día a día: partidas del libro diario, libros de compras y ventas, conciliación bancaria y activos fijos.",
+    description: "Domina el día a día: partidas del libro diario, libros de compras y ventas, conciliación bancaria, nómina y activos fijos.",
     lessons: [
       {
         id: "2.1-partidas",
@@ -135,13 +135,43 @@ export const TRAINING_PHASES: Phase[] = [
         icon: Banknote,
         route: "/conciliacion",
         content: [
-          "Importa el estado de cuenta bancario desde Excel/CSV. La primera vez, mapea las columnas (fecha, descripción, débito, crédito) y guarda la plantilla.",
-          "El sistema sugiere conciliaciones automáticas comparando montos y fechas con tus partidas.",
-          "Marca movimientos como conciliados manualmente cuando sea necesario.",
+          "Importa el estado de cuenta bancario desde Excel/CSV. La primera vez, mapea las columnas (fecha, descripción, débito, crédito) y guarda la plantilla por banco.",
+          "El sistema sugiere conciliaciones automáticas (auto-match) comparando montos, fechas y referencias contra tus partidas contabilizadas.",
+          "Marca movimientos como conciliados de forma manual cuando la coincidencia no sea automática.",
+          "Ajustes: registra notas de débito/crédito bancarias o errores que afecten al saldo del banco o de los libros.",
         ],
+        tips: ["Los movimientos pendientes se priorizan en el reporte para detectar diferencias rápidamente."],
       },
       {
-        id: "2.4-activos-fijos",
+        id: "2.4-conciliacion-cuadratica",
+        title: "Conciliación Cuadrática (Formato SAT)",
+        description: "Reporte oficial con saldos iniciales/finales y firma del CPA.",
+        icon: Scale,
+        route: "/conciliacion",
+        content: [
+          "Genera la conciliación en formato cuadrático guatemalteco: saldo inicial banco vs libros, totales de ingresos/egresos y saldo final cuadrado.",
+          "Incluye los ajustes registrados (cargos/abonos del banco no contabilizados y viceversa) para explicar la diferencia entre saldos.",
+          "Lista los movimientos pendientes (no conciliados) y muestra la sumatoria que debe coincidir con la diferencia entre saldo contable y bancario.",
+          "Se firma con el nombre y número de colegiado del Contador/Auditor (configurable por empresa) y se exporta a PDF para SAT o a Excel para análisis interno.",
+        ],
+        tips: ["Configura el auditor predeterminado en la configuración de la empresa para no escribirlo cada mes."],
+      },
+      {
+        id: "2.5-nomina",
+        title: "Nómina",
+        description: "Importa planillas y genera la póliza contable mensual.",
+        icon: Wallet,
+        route: "/nomina",
+        content: [
+          "Cada mes se gestiona como un período de nómina con vistas en tarjetas o tabla (búsqueda y ordenamiento por mes/año).",
+          "Importa la planilla desde Excel con sueldos, bonificaciones, IGSS laboral, ISR e indemnización.",
+          "El sistema calcula provisiones bajo normativa de Guatemala: IGSS patronal (12.67%), aguinaldo (8.33%), bono 14 (8.33%), indemnización (9.72%) y opcionalmente vacaciones (4.17%).",
+          "Genera automáticamente la póliza contable usando las cuentas configuradas en Configuración (gastos, provisiones y cuentas por pagar).",
+        ],
+        tips: ["La provisión de vacaciones es opcional: en Guatemala suelen deducirse al pagarse/disfrutarse, no al provisionarse mensualmente."],
+      },
+      {
+        id: "2.6-activos-fijos",
         title: "Activos Fijos y Depreciación",
         description: "Gestiona tu patrimonio y depreciaciones mensuales.",
         icon: Package,
