@@ -340,8 +340,9 @@ export function useFxRevaluation() {
 
       toast.success(`Partida ${entryNumber} contabilizada (${preview.rows.length} cuentas revaluadas).`);
       return entryId;
-    } catch (e: any) {
-      toast.error("Error contabilizando revaluación: " + e.message);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error("Error contabilizando revaluación: " + msg);
       return null;
     } finally {
       setPosting(false);
