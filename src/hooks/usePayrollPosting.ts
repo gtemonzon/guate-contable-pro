@@ -134,7 +134,7 @@ export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[]
     const totalDebitAmt = lines.reduce((s, l) => s + l.debit_amount, 0);
 
     // Header (siguiendo patrón de useJournalEntryForm)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const { data: header, error: hErr } = await supabase.from('tab_journal_entries').insert({
       enterprise_id: period.enterprise_id,
       entry_number: entryNumber,
