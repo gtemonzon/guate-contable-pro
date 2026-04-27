@@ -1,5 +1,4 @@
 import * as XLSX from "xlsx";
-import MDBReader from "mdb-reader";
 import {
   ParsedAccount,
   ParsedDataset,
@@ -206,6 +205,7 @@ function detectAccountLengths(accounts: ParsedAccount[]) {
 
 export async function parseMdb(file: File): Promise<ParsedDataset> {
   const buf = new Uint8Array(await file.arrayBuffer());
+  const { default: MDBReader } = await import("mdb-reader");
   const reader = new MDBReader(Buffer.from(buf));
 
   const tableNames = reader.getTableNames();

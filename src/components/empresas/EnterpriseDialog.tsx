@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -40,7 +40,7 @@ import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
-import { LegacyImportWizard } from "./legacyImport/LegacyImportWizard";
+const LegacyImportWizard = lazy(() => import("./legacyImport/LegacyImportWizard").then(m => ({ default: m.LegacyImportWizard })));
 import { DatabaseBackup } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -279,13 +279,15 @@ export function EnterpriseDialog({
             )}
           </div>
         </DialogHeader>
-        {enterprise && (
-          <LegacyImportWizard
-            open={legacyImportOpen}
-            onOpenChange={setLegacyImportOpen}
-            enterpriseId={enterprise.id}
-            enterpriseName={enterprise.business_name}
-          />
+        {enterprise && legacyImportOpen && (
+          <Suspense fallback={null}>
+            <LegacyImportWizard
+              open={legacyImportOpen}
+              onOpenChange={setLegacyImportOpen}
+              enterpriseId={enterprise.id}
+              enterpriseName={enterprise.business_name}
+            />
+          </Suspense>
         )}
 
         {enterprise ? (
