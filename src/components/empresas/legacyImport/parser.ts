@@ -248,12 +248,12 @@ function parseJournal(
           return true;
         })
         .map((d) => {
-          // idcta es el FK al catálogo (tbl_cuentas.idCuenta). idctaDetalle apunta al padre.
-          const legacyAccountId = pickKey(d, ["idcta", "id_cuenta", "cuenta_id"]);
-          const codeRaw = pickKey(d, ["cuenta"]);
+          // En tbl_diarioDetalle la columna "cuenta" contiene el idCuenta legacy (FK a tbl_cuentas).
+          // "idcta" / "idctaDetalle" son identificadores internos del detalle, no del catálogo.
+          const legacyAccountId =
+            pickKey(d, ["cuenta", "idcuenta", "id_cuenta", "cuenta_id", "idcta"]);
           const accountCode =
-            codeByLegacyId.get(String(legacyAccountId)) ??
-            (codeRaw !== undefined ? String(codeRaw) : "");
+            codeByLegacyId.get(String(legacyAccountId)) ?? "";
           return {
             accountCode,
             legacyAccountId,
