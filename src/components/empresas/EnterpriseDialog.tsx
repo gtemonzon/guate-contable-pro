@@ -41,7 +41,7 @@ import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
 const LegacyImportWizard = lazy(() => import("./legacyImport/LegacyImportWizard").then(m => ({ default: m.LegacyImportWizard })));
-import { DatabaseBackup } from "lucide-react";
+import { DatabaseBackup, Loader2 } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -89,10 +89,49 @@ export function EnterpriseDialog({
   const [activeTab, setActiveTab] = useState(defaultTab || "general");
   const [legacyImportOpen, setLegacyImportOpen] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [legacyJobActive, setLegacyJobActive] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserEmail(data.user?.email ?? null));
   }, []);
+
+  // Detectar si hay un job de importación legado en curso para esta empresa
+  useEffect(() => {
+    if (!enterprise || currentUserEmail !== "gtemonzon@gmail.com") {
+      setLegacyJobActive(false);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      const { data } = await supabase
+        .from("tab_legacy_import_jobs")
+        .select("status")
+        .eq("enterprise_id", enterprise.id)
+        .in("status", ["pending", "running"])
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setLegacyJobActive(!!data);
+    };
+    check();
+    // Suscripción realtime
+    const channel = supabase
+      .channel(`enterprise-legacy-jobs-${enterprise.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tab_legacy_import_jobs",
+          filter: `enterprise_id=eq.${enterprise.id}`,
+        },
+        () => check()
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [enterprise, currentUserEmail]);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -269,12 +308,16 @@ export function EnterpriseDialog({
             {enterprise && currentUserEmail === "gtemonzon@gmail.com" && (
               <Button
                 type="button"
-                variant="outline"
+                variant={legacyJobActive ? "default" : "outline"}
                 size="sm"
                 onClick={() => setLegacyImportOpen(true)}
               >
-                <DatabaseBackup className="h-4 w-4 mr-2" />
-                Importar datos legado
+                {legacyJobActive ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <DatabaseBackup className="h-4 w-4 mr-2" />
+                )}
+                {legacyJobActive ? "Importación en curso..." : "Importar datos legado"}
               </Button>
             )}
           </div>

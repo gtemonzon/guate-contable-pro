@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,10 +6,10 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, CheckCircle2, AlertCircle, Loader2, Info } from "lucide-react";
 import { parseLegacyFile } from "./parser";
-import { importLegacyData, ImportProgress, ImportResult } from "./importer";
 import { ParsedDataset } from "./types";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LegacyImportWizardProps {
   open: boolean;
@@ -20,28 +20,85 @@ interface LegacyImportWizardProps {
 
 type Step = 1 | 2 | 3 | 4;
 
+interface JobRow {
+  id: string;
+  status: string;
+  current_step: string | null;
+  current_count: number;
+  total_count: number;
+  errors: string[];
+  result: any;
+  error_message: string | null;
+  finished_at: string | null;
+}
+
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>(1);
   const [, setFile] = useState<File | null>(null);
   const [dataset, setDataset] = useState<ParsedDataset | null>(null);
   const [parsing, setParsing] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState<ImportProgress>({ step: "", current: 0, total: 0 });
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [job, setJob] = useState<JobRow | null>(null);
 
   const reset = () => {
     setStep(1);
     setFile(null);
     setDataset(null);
-    setResult(null);
-    setProgress({ step: "", current: 0, total: 0 });
+    setJob(null);
   };
 
+  // Buscar job activo de la empresa al abrir
+  const fetchActiveJob = useCallback(async () => {
+    const { data } = await supabase
+      .from("tab_legacy_import_jobs")
+      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at")
+      .eq("enterprise_id", enterpriseId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data && (data.status === "running" || data.status === "pending")) {
+      setJob(data as JobRow);
+      setStep(4);
+    } else if (data && (data.status === "completed" || data.status === "failed")) {
+      // Mostrar último resultado solo si fue muy reciente (<10 min)
+      const finished = data.finished_at ? new Date(data.finished_at).getTime() : 0;
+      if (Date.now() - finished < 10 * 60 * 1000) {
+        setJob(data as JobRow);
+        setStep(4);
+      }
+    }
+  }, [enterpriseId]);
+
+  useEffect(() => {
+    if (open) fetchActiveJob();
+  }, [open, fetchActiveJob]);
+
+  // Realtime: suscribirse al job activo
+  useEffect(() => {
+    if (!job?.id) return;
+    const channel = supabase
+      .channel(`legacy-job-${job.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tab_legacy_import_jobs", filter: `id=eq.${job.id}` },
+        (payload) => {
+          setJob((prev) => ({ ...(prev as JobRow), ...(payload.new as any) }));
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [job?.id]);
+
   const handleClose = () => {
-    if (importing) return;
-    reset();
+    // Permitir cerrar siempre — el proceso continúa en backend
     onOpenChange(false);
+    // No resetear si hay job en curso (para que al reabrir mantengamos contexto)
+    if (!job || job.status === "completed" || job.status === "failed") {
+      reset();
+    }
   };
 
   const handleFile = async (f: File) => {
@@ -60,18 +117,58 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
 
   const handleImport = async () => {
     if (!dataset) return;
-    setImporting(true);
-    setStep(4);
+    setSubmitting(true);
     try {
-      const res = await importLegacyData(enterpriseId, dataset, setProgress);
-      setResult(res);
-      toast({ title: "Importación completa", description: `${res.journalEntriesCreated} partidas creadas` });
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("No hay sesión");
+
+      // tenant_id de la empresa
+      const { data: ent } = await supabase
+        .from("tab_enterprises")
+        .select("tenant_id")
+        .eq("id", enterpriseId)
+        .single();
+      if (!ent) throw new Error("Empresa no encontrada");
+
+      // Crear job
+      const { data: jobData, error: jobErr } = await supabase
+        .from("tab_legacy_import_jobs")
+        .insert({
+          enterprise_id: enterpriseId,
+          tenant_id: (ent as any).tenant_id,
+          created_by: userData.user.id,
+          payload: dataset as any,
+          status: "pending",
+        })
+        .select("*")
+        .single();
+      if (jobErr || !jobData) throw jobErr ?? new Error("No se pudo crear el job");
+
+      setJob(jobData as JobRow);
+      setStep(4);
+
+      // Disparar edge function (fire-and-forget — no esperamos)
+      supabase.functions.invoke("legacy-import-runner", {
+        body: { jobId: jobData.id },
+      }).catch((e) => {
+        console.error("Error invocando runner", e);
+      });
+
+      toast({
+        title: "Importación iniciada",
+        description: "El proceso continuará en segundo plano. Puedes cerrar esta ventana.",
+      });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error en importación", description: e.message });
+      toast({ variant: "destructive", title: "Error al iniciar importación", description: e.message });
     } finally {
-      setImporting(false);
+      setSubmitting(false);
     }
   };
+
+  const isRunning = job?.status === "running" || job?.status === "pending";
+  const isDone = job?.status === "completed";
+  const isFailed = job?.status === "failed";
+  const result = job?.result;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -84,7 +181,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
         </DialogHeader>
 
         <div className="overflow-y-auto min-h-0">
-          {/* PASO 1: Subir archivo */}
+          {/* PASO 1 */}
           {step === 1 && (
             <div className="space-y-4">
               <Card>
@@ -120,17 +217,17 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
               <div className="text-xs text-muted-foreground">
                 <p className="font-medium mb-1">Hojas reconocidas:</p>
                 <ul className="list-disc list-inside space-y-0.5">
-                  <li><code>tbl_cuentas</code> — Catálogo de cuentas (se importan todas)</li>
+                  <li><code>tbl_cuentas</code> — Catálogo de cuentas</li>
                   <li><code>tbl_compras</code> — Libro de compras</li>
-                  <li><code>tbl_ventas</code> — Libro de ventas (con sucursales si existen)</li>
-                  <li><code>tbl_diario</code> + <code>tbl_diario_Detalle</code> — Partidas (solo líneas con <code>mostrar=Verdadero</code>)</li>
+                  <li><code>tbl_ventas</code> — Libro de ventas</li>
+                  <li><code>tbl_diario</code> + <code>tbl_diario_Detalle</code> — Partidas</li>
                   <li><code>tbl_grupoActivos</code> + <code>tbl_ActivosFijo</code> — Activos fijos</li>
                 </ul>
               </div>
             </div>
           )}
 
-          {/* PASO 2: Resumen detectado */}
+          {/* PASO 2 */}
           {step === 2 && dataset && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2 text-center text-sm">
@@ -144,9 +241,9 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
 
               <Card>
                 <CardContent className="p-4 text-sm space-y-1">
-                  <div>📒 Catálogo de cuentas: <strong>se importará completo</strong> ({dataset.accounts.length} cuentas).</div>
-                  <div>🧾 Diario: solo se incluyen líneas con <strong>mostrar = Verdadero</strong> (cuentas de movimiento).</div>
-                  <div>🏬 Sucursales en ventas: <strong>{dataset.hasBranches ? "detectadas" : "no, todas se asignan a la única sucursal"}</strong>.</div>
+                  <div>📒 Catálogo: <strong>{dataset.accounts.length} cuentas</strong>.</div>
+                  <div>🧾 Diario: solo líneas con <strong>mostrar = Verdadero</strong>.</div>
+                  <div>🏬 Sucursales: <strong>{dataset.hasBranches ? "detectadas" : "no, asignadas a sucursal única"}</strong>.</div>
                 </CardContent>
               </Card>
 
@@ -157,7 +254,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
             </div>
           )}
 
-          {/* PASO 3: Vista previa */}
+          {/* PASO 3 */}
           {step === 3 && dataset && (
             <div className="space-y-3">
               <h3 className="font-semibold">Vista previa</h3>
@@ -211,72 +308,90 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                       );
                     })}
                   </div>
-                  {dataset.fixedAssets.length > 0 && (
-                    <div>
-                      <p className="font-medium mb-1">Activos fijos (primeros 5 de {dataset.fixedAssets.length}):</p>
-                      {dataset.fixedAssets.slice(0, 5).map((a, i) => (
-                        <div key={i} className="flex gap-2 border-b py-1">
-                          <span className="w-20 font-mono">{a.code}</span>
-                          <span className="flex-1 truncate">{a.name}</span>
-                          <span className="font-mono">Q{a.cost.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </ScrollArea>
               <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setStep(2)}>Atrás</Button>
-                <Button onClick={handleImport}>Importar todo</Button>
+                <Button onClick={handleImport} disabled={submitting}>
+                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Importar todo
+                </Button>
               </div>
             </div>
           )}
 
-          {/* PASO 4: Importando / Resultado */}
+          {/* PASO 4: Job en curso o resultado */}
           {step === 4 && (
             <div className="space-y-4">
-              {importing && (
-                <div className="space-y-2">
-                  <p className="text-sm">{progress.step}</p>
-                  <Progress value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} />
-                  <p className="text-xs text-muted-foreground text-center">{progress.current} / {progress.total}</p>
+              {!job && (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  No hay importaciones recientes para esta empresa.
                 </div>
               )}
-              {result && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-semibold">Importación finalizada</span>
+              {isRunning && job && (
+                <>
+                  <div className="flex items-start gap-2 p-3 rounded bg-muted text-xs">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div>
+                      Este proceso corre en <strong>segundo plano en el servidor</strong>. Puedes cerrar esta ventana o el navegador
+                      — incluso seguir desde otro equipo o tu celular abriendo nuevamente "Importar datos legado" en esta empresa.
+                    </div>
                   </div>
-                  <Card>
-                    <CardContent className="p-4 grid grid-cols-2 gap-2 text-sm">
-                      <div>Cuentas: <strong>{result.accountsCreated}</strong></div>
-                      <div>Períodos: <strong>{result.periodsCreated}</strong></div>
-                      <div>Compras: <strong>{result.purchasesCreated}</strong></div>
-                      <div>Ventas: <strong>{result.salesCreated}</strong></div>
-                      <div>Partidas creadas: <strong>{result.journalEntriesCreated}</strong></div>
-                      <div>Publicadas: <strong>{result.journalEntriesPosted}</strong></div>
-                      <div>Borrador (descuadradas): <strong>{result.journalEntriesAsDraft}</strong></div>
-                      <div>Grupos activos: <strong>{result.assetCategoriesCreated}</strong></div>
-                      <div>Activos fijos: <strong>{result.fixedAssetsCreated}</strong></div>
-                    </CardContent>
-                  </Card>
-                  {result.errors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">{job.current_step ?? "Iniciando..."}</p>
+                    <Progress value={job.total_count > 0 ? (job.current_count / job.total_count) * 100 : 0} />
+                    <p className="text-xs text-muted-foreground text-center">
+                      {job.current_count} / {job.total_count}
+                    </p>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
+                  </div>
+                </>
+              )}
+              {(isDone || isFailed) && job && (
+                <div className="space-y-3">
+                  <div className={`flex items-center gap-2 ${isDone ? "text-success" : "text-destructive"}`}>
+                    {isDone ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                    <span className="font-semibold">
+                      {isDone ? "Importación finalizada" : "Importación con error"}
+                    </span>
+                  </div>
+                  {isFailed && job.error_message && (
+                    <Card><CardContent className="p-3 text-sm text-destructive">{job.error_message}</CardContent></Card>
+                  )}
+                  {result && (
+                    <Card>
+                      <CardContent className="p-4 grid grid-cols-2 gap-2 text-sm">
+                        <div>Cuentas: <strong>{result.accountsCreated}</strong></div>
+                        <div>Períodos: <strong>{result.periodsCreated}</strong></div>
+                        <div>Compras: <strong>{result.purchasesCreated}</strong></div>
+                        <div>Ventas: <strong>{result.salesCreated}</strong></div>
+                        <div>Partidas creadas: <strong>{result.journalEntriesCreated}</strong></div>
+                        <div>Publicadas: <strong>{result.journalEntriesPosted}</strong></div>
+                        <div>Borrador: <strong>{result.journalEntriesAsDraft}</strong></div>
+                        <div>Grupos activos: <strong>{result.assetCategoriesCreated}</strong></div>
+                        <div>Activos fijos: <strong>{result.fixedAssetsCreated}</strong></div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {job.errors && job.errors.length > 0 && (
                     <Card>
                       <CardContent className="p-4">
                         <div className="flex items-center gap-2 text-destructive mb-2">
                           <AlertCircle className="h-4 w-4" />
-                          <span className="font-medium">{result.errors.length} errores</span>
+                          <span className="font-medium">{job.errors.length} avisos/errores</span>
                         </div>
                         <ScrollArea className="h-32">
                           <ul className="text-xs space-y-1">
-                            {result.errors.slice(0, 50).map((e, i) => (<li key={i}>• {e}</li>))}
+                            {job.errors.slice(0, 100).map((e, i) => (<li key={i}>• {e}</li>))}
                           </ul>
                         </ScrollArea>
                       </CardContent>
                     </Card>
                   )}
-                  <div className="flex justify-end">
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => { reset(); }}>Nueva importación</Button>
                     <Button onClick={handleClose}>Cerrar</Button>
                   </div>
                 </div>

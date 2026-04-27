@@ -2825,6 +2825,74 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_legacy_import_jobs: {
+        Row: {
+          created_at: string
+          created_by: string
+          current_count: number
+          current_step: string | null
+          enterprise_id: number
+          error_message: string | null
+          errors: Json
+          finished_at: string | null
+          id: string
+          payload: Json
+          result: Json | null
+          started_at: string | null
+          status: string
+          steps_completed: Json
+          tenant_id: number
+          total_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          current_count?: number
+          current_step?: string | null
+          enterprise_id: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          payload: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          steps_completed?: Json
+          tenant_id: number
+          total_count?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          current_count?: number
+          current_step?: string | null
+          enterprise_id?: number
+          error_message?: string | null
+          errors?: Json
+          finished_at?: string | null
+          id?: string
+          payload?: Json
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+          steps_completed?: Json
+          tenant_id?: number
+          total_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_legacy_import_jobs_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_notifications: {
         Row: {
           action_url: string | null
