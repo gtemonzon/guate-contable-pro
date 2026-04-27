@@ -114,20 +114,49 @@ function parseAccounts(rows: any[]): ParsedAccount[] {
 
 function parsePurchases(rows: any[]): ParsedPurchase[] {
   return rows
-    .map((r) => ({
-      date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
-      series: String(pickKey(r, ["serie", "series"]) ?? "").trim(),
-      number: String(pickKey(r, ["numerodoc", "numero", "numero_factura", "factura"]) ?? "").trim(),
-      felDocType: mapClaseToFel(pickKey(r, ["clase", "tipo_documento"])),
-      supplierNit: normalizeNit(pickKey(r, ["nit", "nit_proveedor"])),
-      supplierName: String(pickKey(r, ["proveedor", "nombre", "nombre_proveedor"]) ?? "").trim(),
-      netAmount: num(pickKey(r, ["precio", "base", "neto", "subtotal"])),
-      vatAmount: num(pickKey(r, ["iva", "vat"])),
-      totalAmount: num(pickKey(r, ["precio", "total", "gran_total"])) + num(pickKey(r, ["iva", "vat"])),
-      authorizationNumber:
-        String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
-      legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
-    }))
+    .map((r) => {
+      const bienes = num(pickKey(r, ["precio", "bienes"]));
+      const servicios = num(pickKey(r, ["servicios"]));
+      const activos = num(pickKey(r, ["activos", "activosfijos", "activos_fijos"]));
+      const importaciones = num(pickKey(r, ["importaciones"]));
+      const exentas = num(pickKey(r, ["exentas", "exento"]));
+      const ivaRaw = num(pickKey(r, ["iva", "vat"]));
+
+      // Determinar tipo de operación según en qué columna está el monto
+      let operationTypeCode: ParsedPurchase["operationTypeCode"] = "BIENES";
+      let netAmount = 0;
+      let idpAmount = 0;
+      if (activos > 0) { operationTypeCode = "ACTIVOS_FIJOS"; netAmount = activos; }
+      else if (importaciones > 0) { operationTypeCode = "IMPORTACIONES"; netAmount = importaciones; }
+      else if (servicios > 0) { operationTypeCode = "SERVICIOS"; netAmount = servicios; }
+      else if (bienes > 0 && exentas > 0) {
+        // Combustible: bienes + IDP en exentas
+        operationTypeCode = "COMBUSTIBLE";
+        netAmount = bienes;
+        idpAmount = exentas;
+      }
+      else if (bienes > 0) { operationTypeCode = "BIENES"; netAmount = bienes; }
+      else if (exentas > 0) { operationTypeCode = "OTRAS"; netAmount = exentas; }
+
+      const total = netAmount + idpAmount + ivaRaw;
+
+      return {
+        date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
+        series: String(pickKey(r, ["serie", "series"]) ?? "").trim(),
+        number: String(pickKey(r, ["numerodoc", "numero", "numero_factura", "factura"]) ?? "").trim(),
+        felDocType: mapClaseToFel(pickKey(r, ["clase", "tipo_documento"])),
+        supplierNit: normalizeNit(pickKey(r, ["nit", "nit_proveedor"])),
+        supplierName: String(pickKey(r, ["proveedor", "nombre", "nombre_proveedor"]) ?? "").trim(),
+        netAmount,
+        vatAmount: ivaRaw,
+        totalAmount: total,
+        idpAmount,
+        operationTypeCode,
+        authorizationNumber:
+          String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
+        legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
+      };
+    })
     .filter((p) => p.date && p.totalAmount > 0);
 }
 
