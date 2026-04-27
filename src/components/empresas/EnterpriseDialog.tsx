@@ -279,13 +279,15 @@ export function EnterpriseDialog({
             )}
           </div>
         </DialogHeader>
-        {enterprise && (
-          <LegacyImportWizard
-            open={legacyImportOpen}
-            onOpenChange={setLegacyImportOpen}
-            enterpriseId={enterprise.id}
-            enterpriseName={enterprise.business_name}
-          />
+        {enterprise && legacyImportOpen && (
+          <Suspense fallback={null}>
+            <LegacyImportWizard
+              open={legacyImportOpen}
+              onOpenChange={setLegacyImportOpen}
+              enterpriseId={enterprise.id}
+              enterpriseName={enterprise.business_name}
+            />
+          </Suspense>
         )}
 
         {enterprise ? (
