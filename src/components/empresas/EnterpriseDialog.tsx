@@ -40,6 +40,8 @@ import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
+import { LegacyImportWizard } from "./legacyImport/LegacyImportWizard";
+import { DatabaseBackup } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
