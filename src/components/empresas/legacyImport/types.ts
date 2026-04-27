@@ -11,6 +11,8 @@ export interface ParsedAccount {
   parentLegacyId?: string | number; // padre (código) opcional
 }
 
+export type OperationTypeCode = "BIENES" | "SERVICIOS" | "ACTIVOS_FIJOS" | "IMPORTACIONES" | "COMBUSTIBLE" | "OTRAS";
+
 export interface ParsedPurchase {
   date: string;
   series: string;
@@ -21,6 +23,8 @@ export interface ParsedPurchase {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
+  idpAmount: number;
+  operationTypeCode: OperationTypeCode;
   authorizationNumber?: string;
   legacyAccountId?: string | number; // idCuenta de la cuenta de gasto/compra
 }
