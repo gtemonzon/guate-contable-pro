@@ -216,6 +216,9 @@ export async function importLegacyData(
   onProgress({ step: "Importando ventas...", current: 0, total: ds.sales.length });
   const salesRows = ds.sales.map((s) => {
     const [y] = s.date.split("-").map(Number);
+    const incomeAccountId = s.legacyAccountId
+      ? accountIdByLegacy.get(String(s.legacyAccountId)) ?? null
+      : null;
     return {
       enterprise_id: enterpriseId,
       accounting_period_id: periodIdByYear.get(y) ?? null,
@@ -236,6 +239,8 @@ export async function importLegacyData(
       exchange_rate: 1,
       imported_from_fel: false,
       is_annulled: false,
+      operation_type_id: s.operationTypeCode ? opTypeIdByCode.get(s.operationTypeCode) ?? null : null,
+      income_account_id: incomeAccountId,
       establishment_code: s.branchCode ?? null,
       establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
     };
