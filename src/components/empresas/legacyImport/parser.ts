@@ -130,8 +130,8 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
       else if (importaciones > 0) { operationTypeCode = "IMPORTACIONES"; netAmount = importaciones; }
       else if (servicios > 0) { operationTypeCode = "SERVICIOS"; netAmount = servicios; }
       else if (bienes > 0 && exentas > 0) {
-        // Combustible: bienes + IDP en exentas
-        operationTypeCode = "COMBUSTIBLE";
+        // Combustible: OTRAS + IDP en exentas
+        operationTypeCode = "OTRAS";
         netAmount = bienes;
         idpAmount = exentas;
       }
@@ -167,6 +167,21 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
       const branchRaw = pickKey(r, ["idsucursal", "sucursal", "branch"]);
       const branch = branchRaw !== undefined && branchRaw !== null ? String(branchRaw).trim() : "0";
       if (branch && branch !== "0") hasBranches = true;
+
+      const bienes = num(pickKey(r, ["precio", "bienes"]));
+      const servicios = num(pickKey(r, ["servicios"]));
+      const exentas = num(pickKey(r, ["exentas", "exento"]));
+      const ivaRaw = num(pickKey(r, ["iva", "vat"]));
+
+      // Determinar tipo de operación según en qué columna está el monto
+      let operationTypeCode = "BIENES";
+      let netAmount = 0;
+      if (servicios > 0) { operationTypeCode = "SERVICIOS"; netAmount = servicios; }
+      else if (bienes > 0) { operationTypeCode = "BIENES"; netAmount = bienes; }
+      else if (exentas > 0) { operationTypeCode = "OTRAS"; netAmount = exentas; }
+
+      const total = netAmount + ivaRaw;
+
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
         series: String(pickKey(r, ["serie", "series"]) ?? "").trim(),
@@ -174,9 +189,11 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
         felDocType: mapClaseToFel(pickKey(r, ["clase", "tipo_documento"])),
         customerNit: normalizeNit(pickKey(r, ["nit", "nit_cliente"])),
         customerName: String(pickKey(r, ["cliente", "nombre", "nombre_cliente"]) ?? "").trim(),
-        netAmount: num(pickKey(r, ["precio", "base", "neto", "subtotal"])),
-        vatAmount: num(pickKey(r, ["iva", "vat"])),
-        totalAmount: num(pickKey(r, ["precio", "total", "gran_total"])) + num(pickKey(r, ["iva", "vat"])),
+        netAmount,
+        vatAmount: ivaRaw,
+        totalAmount: total,
+        operationTypeCode,
+        legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
         authorizationNumber:
           String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
         branchCode: branch && branch !== "0" ? branch : undefined,
@@ -217,15 +234,22 @@ function parseJournal(
       ).trim();
       const reference = String(pickKey(h, ["documento", "referencia"]) ?? "").trim();
       const ds = detailsByEntry.get(String(legacyId)) || [];
-      // CRITICAL: filtrar por mostrar = true (las cuentas de movimiento)
+      // Detectar si la hoja tiene la columna "mostrar"
+      const hasMostrar = ds.some((d) =>
+        Object.keys(d).some((kk) => k(kk) === k("mostrar"))
+      );
       const lines = ds
         .filter((d) => {
-          const m = pickKey(d, ["mostrar"]);
-          // Si la columna existe, exigir true; si no existe, dejar pasar.
-          return m === undefined || asBool(m);
+          // Si existe la columna mostrar, exigir true (excluye padres acumulativos).
+          if (hasMostrar) {
+            const m = pickKey(d, ["mostrar"]);
+            if (!asBool(m)) return false;
+          }
+          return true;
         })
         .map((d) => {
-          const legacyAccountId = pickKey(d, ["idcta", "id_cuenta", "cuenta_id", "idctadetalle"]);
+          // idcta es el FK al catálogo (tbl_cuentas.idCuenta). idctaDetalle apunta al padre.
+          const legacyAccountId = pickKey(d, ["idcta", "id_cuenta", "cuenta_id"]);
           const codeRaw = pickKey(d, ["cuenta"]);
           const accountCode =
             codeByLegacyId.get(String(legacyAccountId)) ??
