@@ -5,11 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { parseLegacyFile, filterAccountsByLevel } from "./parser";
+import { Upload, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { parseLegacyFile } from "./parser";
 import { importLegacyData, ImportProgress, ImportResult } from "./importer";
 import { ParsedDataset } from "./types";
 
@@ -20,15 +18,14 @@ interface LegacyImportWizardProps {
   enterpriseName: string;
 }
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4;
 
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>(1);
-  const [file, setFile] = useState<File | null>(null);
+  const [, setFile] = useState<File | null>(null);
   const [dataset, setDataset] = useState<ParsedDataset | null>(null);
   const [parsing, setParsing] = useState(false);
-  const [accountLevel, setAccountLevel] = useState<string>("all");
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress>({ step: "", current: 0, total: 0 });
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -37,7 +34,6 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     setStep(1);
     setFile(null);
     setDataset(null);
-    setAccountLevel("all");
     setResult(null);
     setProgress({ step: "", current: 0, total: 0 });
   };
@@ -65,10 +61,9 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const handleImport = async () => {
     if (!dataset) return;
     setImporting(true);
-    setStep(5);
+    setStep(4);
     try {
-      const filtered = filterAccountsByLevel(dataset.accounts, accountLevel === "all" ? "all" : parseInt(accountLevel));
-      const res = await importLegacyData(enterpriseId, dataset, filtered, setProgress);
+      const res = await importLegacyData(enterpriseId, dataset, setProgress);
       setResult(res);
       toast({ title: "Importación completa", description: `${res.journalEntriesCreated} partidas creadas` });
     } catch (e: any) {
@@ -78,16 +73,13 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     }
   };
 
-  const lengths = dataset?.detectedAccountLengths ?? {};
-  const lengthEntries = Object.entries(lengths).sort(([a], [b]) => parseInt(a) - parseInt(b));
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-3xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Importación de datos legado (Microsoft Access)</DialogTitle>
+          <DialogTitle>Importación de datos legado</DialogTitle>
           <DialogDescription>
-            Empresa: <strong>{enterpriseName}</strong> · Paso {step} de 5
+            Empresa: <strong>{enterpriseName}</strong> · Paso {step} de 4
           </DialogDescription>
         </DialogHeader>
 
@@ -106,10 +98,10 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                     ) : (
                       <>
                         <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                        <p className="text-sm mb-4">Sube el archivo .mdb (Access) o .xlsx multi-hoja</p>
+                        <p className="text-sm mb-4">Sube el archivo .xlsx exportado del sistema legado</p>
                         <input
                           type="file"
-                          accept=".mdb,.accdb,.xlsx,.xls"
+                          accept=".xlsx,.xls"
                           id="legacy-file"
                           className="hidden"
                           onChange={(e) => {
@@ -126,47 +118,37 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                 </CardContent>
               </Card>
               <div className="text-xs text-muted-foreground">
-                <p className="font-medium mb-1">Tablas/hojas reconocidas:</p>
+                <p className="font-medium mb-1">Hojas reconocidas:</p>
                 <ul className="list-disc list-inside space-y-0.5">
-                  <li><code>tbl_cuentas</code> — Catálogo de cuentas</li>
+                  <li><code>tbl_cuentas</code> — Catálogo de cuentas (se importan todas)</li>
                   <li><code>tbl_compras</code> — Libro de compras</li>
-                  <li><code>tbl_ventas</code> — Libro de ventas</li>
-                  <li><code>tbl_diario</code> + <code>tbl_diario_detalle</code> — Partidas</li>
+                  <li><code>tbl_ventas</code> — Libro de ventas (con sucursales si existen)</li>
+                  <li><code>tbl_diario</code> + <code>tbl_diario_Detalle</code> — Partidas (solo líneas con <code>mostrar=Verdadero</code>)</li>
+                  <li><code>tbl_grupoActivos</code> + <code>tbl_ActivosFijo</code> — Activos fijos</li>
                 </ul>
               </div>
             </div>
           )}
 
-          {/* PASO 2: Vista previa cuentas + nivel */}
+          {/* PASO 2: Resumen detectado */}
           {step === 2 && dataset && (
             <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-2 text-center text-sm">
+              <div className="grid grid-cols-3 gap-2 text-center text-sm">
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.accounts.length}</div><div className="text-xs text-muted-foreground">Cuentas</div></CardContent></Card>
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.purchases.length}</div><div className="text-xs text-muted-foreground">Compras</div></CardContent></Card>
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.sales.length}</div><div className="text-xs text-muted-foreground">Ventas</div></CardContent></Card>
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.journalEntries.length}</div><div className="text-xs text-muted-foreground">Partidas</div></CardContent></Card>
+                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.assetCategories.length}</div><div className="text-xs text-muted-foreground">Grupos activos</div></CardContent></Card>
+                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.fixedAssets.length}</div><div className="text-xs text-muted-foreground">Activos fijos</div></CardContent></Card>
               </div>
 
-              <div>
-                <Label className="text-base font-semibold">Niveles de cuenta detectados</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Selecciona qué cuentas conservar (recomendamos las de mayor longitud, que son las de movimiento).
-                </p>
-                <RadioGroup value={accountLevel} onValueChange={setAccountLevel}>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="all" id="lvl-all" />
-                    <Label htmlFor="lvl-all">Todas las cuentas ({dataset.accounts.length})</Label>
-                  </div>
-                  {lengthEntries.map(([len, count]) => (
-                    <div key={len} className="flex items-center gap-2">
-                      <RadioGroupItem value={len} id={`lvl-${len}`} />
-                      <Label htmlFor={`lvl-${len}`}>
-                        Solo cuentas de {len} dígitos <Badge variant="secondary" className="ml-1">{count}</Badge>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
+              <Card>
+                <CardContent className="p-4 text-sm space-y-1">
+                  <div>📒 Catálogo de cuentas: <strong>se importará completo</strong> ({dataset.accounts.length} cuentas).</div>
+                  <div>🧾 Diario: solo se incluyen líneas con <strong>mostrar = Verdadero</strong> (cuentas de movimiento).</div>
+                  <div>🏬 Sucursales en ventas: <strong>{dataset.hasBranches ? "detectadas" : "no, todas se asignan a la única sucursal"}</strong>.</div>
+                </CardContent>
+              </Card>
 
               <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setStep(1)}>Atrás</Button>
@@ -175,11 +157,11 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
             </div>
           )}
 
-          {/* PASO 3: Vista previa libros */}
+          {/* PASO 3: Vista previa */}
           {step === 3 && dataset && (
             <div className="space-y-3">
-              <h3 className="font-semibold">Vista previa de libros fiscales</h3>
-              <ScrollArea className="h-64 border rounded">
+              <h3 className="font-semibold">Vista previa</h3>
+              <ScrollArea className="h-72 border rounded">
                 <div className="p-3 space-y-3 text-xs">
                   <div>
                     <p className="font-medium mb-1">Compras (primeros 5 de {dataset.purchases.length}):</p>
@@ -200,63 +182,58 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                         <span className="w-20">{s.date}</span>
                         <span className="w-16">{s.felDocType}</span>
                         <span className="w-24">{s.customerNit}</span>
-                        <span className="flex-1 truncate">{s.customerName}</span>
+                        <span className="flex-1 truncate">{s.customerName}{s.branchCode ? ` [Suc.${s.branchCode}]` : ""}</span>
                         <span className="font-mono">Q{s.totalAmount.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
+                  <div>
+                    <p className="font-medium mb-1">Partidas (primeras 3):</p>
+                    {dataset.journalEntries.slice(0, 3).map((e, i) => {
+                      const td = e.lines.reduce((s, l) => s + l.debit, 0);
+                      const tc = e.lines.reduce((s, l) => s + l.credit, 0);
+                      const balanced = Math.abs(td - tc) < 0.01;
+                      return (
+                        <div key={i} className="border rounded p-2 mb-1">
+                          <div className="flex justify-between mb-1">
+                            <span className="font-medium">{e.date} · {e.description.slice(0, 60)}</span>
+                            <Badge variant={balanced ? "default" : "destructive"}>{balanced ? "Cuadrada" : `Δ ${(td - tc).toFixed(2)}`}</Badge>
+                          </div>
+                          {e.lines.slice(0, 4).map((l, j) => (
+                            <div key={j} className="grid grid-cols-12 gap-1 text-[11px]">
+                              <span className="col-span-2 font-mono">{l.accountCode}</span>
+                              <span className="col-span-7 truncate">{l.description}</span>
+                              <span className="col-span-2 text-right font-mono">{l.debit > 0 ? l.debit.toFixed(2) : ""}</span>
+                              <span className="col-span-1 text-right font-mono">{l.credit > 0 ? l.credit.toFixed(2) : ""}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {dataset.fixedAssets.length > 0 && (
+                    <div>
+                      <p className="font-medium mb-1">Activos fijos (primeros 5 de {dataset.fixedAssets.length}):</p>
+                      {dataset.fixedAssets.slice(0, 5).map((a, i) => (
+                        <div key={i} className="flex gap-2 border-b py-1">
+                          <span className="w-20 font-mono">{a.code}</span>
+                          <span className="flex-1 truncate">{a.name}</span>
+                          <span className="font-mono">Q{a.cost.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
               <div className="flex justify-between">
                 <Button variant="outline" onClick={() => setStep(2)}>Atrás</Button>
-                <Button onClick={() => setStep(4)}>Continuar</Button>
-              </div>
-            </div>
-          )}
-
-          {/* PASO 4: Vista previa partidas */}
-          {step === 4 && dataset && (
-            <div className="space-y-3">
-              <h3 className="font-semibold">Vista previa de partidas</h3>
-              <p className="text-xs text-muted-foreground">
-                {dataset.journalEntries.length} partidas con {dataset.journalEntries.reduce((s, e) => s + e.lines.length, 0)} líneas totales.
-              </p>
-              <ScrollArea className="h-64 border rounded">
-                <div className="p-3 space-y-2 text-xs">
-                  {dataset.journalEntries.slice(0, 5).map((e, i) => {
-                    const totalDebit = e.lines.reduce((s, l) => s + l.debit, 0);
-                    const totalCredit = e.lines.reduce((s, l) => s + l.credit, 0);
-                    const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
-                    return (
-                      <div key={i} className="border rounded p-2">
-                        <div className="flex justify-between mb-1">
-                          <span className="font-medium">{e.date} · {e.description}</span>
-                          <Badge variant={balanced ? "default" : "destructive"}>
-                            {balanced ? "Cuadrada" : `Δ ${(totalDebit - totalCredit).toFixed(2)}`}
-                          </Badge>
-                        </div>
-                        {e.lines.slice(0, 4).map((l, j) => (
-                          <div key={j} className="grid grid-cols-12 gap-1 text-[11px]">
-                            <span className="col-span-2 font-mono">{l.accountCode}</span>
-                            <span className="col-span-7 truncate">{l.description}</span>
-                            <span className="col-span-2 text-right font-mono">{l.debit > 0 ? l.debit.toFixed(2) : ""}</span>
-                            <span className="col-span-1 text-right font-mono">{l.credit > 0 ? l.credit.toFixed(2) : ""}</span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep(3)}>Atrás</Button>
                 <Button onClick={handleImport}>Importar todo</Button>
               </div>
             </div>
           )}
 
-          {/* PASO 5: Importando / Resultado */}
-          {step === 5 && (
+          {/* PASO 4: Importando / Resultado */}
+          {step === 4 && (
             <div className="space-y-4">
               {importing && (
                 <div className="space-y-2">
@@ -273,13 +250,15 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   </div>
                   <Card>
                     <CardContent className="p-4 grid grid-cols-2 gap-2 text-sm">
-                      <div>Cuentas creadas: <strong>{result.accountsCreated}</strong></div>
-                      <div>Períodos creados: <strong>{result.periodsCreated}</strong></div>
+                      <div>Cuentas: <strong>{result.accountsCreated}</strong></div>
+                      <div>Períodos: <strong>{result.periodsCreated}</strong></div>
                       <div>Compras: <strong>{result.purchasesCreated}</strong></div>
                       <div>Ventas: <strong>{result.salesCreated}</strong></div>
                       <div>Partidas creadas: <strong>{result.journalEntriesCreated}</strong></div>
                       <div>Publicadas: <strong>{result.journalEntriesPosted}</strong></div>
                       <div>Borrador (descuadradas): <strong>{result.journalEntriesAsDraft}</strong></div>
+                      <div>Grupos activos: <strong>{result.assetCategoriesCreated}</strong></div>
+                      <div>Activos fijos: <strong>{result.fixedAssetsCreated}</strong></div>
                     </CardContent>
                   </Card>
                   {result.errors.length > 0 && (
