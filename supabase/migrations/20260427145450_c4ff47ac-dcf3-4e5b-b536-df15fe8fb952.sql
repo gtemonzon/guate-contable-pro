@@ -1,0 +1,10 @@
+UPDATE tab_journal_entries SET is_posted=false, status='borrador' WHERE enterprise_id=33;
+DELETE FROM tab_purchase_journal_links WHERE journal_entry_id IN (SELECT id FROM tab_journal_entries WHERE enterprise_id=33);
+DELETE FROM tab_journal_entry_metadata_changes WHERE journal_entry_id IN (SELECT id FROM tab_journal_entries WHERE enterprise_id=33);
+DELETE FROM tab_journal_entry_history WHERE journal_entry_id IN (SELECT id FROM tab_journal_entries WHERE enterprise_id=33);
+DELETE FROM tab_journal_entry_details WHERE journal_entry_id IN (SELECT id FROM tab_journal_entries WHERE enterprise_id=33);
+DELETE FROM tab_journal_entries WHERE enterprise_id=33;
+DELETE FROM tab_purchase_books WHERE enterprise_id=33;
+DELETE FROM tab_accounting_periods WHERE enterprise_id=33;
+DELETE FROM tab_accounts WHERE enterprise_id=33;
+DELETE FROM tab_audit_log WHERE enterprise_id=33;
