@@ -148,6 +148,15 @@ export async function importLegacyData(
 
   // ---------- 3. Compras ----------
   onProgress({ step: "Importando compras...", current: 0, total: ds.purchases.length });
+
+  // Cargar tipos de operación (globales o de la empresa)
+  const { data: opTypes } = await supabase
+    .from("tab_operation_types")
+    .select("id, code")
+    .or(`enterprise_id.is.null,enterprise_id.eq.${enterpriseId}`);
+  const opTypeIdByCode = new Map<string, number>();
+  opTypes?.forEach((o: any) => opTypeIdByCode.set(o.code, o.id));
+
   const bookKeys = new Set<string>();
   ds.purchases.forEach((p) => {
     if (!p.date) return;
@@ -167,6 +176,9 @@ export async function importLegacyData(
 
   const purchaseRows = ds.purchases.map((p) => {
     const [y, m] = p.date.split("-").map(Number);
+    const expenseAccountId = p.legacyAccountId
+      ? accountIdByLegacy.get(String(p.legacyAccountId)) ?? null
+      : null;
     return {
       enterprise_id: enterpriseId,
       accounting_period_id: periodIdByYear.get(y) ?? null,
@@ -187,8 +199,9 @@ export async function importLegacyData(
       currency_code: "GTQ",
       exchange_rate: 1,
       imported_from_fel: false,
-      batch_reference: "IMPORT-LEGACY",
-      idp_amount: 0,
+      idp_amount: p.idpAmount,
+      operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
+      expense_account_id: expenseAccountId,
     };
   });
 
