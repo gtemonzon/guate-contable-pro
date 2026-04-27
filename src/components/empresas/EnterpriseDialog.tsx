@@ -249,15 +249,38 @@ export function EnterpriseDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {enterprise ? "Editar Empresa" : "Nueva Empresa"}
-          </DialogTitle>
-          <DialogDescription>
-            {enterprise
-              ? "Modifica los datos de la empresa"
-              : "Registra una nueva empresa en el sistema"}
-          </DialogDescription>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle>
+                {enterprise ? "Editar Empresa" : "Nueva Empresa"}
+              </DialogTitle>
+              <DialogDescription>
+                {enterprise
+                  ? "Modifica los datos de la empresa"
+                  : "Registra una nueva empresa en el sistema"}
+              </DialogDescription>
+            </div>
+            {enterprise && currentUserEmail === "gtemonzon@gmail.com" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setLegacyImportOpen(true)}
+              >
+                <DatabaseBackup className="h-4 w-4 mr-2" />
+                Importar datos legado
+              </Button>
+            )}
+          </div>
         </DialogHeader>
+        {enterprise && (
+          <LegacyImportWizard
+            open={legacyImportOpen}
+            onOpenChange={setLegacyImportOpen}
+            enterpriseId={enterprise.id}
+            enterpriseName={enterprise.business_name}
+          />
+        )}
 
         {enterprise ? (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
