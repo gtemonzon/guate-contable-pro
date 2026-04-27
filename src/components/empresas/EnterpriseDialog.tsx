@@ -87,6 +87,12 @@ export function EnterpriseDialog({
 }: EnterpriseDialogProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(defaultTab || "general");
+  const [legacyImportOpen, setLegacyImportOpen] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserEmail(data.user?.email ?? null));
+  }, []);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
