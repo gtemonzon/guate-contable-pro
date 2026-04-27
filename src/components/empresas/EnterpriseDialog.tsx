@@ -89,10 +89,49 @@ export function EnterpriseDialog({
   const [activeTab, setActiveTab] = useState(defaultTab || "general");
   const [legacyImportOpen, setLegacyImportOpen] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [legacyJobActive, setLegacyJobActive] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUserEmail(data.user?.email ?? null));
   }, []);
+
+  // Detectar si hay un job de importación legado en curso para esta empresa
+  useEffect(() => {
+    if (!enterprise || currentUserEmail !== "gtemonzon@gmail.com") {
+      setLegacyJobActive(false);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      const { data } = await supabase
+        .from("tab_legacy_import_jobs")
+        .select("status")
+        .eq("enterprise_id", enterprise.id)
+        .in("status", ["pending", "running"])
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setLegacyJobActive(!!data);
+    };
+    check();
+    // Suscripción realtime
+    const channel = supabase
+      .channel(`enterprise-legacy-jobs-${enterprise.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tab_legacy_import_jobs",
+          filter: `enterprise_id=eq.${enterprise.id}`,
+        },
+        () => check()
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [enterprise, currentUserEmail]);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
