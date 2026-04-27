@@ -1118,15 +1118,16 @@ export default function LibroVentas() {
           </div>
           <div>
             <Label htmlFor="year-select">Año</Label>
-            <Input
-              id="year-select"
-              type="number"
-              className="w-[100px]"
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              min={yearRange.min}
-              max={yearRange.max}
-            />
+            <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+              <SelectTrigger id="year-select" className="w-[110px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: yearRange.max - yearRange.min + 1 }, (_, i) => yearRange.min + i).map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
