@@ -51,6 +51,10 @@ export default function LibroCompras() {
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [yearRange, setYearRange] = useState<{ min: number; max: number }>({
+    min: new Date().getFullYear() - 5,
+    max: new Date().getFullYear() + 1,
+  });
   
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
     id: number;
