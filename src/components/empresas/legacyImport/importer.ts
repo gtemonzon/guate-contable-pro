@@ -255,9 +255,17 @@ export async function importLegacyData(
 
   // ---------- 5. Partidas contables ----------
   onProgress({ step: "Importando partidas...", current: 0, total: ds.journalEntries.length });
-  let entryCounter = 0;
-  for (const entry of ds.journalEntries) {
-    entryCounter++;
+
+  // Ordenar partidas por fecha para correlativos consistentes
+  const sortedEntries = [...ds.journalEntries].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+
+  // Correlativo por año-mes
+  const counterByYM = new Map<string, number>();
+  let processed = 0;
+  for (const entry of sortedEntries) {
+    processed++;
     const [y, m] = entry.date.split("-").map(Number);
     const periodId = periodIdByYear.get(y);
     if (!periodId) continue;
@@ -270,7 +278,13 @@ export async function importLegacyData(
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
     const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
     const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
-    const entryNumber = `IMP-${y}-${String(m).padStart(2, "0")}-${String(entryCounter).padStart(5, "0")}`;
+
+    const ymKey = `${y}-${String(m).padStart(2, "0")}`;
+    const next = (counterByYM.get(ymKey) ?? 0) + 1;
+    counterByYM.set(ymKey, next);
+    const entryNumber = `${ymKey}-${String(next).padStart(5, "0")}`;
+
+    const generalDescription = entry.description || "Importación legado";
 
     const { data: hdr, error: hErr } = await supabase
       .from("tab_journal_entries")
@@ -279,7 +293,7 @@ export async function importLegacyData(
         accounting_period_id: periodId,
         entry_number: entryNumber,
         entry_date: entry.date,
-        description: entry.description || "Importación legado",
+        description: generalDescription,
         entry_type: "diario",
         document_reference: entry.reference || null,
         currency_code: "GTQ",
@@ -304,7 +318,7 @@ export async function importLegacyData(
       account_id: l.accountId!,
       debit_amount: l.debit,
       credit_amount: l.credit,
-      description: l.description || null,
+      description: generalDescription,
       currency_code: "GTQ",
       exchange_rate: 1,
       original_debit: l.debit,
@@ -321,7 +335,7 @@ export async function importLegacyData(
     if (balanced) {
       const { error: pErr } = await supabase
         .from("tab_journal_entries")
-        .update({ is_posted: true, status: "publicado", posted_at: new Date().toISOString() })
+        .update({ is_posted: true, status: "contabilizado", posted_at: new Date().toISOString() })
         .eq("id", hdr.id);
       if (pErr) {
         result.errors.push(`Posting ${entryNumber}: ${pErr.message}`);
@@ -333,8 +347,8 @@ export async function importLegacyData(
       result.journalEntriesAsDraft++;
     }
 
-    if (entryCounter % 25 === 0) {
-      onProgress({ step: "Importando partidas...", current: entryCounter, total: ds.journalEntries.length });
+    if (processed % 25 === 0) {
+      onProgress({ step: "Importando partidas...", current: processed, total: sortedEntries.length });
     }
   }
 
