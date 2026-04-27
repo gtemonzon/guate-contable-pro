@@ -41,7 +41,7 @@ import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
 const LegacyImportWizard = lazy(() => import("./legacyImport/LegacyImportWizard").then(m => ({ default: m.LegacyImportWizard })));
-import { DatabaseBackup } from "lucide-react";
+import { DatabaseBackup, Loader2 } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -308,12 +308,16 @@ export function EnterpriseDialog({
             {enterprise && currentUserEmail === "gtemonzon@gmail.com" && (
               <Button
                 type="button"
-                variant="outline"
+                variant={legacyJobActive ? "default" : "outline"}
                 size="sm"
                 onClick={() => setLegacyImportOpen(true)}
               >
-                <DatabaseBackup className="h-4 w-4 mr-2" />
-                Importar datos legado
+                {legacyJobActive ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <DatabaseBackup className="h-4 w-4 mr-2" />
+                )}
+                {legacyJobActive ? "Importación en curso..." : "Importar datos legado"}
               </Button>
             )}
           </div>
