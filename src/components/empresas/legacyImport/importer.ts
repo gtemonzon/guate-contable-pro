@@ -1,5 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { ParsedDataset, ParsedAccount, ParsedJournalEntry, ParsedPurchase, ParsedSale } from "./types";
+import {
+  ParsedDataset,
+  ParsedAccount,
+  ParsedAssetCategory,
+  ParsedFixedAsset,
+} from "./types";
 
 export interface ImportProgress {
   step: string;
@@ -15,6 +20,8 @@ export interface ImportResult {
   journalEntriesCreated: number;
   journalEntriesPosted: number;
   journalEntriesAsDraft: number;
+  assetCategoriesCreated: number;
+  fixedAssetsCreated: number;
   errors: string[];
 }
 
@@ -33,17 +40,16 @@ function inferBalanceType(t: string): string {
     case "activo":
     case "gasto":
     case "costo":
-      return "deudora";
+      return "deudor";
     case "pasivo":
     case "capital":
     case "ingreso":
-      return "acreedora";
+      return "acreedor";
     default:
-      return "deudora";
+      return "deudor";
   }
 }
 
-/** Extrae años desde dataset (compras+ventas+partidas) */
 function extractYears(ds: ParsedDataset): number[] {
   const years = new Set<number>();
   const add = (d: string) => {
@@ -56,14 +62,9 @@ function extractYears(ds: ParsedDataset): number[] {
   return Array.from(years).sort();
 }
 
-/* ============================================================
-   IMPORT
-   ============================================================ */
-
 export async function importLegacyData(
   enterpriseId: number,
   ds: ParsedDataset,
-  accountsToImport: ParsedAccount[],
   onProgress: Progress
 ): Promise<ImportResult> {
   const result: ImportResult = {
@@ -74,24 +75,22 @@ export async function importLegacyData(
     journalEntriesCreated: 0,
     journalEntriesPosted: 0,
     journalEntriesAsDraft: 0,
+    assetCategoriesCreated: 0,
+    fixedAssetsCreated: 0,
     errors: [],
   };
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No hay sesión");
 
-  // ---------- 1. Cuentas ----------
-  onProgress({ step: "Insertando cuentas...", current: 0, total: accountsToImport.length });
-
-  // Reconstruir jerarquía: el padre es el código sin el último segmento
-  // Pero como el sistema deriva nivel del código, simplemente respetamos
-  // allowsMovement enviado y dejamos parent vacío al inicio.
-  const accountRows = accountsToImport.map((a) => ({
+  // ---------- 1. Cuentas (todas) ----------
+  onProgress({ step: "Insertando cuentas...", current: 0, total: ds.accounts.length });
+  const accountRows = ds.accounts.map((a: ParsedAccount) => ({
     enterprise_id: enterpriseId,
     account_code: a.code,
     account_name: a.name,
     account_type: a.type,
-    level: Math.max(1, Math.ceil(a.code.length / 2)), // estimación; se ajusta abajo
+    level: Math.max(1, Math.ceil(a.code.length / 2)),
     allows_movement: a.allowsMovement,
     requires_cost_center: false,
     is_active: true,
@@ -102,15 +101,11 @@ export async function importLegacyData(
 
   for (const part of chunk(accountRows, CHUNK)) {
     const { error } = await supabase.from("tab_accounts").insert(part);
-    if (error) {
-      result.errors.push(`Cuentas: ${error.message}`);
-    } else {
-      result.accountsCreated += part.length;
-    }
+    if (error) result.errors.push(`Cuentas: ${error.message}`);
+    else result.accountsCreated += part.length;
     onProgress({ step: "Insertando cuentas...", current: result.accountsCreated, total: accountRows.length });
   }
 
-  // Mapeo code -> id
   const { data: accRows } = await supabase
     .from("tab_accounts")
     .select("id, account_code")
@@ -118,10 +113,18 @@ export async function importLegacyData(
   const accountIdByCode = new Map<string, number>();
   accRows?.forEach((r: any) => accountIdByCode.set(r.account_code, r.id));
 
-  // ---------- 2. Períodos (anuales, abiertos para insertar) ----------
+  // Mapeo legacyId -> id (para compras, activos fijos, etc.)
+  const accountIdByLegacy = new Map<string, number>();
+  ds.accounts.forEach((a) => {
+    if (a.legacyId !== undefined && a.legacyId !== null) {
+      const id = accountIdByCode.get(a.code);
+      if (id) accountIdByLegacy.set(String(a.legacyId), id);
+    }
+  });
+
+  // ---------- 2. Períodos (anuales) ----------
   const years = extractYears(ds);
   onProgress({ step: "Creando períodos...", current: 0, total: years.length });
-
   const periodRows = years.map((y) => ({
     enterprise_id: enterpriseId,
     year: y,
@@ -130,14 +133,12 @@ export async function importLegacyData(
     status: "abierto" as const,
     is_default_period: false,
   }));
-
   for (const part of chunk(periodRows, CHUNK)) {
     const { error } = await supabase.from("tab_accounting_periods").insert(part);
     if (error) result.errors.push(`Períodos: ${error.message}`);
     else result.periodsCreated += part.length;
   }
 
-  // Mapeo year -> period_id
   const { data: perRows } = await supabase
     .from("tab_accounting_periods")
     .select("id, year")
@@ -145,10 +146,8 @@ export async function importLegacyData(
   const periodIdByYear = new Map<number, number>();
   perRows?.forEach((r: any) => periodIdByYear.set(r.year, r.id));
 
-  // ---------- 3. Compras (con purchase_books mensual) ----------
+  // ---------- 3. Compras ----------
   onProgress({ step: "Importando compras...", current: 0, total: ds.purchases.length });
-
-  // crear/buscar purchase_books por (year, month)
   const bookKeys = new Set<string>();
   ds.purchases.forEach((p) => {
     if (!p.date) return;
@@ -202,7 +201,6 @@ export async function importLegacyData(
 
   // ---------- 4. Ventas ----------
   onProgress({ step: "Importando ventas...", current: 0, total: ds.sales.length });
-
   const salesRows = ds.sales.map((s) => {
     const [y] = s.date.split("-").map(Number);
     return {
@@ -225,6 +223,8 @@ export async function importLegacyData(
       exchange_rate: 1,
       imported_from_fel: false,
       is_annulled: false,
+      establishment_code: s.branchCode ?? null,
+      establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
     };
   });
 
@@ -237,7 +237,6 @@ export async function importLegacyData(
 
   // ---------- 5. Partidas contables ----------
   onProgress({ step: "Importando partidas...", current: 0, total: ds.journalEntries.length });
-
   let entryCounter = 0;
   for (const entry of ds.journalEntries) {
     entryCounter++;
@@ -245,23 +244,16 @@ export async function importLegacyData(
     const periodId = periodIdByYear.get(y);
     if (!periodId) continue;
 
-    // Resolver líneas con ID de cuenta
     const lines = entry.lines
-      .map((l) => ({
-        ...l,
-        accountId: accountIdByCode.get(l.accountCode),
-      }))
+      .map((l) => ({ ...l, accountId: accountIdByCode.get(l.accountCode) }))
       .filter((l) => l.accountId && (l.debit > 0 || l.credit > 0));
-
     if (lines.length === 0) continue;
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
     const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
     const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
-
     const entryNumber = `IMP-${y}-${String(m).padStart(2, "0")}-${String(entryCounter).padStart(5, "0")}`;
 
-    // Insertar header (siempre como borrador primero — protocolo de guardado)
     const { data: hdr, error: hErr } = await supabase
       .from("tab_journal_entries")
       .insert({
@@ -288,7 +280,6 @@ export async function importLegacyData(
       continue;
     }
 
-    // Insertar detalles
     const detailRows = lines.map((l, idx) => ({
       journal_entry_id: hdr.id,
       line_number: idx + 1,
@@ -307,7 +298,6 @@ export async function importLegacyData(
       result.errors.push(`Detalles ${entryNumber}: ${dErr.message}`);
       continue;
     }
-
     result.journalEntriesCreated++;
 
     if (balanced) {
@@ -330,7 +320,109 @@ export async function importLegacyData(
     }
   }
 
-  // ---------- 6. Cerrar todos los períodos ----------
+  // ---------- 6. Categorías de Activos Fijos ----------
+  const categoryIdByLegacy = new Map<string, number>();
+  if (ds.assetCategories.length > 0) {
+    onProgress({ step: "Creando categorías de activos...", current: 0, total: ds.assetCategories.length });
+    for (const cat of ds.assetCategories) {
+      const assetAccountId = cat.legacyAccountId
+        ? accountIdByLegacy.get(String(cat.legacyAccountId))
+        : null;
+      const { data: c, error } = await supabase
+        .from("fixed_asset_categories")
+        .insert({
+          enterprise_id: enterpriseId,
+          code: cat.code || `LEG-${cat.legacyId}`,
+          name: cat.name,
+          asset_account_id: assetAccountId ?? null,
+          default_useful_life_months: 60,
+          default_residual_value: 0,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (error) {
+        result.errors.push(`Categoría activo ${cat.name}: ${error.message}`);
+      } else if (c) {
+        categoryIdByLegacy.set(String(cat.legacyId), c.id);
+        result.assetCategoriesCreated++;
+      }
+    }
+  }
+
+  // ---------- 7. Activos Fijos ----------
+  if (ds.fixedAssets.length > 0) {
+    onProgress({ step: "Importando activos fijos...", current: 0, total: ds.fixedAssets.length });
+    // tenant_id de la empresa
+    const { data: ent } = await supabase
+      .from("tab_enterprises")
+      .select("tenant_id")
+      .eq("id", enterpriseId)
+      .single();
+    const tenantId = (ent as any)?.tenant_id;
+
+    // Categoría fallback si la fk no existe
+    let fallbackCategoryId: number | null =
+      categoryIdByLegacy.size > 0 ? Array.from(categoryIdByLegacy.values())[0] : null;
+    if (!fallbackCategoryId) {
+      const { data: c } = await supabase
+        .from("fixed_asset_categories")
+        .insert({
+          enterprise_id: enterpriseId,
+          code: "GEN",
+          name: "General (importado)",
+          default_useful_life_months: 60,
+          default_residual_value: 0,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (c) {
+        fallbackCategoryId = c.id;
+        result.assetCategoriesCreated++;
+      }
+    }
+
+    let assetIdx = 0;
+    for (const a of ds.fixedAssets as ParsedFixedAsset[]) {
+      assetIdx++;
+      const categoryId =
+        (a.legacyCategoryId && categoryIdByLegacy.get(String(a.legacyCategoryId))) ||
+        fallbackCategoryId;
+      if (!categoryId) {
+        result.errors.push(`Activo ${a.name}: sin categoría`);
+        continue;
+      }
+      const { error } = await supabase.from("fixed_assets").insert({
+        enterprise_id: enterpriseId,
+        tenant_id: tenantId,
+        asset_code: a.code,
+        asset_name: a.name,
+        category_id: categoryId,
+        acquisition_date: a.acquisitionDate,
+        in_service_date: a.inServiceDate ?? a.acquisitionDate,
+        acquisition_cost: a.cost,
+        residual_value: a.residualValue,
+        useful_life_months: a.usefulLifeMonths,
+        currency: "GTQ",
+        status: a.status,
+        notes: [a.serial && `Serie: ${a.serial}`, a.model && `Modelo: ${a.model}`, a.characteristics]
+          .filter(Boolean)
+          .join(" | ") || null,
+        created_by: user.id,
+        original_acquisition_cost: a.cost,
+        original_residual_value: a.residualValue,
+        exchange_rate_at_acquisition: 1,
+      });
+      if (error) result.errors.push(`Activo ${a.code}: ${error.message}`);
+      else result.fixedAssetsCreated++;
+      if (assetIdx % 10 === 0) {
+        onProgress({ step: "Importando activos fijos...", current: assetIdx, total: ds.fixedAssets.length });
+      }
+    }
+  }
+
+  // ---------- 8. Cerrar todos los períodos ----------
   onProgress({ step: "Cerrando períodos...", current: 0, total: 1 });
   await supabase
     .from("tab_accounting_periods")
