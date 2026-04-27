@@ -39,6 +39,8 @@ export interface ParsedSale {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
+  operationTypeCode?: string;
+  legacyAccountId?: string | number;
   authorizationNumber?: string;
   branchCode?: string; // IdSucursal (0 = sin sucursal)
 }
