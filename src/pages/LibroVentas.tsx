@@ -1124,8 +1124,8 @@ export default function LibroVentas() {
               className="w-[100px]"
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              min="2020"
-              max="2099"
+              min={yearRange.min}
+              max={yearRange.max}
             />
           </div>
         </div>
