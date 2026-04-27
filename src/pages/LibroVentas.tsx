@@ -70,6 +70,10 @@ export default function LibroVentas() {
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [yearRange, setYearRange] = useState<{ min: number; max: number }>({
+    min: new Date().getFullYear() - 5,
+    max: new Date().getFullYear() + 1,
+  });
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
@@ -257,6 +261,27 @@ export default function LibroVentas() {
       fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
     }
   }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    if (!currentEnterpriseId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("tab_accounting_periods")
+        .select("year")
+        .eq("enterprise_id", parseInt(currentEnterpriseId));
+      const currentYear = new Date().getFullYear();
+      if (data && data.length > 0) {
+        const years = data.map((p) => p.year);
+        setYearRange({
+          min: Math.min(...years) - 1,
+          max: Math.max(...years, currentYear) + 1,
+        });
+      } else {
+        setYearRange({ min: currentYear - 5, max: currentYear + 1 });
+      }
+    })();
+  }, [currentEnterpriseId]);
+
 
   const fetchFELDocTypes = async () => {
     try {
@@ -1099,8 +1124,8 @@ export default function LibroVentas() {
               className="w-[100px]"
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              min="2020"
-              max="2099"
+              min={yearRange.min}
+              max={yearRange.max}
             />
           </div>
         </div>
