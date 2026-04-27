@@ -1,0 +1,13 @@
+DELETE FROM public.tab_legacy_import_jobs WHERE enterprise_id = 33;
+DELETE FROM public.tab_journal_entry_details WHERE journal_entry_id IN (SELECT id FROM public.tab_journal_entries WHERE enterprise_id = 33);
+DELETE FROM public.tab_purchase_journal_links WHERE purchase_id IN (SELECT id FROM public.tab_purchase_ledger WHERE enterprise_id = 33);
+DELETE FROM public.tab_journal_entries WHERE enterprise_id = 33;
+DELETE FROM public.tab_purchase_ledger WHERE enterprise_id = 33;
+DELETE FROM public.tab_sales_ledger WHERE enterprise_id = 33;
+DELETE FROM public.tab_purchase_books WHERE enterprise_id = 33;
+DELETE FROM public.fixed_asset_depreciation_schedule WHERE asset_id IN (SELECT id FROM public.fixed_assets WHERE enterprise_id = 33);
+DELETE FROM public.fixed_asset_event_log WHERE asset_id IN (SELECT id FROM public.fixed_assets WHERE enterprise_id = 33);
+DELETE FROM public.fixed_assets WHERE enterprise_id = 33;
+DELETE FROM public.fixed_asset_categories WHERE enterprise_id = 33;
+DELETE FROM public.tab_accounting_periods WHERE enterprise_id = 33;
+DELETE FROM public.tab_accounts WHERE enterprise_id = 33;
