@@ -70,6 +70,10 @@ export default function LibroVentas() {
   const [existingJournalEntry, setExistingJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [yearRange, setYearRange] = useState<{ min: number; max: number }>({
+    min: new Date().getFullYear() - 5,
+    max: new Date().getFullYear() + 1,
+  });
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   
   const [incomeAccounts, setIncomeAccounts] = useState<Array<{
