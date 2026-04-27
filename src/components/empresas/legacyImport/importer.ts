@@ -262,7 +262,7 @@ export async function importLegacyData(
         entry_number: entryNumber,
         entry_date: entry.date,
         description: entry.description || "Importación legado",
-        entry_type: "manual",
+        entry_type: "diario",
         document_reference: entry.reference || null,
         currency_code: "GTQ",
         exchange_rate: 1,
