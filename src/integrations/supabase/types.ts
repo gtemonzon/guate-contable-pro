@@ -4469,7 +4469,7 @@ export type Database = {
       }
       reset_legacy_import_data: {
         Args: { p_enterprise_id: number }
-        Returns: Json
+        Returns: undefined
       }
       reverse_fx_revaluation: { Args: { p_run_id: number }; Returns: number }
       update_posted_entry_metadata: {
