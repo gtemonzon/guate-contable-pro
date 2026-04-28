@@ -130,14 +130,22 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
         .single();
       if (!ent) throw new Error("Empresa no encontrada");
 
-      // Crear job
+      // Subir el dataset (potencialmente grande) a Storage para evitar timeouts del INSERT JSONB
+      const payloadPath = `${userData.user.id}/${enterpriseId}-${Date.now()}.json`;
+      const payloadBlob = new Blob([JSON.stringify(dataset)], { type: "application/json" });
+      const { error: upErr } = await supabase.storage
+        .from("legacy-imports")
+        .upload(payloadPath, payloadBlob, { contentType: "application/json", upsert: true });
+      if (upErr) throw new Error(`No se pudo subir el archivo de importación: ${upErr.message}`);
+
+      // Crear job (sin payload inline — solo la ruta)
       const { data: jobData, error: jobErr } = await supabase
         .from("tab_legacy_import_jobs")
         .insert({
           enterprise_id: enterpriseId,
           tenant_id: (ent as any).tenant_id,
           created_by: userData.user.id,
-          payload: dataset as any,
+          payload_path: payloadPath,
           status: "pending",
         })
         .select("*")
