@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle2, AlertCircle, Loader2, Info } from "lucide-react";
+import { Upload, CheckCircle2, AlertCircle, Loader2, Info, Trash2 } from "lucide-react";
 import { parseLegacyFile } from "./parser";
 import { ParsedDataset } from "./types";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +40,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const [parsing, setParsing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<JobRow | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   const reset = () => {
     setStep(1);
@@ -173,6 +174,35 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     }
   };
 
+  const handleClearEnterpriseData = async () => {
+    const confirmed = window.confirm(`¿Borrar los datos importados de ${enterpriseName} para volver a probar?`);
+    if (!confirmed) return;
+
+    setClearing(true);
+    try {
+      const { error } = await supabase.rpc("reset_legacy_import_data", {
+        p_enterprise_id: enterpriseId,
+      });
+
+      if (error) throw error;
+
+      reset();
+      await fetchActiveJob();
+      toast({
+        title: "Datos borrados",
+        description: "La empresa quedó limpia para una nueva prueba de importación.",
+      });
+    } catch (e: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al borrar datos",
+        description: e.message,
+      });
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const isRunning = job?.status === "running" || job?.status === "pending";
   const isDone = job?.status === "completed";
   const isFailed = job?.status === "failed";
@@ -192,6 +222,12 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           {/* PASO 1 */}
           {step === 1 && (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={parsing || clearing}>
+                  {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Borrar datos de la empresa
+                </Button>
+              </div>
               <Card>
                 <CardContent className="p-6">
                   <div className="border-2 border-dashed rounded-lg p-8 text-center">
@@ -238,6 +274,12 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           {/* PASO 2 */}
           {step === 2 && dataset && (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                  {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Borrar datos de la empresa
+                </Button>
+              </div>
               <div className="grid grid-cols-3 gap-2 text-center text-sm">
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.accounts.length}</div><div className="text-xs text-muted-foreground">Cuentas</div></CardContent></Card>
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.purchases.length}</div><div className="text-xs text-muted-foreground">Compras</div></CardContent></Card>
@@ -318,12 +360,20 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   </div>
                 </div>
               </ScrollArea>
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep(2)}>Atrás</Button>
-                <Button onClick={handleImport} disabled={submitting}>
+              <div className="flex justify-between gap-2">
+                <div>
+                  <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={submitting || clearing}>
+                    {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                    Borrar datos de la empresa
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setStep(2)}>Atrás</Button>
+                  <Button onClick={handleImport} disabled={submitting || clearing}>
                   {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Importar todo
-                </Button>
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -352,7 +402,11 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                       {job.current_count} / {job.total_count}
                     </p>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex justify-between gap-2">
+                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                      {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                      Borrar datos de la empresa
+                    </Button>
                     <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
                   </div>
                 </>
@@ -398,9 +452,15 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                       </CardContent>
                     </Card>
                   )}
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-2">
+                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                      {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                      Borrar datos de la empresa
+                    </Button>
+                    <div className="flex gap-2">
                     <Button variant="outline" onClick={() => { reset(); }}>Nueva importación</Button>
                     <Button onClick={handleClose}>Cerrar</Button>
+                    </div>
                   </div>
                 </div>
               )}
