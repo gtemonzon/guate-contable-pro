@@ -170,13 +170,16 @@ async function runImport(jobId: string) {
   try {
     // ---------- 1. Cuentas ----------
     await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
+    // Nivel y allows_movement por longitud de código (esquema 1/2/4/6 dígitos)
+    const levelByLen = (len: number) =>
+      len === 6 ? 4 : len === 4 ? 3 : len === 2 ? 2 : 1;
     const accountRows = ds.accounts.map((a) => ({
       enterprise_id: enterpriseId,
       account_code: a.code,
       account_name: a.name,
       account_type: a.type,
-      level: Math.max(1, Math.ceil(a.code.length / 2)),
-      allows_movement: a.allowsMovement,
+      level: levelByLen(a.code.length),
+      allows_movement: a.code.length >= 6,
       requires_cost_center: false,
       is_active: true,
       balance_type: inferBalanceType(a.type),
@@ -193,6 +196,12 @@ async function runImport(jobId: string) {
         accountRows.length,
       );
     }
+
+    // Vincular padres por longitud de código (1->2->4->6)
+    const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
+      p_enterprise_id: enterpriseId,
+    });
+    if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
 
     const { data: accRows } = await sb
       .from("tab_accounts")
@@ -462,12 +471,27 @@ async function runImport(jobId: string) {
         if (b.balanced) balancedIds.push(id);
       }
 
-      // 3) insertar detalles en sub-lotes (cada partida ~5-10 líneas, así que 500 líneas ~50 partidas)
+      // 3) insertar detalles en sub-lotes; si un lote falla, intentar fila por fila
+      //    para no perder TODA la partida por una sola línea problemática.
       for (const detPart of chunk(allDetails, CHUNK)) {
         const { error: dErr } = await sb
           .from("tab_journal_entry_details")
           .insert(detPart);
-        if (dErr) errors.push(`Detalles lote: ${dErr.message}`);
+        if (dErr) {
+          // Fallback fila a fila
+          let rowFails = 0;
+          for (const row of detPart) {
+            const { error: rErr } = await sb
+              .from("tab_journal_entry_details")
+              .insert(row);
+            if (rErr) rowFails++;
+          }
+          if (rowFails > 0) {
+            errors.push(
+              `Detalles: ${rowFails} líneas omitidas en lote (${dErr.message})`,
+            );
+          }
+        }
       }
 
       // 4) marcar como contabilizadas las balanceadas
@@ -620,16 +644,29 @@ async function runImport(jobId: string) {
       }
     }
 
-    // ---------- 8. Cerrar períodos ----------
+    // ---------- 8. Cerrar períodos (excepto el último, que queda abierto) ----------
     await updateProgress("Cerrando períodos...", 0, 1, true);
-    await sb
-      .from("tab_accounting_periods")
-      .update({
-        status: "cerrado",
-        closed_at: new Date().toISOString(),
-        closed_by: userId,
-      })
-      .eq("enterprise_id", enterpriseId);
+    const sortedYears = [...years].sort((a, b) => a - b);
+    const lastYear = sortedYears[sortedYears.length - 1];
+    if (sortedYears.length > 1) {
+      await sb
+        .from("tab_accounting_periods")
+        .update({
+          status: "cerrado",
+          closed_at: new Date().toISOString(),
+          closed_by: userId,
+        })
+        .eq("enterprise_id", enterpriseId)
+        .neq("year", lastYear);
+    }
+    // Marcar el último año como período por defecto + abierto
+    if (lastYear) {
+      await sb
+        .from("tab_accounting_periods")
+        .update({ status: "abierto", is_default_period: true })
+        .eq("enterprise_id", enterpriseId)
+        .eq("year", lastYear);
+    }
 
     await sb
       .from("tab_legacy_import_jobs")

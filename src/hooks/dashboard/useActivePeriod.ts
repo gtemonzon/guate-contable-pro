@@ -38,7 +38,8 @@ export function useActivePeriod(enterpriseId: number | null) {
           if (data) { setActivePeriod(data); return; }
         }
 
-        const { data: periods } = await supabase
+        // Preferir abierto + default; si no hay abierto, tomar el más reciente
+        const { data: openPeriods } = await supabase
           .from('tab_accounting_periods')
           .select('id, year, start_date, end_date, status')
           .eq('enterprise_id', enterpriseId)
@@ -47,7 +48,19 @@ export function useActivePeriod(enterpriseId: number | null) {
           .order('start_date', { ascending: false })
           .limit(1);
 
-        setActivePeriod(periods?.[0] ?? null);
+        if (openPeriods?.[0]) {
+          setActivePeriod(openPeriods[0]);
+          return;
+        }
+
+        const { data: anyPeriods } = await supabase
+          .from('tab_accounting_periods')
+          .select('id, year, start_date, end_date, status')
+          .eq('enterprise_id', enterpriseId)
+          .order('start_date', { ascending: false })
+          .limit(1);
+
+        setActivePeriod(anyPeriods?.[0] ?? null);
       } catch (err) {
         console.error('[useActivePeriod] error:', err);
         setActivePeriod(null);
