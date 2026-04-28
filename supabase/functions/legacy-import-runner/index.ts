@@ -1009,15 +1009,40 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
   try {
-    const { jobId } = await req.json();
+    const body = await req.json();
+
+    if (body?.action === "clear") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { client } = await createAuthedClient(authHeader);
+      const enterpriseId = Number(body.enterpriseId);
+      if (!enterpriseId) {
+        return new Response(JSON.stringify({ error: "enterpriseId requerido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await resetEnterpriseData(client, enterpriseId);
+      return new Response(JSON.stringify({ ok: true, cleared: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { jobId } = body;
     if (!jobId || typeof jobId !== "string") {
       return new Response(JSON.stringify({ error: "jobId requerido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    // Procesar en background — la respuesta sale ya
-    // @ts-ignore EdgeRuntime es global en Supabase Edge
+
     EdgeRuntime.waitUntil(runImport(jobId));
     return new Response(JSON.stringify({ ok: true, jobId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
