@@ -108,7 +108,25 @@ async function runImport(jobId: string) {
 
   const enterpriseId: number = job.enterprise_id;
   const userId: string = job.created_by;
-  const ds: ParsedDataset = job.payload;
+
+  // Cargar dataset: desde Storage (preferido) o desde columna payload (fallback)
+  let ds: ParsedDataset;
+  if (job.payload_path) {
+    const { data: blob, error: dlErr } = await sb.storage
+      .from("legacy-imports")
+      .download(job.payload_path);
+    if (dlErr || !blob) {
+      await sb.from("tab_legacy_import_jobs").update({
+        status: "failed",
+        error_message: `No se pudo descargar el payload: ${dlErr?.message ?? "desconocido"}`,
+        finished_at: new Date().toISOString(),
+      }).eq("id", jobId);
+      return;
+    }
+    ds = JSON.parse(await blob.text());
+  } else {
+    ds = job.payload;
+  }
 
   const errors: string[] = [];
   const result = {
