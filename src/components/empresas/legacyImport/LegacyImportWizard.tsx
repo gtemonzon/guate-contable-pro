@@ -180,8 +180,11 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
 
     setClearing(true);
     try {
-      const { error } = await supabase.rpc("reset_legacy_import_data", {
-        p_enterprise_id: enterpriseId,
+      const { error } = await supabase.functions.invoke("legacy-import-runner", {
+        body: {
+          action: "clear",
+          enterpriseId,
+        },
       });
 
       if (error) throw error;
