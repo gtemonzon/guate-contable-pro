@@ -11,7 +11,9 @@ const corsHeaders = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/legacy-import-runner`;
 
 interface ParsedAccount {
   code: string;
@@ -61,7 +63,33 @@ interface ParsedDataset {
 }
 
 const CHUNK = 500;
-const ENTRY_BATCH = 25; // partidas por lote para evitar statement timeout
+const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
+const DETAIL_CHUNK = 25;
+const DELETE_BATCH = 250;
+
+interface ImportResult {
+  accountsCreated: number;
+  periodsCreated: number;
+  purchasesCreated: number;
+  salesCreated: number;
+  journalEntriesCreated: number;
+  journalEntriesPosted: number;
+  journalEntriesAsDraft: number;
+  assetCategoriesCreated: number;
+  fixedAssetsCreated: number;
+}
+
+const EMPTY_RESULT: ImportResult = {
+  accountsCreated: 0,
+  periodsCreated: 0,
+  purchasesCreated: 0,
+  salesCreated: 0,
+  journalEntriesCreated: 0,
+  journalEntriesPosted: 0,
+  journalEntriesAsDraft: 0,
+  assetCategoriesCreated: 0,
+  fixedAssetsCreated: 0,
+};
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -87,6 +115,205 @@ function extractYears(ds: ParsedDataset): number[] {
   ds.sales.forEach((s) => add(s.date));
   ds.journalEntries.forEach((j) => add(j.date));
   return Array.from(years).sort();
+}
+
+function mergeResult(existing: unknown): ImportResult {
+  return {
+    ...EMPTY_RESULT,
+    ...(existing && typeof existing === "object" ? (existing as Partial<ImportResult>) : {}),
+  };
+}
+
+function parseCompletedSteps(existing: unknown): Set<string> {
+  return new Set(Array.isArray(existing) ? existing.filter((step) => typeof step === "string") : []);
+}
+
+async function createAuthedClient(authHeader: string) {
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("No autorizado");
+  }
+
+  return { client, user: data.user };
+}
+
+async function queueContinuation(jobId: string) {
+  const response = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_ROLE}`,
+      apikey: SERVICE_ROLE,
+    },
+    body: JSON.stringify({ jobId }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`No se pudo continuar la importación: ${body}`);
+  }
+}
+
+async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: string) {
+  const { data } = await sb
+    .from("tab_legacy_import_jobs")
+    .select("status")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  return !!data && (data.status === "pending" || data.status === "running");
+}
+
+async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  await sb
+    .from("tab_legacy_import_jobs")
+    .update({
+      status: "failed",
+      error_message: "Proceso cancelado manualmente antes del borrado.",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("enterprise_id", enterpriseId)
+    .in("status", ["pending", "running"]);
+
+  while (true) {
+    const { data: entryRows, error: entryErr } = await sb
+      .from("tab_journal_entries")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .limit(DELETE_BATCH);
+    if (entryErr) throw entryErr;
+    if (!entryRows?.length) break;
+
+    const entryIds = entryRows.map((row) => row.id);
+    const { error: detailErr } = await sb
+      .from("tab_journal_entry_details")
+      .delete()
+      .in("journal_entry_id", entryIds);
+    if (detailErr) throw detailErr;
+
+    const { error: deleteEntryErr } = await sb
+      .from("tab_journal_entries")
+      .delete()
+      .in("id", entryIds);
+    if (deleteEntryErr) throw deleteEntryErr;
+  }
+
+  while (true) {
+    const { data: assetRows, error: assetErr } = await sb
+      .from("fixed_assets")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .limit(DELETE_BATCH);
+    if (assetErr) throw assetErr;
+    if (!assetRows?.length) break;
+
+    const assetIds = assetRows.map((row) => row.id);
+    const { error: schedErr } = await sb
+      .from("fixed_asset_depreciation_schedule")
+      .delete()
+      .in("asset_id", assetIds);
+    if (schedErr) throw schedErr;
+
+    const { error: eventErr } = await sb
+      .from("fixed_asset_event_log")
+      .delete()
+      .in("asset_id", assetIds);
+    if (eventErr) throw eventErr;
+
+    const { error: deleteAssetErr } = await sb
+      .from("fixed_assets")
+      .delete()
+      .in("id", assetIds);
+    if (deleteAssetErr) throw deleteAssetErr;
+  }
+
+  const { error: purchaseErr } = await sb
+    .from("tab_purchase_ledger")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (purchaseErr) throw purchaseErr;
+
+  const { error: salesErr } = await sb
+    .from("tab_sales_ledger")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (salesErr) throw salesErr;
+
+  const { error: categoriesErr } = await sb
+    .from("fixed_asset_categories")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (categoriesErr) throw categoriesErr;
+
+  const { error: booksErr } = await sb
+    .from("tab_purchase_books")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (booksErr) throw booksErr;
+
+  const { error: periodsErr } = await sb
+    .from("tab_accounting_periods")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (periodsErr) throw periodsErr;
+
+  while (true) {
+    const { data: accountRows, error: accountErr } = await sb
+      .from("tab_accounts")
+      .select("id, parent_account_id")
+      .eq("enterprise_id", enterpriseId);
+    if (accountErr) throw accountErr;
+    if (!accountRows?.length) break;
+
+    const parentIds = new Set(
+      accountRows
+        .map((row) => row.parent_account_id)
+        .filter((id): id is number => typeof id === "number"),
+    );
+    const leafIds = accountRows
+      .filter((row) => !parentIds.has(row.id))
+      .slice(0, DELETE_BATCH)
+      .map((row) => row.id);
+
+    if (!leafIds.length) break;
+
+    const { error: deleteLeafErr } = await sb
+      .from("tab_accounts")
+      .delete()
+      .in("id", leafIds);
+    if (deleteLeafErr) throw deleteLeafErr;
+  }
+
+  const { data: payloadRows, error: payloadErr } = await sb
+    .from("tab_legacy_import_jobs")
+    .select("payload_path")
+    .eq("enterprise_id", enterpriseId)
+    .not("payload_path", "is", null);
+  if (payloadErr) throw payloadErr;
+
+  const payloadPaths = (payloadRows ?? [])
+    .map((row) => row.payload_path)
+    .filter((path): path is string => !!path);
+
+  if (payloadPaths.length > 0) {
+    const { error: storageErr } = await sb.storage
+      .from("legacy-imports")
+      .remove(payloadPaths);
+    if (storageErr) {
+      console.warn("No se pudieron borrar algunos payloads", storageErr.message);
+    }
+  }
+
+  const { error: jobsErr } = await sb
+    .from("tab_legacy_import_jobs")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (jobsErr) throw jobsErr;
 }
 
 async function runImport(jobId: string) {
