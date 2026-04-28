@@ -222,6 +222,12 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           {/* PASO 1 */}
           {step === 1 && (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={parsing || clearing}>
+                  {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Borrar datos de la empresa
+                </Button>
+              </div>
               <Card>
                 <CardContent className="p-6">
                   <div className="border-2 border-dashed rounded-lg p-8 text-center">
@@ -268,6 +274,12 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           {/* PASO 2 */}
           {step === 2 && dataset && (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                  {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Borrar datos de la empresa
+                </Button>
+              </div>
               <div className="grid grid-cols-3 gap-2 text-center text-sm">
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.accounts.length}</div><div className="text-xs text-muted-foreground">Cuentas</div></CardContent></Card>
                 <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.purchases.length}</div><div className="text-xs text-muted-foreground">Compras</div></CardContent></Card>
@@ -391,7 +403,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                     </p>
                   </div>
                   <div className="flex justify-between gap-2">
-                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing || isRunning}>
+                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
                       {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
                       Borrar datos de la empresa
                     </Button>
