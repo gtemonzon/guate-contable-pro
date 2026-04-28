@@ -355,18 +355,11 @@ async function runImport(jobId: string) {
     ds = job.payload;
   }
 
-  const errors: string[] = [];
-  const result = {
-    accountsCreated: 0,
-    periodsCreated: 0,
-    purchasesCreated: 0,
-    salesCreated: 0,
-    journalEntriesCreated: 0,
-    journalEntriesPosted: 0,
-    journalEntriesAsDraft: 0,
-    assetCategoriesCreated: 0,
-    fixedAssetsCreated: 0,
-  };
+  const errors: string[] = Array.isArray(job.errors)
+    ? job.errors.filter((item: unknown): item is string => typeof item === "string")
+    : [];
+  const result = mergeResult(job.result);
+  const stepsCompleted = parseCompletedSteps(job.steps_completed);
 
   let lastUpdate = 0;
   const updateProgress = async (
@@ -391,13 +384,17 @@ async function runImport(jobId: string) {
 
   await sb
     .from("tab_legacy_import_jobs")
-    .update({ status: "running", started_at: new Date().toISOString() })
+    .update({
+      status: "running",
+      started_at: job.started_at ?? new Date().toISOString(),
+      errors,
+      result,
+      steps_completed: Array.from(stepsCompleted),
+    })
     .eq("id", jobId);
 
   try {
     // ---------- 1. Cuentas ----------
-    await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
-    // Nivel y allows_movement por longitud de código (esquema 1/2/4/6 dígitos)
     const levelByLen = (len: number) =>
       len === 6 ? 4 : len === 4 ? 3 : len === 2 ? 2 : 1;
     const accountRows = ds.accounts.map((a) => ({
@@ -413,22 +410,30 @@ async function runImport(jobId: string) {
       is_bank_account: false,
       is_monetary: false,
     }));
-    for (const part of chunk(accountRows, CHUNK)) {
-      const { error } = await sb.from("tab_accounts").insert(part);
-      if (error) errors.push(`Cuentas: ${error.message}`);
-      else result.accountsCreated += part.length;
-      await updateProgress(
-        "Insertando cuentas...",
-        result.accountsCreated,
-        accountRows.length,
-      );
-    }
+    if (!stepsCompleted.has("accounts")) {
+      await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
+      for (const part of chunk(accountRows, CHUNK)) {
+        const { error } = await sb.from("tab_accounts").insert(part);
+        if (error) errors.push(`Cuentas: ${error.message}`);
+        else result.accountsCreated += part.length;
+        await updateProgress(
+          "Insertando cuentas...",
+          result.accountsCreated,
+          accountRows.length,
+        );
+      }
 
-    // Vincular padres por longitud de código (1->2->4->6)
-    const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
-      p_enterprise_id: enterpriseId,
-    });
-    if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
+      const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
+        p_enterprise_id: enterpriseId,
+      });
+      if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
+      stepsCompleted.add("accounts");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    }
 
     const { data: accRows } = await sb
       .from("tab_accounts")
@@ -446,7 +451,6 @@ async function runImport(jobId: string) {
 
     // ---------- 2. Períodos ----------
     const years = extractYears(ds);
-    await updateProgress("Creando períodos...", 0, years.length, true);
     const periodRows = years.map((y) => ({
       enterprise_id: enterpriseId,
       year: y,
@@ -455,12 +459,21 @@ async function runImport(jobId: string) {
       status: "abierto",
       is_default_period: false,
     }));
-    if (periodRows.length > 0) {
-      const { error } = await sb
-        .from("tab_accounting_periods")
-        .insert(periodRows);
-      if (error) errors.push(`Períodos: ${error.message}`);
-      else result.periodsCreated += periodRows.length;
+    if (!stepsCompleted.has("periods")) {
+      await updateProgress("Creando períodos...", 0, years.length, true);
+      if (periodRows.length > 0) {
+        const { error } = await sb
+          .from("tab_accounting_periods")
+          .insert(periodRows);
+        if (error) errors.push(`Períodos: ${error.message}`);
+        else result.periodsCreated += periodRows.length;
+      }
+      stepsCompleted.add("periods");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
     const { data: perRows } = await sb
       .from("tab_accounting_periods")
@@ -470,7 +483,6 @@ async function runImport(jobId: string) {
     perRows?.forEach((r: any) => periodIdByYear.set(r.year, r.id));
 
     // ---------- 3. Compras ----------
-    await updateProgress("Importando compras...", 0, ds.purchases.length, true);
     const { data: opTypes } = await sb
       .from("tab_operation_types")
       .select("id, code")
@@ -485,19 +497,22 @@ async function runImport(jobId: string) {
       bookKeys.add(`${y}-${m}`);
     });
     const bookIdByYM = new Map<string, number>();
-    for (const key of bookKeys) {
-      const [y, m] = key.split("-").map(Number);
-      const { data: bk } = await sb
-        .from("tab_purchase_books")
-        .insert({
-          enterprise_id: enterpriseId,
-          year: y,
-          month: m,
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (bk) bookIdByYM.set(key, bk.id);
+    if (!stepsCompleted.has("purchases")) {
+      await updateProgress("Importando compras...", 0, ds.purchases.length, true);
+      for (const key of bookKeys) {
+        const [y, m] = key.split("-").map(Number);
+        const { data: bk } = await sb
+          .from("tab_purchase_books")
+          .insert({
+            enterprise_id: enterpriseId,
+            year: y,
+            month: m,
+            created_by: userId,
+          })
+          .select("id")
+          .single();
+        if (bk) bookIdByYM.set(key, bk.id);
+      }
     }
 
     const purchaseRows = ds.purchases.map((p) => {
@@ -531,19 +546,32 @@ async function runImport(jobId: string) {
       };
     });
 
-    for (const part of chunk(purchaseRows, CHUNK)) {
-      const { error } = await sb.from("tab_purchase_ledger").insert(part);
-      if (error) errors.push(`Compras: ${error.message}`);
-      else result.purchasesCreated += part.length;
-      await updateProgress(
-        "Importando compras...",
-        result.purchasesCreated,
-        purchaseRows.length,
-      );
+    if (!stepsCompleted.has("purchases")) {
+      for (const part of chunk(purchaseRows, CHUNK)) {
+        const { error } = await sb.from("tab_purchase_ledger").insert(part);
+        if (error) errors.push(`Compras: ${error.message}`);
+        else result.purchasesCreated += part.length;
+        await updateProgress(
+          "Importando compras...",
+          result.purchasesCreated,
+          purchaseRows.length,
+        );
+      }
+      stepsCompleted.add("purchases");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    } else {
+      const { data: existingBooks } = await sb
+        .from("tab_purchase_books")
+        .select("id, year, month")
+        .eq("enterprise_id", enterpriseId);
+      existingBooks?.forEach((bk: any) => bookIdByYM.set(`${bk.year}-${bk.month}`, bk.id));
     }
 
     // ---------- 4. Ventas ----------
-    await updateProgress("Importando ventas...", 0, ds.sales.length, true);
     const salesRows = ds.sales.map((s) => {
       const [y] = s.date.split("-").map(Number);
       const incomeAccountId = s.legacyAccountId
@@ -577,15 +605,24 @@ async function runImport(jobId: string) {
         establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
       };
     });
-    for (const part of chunk(salesRows, CHUNK)) {
-      const { error } = await sb.from("tab_sales_ledger").insert(part);
-      if (error) errors.push(`Ventas: ${error.message}`);
-      else result.salesCreated += part.length;
-      await updateProgress(
-        "Importando ventas...",
-        result.salesCreated,
-        salesRows.length,
-      );
+    if (!stepsCompleted.has("sales")) {
+      await updateProgress("Importando ventas...", 0, ds.sales.length, true);
+      for (const part of chunk(salesRows, CHUNK)) {
+        const { error } = await sb.from("tab_sales_ledger").insert(part);
+        if (error) errors.push(`Ventas: ${error.message}`);
+        else result.salesCreated += part.length;
+        await updateProgress(
+          "Importando ventas...",
+          result.salesCreated,
+          salesRows.length,
+        );
+      }
+      stepsCompleted.add("sales");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
     // ---------- 5. Partidas (BATCH) ----------
@@ -661,9 +698,17 @@ async function runImport(jobId: string) {
       });
     }
 
-    let processed = 0;
-    for (const batch of chunk(prepared, ENTRY_BATCH)) {
-      for (const entryBatch of batch) {
+    let processed = Math.min(job.current_count ?? 0, prepared.length);
+    const sliceStart = stepsCompleted.has("journal_entries") ? prepared.length : processed;
+    const journalSlice = prepared.slice(sliceStart, sliceStart + JOURNAL_SLICE);
+    await updateProgress(
+      "Importando partidas...",
+      processed,
+      prepared.length,
+      true,
+    );
+
+    for (const entryBatch of journalSlice) {
         const { data: insertedHeader, error: hErr } = await sb
           .from("tab_journal_entries")
           .insert(entryBatch.header)
@@ -689,7 +734,7 @@ async function runImport(jobId: string) {
         }));
 
         let detailFailed = false;
-        for (const detPart of chunk(detailRows, 50)) {
+        for (const detPart of chunk(detailRows, DETAIL_CHUNK)) {
           const { error: dErr } = await sb
             .from("tab_journal_entry_details")
             .insert(detPart);
@@ -740,7 +785,25 @@ async function runImport(jobId: string) {
         );
       }
 
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      current_step: "Importando partidas...",
+      current_count: processed,
+      total_count: prepared.length,
+    }).eq("id", jobId);
+
+    if (processed < prepared.length) {
+      await queueContinuation(jobId);
+      return;
     }
+
+    stepsCompleted.add("journal_entries");
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", jobId);
 
     // ---------- 6. Categorías de Activos Fijos ----------
     const categoryIdByLegacy = new Map<string, number>();
