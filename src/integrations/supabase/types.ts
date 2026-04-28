@@ -4442,6 +4442,10 @@ export type Database = {
         Args: { check_tenant_id: number; user_uuid: string }
         Returns: boolean
       }
+      link_account_parents_by_code: {
+        Args: { p_enterprise_id: number }
+        Returns: number
+      }
       preview_next_entry_number: {
         Args: {
           p_enterprise_id: number
