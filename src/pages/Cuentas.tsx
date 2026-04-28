@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Upload, Download, BookOpen, Copy } from "lucide-react";
 import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
@@ -29,6 +30,7 @@ const Cuentas = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
@@ -311,33 +313,34 @@ const Cuentas = () => {
   };
 
   const filteredAccounts = (() => {
-    if (!searchQuery.trim()) {
-      return accounts;
-    }
+    const hasSearch = !!searchQuery.trim();
+    const hasTypeFilter = typeFilter !== "all";
+    if (!hasSearch && !hasTypeFilter) return accounts;
 
-    // Encontrar todas las cuentas que coinciden con la búsqueda
-    const matchingAccounts = accounts.filter((account) =>
-      account.account_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      account.account_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Cuentas que coinciden directamente con los filtros aplicados
+    const matchingAccounts = accounts.filter((account) => {
+      const matchesSearch = !hasSearch
+        ? true
+        : account.account_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          account.account_name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = !hasTypeFilter ? true : account.account_type === typeFilter;
+      return matchesSearch && matchesType;
+    });
 
-    // Incluir todos los ancestros de las cuentas coincidentes
+    // Incluir todos los ancestros para mantener el árbol navegable
     const accountsToShow = new Set<number>();
-    
     matchingAccounts.forEach((account) => {
       accountsToShow.add(account.id);
-      
-      // Agregar todos los ancestros
       let currentAccount = account;
       while (currentAccount.parent_account_id) {
         accountsToShow.add(currentAccount.parent_account_id);
-        const parent = accounts.find(acc => acc.id === currentAccount.parent_account_id);
+        const parent = accounts.find((acc) => acc.id === currentAccount.parent_account_id);
         if (!parent) break;
         currentAccount = parent;
       }
     });
 
-    return accounts.filter(account => accountsToShow.has(account.id));
+    return accounts.filter((account) => accountsToShow.has(account.id));
   })();
 
   if (loading) {
@@ -395,18 +398,34 @@ const Cuentas = () => {
         <CardHeader>
           <CardTitle>Buscar Cuentas</CardTitle>
           <CardDescription>
-            Filtra por código o nombre de cuenta
+            Filtra por código, nombre o tipo de cuenta
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar cuenta..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar cuenta..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Tipo de cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="activo">Activo</SelectItem>
+                <SelectItem value="pasivo">Pasivo</SelectItem>
+                <SelectItem value="capital">Capital</SelectItem>
+                <SelectItem value="ingreso">Ingreso</SelectItem>
+                <SelectItem value="gasto">Gasto</SelectItem>
+                <SelectItem value="costo">Costo</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
