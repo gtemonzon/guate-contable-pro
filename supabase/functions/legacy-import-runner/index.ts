@@ -61,7 +61,7 @@ interface ParsedDataset {
 }
 
 const CHUNK = 500;
-const ENTRY_BATCH = 100; // partidas por lote
+const ENTRY_BATCH = 25; // partidas por lote para evitar statement timeout
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -436,89 +436,83 @@ async function runImport(jobId: string) {
 
     let processed = 0;
     for (const batch of chunk(prepared, ENTRY_BATCH)) {
-      // 1) insert headers en bulk
-      const headersToInsert = batch.map((b) => b.header);
-      const { data: insertedHeaders, error: hErr } = await sb
-        .from("tab_journal_entries")
-        .insert(headersToInsert)
-        .select("id, entry_number");
+      for (const entryBatch of batch) {
+        const { data: insertedHeader, error: hErr } = await sb
+          .from("tab_journal_entries")
+          .insert(entryBatch.header)
+          .select("id")
+          .single();
 
-      if (hErr || !insertedHeaders) {
-        errors.push(`Lote partidas: ${hErr?.message ?? "sin respuesta"}`);
-        processed += batch.length;
+        if (hErr || !insertedHeader) {
+          errors.push(
+            `Partida ${entryBatch.header.entry_number}: ${hErr?.message ?? "sin respuesta"}`,
+          );
+          processed += 1;
+          await updateProgress(
+            "Importando partidas...",
+            processed,
+            prepared.length,
+          );
+          continue;
+        }
+
+        const detailRows = entryBatch.details.map((detail) => ({
+          ...detail,
+          journal_entry_id: insertedHeader.id,
+        }));
+
+        let detailFailed = false;
+        for (const detPart of chunk(detailRows, 50)) {
+          const { error: dErr } = await sb
+            .from("tab_journal_entry_details")
+            .insert(detPart);
+          if (dErr) {
+            let rowFails = 0;
+            for (const row of detPart) {
+              const { error: rErr } = await sb
+                .from("tab_journal_entry_details")
+                .insert(row);
+              if (rErr) rowFails++;
+            }
+            if (rowFails > 0) {
+              detailFailed = true;
+              errors.push(
+                `Detalles ${entryBatch.header.entry_number}: ${rowFails} líneas omitidas (${dErr.message})`,
+              );
+            }
+          }
+        }
+
+        result.journalEntriesCreated++;
+
+        if (!detailFailed && entryBatch.balanced) {
+          const { error: pErr } = await sb
+            .from("tab_journal_entries")
+            .update({
+              is_posted: true,
+              status: "contabilizado",
+              posted_at: new Date().toISOString(),
+            })
+            .eq("id", insertedHeader.id);
+
+          if (pErr) {
+            errors.push(`Posting ${entryBatch.header.entry_number}: ${pErr.message}`);
+            result.journalEntriesAsDraft++;
+          } else {
+            result.journalEntriesPosted++;
+          }
+        } else {
+          result.journalEntriesAsDraft++;
+        }
+
+        processed += 1;
         await updateProgress(
           "Importando partidas...",
           processed,
           prepared.length,
         );
-        continue;
       }
 
-      // Mapear entry_number -> id
-      const idByNumber = new Map<string, string>();
-      insertedHeaders.forEach((h: any) => idByNumber.set(h.entry_number, h.id));
-
-      // 2) armar detalles en bulk
-      const allDetails: any[] = [];
-      const balancedIds: string[] = [];
-      for (const b of batch) {
-        const id = idByNumber.get(b.header.entry_number);
-        if (!id) continue;
-        for (const d of b.details) {
-          allDetails.push({ ...d, journal_entry_id: id });
-        }
-        result.journalEntriesCreated++;
-        if (b.balanced) balancedIds.push(id);
-      }
-
-      // 3) insertar detalles en sub-lotes; si un lote falla, intentar fila por fila
-      //    para no perder TODA la partida por una sola línea problemática.
-      for (const detPart of chunk(allDetails, CHUNK)) {
-        const { error: dErr } = await sb
-          .from("tab_journal_entry_details")
-          .insert(detPart);
-        if (dErr) {
-          // Fallback fila a fila
-          let rowFails = 0;
-          for (const row of detPart) {
-            const { error: rErr } = await sb
-              .from("tab_journal_entry_details")
-              .insert(row);
-            if (rErr) rowFails++;
-          }
-          if (rowFails > 0) {
-            errors.push(
-              `Detalles: ${rowFails} líneas omitidas en lote (${dErr.message})`,
-            );
-          }
-        }
-      }
-
-      // 4) marcar como contabilizadas las balanceadas
-      if (balancedIds.length > 0) {
-        const { error: pErr } = await sb
-          .from("tab_journal_entries")
-          .update({
-            is_posted: true,
-            status: "contabilizado",
-            posted_at: new Date().toISOString(),
-          })
-          .in("id", balancedIds);
-        if (pErr) {
-          errors.push(`Posting lote: ${pErr.message}`);
-          result.journalEntriesAsDraft += balancedIds.length;
-        } else {
-          result.journalEntriesPosted += balancedIds.length;
-        }
-      }
-      result.journalEntriesAsDraft += batch.length - balancedIds.length;
-
-      processed += batch.length;
-      await updateProgress(
-        "Importando partidas...",
-        processed,
-        prepared.length,
-      );
     }
 
     // ---------- 6. Categorías de Activos Fijos ----------
