@@ -807,7 +807,7 @@ async function runImport(jobId: string) {
 
     // ---------- 6. Categorías de Activos Fijos ----------
     const categoryIdByLegacy = new Map<string, number>();
-    if (ds.assetCategories.length > 0) {
+    if (!stepsCompleted.has("asset_categories") && ds.assetCategories.length > 0) {
       await updateProgress(
         "Creando categorías de activos...",
         0,
@@ -837,10 +837,26 @@ async function runImport(jobId: string) {
           result.assetCategoriesCreated++;
         }
       }
+      stepsCompleted.add("asset_categories");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
+    const { data: existingCategories } = await sb
+      .from("fixed_asset_categories")
+      .select("id, code")
+      .eq("enterprise_id", enterpriseId);
+    existingCategories?.forEach((row: any) => categoryIdByLegacy.set(String(row.code), row.id));
+    ds.assetCategories.forEach((cat) => {
+      const byCode = existingCategories?.find((row: any) => row.code === (cat.code || `LEG-${cat.legacyId}`));
+      if (byCode) categoryIdByLegacy.set(String(cat.legacyId), byCode.id);
+    });
+
     // ---------- 7. Activos Fijos ----------
-    if (ds.fixedAssets.length > 0) {
+    if (!stepsCompleted.has("fixed_assets") && ds.fixedAssets.length > 0) {
       await updateProgress(
         "Importando activos fijos...",
         0,
@@ -926,30 +942,38 @@ async function runImport(jobId: string) {
           assetRows.length,
         );
       }
+      stepsCompleted.add("fixed_assets");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
     // ---------- 8. Cerrar períodos (excepto el último, que queda abierto) ----------
-    await updateProgress("Cerrando períodos...", 0, 1, true);
-    const sortedYears = [...years].sort((a, b) => a - b);
-    const lastYear = sortedYears[sortedYears.length - 1];
-    if (sortedYears.length > 1) {
-      await sb
-        .from("tab_accounting_periods")
-        .update({
-          status: "cerrado",
-          closed_at: new Date().toISOString(),
-          closed_by: userId,
-        })
-        .eq("enterprise_id", enterpriseId)
-        .neq("year", lastYear);
-    }
-    // Marcar el último año como período por defecto + abierto
-    if (lastYear) {
-      await sb
-        .from("tab_accounting_periods")
-        .update({ status: "abierto", is_default_period: true })
-        .eq("enterprise_id", enterpriseId)
-        .eq("year", lastYear);
+    if (!stepsCompleted.has("close_periods")) {
+      await updateProgress("Cerrando períodos...", 0, 1, true);
+      const sortedYears = [...years].sort((a, b) => a - b);
+      const lastYear = sortedYears[sortedYears.length - 1];
+      if (sortedYears.length > 1) {
+        await sb
+          .from("tab_accounting_periods")
+          .update({
+            status: "cerrado",
+            closed_at: new Date().toISOString(),
+            closed_by: userId,
+          })
+          .eq("enterprise_id", enterpriseId)
+          .neq("year", lastYear);
+      }
+      if (lastYear) {
+        await sb
+          .from("tab_accounting_periods")
+          .update({ status: "abierto", is_default_period: true })
+          .eq("enterprise_id", enterpriseId)
+          .eq("year", lastYear);
+      }
+      stepsCompleted.add("close_periods");
     }
 
     await sb
@@ -962,6 +986,7 @@ async function runImport(jobId: string) {
         finished_at: new Date().toISOString(),
         result,
         errors,
+        steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", jobId);
   } catch (e: any) {
