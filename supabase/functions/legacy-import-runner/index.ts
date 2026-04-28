@@ -11,7 +11,9 @@ const corsHeaders = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/legacy-import-runner`;
 
 interface ParsedAccount {
   code: string;
@@ -61,7 +63,33 @@ interface ParsedDataset {
 }
 
 const CHUNK = 500;
-const ENTRY_BATCH = 25; // partidas por lote para evitar statement timeout
+const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
+const DETAIL_CHUNK = 25;
+const DELETE_BATCH = 250;
+
+interface ImportResult {
+  accountsCreated: number;
+  periodsCreated: number;
+  purchasesCreated: number;
+  salesCreated: number;
+  journalEntriesCreated: number;
+  journalEntriesPosted: number;
+  journalEntriesAsDraft: number;
+  assetCategoriesCreated: number;
+  fixedAssetsCreated: number;
+}
+
+const EMPTY_RESULT: ImportResult = {
+  accountsCreated: 0,
+  periodsCreated: 0,
+  purchasesCreated: 0,
+  salesCreated: 0,
+  journalEntriesCreated: 0,
+  journalEntriesPosted: 0,
+  journalEntriesAsDraft: 0,
+  assetCategoriesCreated: 0,
+  fixedAssetsCreated: 0,
+};
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -87,6 +115,205 @@ function extractYears(ds: ParsedDataset): number[] {
   ds.sales.forEach((s) => add(s.date));
   ds.journalEntries.forEach((j) => add(j.date));
   return Array.from(years).sort();
+}
+
+function mergeResult(existing: unknown): ImportResult {
+  return {
+    ...EMPTY_RESULT,
+    ...(existing && typeof existing === "object" ? (existing as Partial<ImportResult>) : {}),
+  };
+}
+
+function parseCompletedSteps(existing: unknown): Set<string> {
+  return new Set(Array.isArray(existing) ? existing.filter((step) => typeof step === "string") : []);
+}
+
+async function createAuthedClient(authHeader: string) {
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("No autorizado");
+  }
+
+  return { client, user: data.user };
+}
+
+async function queueContinuation(jobId: string) {
+  const response = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_ROLE}`,
+      apikey: SERVICE_ROLE,
+    },
+    body: JSON.stringify({ jobId }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`No se pudo continuar la importación: ${body}`);
+  }
+}
+
+async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: string) {
+  const { data } = await sb
+    .from("tab_legacy_import_jobs")
+    .select("status")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  return !!data && (data.status === "pending" || data.status === "running");
+}
+
+async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  await sb
+    .from("tab_legacy_import_jobs")
+    .update({
+      status: "failed",
+      error_message: "Proceso cancelado manualmente antes del borrado.",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("enterprise_id", enterpriseId)
+    .in("status", ["pending", "running"]);
+
+  while (true) {
+    const { data: entryRows, error: entryErr } = await sb
+      .from("tab_journal_entries")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .limit(DELETE_BATCH);
+    if (entryErr) throw entryErr;
+    if (!entryRows?.length) break;
+
+    const entryIds = entryRows.map((row) => row.id);
+    const { error: detailErr } = await sb
+      .from("tab_journal_entry_details")
+      .delete()
+      .in("journal_entry_id", entryIds);
+    if (detailErr) throw detailErr;
+
+    const { error: deleteEntryErr } = await sb
+      .from("tab_journal_entries")
+      .delete()
+      .in("id", entryIds);
+    if (deleteEntryErr) throw deleteEntryErr;
+  }
+
+  while (true) {
+    const { data: assetRows, error: assetErr } = await sb
+      .from("fixed_assets")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .limit(DELETE_BATCH);
+    if (assetErr) throw assetErr;
+    if (!assetRows?.length) break;
+
+    const assetIds = assetRows.map((row) => row.id);
+    const { error: schedErr } = await sb
+      .from("fixed_asset_depreciation_schedule")
+      .delete()
+      .in("asset_id", assetIds);
+    if (schedErr) throw schedErr;
+
+    const { error: eventErr } = await sb
+      .from("fixed_asset_event_log")
+      .delete()
+      .in("asset_id", assetIds);
+    if (eventErr) throw eventErr;
+
+    const { error: deleteAssetErr } = await sb
+      .from("fixed_assets")
+      .delete()
+      .in("id", assetIds);
+    if (deleteAssetErr) throw deleteAssetErr;
+  }
+
+  const { error: purchaseErr } = await sb
+    .from("tab_purchase_ledger")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (purchaseErr) throw purchaseErr;
+
+  const { error: salesErr } = await sb
+    .from("tab_sales_ledger")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (salesErr) throw salesErr;
+
+  const { error: categoriesErr } = await sb
+    .from("fixed_asset_categories")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (categoriesErr) throw categoriesErr;
+
+  const { error: booksErr } = await sb
+    .from("tab_purchase_books")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (booksErr) throw booksErr;
+
+  const { error: periodsErr } = await sb
+    .from("tab_accounting_periods")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (periodsErr) throw periodsErr;
+
+  while (true) {
+    const { data: accountRows, error: accountErr } = await sb
+      .from("tab_accounts")
+      .select("id, parent_account_id")
+      .eq("enterprise_id", enterpriseId);
+    if (accountErr) throw accountErr;
+    if (!accountRows?.length) break;
+
+    const parentIds = new Set(
+      accountRows
+        .map((row) => row.parent_account_id)
+        .filter((id): id is number => typeof id === "number"),
+    );
+    const leafIds = accountRows
+      .filter((row) => !parentIds.has(row.id))
+      .slice(0, DELETE_BATCH)
+      .map((row) => row.id);
+
+    if (!leafIds.length) break;
+
+    const { error: deleteLeafErr } = await sb
+      .from("tab_accounts")
+      .delete()
+      .in("id", leafIds);
+    if (deleteLeafErr) throw deleteLeafErr;
+  }
+
+  const { data: payloadRows, error: payloadErr } = await sb
+    .from("tab_legacy_import_jobs")
+    .select("payload_path")
+    .eq("enterprise_id", enterpriseId)
+    .not("payload_path", "is", null);
+  if (payloadErr) throw payloadErr;
+
+  const payloadPaths = (payloadRows ?? [])
+    .map((row) => row.payload_path)
+    .filter((path): path is string => !!path);
+
+  if (payloadPaths.length > 0) {
+    const { error: storageErr } = await sb.storage
+      .from("legacy-imports")
+      .remove(payloadPaths);
+    if (storageErr) {
+      console.warn("No se pudieron borrar algunos payloads", storageErr.message);
+    }
+  }
+
+  const { error: jobsErr } = await sb
+    .from("tab_legacy_import_jobs")
+    .delete()
+    .eq("enterprise_id", enterpriseId);
+  if (jobsErr) throw jobsErr;
 }
 
 async function runImport(jobId: string) {
@@ -128,18 +355,11 @@ async function runImport(jobId: string) {
     ds = job.payload;
   }
 
-  const errors: string[] = [];
-  const result = {
-    accountsCreated: 0,
-    periodsCreated: 0,
-    purchasesCreated: 0,
-    salesCreated: 0,
-    journalEntriesCreated: 0,
-    journalEntriesPosted: 0,
-    journalEntriesAsDraft: 0,
-    assetCategoriesCreated: 0,
-    fixedAssetsCreated: 0,
-  };
+  const errors: string[] = Array.isArray(job.errors)
+    ? job.errors.filter((item: unknown): item is string => typeof item === "string")
+    : [];
+  const result = mergeResult(job.result);
+  const stepsCompleted = parseCompletedSteps(job.steps_completed);
 
   let lastUpdate = 0;
   const updateProgress = async (
@@ -164,13 +384,17 @@ async function runImport(jobId: string) {
 
   await sb
     .from("tab_legacy_import_jobs")
-    .update({ status: "running", started_at: new Date().toISOString() })
+    .update({
+      status: "running",
+      started_at: job.started_at ?? new Date().toISOString(),
+      errors,
+      result,
+      steps_completed: Array.from(stepsCompleted),
+    })
     .eq("id", jobId);
 
   try {
     // ---------- 1. Cuentas ----------
-    await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
-    // Nivel y allows_movement por longitud de código (esquema 1/2/4/6 dígitos)
     const levelByLen = (len: number) =>
       len === 6 ? 4 : len === 4 ? 3 : len === 2 ? 2 : 1;
     const accountRows = ds.accounts.map((a) => ({
@@ -186,22 +410,30 @@ async function runImport(jobId: string) {
       is_bank_account: false,
       is_monetary: false,
     }));
-    for (const part of chunk(accountRows, CHUNK)) {
-      const { error } = await sb.from("tab_accounts").insert(part);
-      if (error) errors.push(`Cuentas: ${error.message}`);
-      else result.accountsCreated += part.length;
-      await updateProgress(
-        "Insertando cuentas...",
-        result.accountsCreated,
-        accountRows.length,
-      );
-    }
+    if (!stepsCompleted.has("accounts")) {
+      await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
+      for (const part of chunk(accountRows, CHUNK)) {
+        const { error } = await sb.from("tab_accounts").insert(part);
+        if (error) errors.push(`Cuentas: ${error.message}`);
+        else result.accountsCreated += part.length;
+        await updateProgress(
+          "Insertando cuentas...",
+          result.accountsCreated,
+          accountRows.length,
+        );
+      }
 
-    // Vincular padres por longitud de código (1->2->4->6)
-    const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
-      p_enterprise_id: enterpriseId,
-    });
-    if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
+      const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
+        p_enterprise_id: enterpriseId,
+      });
+      if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
+      stepsCompleted.add("accounts");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    }
 
     const { data: accRows } = await sb
       .from("tab_accounts")
@@ -219,7 +451,6 @@ async function runImport(jobId: string) {
 
     // ---------- 2. Períodos ----------
     const years = extractYears(ds);
-    await updateProgress("Creando períodos...", 0, years.length, true);
     const periodRows = years.map((y) => ({
       enterprise_id: enterpriseId,
       year: y,
@@ -228,12 +459,21 @@ async function runImport(jobId: string) {
       status: "abierto",
       is_default_period: false,
     }));
-    if (periodRows.length > 0) {
-      const { error } = await sb
-        .from("tab_accounting_periods")
-        .insert(periodRows);
-      if (error) errors.push(`Períodos: ${error.message}`);
-      else result.periodsCreated += periodRows.length;
+    if (!stepsCompleted.has("periods")) {
+      await updateProgress("Creando períodos...", 0, years.length, true);
+      if (periodRows.length > 0) {
+        const { error } = await sb
+          .from("tab_accounting_periods")
+          .insert(periodRows);
+        if (error) errors.push(`Períodos: ${error.message}`);
+        else result.periodsCreated += periodRows.length;
+      }
+      stepsCompleted.add("periods");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
     const { data: perRows } = await sb
       .from("tab_accounting_periods")
@@ -243,7 +483,6 @@ async function runImport(jobId: string) {
     perRows?.forEach((r: any) => periodIdByYear.set(r.year, r.id));
 
     // ---------- 3. Compras ----------
-    await updateProgress("Importando compras...", 0, ds.purchases.length, true);
     const { data: opTypes } = await sb
       .from("tab_operation_types")
       .select("id, code")
@@ -258,19 +497,22 @@ async function runImport(jobId: string) {
       bookKeys.add(`${y}-${m}`);
     });
     const bookIdByYM = new Map<string, number>();
-    for (const key of bookKeys) {
-      const [y, m] = key.split("-").map(Number);
-      const { data: bk } = await sb
-        .from("tab_purchase_books")
-        .insert({
-          enterprise_id: enterpriseId,
-          year: y,
-          month: m,
-          created_by: userId,
-        })
-        .select("id")
-        .single();
-      if (bk) bookIdByYM.set(key, bk.id);
+    if (!stepsCompleted.has("purchases")) {
+      await updateProgress("Importando compras...", 0, ds.purchases.length, true);
+      for (const key of bookKeys) {
+        const [y, m] = key.split("-").map(Number);
+        const { data: bk } = await sb
+          .from("tab_purchase_books")
+          .insert({
+            enterprise_id: enterpriseId,
+            year: y,
+            month: m,
+            created_by: userId,
+          })
+          .select("id")
+          .single();
+        if (bk) bookIdByYM.set(key, bk.id);
+      }
     }
 
     const purchaseRows = ds.purchases.map((p) => {
@@ -304,19 +546,32 @@ async function runImport(jobId: string) {
       };
     });
 
-    for (const part of chunk(purchaseRows, CHUNK)) {
-      const { error } = await sb.from("tab_purchase_ledger").insert(part);
-      if (error) errors.push(`Compras: ${error.message}`);
-      else result.purchasesCreated += part.length;
-      await updateProgress(
-        "Importando compras...",
-        result.purchasesCreated,
-        purchaseRows.length,
-      );
+    if (!stepsCompleted.has("purchases")) {
+      for (const part of chunk(purchaseRows, CHUNK)) {
+        const { error } = await sb.from("tab_purchase_ledger").insert(part);
+        if (error) errors.push(`Compras: ${error.message}`);
+        else result.purchasesCreated += part.length;
+        await updateProgress(
+          "Importando compras...",
+          result.purchasesCreated,
+          purchaseRows.length,
+        );
+      }
+      stepsCompleted.add("purchases");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    } else {
+      const { data: existingBooks } = await sb
+        .from("tab_purchase_books")
+        .select("id, year, month")
+        .eq("enterprise_id", enterpriseId);
+      existingBooks?.forEach((bk: any) => bookIdByYM.set(`${bk.year}-${bk.month}`, bk.id));
     }
 
     // ---------- 4. Ventas ----------
-    await updateProgress("Importando ventas...", 0, ds.sales.length, true);
     const salesRows = ds.sales.map((s) => {
       const [y] = s.date.split("-").map(Number);
       const incomeAccountId = s.legacyAccountId
@@ -350,15 +605,24 @@ async function runImport(jobId: string) {
         establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
       };
     });
-    for (const part of chunk(salesRows, CHUNK)) {
-      const { error } = await sb.from("tab_sales_ledger").insert(part);
-      if (error) errors.push(`Ventas: ${error.message}`);
-      else result.salesCreated += part.length;
-      await updateProgress(
-        "Importando ventas...",
-        result.salesCreated,
-        salesRows.length,
-      );
+    if (!stepsCompleted.has("sales")) {
+      await updateProgress("Importando ventas...", 0, ds.sales.length, true);
+      for (const part of chunk(salesRows, CHUNK)) {
+        const { error } = await sb.from("tab_sales_ledger").insert(part);
+        if (error) errors.push(`Ventas: ${error.message}`);
+        else result.salesCreated += part.length;
+        await updateProgress(
+          "Importando ventas...",
+          result.salesCreated,
+          salesRows.length,
+        );
+      }
+      stepsCompleted.add("sales");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
     // ---------- 5. Partidas (BATCH) ----------
@@ -434,9 +698,17 @@ async function runImport(jobId: string) {
       });
     }
 
-    let processed = 0;
-    for (const batch of chunk(prepared, ENTRY_BATCH)) {
-      for (const entryBatch of batch) {
+    let processed = Math.min(job.current_count ?? 0, prepared.length);
+    const sliceStart = stepsCompleted.has("journal_entries") ? prepared.length : processed;
+    const journalSlice = prepared.slice(sliceStart, sliceStart + JOURNAL_SLICE);
+    await updateProgress(
+      "Importando partidas...",
+      processed,
+      prepared.length,
+      true,
+    );
+
+    for (const entryBatch of journalSlice) {
         const { data: insertedHeader, error: hErr } = await sb
           .from("tab_journal_entries")
           .insert(entryBatch.header)
@@ -462,7 +734,7 @@ async function runImport(jobId: string) {
         }));
 
         let detailFailed = false;
-        for (const detPart of chunk(detailRows, 50)) {
+        for (const detPart of chunk(detailRows, DETAIL_CHUNK)) {
           const { error: dErr } = await sb
             .from("tab_journal_entry_details")
             .insert(detPart);
@@ -513,11 +785,29 @@ async function runImport(jobId: string) {
         );
       }
 
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      current_step: "Importando partidas...",
+      current_count: processed,
+      total_count: prepared.length,
+    }).eq("id", jobId);
+
+    if (processed < prepared.length) {
+      await queueContinuation(jobId);
+      return;
     }
+
+    stepsCompleted.add("journal_entries");
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", jobId);
 
     // ---------- 6. Categorías de Activos Fijos ----------
     const categoryIdByLegacy = new Map<string, number>();
-    if (ds.assetCategories.length > 0) {
+    if (!stepsCompleted.has("asset_categories") && ds.assetCategories.length > 0) {
       await updateProgress(
         "Creando categorías de activos...",
         0,
@@ -547,10 +837,26 @@ async function runImport(jobId: string) {
           result.assetCategoriesCreated++;
         }
       }
+      stepsCompleted.add("asset_categories");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
+    const { data: existingCategories } = await sb
+      .from("fixed_asset_categories")
+      .select("id, code")
+      .eq("enterprise_id", enterpriseId);
+    existingCategories?.forEach((row: any) => categoryIdByLegacy.set(String(row.code), row.id));
+    ds.assetCategories.forEach((cat) => {
+      const byCode = existingCategories?.find((row: any) => row.code === (cat.code || `LEG-${cat.legacyId}`));
+      if (byCode) categoryIdByLegacy.set(String(cat.legacyId), byCode.id);
+    });
+
     // ---------- 7. Activos Fijos ----------
-    if (ds.fixedAssets.length > 0) {
+    if (!stepsCompleted.has("fixed_assets") && ds.fixedAssets.length > 0) {
       await updateProgress(
         "Importando activos fijos...",
         0,
@@ -636,30 +942,38 @@ async function runImport(jobId: string) {
           assetRows.length,
         );
       }
+      stepsCompleted.add("fixed_assets");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
     }
 
     // ---------- 8. Cerrar períodos (excepto el último, que queda abierto) ----------
-    await updateProgress("Cerrando períodos...", 0, 1, true);
-    const sortedYears = [...years].sort((a, b) => a - b);
-    const lastYear = sortedYears[sortedYears.length - 1];
-    if (sortedYears.length > 1) {
-      await sb
-        .from("tab_accounting_periods")
-        .update({
-          status: "cerrado",
-          closed_at: new Date().toISOString(),
-          closed_by: userId,
-        })
-        .eq("enterprise_id", enterpriseId)
-        .neq("year", lastYear);
-    }
-    // Marcar el último año como período por defecto + abierto
-    if (lastYear) {
-      await sb
-        .from("tab_accounting_periods")
-        .update({ status: "abierto", is_default_period: true })
-        .eq("enterprise_id", enterpriseId)
-        .eq("year", lastYear);
+    if (!stepsCompleted.has("close_periods")) {
+      await updateProgress("Cerrando períodos...", 0, 1, true);
+      const sortedYears = [...years].sort((a, b) => a - b);
+      const lastYear = sortedYears[sortedYears.length - 1];
+      if (sortedYears.length > 1) {
+        await sb
+          .from("tab_accounting_periods")
+          .update({
+            status: "cerrado",
+            closed_at: new Date().toISOString(),
+            closed_by: userId,
+          })
+          .eq("enterprise_id", enterpriseId)
+          .neq("year", lastYear);
+      }
+      if (lastYear) {
+        await sb
+          .from("tab_accounting_periods")
+          .update({ status: "abierto", is_default_period: true })
+          .eq("enterprise_id", enterpriseId)
+          .eq("year", lastYear);
+      }
+      stepsCompleted.add("close_periods");
     }
 
     await sb
@@ -672,6 +986,7 @@ async function runImport(jobId: string) {
         finished_at: new Date().toISOString(),
         result,
         errors,
+        steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", jobId);
   } catch (e: any) {
@@ -694,15 +1009,56 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
   try {
-    const { jobId } = await req.json();
+    const body = await req.json();
+
+    if (body?.action === "clear") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { client } = await createAuthedClient(authHeader);
+      const enterpriseId = Number(body.enterpriseId);
+      if (!enterpriseId) {
+        return new Response(JSON.stringify({ error: "enterpriseId requerido" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: enterprise, error: enterpriseErr } = await client
+        .from("tab_enterprises")
+        .select("id")
+        .eq("id", enterpriseId)
+        .maybeSingle();
+
+      if (enterpriseErr || !enterprise) {
+        return new Response(JSON.stringify({ error: "No tienes acceso a esta empresa" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false },
+      });
+      await resetEnterpriseData(adminClient, enterpriseId);
+      return new Response(JSON.stringify({ ok: true, cleared: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { jobId } = body;
     if (!jobId || typeof jobId !== "string") {
       return new Response(JSON.stringify({ error: "jobId requerido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    // Procesar en background — la respuesta sale ya
-    // @ts-ignore EdgeRuntime es global en Supabase Edge
+
     EdgeRuntime.waitUntil(runImport(jobId));
     return new Response(JSON.stringify({ ok: true, jobId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
