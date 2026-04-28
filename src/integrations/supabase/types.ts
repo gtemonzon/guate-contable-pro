@@ -2836,7 +2836,8 @@ export type Database = {
           errors: Json
           finished_at: string | null
           id: string
-          payload: Json
+          payload: Json | null
+          payload_path: string | null
           result: Json | null
           started_at: string | null
           status: string
@@ -2855,7 +2856,8 @@ export type Database = {
           errors?: Json
           finished_at?: string | null
           id?: string
-          payload: Json
+          payload?: Json | null
+          payload_path?: string | null
           result?: Json | null
           started_at?: string | null
           status?: string
@@ -2874,7 +2876,8 @@ export type Database = {
           errors?: Json
           finished_at?: string | null
           id?: string
-          payload?: Json
+          payload?: Json | null
+          payload_path?: string | null
           result?: Json | null
           started_at?: string | null
           status?: string
