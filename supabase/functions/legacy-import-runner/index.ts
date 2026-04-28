@@ -1029,7 +1029,23 @@ Deno.serve(async (req) => {
         });
       }
 
-      await resetEnterpriseData(client, enterpriseId);
+      const { data: enterprise, error: enterpriseErr } = await client
+        .from("tab_enterprises")
+        .select("id")
+        .eq("id", enterpriseId)
+        .maybeSingle();
+
+      if (enterpriseErr || !enterprise) {
+        return new Response(JSON.stringify({ error: "No tienes acceso a esta empresa" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false },
+      });
+      await resetEnterpriseData(adminClient, enterpriseId);
       return new Response(JSON.stringify({ ok: true, cleared: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
