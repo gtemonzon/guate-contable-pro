@@ -26,21 +26,40 @@ interface MonthLabel {
 
 interface MonthlyBalanceTreeViewProps {
   accounts: MonthlyAccount[];
-  /** Sorted list of selected month numbers (1-12). */
   months?: number[];
-  /** Mapping month number -> display label. */
   monthLabels?: MonthLabel[];
   onViewDetails?: (accountId: number) => void;
 }
 
-interface TreeNodeProps {
-  account: MonthlyAccount;
-  children: MonthlyAccount[];
-  level: number;
-  allAccounts: MonthlyAccount[];
-  months: number[];
-  showMonthlyDetail: boolean;
-  onViewDetails?: (accountId: number) => void;
+// Fixed pixel widths to guarantee vertical column alignment regardless of row indentation.
+const COL_WIDTHS = {
+  chevron: 32,
+  code: 80,
+  name: 280,
+  initial: 130,
+  debit: 120,
+  credit: 120,
+  movement: 130, // when collapsed
+  monthCell: 130, // per month when expanded
+  final: 140,
+  actions: 56,
+};
+
+function buildGridTemplate(showMonthlyDetail: boolean, monthsLen: number): string {
+  const movementCols = showMonthlyDetail
+    ? `repeat(${Math.max(1, monthsLen)}, ${COL_WIDTHS.monthCell}px)`
+    : `${COL_WIDTHS.movement}px`;
+  return [
+    `${COL_WIDTHS.chevron}px`,
+    `${COL_WIDTHS.code}px`,
+    `minmax(${COL_WIDTHS.name}px, 1fr)`,
+    `${COL_WIDTHS.initial}px`,
+    `${COL_WIDTHS.debit}px`,
+    `${COL_WIDTHS.credit}px`,
+    movementCols,
+    `${COL_WIDTHS.final}px`,
+    `${COL_WIDTHS.actions}px`,
+  ].join(" ");
 }
 
 function getMovementStyle(balanceType: string, movement: number) {
@@ -53,6 +72,17 @@ function getMovementStyle(balanceType: string, movement: number) {
   };
 }
 
+interface TreeNodeProps {
+  account: MonthlyAccount;
+  children: MonthlyAccount[];
+  level: number;
+  allAccounts: MonthlyAccount[];
+  months: number[];
+  showMonthlyDetail: boolean;
+  gridTemplate: string;
+  onViewDetails?: (accountId: number) => void;
+}
+
 function TreeNode({
   account,
   children,
@@ -60,31 +90,23 @@ function TreeNode({
   allAccounts,
   months,
   showMonthlyDetail,
+  gridTemplate,
   onViewDetails,
 }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 3);
   const hasChildren = children.length > 0;
-  const paddingLeft = `${level * 1.5}rem`;
 
   const movementStyle = getMovementStyle(account.balance_type, account.movement);
   const MovementIcon = movementStyle.icon;
-
-  // Adjust column widths: when monthly detail is on, the "Movimiento" column
-  // becomes a flex container with one cell per month; otherwise it's a single cell.
-  const movementColSpan = showMonthlyDetail ? Math.max(1, months.length) : 1;
-  // Use a 12 + N grid where N = extra months when expanded
-  const gridCols = showMonthlyDetail ? 12 + (months.length - 1) : 12;
-  // Minimum width so columns don't compress; triggers horizontal scroll instead.
-  const minTableWidth = showMonthlyDetail
-    ? `${800 + months.length * 90}px`
-    : "1100px";
+  const indent = level * 20; // px, applied only to name cell
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 py-2 px-3 border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary rounded-r-lg transition-colors border-b"
-        style={{ paddingLeft }}
+        className="grid gap-3 items-center py-2 px-3 border-l-4 border-l-transparent hover:bg-[hsl(var(--table-row-hover))] hover:border-l-primary transition-colors border-b"
+        style={{ gridTemplateColumns: gridTemplate }}
       >
+        {/* Chevron */}
         <button
           onClick={() => hasChildren && setIsExpanded(!isExpanded)}
           className="flex items-center justify-center w-6 h-6"
@@ -100,129 +122,114 @@ function TreeNode({
           )}
         </button>
 
-        <div
-          className="flex-1 grid gap-4 items-center"
-          style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, minWidth: minTableWidth }}
-        >
-          {/* Code */}
-          <div className="col-span-1">
-            <span className="font-mono text-sm text-muted-foreground">
-              {account.account_code}
-            </span>
-          </div>
+        {/* Code */}
+        <div className="font-mono text-sm text-muted-foreground truncate">
+          {account.account_code}
+        </div>
 
-          {/* Name */}
-          <div className="col-span-3">
-            <span className={`font-medium ${hasChildren ? "font-semibold" : ""}`}>
-              {account.account_name}
-            </span>
-          </div>
+        {/* Name (indented) */}
+        <div className="min-w-0" style={{ paddingLeft: indent }}>
+          <span className={`font-medium truncate ${hasChildren ? "font-semibold" : ""}`}>
+            {account.account_name}
+          </span>
+        </div>
 
-          {/* Initial Balance */}
-          <div className="col-span-2 text-right">
+        {/* Initial Balance */}
+        <div className="text-right">
+          <span
+            className={cn(
+              "font-mono text-sm whitespace-nowrap",
+              hasChildren && "font-semibold",
+              account.initial_balance < 0 && "text-red-600"
+            )}
+          >
+            {account.initial_balance !== 0
+              ? formatCurrency(Math.abs(account.initial_balance))
+              : "-"}
+          </span>
+        </div>
+
+        {/* Debit */}
+        <div className="text-right">
+          <span className={`font-mono text-sm whitespace-nowrap ${hasChildren ? "font-semibold" : ""}`}>
+            {account.debit > 0 ? formatCurrency(account.debit) : "-"}
+          </span>
+        </div>
+
+        {/* Credit */}
+        <div className="text-right">
+          <span className={`font-mono text-sm whitespace-nowrap ${hasChildren ? "font-semibold" : ""}`}>
+            {account.credit > 0 ? formatCurrency(account.credit) : "-"}
+          </span>
+        </div>
+
+        {/* Movement: aggregated OR one cell per month — each occupies its own grid column */}
+        {showMonthlyDetail ? (
+          months.map((m) => {
+            const cell = account.monthly_movements?.[m];
+            const net = cell?.net ?? 0;
+            const style = getMovementStyle(account.balance_type, net);
+            const Icon = style.icon;
+            return (
+              <div key={m} className="text-right">
+                <span
+                  className={cn(
+                    "font-mono text-sm inline-flex items-center gap-0.5 whitespace-nowrap",
+                    hasChildren && "font-semibold",
+                    style.color
+                  )}
+                >
+                  {Icon && net !== 0 && <Icon className="h-3 w-3" />}
+                  {net !== 0 ? formatCurrency(Math.abs(net)) : "-"}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-right">
             <span
               className={cn(
-                "font-mono text-sm",
+                "font-mono text-sm inline-flex items-center gap-0.5 whitespace-nowrap",
                 hasChildren && "font-semibold",
-                account.initial_balance < 0 && "text-red-600"
+                movementStyle.color
               )}
             >
-              {account.initial_balance !== 0
-                ? formatCurrency(Math.abs(account.initial_balance))
+              {MovementIcon && account.movement !== 0 && (
+                <MovementIcon className="h-3 w-3" />
+              )}
+              {account.movement !== 0
+                ? formatCurrency(Math.abs(account.movement))
                 : "-"}
             </span>
           </div>
+        )}
 
-          {/* Debit */}
-          <div className="col-span-1 text-right">
-            <span className={`font-mono text-sm ${hasChildren ? "font-semibold" : ""}`}>
-              {account.debit > 0 ? formatCurrency(account.debit) : "-"}
-            </span>
-          </div>
+        {/* Final Balance */}
+        <div className="text-right">
+          <span
+            className={cn(
+              "font-mono text-sm whitespace-nowrap",
+              hasChildren && "font-semibold",
+              account.final_balance < 0 && "text-red-600"
+            )}
+          >
+            {account.final_balance !== 0
+              ? formatCurrency(Math.abs(account.final_balance))
+              : "-"}
+          </span>
+        </div>
 
-          {/* Credit */}
-          <div className="col-span-1 text-right">
-            <span className={`font-mono text-sm ${hasChildren ? "font-semibold" : ""}`}>
-              {account.credit > 0 ? formatCurrency(account.credit) : "-"}
-            </span>
-          </div>
-
-          {/* Movement: aggregated OR one cell per month */}
-          {showMonthlyDetail ? (
-            <div
-              className="text-right grid gap-2"
-              style={{
-                gridColumn: `span ${movementColSpan} / span ${movementColSpan}`,
-                gridTemplateColumns: `repeat(${movementColSpan}, minmax(0, 1fr))`,
-              }}
-            >
-              {months.map((m) => {
-                const cell = account.monthly_movements?.[m];
-                const net = cell?.net ?? 0;
-                const style = getMovementStyle(account.balance_type, net);
-                const Icon = style.icon;
-                return (
-                  <div key={m} className="text-right">
-                    <span
-                      className={cn(
-                        "font-mono text-sm inline-flex items-center gap-0.5",
-                        hasChildren && "font-semibold",
-                        style.color
-                      )}
-                    >
-                      {Icon && net !== 0 && <Icon className="h-3 w-3" />}
-                      {net !== 0 ? formatCurrency(Math.abs(net)) : "-"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="col-span-1 text-right">
-              <span
-                className={cn(
-                  "font-mono text-sm inline-flex items-center gap-0.5",
-                  hasChildren && "font-semibold",
-                  movementStyle.color
-                )}
-              >
-                {MovementIcon && account.movement !== 0 && (
-                  <MovementIcon className="h-3 w-3" />
-                )}
-                {account.movement !== 0
-                  ? formatCurrency(Math.abs(account.movement))
-                  : "-"}
-              </span>
-            </div>
-          )}
-
-          {/* Final Balance */}
-          <div className="col-span-2 text-right">
-            <span
-              className={cn(
-                "font-mono text-sm",
-                hasChildren && "font-semibold",
-                account.final_balance < 0 && "text-red-600"
-              )}
-            >
-              {account.final_balance !== 0
-                ? formatCurrency(Math.abs(account.final_balance))
-                : "-"}
-            </span>
-          </div>
-
-          {/* Actions */}
-          <div className="col-span-1 text-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onViewDetails?.(account.id)}
-              title="Ver detalle en Mayor General"
-              className="h-8 w-8"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* Actions */}
+        <div className="text-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onViewDetails?.(account.id)}
+            title="Ver detalle en Mayor General"
+            className="h-8 w-8"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -237,6 +244,7 @@ function TreeNode({
               allAccounts={allAccounts}
               months={months}
               showMonthlyDetail={showMonthlyDetail}
+              gridTemplate={gridTemplate}
               onViewDetails={onViewDetails}
             />
           ))}
@@ -254,13 +262,9 @@ export function MonthlyBalanceTreeView({
 }: MonthlyBalanceTreeViewProps) {
   const [showMonthlyDetail, setShowMonthlyDetail] = useState(false);
   const canExpandMonths = months.length > 1;
-  // If only one month is selected, expanding doesn't add value — force collapsed.
   const effectiveExpand = canExpandMonths && showMonthlyDetail;
-  const movementColSpan = effectiveExpand ? months.length : 1;
-  const gridCols = effectiveExpand ? 12 + (months.length - 1) : 12;
-  const minTableWidth = effectiveExpand
-    ? `${800 + months.length * 90}px`
-    : "1100px";
+
+  const gridTemplate = buildGridTemplate(effectiveExpand, months.length);
 
   const buildTree = (parentId: number | null = null): MonthlyAccount[] => {
     return accounts
@@ -279,6 +283,7 @@ export function MonthlyBalanceTreeView({
         allAccounts={accounts}
         months={months}
         showMonthlyDetail={effectiveExpand}
+        gridTemplate={gridTemplate}
         onViewDetails={onViewDetails}
       />
     ));
@@ -287,35 +292,28 @@ export function MonthlyBalanceTreeView({
   const labelFor = (m: number) => monthLabels.find((l) => l.value === m)?.label ?? `Mes ${m}`;
 
   return (
-    <div className="space-y-0 overflow-x-auto">
-     <div style={{ minWidth: minTableWidth }}>
-      {/* Header */}
-      <div
-        className="grid gap-4 py-3 px-3 bg-muted font-semibold text-sm border-b-2"
-        style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`, paddingLeft: "2rem" }}
-      >
-        <div className="col-span-1 pl-8">Código</div>
-        <div className="col-span-3">Nombre de Cuenta</div>
-        <div className="col-span-2 text-right">Saldo Inicial</div>
-        <div className="col-span-1 text-right">Debe</div>
-        <div className="col-span-1 text-right">Haber</div>
+    <div className="overflow-x-auto">
+      <div className="inline-block min-w-full">
+        {/* Header */}
+        <div
+          className="grid gap-3 py-3 px-3 bg-muted font-semibold text-sm border-b-2 sticky top-0 z-10"
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
+          <div /> {/* chevron column */}
+          <div>Código</div>
+          <div>Nombre de Cuenta</div>
+          <div className="text-right">Saldo Inicial</div>
+          <div className="text-right">Debe</div>
+          <div className="text-right">Haber</div>
 
-        {/* Movement header with collapse/expand toggle */}
-        {effectiveExpand ? (
-          <div
-            className="grid gap-2"
-            style={{
-              gridColumn: `span ${movementColSpan} / span ${movementColSpan}`,
-              gridTemplateColumns: `repeat(${movementColSpan}, minmax(0, 1fr))`,
-            }}
-          >
-            {months.map((m, idx) => (
+          {effectiveExpand ? (
+            months.map((m, idx) => (
               <div
                 key={m}
-                className="text-right flex items-center justify-end gap-1"
+                className="text-right flex items-center justify-end gap-1 whitespace-nowrap"
                 title={labelFor(m)}
               >
-                {idx === 0 && canExpandMonths && (
+                {idx === 0 && (
                   <button
                     type="button"
                     onClick={() => setShowMonthlyDetail(false)}
@@ -327,31 +325,30 @@ export function MonthlyBalanceTreeView({
                 )}
                 <span className="truncate">{labelFor(m)}</span>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="col-span-1 text-right flex items-center justify-end gap-1">
-            {canExpandMonths && (
-              <button
-                type="button"
-                onClick={() => setShowMonthlyDetail(true)}
-                className="text-muted-foreground hover:text-primary"
-                title="Expandir movimientos por mes"
-              >
-                <PlusSquare className="h-4 w-4" />
-              </button>
-            )}
-            <span>Movimiento</span>
-          </div>
-        )}
+            ))
+          ) : (
+            <div className="text-right flex items-center justify-end gap-1 whitespace-nowrap">
+              {canExpandMonths && (
+                <button
+                  type="button"
+                  onClick={() => setShowMonthlyDetail(true)}
+                  className="text-muted-foreground hover:text-primary"
+                  title="Expandir movimientos por mes"
+                >
+                  <PlusSquare className="h-4 w-4" />
+                </button>
+              )}
+              <span>Movimiento</span>
+            </div>
+          )}
 
-        <div className="col-span-2 text-right">Saldo Final</div>
-        <div className="col-span-1 text-center">Acciones</div>
+          <div className="text-right">Saldo Final</div>
+          <div className="text-center">Acciones</div>
+        </div>
+
+        {/* Tree */}
+        {renderTree(null, 0)}
       </div>
-
-      {/* Tree */}
-      {renderTree(null, 0)}
-     </div>
     </div>
   );
 }
