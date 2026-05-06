@@ -227,7 +227,7 @@ function parseJournal(
 
   return headers
     .map((h) => {
-      const legacyId = pickKey(h, ["npoliza", "idpoliza", "id"]);
+      const legacyId = pickKey(h, ["idpoliza", "npoliza", "id"]);
       const date = toIsoDate(pickKey(h, ["fecha", "date"]));
       const description = String(
         pickKey(h, ["concepto", "descripcion", "description"]) ?? "Importación legado"
