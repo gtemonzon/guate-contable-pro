@@ -43,6 +43,28 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<JobRow | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  // tick cada segundo cuando hay job activo (para mostrar segundos desde última actualización)
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+
+  const handleResume = async () => {
+    if (!job?.id) return;
+    setResuming(true);
+    try {
+      await supabase.functions.invoke("legacy-import-runner", { body: { jobId: job.id } });
+      toast({ title: "Reanudado", description: "Se solicitó al servidor continuar el proceso." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "No se pudo reanudar", description: e.message });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   const reset = () => {
     setStep(1);
