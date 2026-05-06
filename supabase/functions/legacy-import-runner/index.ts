@@ -642,6 +642,7 @@ async function runImport(jobId: string) {
       header: any;
       details: any[];
       balanced: boolean;
+      shouldPost: boolean;
     };
     const prepared: PreparedEntry[] = [];
 
@@ -650,16 +651,19 @@ async function runImport(jobId: string) {
       const periodId = periodIdByYear.get(y);
       if (!periodId) continue;
       const lines = entry.lines
-        .map((l) => ({
+        .map((l: any) => ({
           ...l,
           accountId: accountIdByCode.get(l.accountCode),
         }))
-        .filter((l) => l.accountId && (l.debit > 0 || l.credit > 0));
+        .filter((l: any) => l.accountId && (l.debit > 0 || l.credit > 0));
       if (lines.length === 0) continue;
 
-      const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
-      const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
+      const totalDebit = lines.reduce((s: number, l: any) => s + l.debit, 0);
+      const totalCredit = lines.reduce((s: number, l: any) => s + l.credit, 0);
       const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
+      // Si el archivo trae explícitamente Mayorizada=false → respetar borrador
+      // Si Mayorizada=true (o no viene) → contabilizar siempre que esté cuadrada
+      const shouldPost = balanced && (entry.isPostedFlag !== false);
       const ymKey = `${y}-${String(m).padStart(2, "0")}`;
       const next = (counterByYM.get(ymKey) ?? 0) + 1;
       counterByYM.set(ymKey, next);
@@ -683,7 +687,7 @@ async function runImport(jobId: string) {
           status: "borrador",
           created_by: userId,
         },
-        details: lines.map((l, idx) => ({
+        details: lines.map((l: any, idx: number) => ({
           line_number: idx + 1,
           account_id: l.accountId!,
           debit_amount: l.debit,
@@ -695,6 +699,7 @@ async function runImport(jobId: string) {
           original_credit: l.credit,
         })),
         balanced,
+        shouldPost,
       });
     }
 
@@ -757,7 +762,7 @@ async function runImport(jobId: string) {
 
         result.journalEntriesCreated++;
 
-        if (!detailFailed && entryBatch.balanced) {
+        if (!detailFailed && entryBatch.shouldPost) {
           const { error: pErr } = await sb
             .from("tab_journal_entries")
             .update({

@@ -263,7 +263,15 @@ function parseJournal(
           };
         })
         .filter((l) => l.accountCode && (l.debit > 0 || l.credit > 0));
-      return { legacyId, date, description, reference, lines };
+      const isBalancedFlag = (() => {
+        const v = pickKey(h, ["cuadrada"]);
+        return v === undefined ? undefined : asBool(v);
+      })();
+      const isPostedFlag = (() => {
+        const v = pickKey(h, ["mayorizada"]);
+        return v === undefined ? undefined : asBool(v);
+      })();
+      return { legacyId, date, description, reference, lines, isBalancedFlag, isPostedFlag };
     })
     .filter((e) => e.date && e.lines.length > 0);
 }
