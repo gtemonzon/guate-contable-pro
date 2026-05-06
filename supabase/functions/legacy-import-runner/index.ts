@@ -1340,48 +1340,36 @@ Deno.serve(async (req) => {
       const { data: userData } = await client.auth.getUser();
       const userId = userData?.user?.id;
 
-      // Crear un "job" de progreso especial para el borrado
-      const { data: progressJob, error: progJobErr } = await adminClient
-        .from("tab_legacy_import_jobs")
-        .insert({
-          enterprise_id: enterpriseId,
-          tenant_id: (enterprise as any).tenant_id,
-          created_by: userId,
-          status: "running",
-          current_step: "Preparando borrado...",
-          started_at: new Date().toISOString(),
-          payload: { action: "clear" },
-        })
-        .select("id")
-        .single();
-      if (progJobErr) {
-        console.error("No se pudo crear job de progreso", progJobErr);
+      const requestedClearJobId = typeof body.clearJobId === "string" ? body.clearJobId : undefined;
+
+      let progressJobId = requestedClearJobId;
+      if (!progressJobId) {
+        const { data: progressJob, error: progJobErr } = await adminClient
+          .from("tab_legacy_import_jobs")
+          .insert({
+            enterprise_id: enterpriseId,
+            tenant_id: (enterprise as any).tenant_id,
+            created_by: userId,
+            status: "running",
+            current_step: "Preparando borrado...",
+            started_at: new Date().toISOString(),
+            payload: { action: "clear" },
+          })
+          .select("id")
+          .single();
+
+        if (progJobErr || !progressJob?.id) {
+          console.error("No se pudo crear job de progreso", progJobErr);
+          return new Response(JSON.stringify({ error: "No se pudo iniciar el borrado" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        progressJobId = progressJob.id as string;
       }
 
-      const progressJobId = progressJob?.id as string | undefined;
-
-      EdgeRuntime.waitUntil((async () => {
-        try {
-          await resetEnterpriseData(adminClient, enterpriseId, progressJobId);
-          if (progressJobId) {
-            await adminClient.from("tab_legacy_import_jobs").update({
-              status: "completed",
-              current_step: "Borrado completado",
-              finished_at: new Date().toISOString(),
-              result: { cleared: true },
-            }).eq("id", progressJobId);
-          }
-        } catch (clearErr: any) {
-          console.error("clear failed", clearErr);
-          if (progressJobId) {
-            await adminClient.from("tab_legacy_import_jobs").update({
-              status: "failed",
-              error_message: String(clearErr?.message ?? clearErr),
-              finished_at: new Date().toISOString(),
-            }).eq("id", progressJobId);
-          }
-        }
-      })());
+      EdgeRuntime.waitUntil(runClear(progressJobId, enterpriseId));
 
       return new Response(JSON.stringify({ ok: true, jobId: progressJobId, clearing: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
