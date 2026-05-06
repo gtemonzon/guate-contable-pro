@@ -158,7 +158,32 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
           <Badge variant="secondary" className={ACCOUNT_TYPE_COLORS[account.account_type]}>
             {ACCOUNT_TYPE_LABELS[account.account_type]}
           </Badge>
-          
+
+          {account.balance_type === 'deudor' && (
+            <span
+              title="Deudor"
+              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-400"
+            >
+              D
+            </span>
+          )}
+          {account.balance_type === 'acreedor' && (
+            <span
+              title="Acreedor"
+              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-red-500/15 text-red-700 dark:text-red-400"
+            >
+              A
+            </span>
+          )}
+          {account.balance_type === 'indiferente' && (
+            <span
+              title="Indiferente"
+              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground"
+            >
+              I
+            </span>
+          )}
+
           {account.allows_movement && (
             <Badge variant="outline" className="text-xs">
               Movimiento

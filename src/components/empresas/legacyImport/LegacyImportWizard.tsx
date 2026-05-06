@@ -204,7 +204,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
 
     setClearing(true);
     try {
-      const { error } = await supabase.functions.invoke("legacy-import-runner", {
+      const { data, error } = await supabase.functions.invoke("legacy-import-runner", {
         body: {
           action: "clear",
           enterpriseId,
@@ -213,12 +213,30 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
 
       if (error) throw error;
 
-      reset();
-      await fetchActiveJob();
-      toast({
-        title: "Datos borrados",
-        description: "La empresa quedó limpia para una nueva prueba de importación.",
-      });
+      // Si el servidor devolvió un jobId de progreso, lo seguimos via realtime
+      const progressJobId = (data as any)?.jobId as string | undefined;
+      if (progressJobId) {
+        const { data: jobRow } = await supabase
+          .from("tab_legacy_import_jobs")
+          .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at")
+          .eq("id", progressJobId)
+          .maybeSingle();
+        if (jobRow) {
+          setJob(jobRow as JobRow);
+          setStep(4);
+        }
+        toast({
+          title: "Borrado iniciado",
+          description: "Verás el progreso en tiempo real.",
+        });
+      } else {
+        reset();
+        await fetchActiveJob();
+        toast({
+          title: "Datos borrados",
+          description: "La empresa quedó limpia para una nueva prueba de importación.",
+        });
+      }
     } catch (e: any) {
       toast({
         variant: "destructive",

@@ -170,7 +170,11 @@ async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: stri
   return !!data && (data.status === "pending" || data.status === "running");
 }
 
-async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+async function resetEnterpriseData(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  progressJobId?: string,
+) {
   await sb
     .from("tab_legacy_import_jobs")
     .update({
@@ -179,8 +183,37 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
       finished_at: new Date().toISOString(),
     })
     .eq("enterprise_id", enterpriseId)
-    .in("status", ["pending", "running"]);
+    .in("status", ["pending", "running"])
+    .neq("id", progressJobId ?? "00000000-0000-0000-0000-000000000000");
 
+  // Helpers de progreso (no-op si no hay progressJobId)
+  const updateStep = async (step: string, total = 0, current = 0) => {
+    if (!progressJobId) return;
+    await sb.from("tab_legacy_import_jobs").update({
+      current_step: step,
+      total_count: total,
+      current_count: current,
+      updated_at: new Date().toISOString(),
+    }).eq("id", progressJobId);
+  };
+  const updateCount = async (current: number) => {
+    if (!progressJobId) return;
+    await sb.from("tab_legacy_import_jobs").update({
+      current_count: current,
+      updated_at: new Date().toISOString(),
+    }).eq("id", progressJobId);
+  };
+
+  // Contar totales aproximados para la barra
+  const countTable = async (table: string) => {
+    const { count } = await sb.from(table).select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId);
+    return count ?? 0;
+  };
+
+  // 1. Partidas
+  const totalEntries = await countTable("tab_journal_entries");
+  await updateStep("Borrando partidas...", totalEntries, 0);
+  let deletedEntries = 0;
   while (true) {
     const { data: entryRows, error: entryErr } = await sb
       .from("tab_journal_entries")
@@ -202,8 +235,14 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
       .delete()
       .in("id", entryIds);
     if (deleteEntryErr) throw deleteEntryErr;
+    deletedEntries += entryIds.length;
+    await updateCount(deletedEntries);
   }
 
+  // 2. Activos fijos
+  const totalAssets = await countTable("fixed_assets");
+  await updateStep("Borrando activos fijos...", totalAssets, 0);
+  let deletedAssets = 0;
   while (true) {
     const { data: assetRows, error: assetErr } = await sb
       .from("fixed_assets")
@@ -231,57 +270,72 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
       .delete()
       .in("id", assetIds);
     if (deleteAssetErr) throw deleteAssetErr;
+    deletedAssets += assetIds.length;
+    await updateCount(deletedAssets);
   }
 
-    // Borrado batched para evitar statement timeout en tablas grandes
-    async function deleteByEnterpriseInBatches(table: string, label: string) {
-      while (true) {
-        const { data, error } = await sb
-          .from(table)
-          .select("id")
-          .eq("enterprise_id", enterpriseId)
-          .limit(DELETE_BATCH);
-        if (error) throw new Error(`${label}: ${error.message}`);
-        if (!data?.length) break;
-        const ids = data.map((r: any) => r.id);
-        const { error: delErr } = await sb.from(table).delete().in("id", ids);
-        if (delErr) throw new Error(`${label}: ${delErr.message}`);
-      }
+  // 3. Tablas grandes con progreso
+  async function deleteByEnterpriseInBatches(table: string, label: string) {
+    const total = await countTable(table);
+    await updateStep(`Borrando ${label}...`, total, 0);
+    let done = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from(table)
+        .select("id")
+        .eq("enterprise_id", enterpriseId)
+        .limit(DELETE_BATCH);
+      if (error) throw new Error(`${label}: ${error.message}`);
+      if (!data?.length) break;
+      const ids = data.map((r: any) => r.id);
+      const { error: delErr } = await sb.from(table).delete().in("id", ids);
+      if (delErr) throw new Error(`${label}: ${delErr.message}`);
+      done += ids.length;
+      await updateCount(done);
     }
+  }
 
-    await deleteByEnterpriseInBatches("tab_purchase_ledger", "Compras");
-    await deleteByEnterpriseInBatches("tab_sales_ledger", "Ventas");
-    await deleteByEnterpriseInBatches("fixed_asset_categories", "Categorías de activos");
-    await deleteByEnterpriseInBatches("tab_purchase_books", "Libros de compras");
-    await deleteByEnterpriseInBatches("tab_accounting_periods", "Períodos");
+  await deleteByEnterpriseInBatches("tab_purchase_ledger", "compras");
+  await deleteByEnterpriseInBatches("tab_sales_ledger", "ventas");
+  await deleteByEnterpriseInBatches("fixed_asset_categories", "categorías de activos");
+  await deleteByEnterpriseInBatches("tab_purchase_books", "libros de compras");
+  await deleteByEnterpriseInBatches("tab_accounting_periods", "períodos");
 
+  // 4. Cuentas (jerárquico)
+  const totalAccounts = await countTable("tab_accounts");
+  await updateStep("Borrando catálogo de cuentas...", totalAccounts, 0);
+  let deletedAccounts = 0;
   while (true) {
-      const { data: accountRows, error: accountErr } = await sb
-        .from("tab_accounts")
-        .select("id, parent_account_id")
-        .eq("enterprise_id", enterpriseId);
-      if (accountErr) throw accountErr;
-      if (!accountRows?.length) break;
+    const { data: accountRows, error: accountErr } = await sb
+      .from("tab_accounts")
+      .select("id, parent_account_id")
+      .eq("enterprise_id", enterpriseId);
+    if (accountErr) throw accountErr;
+    if (!accountRows?.length) break;
 
-      const parentIds = new Set(
-        accountRows
-          .map((row) => row.parent_account_id)
-          .filter((id): id is number => typeof id === "number"),
-      );
-      const leafIds = accountRows
-        .filter((row) => !parentIds.has(row.id))
-        .slice(0, DELETE_BATCH)
-        .map((row) => row.id);
+    const parentIds = new Set(
+      accountRows
+        .map((row) => row.parent_account_id)
+        .filter((id): id is number => typeof id === "number"),
+    );
+    const leafIds = accountRows
+      .filter((row) => !parentIds.has(row.id))
+      .slice(0, DELETE_BATCH)
+      .map((row) => row.id);
 
-      if (!leafIds.length) break;
+    if (!leafIds.length) break;
 
-      const { error: deleteLeafErr } = await sb
-        .from("tab_accounts")
-        .delete()
-        .in("id", leafIds);
-      if (deleteLeafErr) throw deleteLeafErr;
-    }
+    const { error: deleteLeafErr } = await sb
+      .from("tab_accounts")
+      .delete()
+      .in("id", leafIds);
+    if (deleteLeafErr) throw deleteLeafErr;
+    deletedAccounts += leafIds.length;
+    await updateCount(deletedAccounts);
+  }
 
+  // 5. Limpiar storage payloads
+  await updateStep("Limpiando archivos temporales...", 1, 0);
   const { data: payloadRows, error: payloadErr } = await sb
     .from("tab_legacy_import_jobs")
     .select("payload_path")
@@ -301,11 +355,12 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
       console.warn("No se pudieron borrar algunos payloads", storageErr.message);
     }
   }
+  await updateCount(1);
 
-  const { error: jobsErr } = await sb
-    .from("tab_legacy_import_jobs")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
+  // 6. Borrar jobs (excepto el de progreso si existe — se elimina al final)
+  let jobsQuery = sb.from("tab_legacy_import_jobs").delete().eq("enterprise_id", enterpriseId);
+  if (progressJobId) jobsQuery = jobsQuery.neq("id", progressJobId);
+  const { error: jobsErr } = await jobsQuery;
   if (jobsErr) throw jobsErr;
 }
 
@@ -1091,7 +1146,7 @@ Deno.serve(async (req) => {
 
       const { data: enterprise, error: enterpriseErr } = await client
         .from("tab_enterprises")
-        .select("id")
+        .select("id, tenant_id")
         .eq("id", enterpriseId)
         .maybeSingle();
 
@@ -1105,16 +1160,55 @@ Deno.serve(async (req) => {
       const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
         auth: { persistSession: false },
       });
-      try {
-        await resetEnterpriseData(adminClient, enterpriseId);
-      } catch (clearErr: any) {
-        console.error("clear failed", clearErr);
-        return new Response(JSON.stringify({ error: String(clearErr?.message ?? clearErr) }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+
+      // Obtener el usuario para crear job de progreso
+      const { data: userData } = await client.auth.getUser();
+      const userId = userData?.user?.id;
+
+      // Crear un "job" de progreso especial para el borrado
+      const { data: progressJob, error: progJobErr } = await adminClient
+        .from("tab_legacy_import_jobs")
+        .insert({
+          enterprise_id: enterpriseId,
+          tenant_id: (enterprise as any).tenant_id,
+          created_by: userId,
+          status: "running",
+          current_step: "Preparando borrado...",
+          started_at: new Date().toISOString(),
+          payload: { action: "clear" },
+        })
+        .select("id")
+        .single();
+      if (progJobErr) {
+        console.error("No se pudo crear job de progreso", progJobErr);
       }
-      return new Response(JSON.stringify({ ok: true, cleared: true }), {
+
+      const progressJobId = progressJob?.id as string | undefined;
+
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          await resetEnterpriseData(adminClient, enterpriseId, progressJobId);
+          if (progressJobId) {
+            await adminClient.from("tab_legacy_import_jobs").update({
+              status: "completed",
+              current_step: "Borrado completado",
+              finished_at: new Date().toISOString(),
+              result: { cleared: true },
+            }).eq("id", progressJobId);
+          }
+        } catch (clearErr: any) {
+          console.error("clear failed", clearErr);
+          if (progressJobId) {
+            await adminClient.from("tab_legacy_import_jobs").update({
+              status: "failed",
+              error_message: String(clearErr?.message ?? clearErr),
+              finished_at: new Date().toISOString(),
+            }).eq("id", progressJobId);
+          }
+        }
+      })());
+
+      return new Response(JSON.stringify({ ok: true, jobId: progressJobId, clearing: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
