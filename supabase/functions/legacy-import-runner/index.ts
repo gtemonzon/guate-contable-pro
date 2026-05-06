@@ -66,7 +66,9 @@ const CHUNK = 100; // lote de inserción (compras/ventas) — más pequeño para
 const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
 const DETAIL_CHUNK = 25;
 const DELETE_BATCH = 250;
+const CLEAR_DELETE_BATCH = 100;
 const MAX_RUNTIME_MS = 50_000; // si nos acercamos al límite del runtime, encolar continuación
+const CLEAR_MAX_RUNTIME_MS = 20_000; // el borrado cede más agresivamente para no chocar con timeouts
 
 interface ImportResult {
   accountsCreated: number;
@@ -160,6 +162,23 @@ async function queueContinuation(jobId: string) {
   }
 }
 
+async function queueClearContinuation(clearJobId: string, enterpriseId: number) {
+  const response = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_ROLE}`,
+      apikey: SERVICE_ROLE,
+    },
+    body: JSON.stringify({ action: "clear", enterpriseId, clearJobId }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`No se pudo continuar el borrado: ${body}`);
+  }
+}
+
 async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: string) {
   const { data } = await sb
     .from("tab_legacy_import_jobs")
@@ -170,198 +189,354 @@ async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: stri
   return !!data && (data.status === "pending" || data.status === "running");
 }
 
-async function resetEnterpriseData(
-  sb: ReturnType<typeof createClient>,
-  enterpriseId: number,
-  progressJobId?: string,
-) {
-  await sb
+async function runClear(clearJobId: string, enterpriseId: number) {
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE, {
+    auth: { persistSession: false },
+  });
+
+  const clearStartTs = Date.now();
+  const shouldYield = () => Date.now() - clearStartTs > CLEAR_MAX_RUNTIME_MS;
+
+  const { data: clearJob, error: clearJobErr } = await sb
     .from("tab_legacy_import_jobs")
-    .update({
-      status: "failed",
-      error_message: "Proceso cancelado manualmente antes del borrado.",
-      finished_at: new Date().toISOString(),
-    })
-    .eq("enterprise_id", enterpriseId)
-    .in("status", ["pending", "running"])
-    .neq("id", progressJobId ?? "00000000-0000-0000-0000-000000000000");
+    .select("id, status, current_step, current_count, total_count, steps_completed, result, started_at")
+    .eq("id", clearJobId)
+    .single();
 
-  // Helpers de progreso (no-op si no hay progressJobId)
-  const updateStep = async (step: string, total = 0, current = 0) => {
-    if (!progressJobId) return;
+  if (clearJobErr || !clearJob) {
+    console.error("Job de borrado no encontrado", clearJobErr);
+    return;
+  }
+
+  const stepsCompleted = parseCompletedSteps((clearJob as any).steps_completed);
+  const clearResult = {
+    ...(clearJob.result && typeof clearJob.result === "object" ? clearJob.result : {}),
+    deletedByStep:
+      clearJob.result &&
+      typeof clearJob.result === "object" &&
+      (clearJob.result as Record<string, unknown>).deletedByStep &&
+      typeof (clearJob.result as Record<string, unknown>).deletedByStep === "object"
+        ? { ...((clearJob.result as Record<string, any>).deletedByStep ?? {}) }
+        : {},
+  } as { cleared?: boolean; deletedByStep: Record<string, number> };
+
+  const persistClearJob = async (patch: Record<string, unknown> = {}) => {
     await sb.from("tab_legacy_import_jobs").update({
-      current_step: step,
-      total_count: total,
-      current_count: current,
+      status: "running",
+      started_at: clearJob.started_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    }).eq("id", progressJobId);
-  };
-  const updateCount = async (current: number) => {
-    if (!progressJobId) return;
-    await sb.from("tab_legacy_import_jobs").update({
-      current_count: current,
-      updated_at: new Date().toISOString(),
-    }).eq("id", progressJobId);
+      result: clearResult,
+      steps_completed: Array.from(stepsCompleted),
+      ...patch,
+    }).eq("id", clearJobId);
   };
 
-  // Contar totales aproximados para la barra
   const countTable = async (table: string) => {
-    const { count } = await sb.from(table).select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId);
+    const { count } = await sb
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .eq("enterprise_id", enterpriseId);
     return count ?? 0;
   };
 
-  // 1. Partidas
-  const totalEntries = await countTable("tab_journal_entries");
-  await updateStep("Borrando partidas...", totalEntries, 0);
-  let deletedEntries = 0;
-  while (true) {
-    const { data: entryRows, error: entryErr } = await sb
-      .from("tab_journal_entries")
+  const deleteByIdsAdaptive = async (
+    table: string,
+    ids: Array<string | number>,
+    label: string,
+  ): Promise<number> => {
+    if (!ids.length) return 0;
+
+    const { error } = await sb.from(table).delete().in("id", ids as any);
+    if (!error) return ids.length;
+
+    if (/statement timeout|canceling statement/i.test(error.message) && ids.length > 1) {
+      const mid = Math.floor(ids.length / 2);
+      const left = await deleteByIdsAdaptive(table, ids.slice(0, mid), label);
+      const right = await deleteByIdsAdaptive(table, ids.slice(mid), label);
+      return left + right;
+    }
+
+    if (ids.length > 1) {
+      let deleted = 0;
+      let firstError: string | null = null;
+      for (const id of ids) {
+        const { error: rowError } = await sb.from(table).delete().eq("id", id as any);
+        if (rowError) {
+          firstError ??= rowError.message;
+        } else {
+          deleted += 1;
+        }
+      }
+      if (firstError) {
+        throw new Error(`${label}: ${firstError}`);
+      }
+      return deleted;
+    }
+
+    throw new Error(`${label}: ${error.message}`);
+  };
+
+  const deleteByColumnAdaptive = async (
+    table: string,
+    column: string,
+    values: Array<string | number>,
+    label: string,
+  ): Promise<void> => {
+    if (!values.length) return;
+
+    const { error } = await sb.from(table).delete().in(column, values as any);
+    if (!error) return;
+
+    if (/statement timeout|canceling statement/i.test(error.message) && values.length > 1) {
+      const mid = Math.floor(values.length / 2);
+      await deleteByColumnAdaptive(table, column, values.slice(0, mid), label);
+      await deleteByColumnAdaptive(table, column, values.slice(mid), label);
+      return;
+    }
+
+    const { data: dependentRows, error: selectErr } = await sb
+      .from(table)
       .select("id")
-      .eq("enterprise_id", enterpriseId)
-      .limit(DELETE_BATCH);
-    if (entryErr) throw entryErr;
-    if (!entryRows?.length) break;
+      .in(column, values as any)
+      .limit(CLEAR_DELETE_BATCH);
 
-    const entryIds = entryRows.map((row) => row.id);
-    const { error: detailErr } = await sb
-      .from("tab_journal_entry_details")
-      .delete()
-      .in("journal_entry_id", entryIds);
-    if (detailErr) throw detailErr;
+    if (selectErr) throw new Error(`${label}: ${selectErr.message}`);
 
-    const { error: deleteEntryErr } = await sb
-      .from("tab_journal_entries")
-      .delete()
-      .in("id", entryIds);
-    if (deleteEntryErr) throw deleteEntryErr;
-    deletedEntries += entryIds.length;
-    await updateCount(deletedEntries);
-  }
+    const dependentIds = (dependentRows ?? []).map((row: any) => row.id);
+    if (!dependentIds.length) return;
 
-  // 2. Activos fijos
-  const totalAssets = await countTable("fixed_assets");
-  await updateStep("Borrando activos fijos...", totalAssets, 0);
-  let deletedAssets = 0;
-  while (true) {
-    const { data: assetRows, error: assetErr } = await sb
-      .from("fixed_assets")
-      .select("id")
-      .eq("enterprise_id", enterpriseId)
-      .limit(DELETE_BATCH);
-    if (assetErr) throw assetErr;
-    if (!assetRows?.length) break;
+    await deleteByIdsAdaptive(table, dependentIds, label);
+  };
 
-    const assetIds = assetRows.map((row) => row.id);
-    const { error: schedErr } = await sb
-      .from("fixed_asset_depreciation_schedule")
-      .delete()
-      .in("asset_id", assetIds);
-    if (schedErr) throw schedErr;
+  const deleteSimpleEnterpriseTable = async (
+    table: string,
+    label: string,
+    stepKey: string,
+    batchSize = CLEAR_DELETE_BATCH,
+  ): Promise<boolean> => {
+    if (stepsCompleted.has(stepKey)) return false;
 
-    const { error: eventErr } = await sb
-      .from("fixed_asset_event_log")
-      .delete()
-      .in("asset_id", assetIds);
-    if (eventErr) throw eventErr;
+    let deleted = clearResult.deletedByStep[stepKey] ?? 0;
+    const remaining = await countTable(table);
+    const total = Math.max(deleted + remaining, deleted);
+    await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
 
-    const { error: deleteAssetErr } = await sb
-      .from("fixed_assets")
-      .delete()
-      .in("id", assetIds);
-    if (deleteAssetErr) throw deleteAssetErr;
-    deletedAssets += assetIds.length;
-    await updateCount(deletedAssets);
-  }
-
-  // 3. Tablas grandes con progreso
-  async function deleteByEnterpriseInBatches(table: string, label: string) {
-    const total = await countTable(table);
-    await updateStep(`Borrando ${label}...`, total, 0);
-    let done = 0;
     while (true) {
       const { data, error } = await sb
         .from(table)
         .select("id")
         .eq("enterprise_id", enterpriseId)
-        .limit(DELETE_BATCH);
+        .order("id", { ascending: true })
+        .limit(batchSize);
       if (error) throw new Error(`${label}: ${error.message}`);
       if (!data?.length) break;
-      const ids = data.map((r: any) => r.id);
-      const { error: delErr } = await sb.from(table).delete().in("id", ids);
-      if (delErr) throw new Error(`${label}: ${delErr.message}`);
-      done += ids.length;
-      await updateCount(done);
+
+      deleted += await deleteByIdsAdaptive(table, data.map((row: any) => row.id), label);
+      clearResult.deletedByStep[stepKey] = deleted;
+      await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
+
+      if (shouldYield()) {
+        await queueClearContinuation(clearJobId, enterpriseId);
+        return true;
+      }
     }
-  }
 
-  await deleteByEnterpriseInBatches("tab_purchase_ledger", "compras");
-  await deleteByEnterpriseInBatches("tab_sales_ledger", "ventas");
-  await deleteByEnterpriseInBatches("fixed_asset_categories", "categorías de activos");
-  await deleteByEnterpriseInBatches("tab_purchase_books", "libros de compras");
-  await deleteByEnterpriseInBatches("tab_accounting_periods", "períodos");
+    stepsCompleted.add(stepKey);
+    await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
+    return false;
+  };
 
-  // 4. Cuentas (jerárquico)
-  const totalAccounts = await countTable("tab_accounts");
-  await updateStep("Borrando catálogo de cuentas...", totalAccounts, 0);
-  let deletedAccounts = 0;
-  while (true) {
-    const { data: accountRows, error: accountErr } = await sb
-      .from("tab_accounts")
-      .select("id, parent_account_id")
-      .eq("enterprise_id", enterpriseId);
-    if (accountErr) throw accountErr;
-    if (!accountRows?.length) break;
+  await persistClearJob();
 
-    const parentIds = new Set(
-      accountRows
-        .map((row) => row.parent_account_id)
-        .filter((id): id is number => typeof id === "number"),
-    );
-    const leafIds = accountRows
-      .filter((row) => !parentIds.has(row.id))
-      .slice(0, DELETE_BATCH)
-      .map((row) => row.id);
+  try {
+    if (!stepsCompleted.has("cancel_active_jobs")) {
+      await sb
+        .from("tab_legacy_import_jobs")
+        .update({
+          status: "failed",
+          error_message: "Proceso cancelado manualmente antes del borrado.",
+          finished_at: new Date().toISOString(),
+        })
+        .eq("enterprise_id", enterpriseId)
+        .in("status", ["pending", "running"])
+        .neq("id", clearJobId);
 
-    if (!leafIds.length) break;
-
-    const { error: deleteLeafErr } = await sb
-      .from("tab_accounts")
-      .delete()
-      .in("id", leafIds);
-    if (deleteLeafErr) throw deleteLeafErr;
-    deletedAccounts += leafIds.length;
-    await updateCount(deletedAccounts);
-  }
-
-  // 5. Limpiar storage payloads
-  await updateStep("Limpiando archivos temporales...", 1, 0);
-  const { data: payloadRows, error: payloadErr } = await sb
-    .from("tab_legacy_import_jobs")
-    .select("payload_path")
-    .eq("enterprise_id", enterpriseId)
-    .not("payload_path", "is", null);
-  if (payloadErr) throw payloadErr;
-
-  const payloadPaths = (payloadRows ?? [])
-    .map((row) => row.payload_path)
-    .filter((path): path is string => !!path);
-
-  if (payloadPaths.length > 0) {
-    const { error: storageErr } = await sb.storage
-      .from("legacy-imports")
-      .remove(payloadPaths);
-    if (storageErr) {
-      console.warn("No se pudieron borrar algunos payloads", storageErr.message);
+      stepsCompleted.add("cancel_active_jobs");
+      await persistClearJob({ current_step: "Preparando borrado...", current_count: 0, total_count: 1 });
     }
-  }
-  await updateCount(1);
 
-  // 6. Borrar jobs (excepto el de progreso si existe — se elimina al final)
-  let jobsQuery = sb.from("tab_legacy_import_jobs").delete().eq("enterprise_id", enterpriseId);
-  if (progressJobId) jobsQuery = jobsQuery.neq("id", progressJobId);
-  const { error: jobsErr } = await jobsQuery;
-  if (jobsErr) throw jobsErr;
+    if (!stepsCompleted.has("journal_entries_clear")) {
+      let deletedEntries = clearResult.deletedByStep.journal_entries_clear ?? 0;
+      const remainingEntries = await countTable("tab_journal_entries");
+      const totalEntries = Math.max(deletedEntries + remainingEntries, deletedEntries);
+      await persistClearJob({ current_step: "Borrando partidas...", current_count: deletedEntries, total_count: totalEntries });
+
+      while (true) {
+        const { data: entryRows, error: entryErr } = await sb
+          .from("tab_journal_entries")
+          .select("id")
+          .eq("enterprise_id", enterpriseId)
+          .order("id", { ascending: true })
+          .limit(CLEAR_DELETE_BATCH);
+        if (entryErr) throw entryErr;
+        if (!entryRows?.length) break;
+
+        const entryIds = entryRows.map((row) => row.id);
+        await deleteByColumnAdaptive("tab_journal_entry_details", "journal_entry_id", entryIds, "detalles de partidas");
+        deletedEntries += await deleteByIdsAdaptive("tab_journal_entries", entryIds, "partidas");
+        clearResult.deletedByStep.journal_entries_clear = deletedEntries;
+        await persistClearJob({ current_step: "Borrando partidas...", current_count: deletedEntries, total_count: totalEntries });
+
+        if (shouldYield()) {
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return;
+        }
+      }
+
+      stepsCompleted.add("journal_entries_clear");
+      await persistClearJob({ current_step: "Borrando partidas...", current_count: deletedEntries, total_count: totalEntries });
+    }
+
+    if (!stepsCompleted.has("fixed_assets_clear")) {
+      let deletedAssets = clearResult.deletedByStep.fixed_assets_clear ?? 0;
+      const remainingAssets = await countTable("fixed_assets");
+      const totalAssets = Math.max(deletedAssets + remainingAssets, deletedAssets);
+      await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
+
+      while (true) {
+        const { data: assetRows, error: assetErr } = await sb
+          .from("fixed_assets")
+          .select("id")
+          .eq("enterprise_id", enterpriseId)
+          .order("id", { ascending: true })
+          .limit(CLEAR_DELETE_BATCH);
+        if (assetErr) throw assetErr;
+        if (!assetRows?.length) break;
+
+        const assetIds = assetRows.map((row) => row.id);
+        await deleteByColumnAdaptive("fixed_asset_depreciation_schedule", "asset_id", assetIds, "depreciaciones de activos");
+        await deleteByColumnAdaptive("fixed_asset_event_log", "asset_id", assetIds, "bitácora de activos");
+        deletedAssets += await deleteByIdsAdaptive("fixed_assets", assetIds, "activos fijos");
+        clearResult.deletedByStep.fixed_assets_clear = deletedAssets;
+        await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
+
+        if (shouldYield()) {
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return;
+        }
+      }
+
+      stepsCompleted.add("fixed_assets_clear");
+      await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
+    }
+
+    if (await deleteSimpleEnterpriseTable("tab_purchase_ledger", "compras", "purchase_ledger_clear", 75)) return;
+    if (await deleteSimpleEnterpriseTable("tab_sales_ledger", "ventas", "sales_ledger_clear", 50)) return;
+    if (await deleteSimpleEnterpriseTable("fixed_asset_categories", "categorías de activos", "asset_categories_clear", 75)) return;
+    if (await deleteSimpleEnterpriseTable("tab_purchase_books", "libros de compras", "purchase_books_clear", 75)) return;
+    if (await deleteSimpleEnterpriseTable("tab_accounting_periods", "períodos", "periods_clear", 75)) return;
+
+    if (!stepsCompleted.has("accounts_clear")) {
+      let deletedAccounts = clearResult.deletedByStep.accounts_clear ?? 0;
+      const remainingAccounts = await countTable("tab_accounts");
+      const totalAccounts = Math.max(deletedAccounts + remainingAccounts, deletedAccounts);
+      await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
+
+      while (true) {
+        const { data: accountRows, error: accountErr } = await sb
+          .from("tab_accounts")
+          .select("id, parent_account_id")
+          .eq("enterprise_id", enterpriseId);
+        if (accountErr) throw accountErr;
+        if (!accountRows?.length) break;
+
+        const parentIds = new Set(
+          accountRows
+            .map((row) => row.parent_account_id)
+            .filter((id): id is number => typeof id === "number"),
+        );
+        const leafIds = accountRows
+          .filter((row) => !parentIds.has(row.id))
+          .slice(0, CLEAR_DELETE_BATCH)
+          .map((row) => row.id);
+
+        if (!leafIds.length) break;
+
+        deletedAccounts += await deleteByIdsAdaptive("tab_accounts", leafIds, "catálogo de cuentas");
+        clearResult.deletedByStep.accounts_clear = deletedAccounts;
+        await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
+
+        if (shouldYield()) {
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return;
+        }
+      }
+
+      stepsCompleted.add("accounts_clear");
+      await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
+    }
+
+    if (!stepsCompleted.has("payloads_clear")) {
+      await persistClearJob({ current_step: "Limpiando archivos temporales...", current_count: 0, total_count: 1 });
+      const { data: payloadRows, error: payloadErr } = await sb
+        .from("tab_legacy_import_jobs")
+        .select("payload_path")
+        .eq("enterprise_id", enterpriseId)
+        .not("payload_path", "is", null);
+      if (payloadErr) throw payloadErr;
+
+      const payloadPaths = (payloadRows ?? [])
+        .map((row) => row.payload_path)
+        .filter((path): path is string => !!path);
+
+      if (payloadPaths.length > 0) {
+        const { error: storageErr } = await sb.storage
+          .from("legacy-imports")
+          .remove(payloadPaths);
+        if (storageErr) {
+          console.warn("No se pudieron borrar algunos payloads", storageErr.message);
+        }
+      }
+
+      stepsCompleted.add("payloads_clear");
+      await persistClearJob({ current_step: "Limpiando archivos temporales...", current_count: 1, total_count: 1 });
+    }
+
+    if (!stepsCompleted.has("jobs_clear")) {
+      await persistClearJob({ current_step: "Limpiando historial de importación...", current_count: 0, total_count: 1 });
+      const { error: jobsErr } = await sb
+        .from("tab_legacy_import_jobs")
+        .delete()
+        .eq("enterprise_id", enterpriseId)
+        .neq("id", clearJobId);
+      if (jobsErr) throw jobsErr;
+
+      stepsCompleted.add("jobs_clear");
+      await persistClearJob({ current_step: "Limpiando historial de importación...", current_count: 1, total_count: 1 });
+    }
+
+    clearResult.cleared = true;
+    await sb.from("tab_legacy_import_jobs").update({
+      status: "completed",
+      current_step: "Borrado completado",
+      current_count: 1,
+      total_count: 1,
+      updated_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      result: clearResult,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", clearJobId);
+  } catch (clearErr: any) {
+    console.error("clear failed", clearErr);
+    await sb.from("tab_legacy_import_jobs").update({
+      status: "failed",
+      error_message: String(clearErr?.message ?? clearErr),
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      result: clearResult,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", clearJobId);
+  }
 }
 
 async function runImport(jobId: string) {
@@ -1135,7 +1310,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const { client } = await createAuthedClient(authHeader);
+      const requestedClearJobId = typeof body.clearJobId === "string" ? body.clearJobId : undefined;
+      const isInternalClearContinuation = requestedClearJobId && authHeader === `Bearer ${SERVICE_ROLE}`;
       const enterpriseId = Number(body.enterpriseId);
       if (!enterpriseId) {
         return new Response(JSON.stringify({ error: "enterpriseId requerido" }), {
@@ -1143,6 +1319,14 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false },
+      });
+
+      const client = isInternalClearContinuation
+        ? adminClient
+        : (await createAuthedClient(authHeader)).client;
 
       const { data: enterprise, error: enterpriseErr } = await client
         .from("tab_enterprises")
@@ -1157,56 +1341,39 @@ Deno.serve(async (req) => {
         });
       }
 
-      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
-        auth: { persistSession: false },
-      });
-
       // Obtener el usuario para crear job de progreso
-      const { data: userData } = await client.auth.getUser();
-      const userId = userData?.user?.id;
+      const userId = isInternalClearContinuation
+        ? undefined
+        : (await client.auth.getUser()).data?.user?.id;
 
-      // Crear un "job" de progreso especial para el borrado
-      const { data: progressJob, error: progJobErr } = await adminClient
-        .from("tab_legacy_import_jobs")
-        .insert({
-          enterprise_id: enterpriseId,
-          tenant_id: (enterprise as any).tenant_id,
-          created_by: userId,
-          status: "running",
-          current_step: "Preparando borrado...",
-          started_at: new Date().toISOString(),
-          payload: { action: "clear" },
-        })
-        .select("id")
-        .single();
-      if (progJobErr) {
-        console.error("No se pudo crear job de progreso", progJobErr);
+      let progressJobId = requestedClearJobId;
+      if (!progressJobId) {
+        const { data: progressJob, error: progJobErr } = await adminClient
+          .from("tab_legacy_import_jobs")
+          .insert({
+            enterprise_id: enterpriseId,
+            tenant_id: (enterprise as any).tenant_id,
+            created_by: userId,
+            status: "running",
+            current_step: "Preparando borrado...",
+            started_at: new Date().toISOString(),
+            payload: { action: "clear" },
+          })
+          .select("id")
+          .single();
+
+        if (progJobErr || !progressJob?.id) {
+          console.error("No se pudo crear job de progreso", progJobErr);
+          return new Response(JSON.stringify({ error: "No se pudo iniciar el borrado" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        progressJobId = progressJob.id as string;
       }
 
-      const progressJobId = progressJob?.id as string | undefined;
-
-      EdgeRuntime.waitUntil((async () => {
-        try {
-          await resetEnterpriseData(adminClient, enterpriseId, progressJobId);
-          if (progressJobId) {
-            await adminClient.from("tab_legacy_import_jobs").update({
-              status: "completed",
-              current_step: "Borrado completado",
-              finished_at: new Date().toISOString(),
-              result: { cleared: true },
-            }).eq("id", progressJobId);
-          }
-        } catch (clearErr: any) {
-          console.error("clear failed", clearErr);
-          if (progressJobId) {
-            await adminClient.from("tab_legacy_import_jobs").update({
-              status: "failed",
-              error_message: String(clearErr?.message ?? clearErr),
-              finished_at: new Date().toISOString(),
-            }).eq("id", progressJobId);
-          }
-        }
-      })());
+      EdgeRuntime.waitUntil(runClear(progressJobId, enterpriseId));
 
       return new Response(JSON.stringify({ ok: true, jobId: progressJobId, clearing: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
