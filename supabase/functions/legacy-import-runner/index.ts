@@ -762,7 +762,7 @@ async function runImport(jobId: string) {
 
         result.journalEntriesCreated++;
 
-        if (!detailFailed && entryBatch.balanced) {
+        if (!detailFailed && entryBatch.shouldPost) {
           const { error: pErr } = await sb
             .from("tab_journal_entries")
             .update({
