@@ -62,10 +62,11 @@ interface ParsedDataset {
   fixedAssets: ParsedFixedAsset[];
 }
 
-const CHUNK = 500;
+const CHUNK = 100; // lote de inserción (compras/ventas) — más pequeño para evitar statement timeout
 const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
 const DETAIL_CHUNK = 25;
 const DELETE_BATCH = 250;
+const MAX_RUNTIME_MS = 50_000; // si nos acercamos al límite del runtime, encolar continuación
 
 interface ImportResult {
   accountsCreated: number;
