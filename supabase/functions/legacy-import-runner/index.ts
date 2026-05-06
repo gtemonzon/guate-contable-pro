@@ -210,6 +210,10 @@ async function resetEnterpriseData(
     return count ?? 0;
   };
 
+  // 1. Partidas
+  const totalEntries = await countTable("tab_journal_entries");
+  await updateStep("Borrando partidas...", totalEntries, 0);
+  let deletedEntries = 0;
   while (true) {
     const { data: entryRows, error: entryErr } = await sb
       .from("tab_journal_entries")
@@ -231,8 +235,14 @@ async function resetEnterpriseData(
       .delete()
       .in("id", entryIds);
     if (deleteEntryErr) throw deleteEntryErr;
+    deletedEntries += entryIds.length;
+    await updateCount(deletedEntries);
   }
 
+  // 2. Activos fijos
+  const totalAssets = await countTable("fixed_assets");
+  await updateStep("Borrando activos fijos...", totalAssets, 0);
+  let deletedAssets = 0;
   while (true) {
     const { data: assetRows, error: assetErr } = await sb
       .from("fixed_assets")
@@ -260,57 +270,72 @@ async function resetEnterpriseData(
       .delete()
       .in("id", assetIds);
     if (deleteAssetErr) throw deleteAssetErr;
+    deletedAssets += assetIds.length;
+    await updateCount(deletedAssets);
   }
 
-    // Borrado batched para evitar statement timeout en tablas grandes
-    async function deleteByEnterpriseInBatches(table: string, label: string) {
-      while (true) {
-        const { data, error } = await sb
-          .from(table)
-          .select("id")
-          .eq("enterprise_id", enterpriseId)
-          .limit(DELETE_BATCH);
-        if (error) throw new Error(`${label}: ${error.message}`);
-        if (!data?.length) break;
-        const ids = data.map((r: any) => r.id);
-        const { error: delErr } = await sb.from(table).delete().in("id", ids);
-        if (delErr) throw new Error(`${label}: ${delErr.message}`);
-      }
+  // 3. Tablas grandes con progreso
+  async function deleteByEnterpriseInBatches(table: string, label: string) {
+    const total = await countTable(table);
+    await updateStep(`Borrando ${label}...`, total, 0);
+    let done = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from(table)
+        .select("id")
+        .eq("enterprise_id", enterpriseId)
+        .limit(DELETE_BATCH);
+      if (error) throw new Error(`${label}: ${error.message}`);
+      if (!data?.length) break;
+      const ids = data.map((r: any) => r.id);
+      const { error: delErr } = await sb.from(table).delete().in("id", ids);
+      if (delErr) throw new Error(`${label}: ${delErr.message}`);
+      done += ids.length;
+      await updateCount(done);
     }
+  }
 
-    await deleteByEnterpriseInBatches("tab_purchase_ledger", "Compras");
-    await deleteByEnterpriseInBatches("tab_sales_ledger", "Ventas");
-    await deleteByEnterpriseInBatches("fixed_asset_categories", "Categorías de activos");
-    await deleteByEnterpriseInBatches("tab_purchase_books", "Libros de compras");
-    await deleteByEnterpriseInBatches("tab_accounting_periods", "Períodos");
+  await deleteByEnterpriseInBatches("tab_purchase_ledger", "compras");
+  await deleteByEnterpriseInBatches("tab_sales_ledger", "ventas");
+  await deleteByEnterpriseInBatches("fixed_asset_categories", "categorías de activos");
+  await deleteByEnterpriseInBatches("tab_purchase_books", "libros de compras");
+  await deleteByEnterpriseInBatches("tab_accounting_periods", "períodos");
 
+  // 4. Cuentas (jerárquico)
+  const totalAccounts = await countTable("tab_accounts");
+  await updateStep("Borrando catálogo de cuentas...", totalAccounts, 0);
+  let deletedAccounts = 0;
   while (true) {
-      const { data: accountRows, error: accountErr } = await sb
-        .from("tab_accounts")
-        .select("id, parent_account_id")
-        .eq("enterprise_id", enterpriseId);
-      if (accountErr) throw accountErr;
-      if (!accountRows?.length) break;
+    const { data: accountRows, error: accountErr } = await sb
+      .from("tab_accounts")
+      .select("id, parent_account_id")
+      .eq("enterprise_id", enterpriseId);
+    if (accountErr) throw accountErr;
+    if (!accountRows?.length) break;
 
-      const parentIds = new Set(
-        accountRows
-          .map((row) => row.parent_account_id)
-          .filter((id): id is number => typeof id === "number"),
-      );
-      const leafIds = accountRows
-        .filter((row) => !parentIds.has(row.id))
-        .slice(0, DELETE_BATCH)
-        .map((row) => row.id);
+    const parentIds = new Set(
+      accountRows
+        .map((row) => row.parent_account_id)
+        .filter((id): id is number => typeof id === "number"),
+    );
+    const leafIds = accountRows
+      .filter((row) => !parentIds.has(row.id))
+      .slice(0, DELETE_BATCH)
+      .map((row) => row.id);
 
-      if (!leafIds.length) break;
+    if (!leafIds.length) break;
 
-      const { error: deleteLeafErr } = await sb
-        .from("tab_accounts")
-        .delete()
-        .in("id", leafIds);
-      if (deleteLeafErr) throw deleteLeafErr;
-    }
+    const { error: deleteLeafErr } = await sb
+      .from("tab_accounts")
+      .delete()
+      .in("id", leafIds);
+    if (deleteLeafErr) throw deleteLeafErr;
+    deletedAccounts += leafIds.length;
+    await updateCount(deletedAccounts);
+  }
 
+  // 5. Limpiar storage payloads
+  await updateStep("Limpiando archivos temporales...", 1, 0);
   const { data: payloadRows, error: payloadErr } = await sb
     .from("tab_legacy_import_jobs")
     .select("payload_path")
@@ -330,11 +355,12 @@ async function resetEnterpriseData(
       console.warn("No se pudieron borrar algunos payloads", storageErr.message);
     }
   }
+  await updateCount(1);
 
-  const { error: jobsErr } = await sb
-    .from("tab_legacy_import_jobs")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
+  // 6. Borrar jobs (excepto el de progreso si existe — se elimina al final)
+  let jobsQuery = sb.from("tab_legacy_import_jobs").delete().eq("enterprise_id", enterpriseId);
+  if (progressJobId) jobsQuery = jobsQuery.neq("id", progressJobId);
+  const { error: jobsErr } = await jobsQuery;
   if (jobsErr) throw jobsErr;
 }
 
