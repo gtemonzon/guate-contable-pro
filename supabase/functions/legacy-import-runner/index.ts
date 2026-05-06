@@ -233,62 +233,54 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
     if (deleteAssetErr) throw deleteAssetErr;
   }
 
-  const { error: purchaseErr } = await sb
-    .from("tab_purchase_ledger")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
-  if (purchaseErr) throw purchaseErr;
+    // Borrado batched para evitar statement timeout en tablas grandes
+    async function deleteByEnterpriseInBatches(table: string, label: string) {
+      while (true) {
+        const { data, error } = await sb
+          .from(table)
+          .select("id")
+          .eq("enterprise_id", enterpriseId)
+          .limit(DELETE_BATCH);
+        if (error) throw new Error(`${label}: ${error.message}`);
+        if (!data?.length) break;
+        const ids = data.map((r: any) => r.id);
+        const { error: delErr } = await sb.from(table).delete().in("id", ids);
+        if (delErr) throw new Error(`${label}: ${delErr.message}`);
+      }
+    }
 
-  const { error: salesErr } = await sb
-    .from("tab_sales_ledger")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
-  if (salesErr) throw salesErr;
-
-  const { error: categoriesErr } = await sb
-    .from("fixed_asset_categories")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
-  if (categoriesErr) throw categoriesErr;
-
-  const { error: booksErr } = await sb
-    .from("tab_purchase_books")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
-  if (booksErr) throw booksErr;
-
-  const { error: periodsErr } = await sb
-    .from("tab_accounting_periods")
-    .delete()
-    .eq("enterprise_id", enterpriseId);
-  if (periodsErr) throw periodsErr;
+    await deleteByEnterpriseInBatches("tab_purchase_ledger", "Compras");
+    await deleteByEnterpriseInBatches("tab_sales_ledger", "Ventas");
+    await deleteByEnterpriseInBatches("fixed_asset_categories", "Categorías de activos");
+    await deleteByEnterpriseInBatches("tab_purchase_books", "Libros de compras");
+    await deleteByEnterpriseInBatches("tab_accounting_periods", "Períodos");
 
   while (true) {
-    const { data: accountRows, error: accountErr } = await sb
-      .from("tab_accounts")
-      .select("id, parent_account_id")
-      .eq("enterprise_id", enterpriseId);
-    if (accountErr) throw accountErr;
-    if (!accountRows?.length) break;
+      const { data: accountRows, error: accountErr } = await sb
+        .from("tab_accounts")
+        .select("id, parent_account_id")
+        .eq("enterprise_id", enterpriseId);
+      if (accountErr) throw accountErr;
+      if (!accountRows?.length) break;
 
-    const parentIds = new Set(
-      accountRows
-        .map((row) => row.parent_account_id)
-        .filter((id): id is number => typeof id === "number"),
-    );
-    const leafIds = accountRows
-      .filter((row) => !parentIds.has(row.id))
-      .slice(0, DELETE_BATCH)
-      .map((row) => row.id);
+      const parentIds = new Set(
+        accountRows
+          .map((row) => row.parent_account_id)
+          .filter((id): id is number => typeof id === "number"),
+      );
+      const leafIds = accountRows
+        .filter((row) => !parentIds.has(row.id))
+        .slice(0, DELETE_BATCH)
+        .map((row) => row.id);
 
-    if (!leafIds.length) break;
+      if (!leafIds.length) break;
 
-    const { error: deleteLeafErr } = await sb
-      .from("tab_accounts")
-      .delete()
-      .in("id", leafIds);
-    if (deleteLeafErr) throw deleteLeafErr;
-  }
+      const { error: deleteLeafErr } = await sb
+        .from("tab_accounts")
+        .delete()
+        .in("id", leafIds);
+      if (deleteLeafErr) throw deleteLeafErr;
+    }
 
   const { data: payloadRows, error: payloadErr } = await sb
     .from("tab_legacy_import_jobs")
@@ -1113,7 +1105,15 @@ Deno.serve(async (req) => {
       const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
         auth: { persistSession: false },
       });
-      await resetEnterpriseData(adminClient, enterpriseId);
+      try {
+        await resetEnterpriseData(adminClient, enterpriseId);
+      } catch (clearErr: any) {
+        console.error("clear failed", clearErr);
+        return new Response(JSON.stringify({ error: String(clearErr?.message ?? clearErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ ok: true, cleared: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
