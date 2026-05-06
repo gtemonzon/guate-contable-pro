@@ -30,6 +30,8 @@ interface JobRow {
   result: any;
   error_message: string | null;
   finished_at: string | null;
+  updated_at?: string | null;
+  started_at?: string | null;
 }
 
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
@@ -41,6 +43,28 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const [submitting, setSubmitting] = useState(false);
   const [job, setJob] = useState<JobRow | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  // tick cada segundo cuando hay job activo (para mostrar segundos desde última actualización)
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+
+  const handleResume = async () => {
+    if (!job?.id) return;
+    setResuming(true);
+    try {
+      await supabase.functions.invoke("legacy-import-runner", { body: { jobId: job.id } });
+      toast({ title: "Reanudado", description: "Se solicitó al servidor continuar el proceso." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "No se pudo reanudar", description: e.message });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   const reset = () => {
     setStep(1);
@@ -53,7 +77,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const fetchActiveJob = useCallback(async () => {
     const { data } = await supabase
       .from("tab_legacy_import_jobs")
-      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at")
+      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at")
       .eq("enterprise_id", enterpriseId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -400,31 +424,68 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   No hay importaciones recientes para esta empresa.
                 </div>
               )}
-              {isRunning && job && (
-                <>
-                  <div className="flex items-start gap-2 p-3 rounded bg-muted text-xs">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      Este proceso corre en <strong>segundo plano en el servidor</strong>. Puedes cerrar esta ventana o el navegador
-                      — incluso seguir desde otro equipo o tu celular abriendo nuevamente "Importar datos legado" en esta empresa.
+              {isRunning && job && (() => {
+                const updatedAtMs = job.updated_at ? new Date(job.updated_at).getTime() : 0;
+                const secondsSinceUpdate = updatedAtMs ? Math.max(0, Math.floor((now - updatedAtMs) / 1000)) : null;
+                const stalled = secondsSinceUpdate !== null && secondsSinceUpdate > 90;
+                return (
+                  <>
+                    <div className="flex items-start gap-2 p-3 rounded bg-muted text-xs">
+                      <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div>
+                        Este proceso corre en <strong>segundo plano en el servidor</strong>. Puedes cerrar esta ventana o el navegador
+                        — incluso seguir desde otro equipo o tu celular abriendo nuevamente "Importar datos legado" en esta empresa.
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">{job.current_step ?? "Iniciando..."}</p>
-                    <Progress value={job.total_count > 0 ? (job.current_count / job.total_count) * 100 : 0} />
-                    <p className="text-xs text-muted-foreground text-center">
-                      {job.current_count} / {job.total_count}
-                    </p>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
-                      {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                      Borrar datos de la empresa
-                    </Button>
-                    <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
-                  </div>
-                </>
-              )}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">{job.current_step ?? "Iniciando..."}</p>
+                      <Progress value={job.total_count > 0 ? (job.current_count / job.total_count) * 100 : 0} />
+                      <p className="text-xs text-muted-foreground text-center">
+                        {job.current_count} / {job.total_count}
+                      </p>
+                      {secondsSinceUpdate !== null && (
+                        <p className={`text-xs text-center ${stalled ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                          {stalled ? (
+                            <>⚠ Sin actividad hace {secondsSinceUpdate}s — el proceso podría haberse detenido. Pulsa "Reanudar".</>
+                          ) : (
+                            <>Última actualización hace {secondsSinceUpdate}s</>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    {job.errors && job.errors.length > 0 && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-2 text-destructive mb-2 text-sm">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="font-medium">{job.errors.length} avisos durante el proceso</span>
+                          </div>
+                          <ScrollArea className="h-32">
+                            <ul className="text-xs space-y-1">
+                              {job.errors.slice(-50).map((e, i) => (<li key={i}>• {e}</li>))}
+                            </ul>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <div className="flex justify-between gap-2">
+                      <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                        {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                        Borrar datos de la empresa
+                      </Button>
+                      <div className="flex gap-2">
+                        {stalled && (
+                          <Button onClick={handleResume} disabled={resuming}>
+                            {resuming && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Reanudar
+                          </Button>
+                        )}
+                        <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
               {(isDone || isFailed) && job && (
                 <div className="space-y-3">
                   <div className={`flex items-center gap-2 ${isDone ? "text-success" : "text-destructive"}`}>

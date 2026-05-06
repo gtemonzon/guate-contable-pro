@@ -62,10 +62,11 @@ interface ParsedDataset {
   fixedAssets: ParsedFixedAsset[];
 }
 
-const CHUNK = 500;
+const CHUNK = 100; // lote de inserción (compras/ventas) — más pequeño para evitar statement timeout
 const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
 const DETAIL_CHUNK = 25;
 const DELETE_BATCH = 250;
+const MAX_RUNTIME_MS = 50_000; // si nos acercamos al límite del runtime, encolar continuación
 
 interface ImportResult {
   accountsCreated: number;
@@ -497,8 +498,77 @@ async function runImport(jobId: string) {
       bookKeys.add(`${y}-${m}`);
     });
     const bookIdByYM = new Map<string, number>();
-    if (!stepsCompleted.has("purchases")) {
-      await updateProgress("Importando compras...", 0, ds.purchases.length, true);
+
+    const startTs = Date.now();
+    const shouldYield = () => Date.now() - startTs > MAX_RUNTIME_MS;
+
+    // Helper: inserta en lotes con fallback fila-por-fila y soporte de reanudación
+    async function insertBatched<T>(
+      table: string,
+      rows: T[],
+      label: string,
+      stepKey: string,
+      stepLabel: string,
+      counterKey: keyof ImportResult,
+    ): Promise<"done" | "yield"> {
+      if (stepsCompleted.has(stepKey)) return "done";
+      // Reanudación: si el job ya tiene current_step igual al nuestro, reusar current_count
+      let startIdx = 0;
+      if (job.current_step === stepLabel && typeof job.current_count === "number") {
+        startIdx = Math.min(job.current_count, rows.length);
+      }
+      // Si ya teníamos result.<counter>, usar ese como punto de partida también
+      const alreadyCount = (result as any)[counterKey] as number;
+      if (alreadyCount > startIdx) startIdx = Math.min(alreadyCount, rows.length);
+
+      await updateProgress(stepLabel, startIdx, rows.length, true);
+
+      for (let i = startIdx; i < rows.length; i += CHUNK) {
+        const part = rows.slice(i, i + CHUNK);
+        const { error } = await sb.from(table).insert(part as any);
+        if (error) {
+          // Fallback fila-por-fila: aísla el problema y deja un error explicativo
+          let okCount = 0;
+          let firstErr: string | null = null;
+          for (const row of part) {
+            const { error: rErr } = await sb.from(table).insert(row as any);
+            if (rErr) {
+              if (!firstErr) firstErr = rErr.message;
+              errors.push(`${label}: ${rErr.message}`);
+            } else {
+              okCount++;
+            }
+          }
+          (result as any)[counterKey] = ((result as any)[counterKey] as number) + okCount;
+          if (firstErr) {
+            console.warn(`${label} batch falló, ${okCount}/${part.length} ok. Primer error: ${firstErr}`);
+          }
+        } else {
+          (result as any)[counterKey] = ((result as any)[counterKey] as number) + part.length;
+        }
+        await sb.from("tab_legacy_import_jobs").update({
+          result,
+          errors,
+          current_step: stepLabel,
+          current_count: i + part.length,
+          total_count: rows.length,
+        }).eq("id", jobId);
+
+        if (shouldYield()) {
+          return "yield";
+        }
+      }
+
+      stepsCompleted.add(stepKey);
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+      return "done";
+    }
+
+    if (!stepsCompleted.has("purchase_books")) {
       for (const key of bookKeys) {
         const [y, m] = key.split("-").map(Number);
         const { data: bk } = await sb
@@ -513,6 +583,16 @@ async function runImport(jobId: string) {
           .single();
         if (bk) bookIdByYM.set(key, bk.id);
       }
+      stepsCompleted.add("purchase_books");
+      await sb.from("tab_legacy_import_jobs").update({
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    } else {
+      const { data: existingBooks } = await sb
+        .from("tab_purchase_books")
+        .select("id, year, month")
+        .eq("enterprise_id", enterpriseId);
+      existingBooks?.forEach((bk: any) => bookIdByYM.set(`${bk.year}-${bk.month}`, bk.id));
     }
 
     const purchaseRows = ds.purchases.map((p) => {
@@ -546,29 +626,17 @@ async function runImport(jobId: string) {
       };
     });
 
-    if (!stepsCompleted.has("purchases")) {
-      for (const part of chunk(purchaseRows, CHUNK)) {
-        const { error } = await sb.from("tab_purchase_ledger").insert(part);
-        if (error) errors.push(`Compras: ${error.message}`);
-        else result.purchasesCreated += part.length;
-        await updateProgress(
-          "Importando compras...",
-          result.purchasesCreated,
-          purchaseRows.length,
-        );
-      }
-      stepsCompleted.add("purchases");
-      await sb.from("tab_legacy_import_jobs").update({
-        result,
-        errors,
-        steps_completed: Array.from(stepsCompleted),
-      }).eq("id", jobId);
-    } else {
-      const { data: existingBooks } = await sb
-        .from("tab_purchase_books")
-        .select("id, year, month")
-        .eq("enterprise_id", enterpriseId);
-      existingBooks?.forEach((bk: any) => bookIdByYM.set(`${bk.year}-${bk.month}`, bk.id));
+    const purchasesOutcome = await insertBatched(
+      "tab_purchase_ledger",
+      purchaseRows,
+      "Compras",
+      "purchases",
+      "Importando compras...",
+      "purchasesCreated",
+    );
+    if (purchasesOutcome === "yield") {
+      await queueContinuation(jobId);
+      return;
     }
 
     // ---------- 4. Ventas ----------
@@ -605,25 +673,20 @@ async function runImport(jobId: string) {
         establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
       };
     });
-    if (!stepsCompleted.has("sales")) {
-      await updateProgress("Importando ventas...", 0, ds.sales.length, true);
-      for (const part of chunk(salesRows, CHUNK)) {
-        const { error } = await sb.from("tab_sales_ledger").insert(part);
-        if (error) errors.push(`Ventas: ${error.message}`);
-        else result.salesCreated += part.length;
-        await updateProgress(
-          "Importando ventas...",
-          result.salesCreated,
-          salesRows.length,
-        );
-      }
-      stepsCompleted.add("sales");
-      await sb.from("tab_legacy_import_jobs").update({
-        result,
-        errors,
-        steps_completed: Array.from(stepsCompleted),
-      }).eq("id", jobId);
+
+    const salesOutcome = await insertBatched(
+      "tab_sales_ledger",
+      salesRows,
+      "Ventas",
+      "sales",
+      "Importando ventas...",
+      "salesCreated",
+    );
+    if (salesOutcome === "yield") {
+      await queueContinuation(jobId);
+      return;
     }
+
 
     // ---------- 5. Partidas (BATCH) ----------
     await updateProgress(
