@@ -55,7 +55,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const fetchActiveJob = useCallback(async () => {
     const { data } = await supabase
       .from("tab_legacy_import_jobs")
-      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at")
+      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at")
       .eq("enterprise_id", enterpriseId)
       .order("created_at", { ascending: false })
       .limit(1)
