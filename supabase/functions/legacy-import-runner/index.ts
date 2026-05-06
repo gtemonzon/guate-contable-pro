@@ -1105,7 +1105,15 @@ Deno.serve(async (req) => {
       const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
         auth: { persistSession: false },
       });
-      await resetEnterpriseData(adminClient, enterpriseId);
+      try {
+        await resetEnterpriseData(adminClient, enterpriseId);
+      } catch (clearErr: any) {
+        console.error("clear failed", clearErr);
+        return new Response(JSON.stringify({ error: String(clearErr?.message ?? clearErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ ok: true, cleared: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
