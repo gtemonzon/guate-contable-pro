@@ -59,6 +59,8 @@ export interface ParsedJournalEntry {
   description: string;
   reference?: string;
   lines: ParsedJournalLine[];
+  isBalancedFlag?: boolean; // columna "cuadrada" del origen
+  isPostedFlag?: boolean;   // columna "Mayorizada" del origen
 }
 
 export interface ParsedFixedAsset {
