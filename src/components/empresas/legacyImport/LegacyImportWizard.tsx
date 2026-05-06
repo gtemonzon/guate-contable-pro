@@ -30,6 +30,8 @@ interface JobRow {
   result: any;
   error_message: string | null;
   finished_at: string | null;
+  updated_at?: string | null;
+  started_at?: string | null;
 }
 
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
