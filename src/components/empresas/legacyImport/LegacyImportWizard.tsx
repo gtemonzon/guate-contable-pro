@@ -424,31 +424,68 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   No hay importaciones recientes para esta empresa.
                 </div>
               )}
-              {isRunning && job && (
-                <>
-                  <div className="flex items-start gap-2 p-3 rounded bg-muted text-xs">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      Este proceso corre en <strong>segundo plano en el servidor</strong>. Puedes cerrar esta ventana o el navegador
-                      — incluso seguir desde otro equipo o tu celular abriendo nuevamente "Importar datos legado" en esta empresa.
+              {isRunning && job && (() => {
+                const updatedAtMs = job.updated_at ? new Date(job.updated_at).getTime() : 0;
+                const secondsSinceUpdate = updatedAtMs ? Math.max(0, Math.floor((now - updatedAtMs) / 1000)) : null;
+                const stalled = secondsSinceUpdate !== null && secondsSinceUpdate > 90;
+                return (
+                  <>
+                    <div className="flex items-start gap-2 p-3 rounded bg-muted text-xs">
+                      <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div>
+                        Este proceso corre en <strong>segundo plano en el servidor</strong>. Puedes cerrar esta ventana o el navegador
+                        — incluso seguir desde otro equipo o tu celular abriendo nuevamente "Importar datos legado" en esta empresa.
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">{job.current_step ?? "Iniciando..."}</p>
-                    <Progress value={job.total_count > 0 ? (job.current_count / job.total_count) * 100 : 0} />
-                    <p className="text-xs text-muted-foreground text-center">
-                      {job.current_count} / {job.total_count}
-                    </p>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
-                      {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                      Borrar datos de la empresa
-                    </Button>
-                    <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
-                  </div>
-                </>
-              )}
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">{job.current_step ?? "Iniciando..."}</p>
+                      <Progress value={job.total_count > 0 ? (job.current_count / job.total_count) * 100 : 0} />
+                      <p className="text-xs text-muted-foreground text-center">
+                        {job.current_count} / {job.total_count}
+                      </p>
+                      {secondsSinceUpdate !== null && (
+                        <p className={`text-xs text-center ${stalled ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+                          {stalled ? (
+                            <>⚠ Sin actividad hace {secondsSinceUpdate}s — el proceso podría haberse detenido. Pulsa "Reanudar".</>
+                          ) : (
+                            <>Última actualización hace {secondsSinceUpdate}s</>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    {job.errors && job.errors.length > 0 && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-2 text-destructive mb-2 text-sm">
+                            <AlertCircle className="h-4 w-4" />
+                            <span className="font-medium">{job.errors.length} avisos durante el proceso</span>
+                          </div>
+                          <ScrollArea className="h-32">
+                            <ul className="text-xs space-y-1">
+                              {job.errors.slice(-50).map((e, i) => (<li key={i}>• {e}</li>))}
+                            </ul>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <div className="flex justify-between gap-2">
+                      <Button variant="destructive" onClick={handleClearEnterpriseData} disabled={clearing}>
+                        {clearing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                        Borrar datos de la empresa
+                      </Button>
+                      <div className="flex gap-2">
+                        {stalled && (
+                          <Button onClick={handleResume} disabled={resuming}>
+                            {resuming && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Reanudar
+                          </Button>
+                        )}
+                        <Button variant="outline" onClick={handleClose}>Cerrar (sigue en segundo plano)</Button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
               {(isDone || isFailed) && job && (
                 <div className="space-y-3">
                   <div className={`flex items-center gap-2 ${isDone ? "text-success" : "text-destructive"}`}>
