@@ -1310,7 +1310,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const { client } = await createAuthedClient(authHeader);
+      const requestedClearJobId = typeof body.clearJobId === "string" ? body.clearJobId : undefined;
+      const isInternalClearContinuation = requestedClearJobId && authHeader === `Bearer ${SERVICE_ROLE}`;
       const enterpriseId = Number(body.enterpriseId);
       if (!enterpriseId) {
         return new Response(JSON.stringify({ error: "enterpriseId requerido" }), {
@@ -1318,6 +1319,14 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false },
+      });
+
+      const client = isInternalClearContinuation
+        ? adminClient
+        : (await createAuthedClient(authHeader)).client;
 
       const { data: enterprise, error: enterpriseErr } = await client
         .from("tab_enterprises")
@@ -1332,15 +1341,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
-        auth: { persistSession: false },
-      });
-
       // Obtener el usuario para crear job de progreso
-      const { data: userData } = await client.auth.getUser();
-      const userId = userData?.user?.id;
-
-      const requestedClearJobId = typeof body.clearJobId === "string" ? body.clearJobId : undefined;
+      const userId = isInternalClearContinuation
+        ? undefined
+        : (await client.auth.getUser()).data?.user?.id;
 
       let progressJobId = requestedClearJobId;
       if (!progressJobId) {
