@@ -283,14 +283,25 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   Borrar datos de la empresa
                 </Button>
               </div>
-              <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.accounts.length}</div><div className="text-xs text-muted-foreground">Cuentas</div></CardContent></Card>
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.purchases.length}</div><div className="text-xs text-muted-foreground">Compras</div></CardContent></Card>
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.sales.length}</div><div className="text-xs text-muted-foreground">Ventas</div></CardContent></Card>
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.journalEntries.length}</div><div className="text-xs text-muted-foreground">Partidas</div></CardContent></Card>
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.assetCategories.length}</div><div className="text-xs text-muted-foreground">Grupos activos</div></CardContent></Card>
-                <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.fixedAssets.length}</div><div className="text-xs text-muted-foreground">Activos fijos</div></CardContent></Card>
-              </div>
+              {(() => {
+                const years = Array.from(new Set(
+                  dataset.journalEntries
+                    .map((e) => (e.date || "").slice(0, 4))
+                    .filter((y) => /^\d{4}$/.test(y))
+                )).sort();
+                const yearsLabel = years.length > 0 ? `[${years.join(", ")}]` : "—";
+                return (
+                  <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.accounts.length}</div><div className="text-xs text-muted-foreground">Cuentas</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.purchases.length}</div><div className="text-xs text-muted-foreground">Compras</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.sales.length}</div><div className="text-xs text-muted-foreground">Ventas</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.journalEntries.length}</div><div className="text-xs text-muted-foreground">Partidas</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{years.length}</div><div className="text-xs text-muted-foreground">Períodos {yearsLabel}</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.assetCategories.length}</div><div className="text-xs text-muted-foreground">Grupos activos</div></CardContent></Card>
+                    <Card><CardContent className="p-3"><div className="text-2xl font-bold">{dataset.fixedAssets.length}</div><div className="text-xs text-muted-foreground">Activos fijos</div></CardContent></Card>
+                  </div>
+                );
+              })()}
 
               <Card>
                 <CardContent className="p-4 text-sm space-y-1">
