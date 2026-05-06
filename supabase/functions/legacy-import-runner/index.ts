@@ -170,7 +170,11 @@ async function isJobStillActive(sb: ReturnType<typeof createClient>, jobId: stri
   return !!data && (data.status === "pending" || data.status === "running");
 }
 
-async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+async function resetEnterpriseData(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  progressJobId?: string,
+) {
   await sb
     .from("tab_legacy_import_jobs")
     .update({
@@ -179,7 +183,32 @@ async function resetEnterpriseData(sb: ReturnType<typeof createClient>, enterpri
       finished_at: new Date().toISOString(),
     })
     .eq("enterprise_id", enterpriseId)
-    .in("status", ["pending", "running"]);
+    .in("status", ["pending", "running"])
+    .neq("id", progressJobId ?? "00000000-0000-0000-0000-000000000000");
+
+  // Helpers de progreso (no-op si no hay progressJobId)
+  const updateStep = async (step: string, total = 0, current = 0) => {
+    if (!progressJobId) return;
+    await sb.from("tab_legacy_import_jobs").update({
+      current_step: step,
+      total_count: total,
+      current_count: current,
+      updated_at: new Date().toISOString(),
+    }).eq("id", progressJobId);
+  };
+  const updateCount = async (current: number) => {
+    if (!progressJobId) return;
+    await sb.from("tab_legacy_import_jobs").update({
+      current_count: current,
+      updated_at: new Date().toISOString(),
+    }).eq("id", progressJobId);
+  };
+
+  // Contar totales aproximados para la barra
+  const countTable = async (table: string) => {
+    const { count } = await sb.from(table).select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId);
+    return count ?? 0;
+  };
 
   while (true) {
     const { data: entryRows, error: entryErr } = await sb
