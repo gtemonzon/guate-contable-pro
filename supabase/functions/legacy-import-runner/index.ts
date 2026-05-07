@@ -927,6 +927,49 @@ async function runImport(jobId: string) {
     }).eq("id", jobId);
   }
 
+  if (!stepsCompleted.has("preclear")) {
+    const clearTable = async (tableKey: string, fn: () => Promise<number>) => {
+      if ((tableStats[tableKey] ?? 0) <= 0) return;
+      if (getDecisionForTable(importPlan, tableKey) !== "clear_then_import") return;
+      await updateProgress(`Limpiando ${TABLE_LABELS[tableKey]} existentes...`, 0, tableStats[tableKey], true);
+      const deleted = await fn();
+      result.deletedByStep = result.deletedByStep ?? {};
+      result.deletedByStep[`preclear_${tableKey}`] = deleted;
+      result.deletedTotal = Object.values(result.deletedByStep).reduce((sum, value) => sum + Number(value || 0), 0);
+    };
+
+    if ((tableStats.accounts ?? 0) > 0 || (tableStats.periods ?? 0) > 0) {
+      const shouldClearDomain = ["accounts", "periods"].some(
+        (tableKey) => (tableStats[tableKey] ?? 0) > 0 && getDecisionForTable(importPlan, tableKey) === "clear_then_import",
+      );
+      if (shouldClearDomain) {
+        await updateProgress("Limpiando cuentas y períodos existentes...", 0, (tableStats.accounts ?? 0) + (tableStats.periods ?? 0), true);
+        const deleted = await clearPeriodsAndAccountsDomainForImport(sb, enterpriseId);
+        result.deletedByStep = result.deletedByStep ?? {};
+        result.deletedByStep.preclear_accounts_periods = deleted;
+        result.deletedTotal = Object.values(result.deletedByStep).reduce((sum, value) => sum + Number(value || 0), 0);
+      }
+    } else {
+      await clearTable("journalEntries", () => clearJournalEntriesForImport(sb, enterpriseId));
+      await clearTable("purchases", () => clearPurchasesForImport(sb, enterpriseId));
+      await clearTable("sales", () => clearSimpleEnterpriseTable(sb, enterpriseId, "tab_sales_ledger", "ventas"));
+      await clearTable("fixedAssets", () => clearFixedAssetsForImport(sb, enterpriseId));
+      await clearTable("assetCategories", async () => {
+        const assetsDeleted = await clearFixedAssetsForImport(sb, enterpriseId);
+        const categoriesDeleted = await clearSimpleEnterpriseTable(sb, enterpriseId, "fixed_asset_categories", "categorías de activos");
+        return assetsDeleted + categoriesDeleted;
+      });
+    }
+
+    result.tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
+    stepsCompleted.add("preclear");
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", jobId);
+  }
+
   let lastUpdate = 0;
   const updateProgress = async (
     step: string,
