@@ -676,8 +676,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       }
     }
 
-    const remaining = await verifyTableEmpty(table, stepKey);
-    if (remaining > 0) throw new Error(`${label}: quedaron ${remaining} registros sin borrar`);
+    const remainingAfter = await verifyTableEmpty(table, stepKey);
+    if (remainingAfter > 0) throw new Error(`${label}: quedaron ${remainingAfter} registros sin borrar`);
     stepsCompleted.add(stepKey);
     await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
     return false;
