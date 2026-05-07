@@ -814,7 +814,11 @@ async function runImport(jobId: string) {
     : [];
   const result = mergeResult(job.result);
   const stepsCompleted = parseCompletedSteps(job.steps_completed);
-  const importPlan = normalizeImportPlan((job as any).import_plan);
+  const importPlan = normalizeImportPlan(
+    job.payload && typeof job.payload === "object"
+      ? (job.payload as Record<string, unknown>).importPlan
+      : undefined,
+  );
   result.importPlan = importPlan;
 
   const tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
