@@ -64,11 +64,19 @@ export function useYearlyCharts(enterpriseId: number | null, selectedYears: numb
 }
 
 export async function fetchAvailableChartYears(enterpriseId: number): Promise<number[]> {
-  const yearsSet = new Set<number>();
+  const { data: periods } = await supabase
+    .from('tab_accounting_periods')
+    .select('year')
+    .eq('enterprise_id', enterpriseId)
+    .order('year', { ascending: false });
 
+  const periodYears = Array.from(new Set((periods ?? []).map((p) => Number(p.year)).filter((year) => Number.isFinite(year) && year >= 1900 && year <= 2100)));
+  if (periodYears.length > 0) return periodYears.sort((a, b) => b - a);
+
+  const yearsSet = new Set<number>();
   const [{ data: sales }, { data: purchases }] = await Promise.all([
-    supabase.from('tab_sales_ledger').select('invoice_date').eq('enterprise_id', enterpriseId).eq('is_annulled', false),
-    supabase.from('tab_purchase_ledger').select('invoice_date').eq('enterprise_id', enterpriseId),
+    supabase.from('tab_sales_ledger').select('invoice_date').eq('enterprise_id', enterpriseId).eq('is_annulled', false).limit(5000),
+    supabase.from('tab_purchase_ledger').select('invoice_date').eq('enterprise_id', enterpriseId).limit(5000),
   ]);
 
   sales?.forEach((s) => yearsSet.add(new Date(s.invoice_date).getFullYear()));
