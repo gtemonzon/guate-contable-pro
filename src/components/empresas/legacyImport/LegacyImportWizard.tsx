@@ -526,7 +526,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   <div className={`flex items-center gap-2 ${isDone ? "text-success" : "text-destructive"}`}>
                     {isDone ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
                     <span className="font-semibold">
-                      {isDone ? "Importación finalizada" : "Importación con error"}
+                      {isDone ? (isClearJob ? "Borrado finalizado" : "Importación finalizada") : (isClearJob ? "Borrado con error" : "Importación con error")}
                     </span>
                   </div>
                   {isFailed && job.error_message && (
