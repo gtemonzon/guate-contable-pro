@@ -360,7 +360,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Importación de datos legado</DialogTitle>
           <DialogDescription>
@@ -368,7 +368,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           </DialogDescription>
         </DialogHeader>
 
-        <div className="overflow-y-auto min-h-0">
+        <div className="overflow-y-auto min-h-0 max-h-[calc(90vh-7rem)] pr-1">
           {/* PASO 1 */}
           {step === 1 && (
             <div className="space-y-4">
@@ -660,33 +660,47 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                     <Button onClick={handleClose}>Cerrar</Button>
                     </div>
                   </div>
-                  {isClearJob && result && (
-                    <Card>
-                      <CardContent className="p-4 space-y-2 text-sm">
-                        <div>Total borrado: <strong>{result.deletedTotal ?? 0}</strong></div>
-                        {result.deletedByStep && Object.keys(result.deletedByStep).length > 0 && (
-                          <div className="space-y-1">
-                            {Object.entries(result.deletedByStep).map(([key, value]) => (
-                              <div key={key} className="flex justify-between gap-3">
-                                <span className="text-muted-foreground">{key}</span>
-                                <strong>{Number(value || 0)}</strong>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {result.verifiedEmptyByStep && Object.keys(result.verifiedEmptyByStep).length > 0 && (
-                          <div className="space-y-1 border-t pt-2">
-                            {Object.entries(result.verifiedEmptyByStep).map(([key, value]) => (
-                              <div key={key} className="flex justify-between gap-3">
-                                <span className="text-muted-foreground">{key}</span>
-                                <strong>{value ? "Vacío" : "Con remanentes"}</strong>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  )}
+                   {isClearJob && result && (
+                     <Card>
+                       <CardContent className="p-4 space-y-3 text-sm">
+                         <div>Total borrado: <strong>{result.deletedTotal ?? 0}</strong></div>
+                         <ScrollArea className="h-60 rounded border">
+                           <div className="space-y-3 p-3">
+                             {result.deletedByStep && Object.keys(result.deletedByStep).length > 0 && (
+                               <div className="space-y-1">
+                                 {Object.entries(result.deletedByStep).map(([key, value]) => (
+                                   <div key={key} className="flex justify-between gap-3">
+                                     <span className="text-muted-foreground break-all">{key}</span>
+                                     <strong>{Number(value || 0)}</strong>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                             {result.verifiedEmptyByStep && Object.keys(result.verifiedEmptyByStep).length > 0 && (
+                               <div className="space-y-1 border-t pt-3">
+                                 {Object.entries(result.verifiedEmptyByStep).map(([key, value]) => (
+                                   <div key={key} className="flex justify-between gap-3">
+                                     <span className="text-muted-foreground break-all">{key}</span>
+                                     <strong>{value ? "Vacío" : "Con remanentes"}</strong>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                             {result.tableStats && Object.keys(result.tableStats).length > 0 && (
+                               <div className="space-y-1 border-t pt-3">
+                                 {Object.entries(result.tableStats).map(([key, value]) => (
+                                   <div key={key} className="flex justify-between gap-3">
+                                     <span className="text-muted-foreground break-all">{key}</span>
+                                     <strong>{Number(value || 0)} restantes</strong>
+                                   </div>
+                                 ))}
+                               </div>
+                             )}
+                           </div>
+                         </ScrollArea>
+                       </CardContent>
+                     </Card>
+                   )}
                 </div>
               )}
             </div>
