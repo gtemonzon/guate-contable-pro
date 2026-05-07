@@ -148,6 +148,7 @@ const EMPTY_RESULT: ImportResult = {
 const TABLE_LABELS: Record<string, string> = {
   accounts: "Cuentas",
   periods: "Períodos",
+  purchaseBooks: "Libros de compras",
   purchases: "Compras",
   sales: "Ventas",
   journalEntries: "Partidas",
@@ -1008,6 +1009,68 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     return false;
   };
 
+  const deleteAccountsTreeAdaptive = async (): Promise<boolean> => {
+    if (stepsCompleted.has("accounts_clear")) return false;
+
+    let deleted = clearResult.deletedByStep.accounts_clear ?? 0;
+    const remaining = await countTable("tab_accounts");
+    const total = Math.max(deleted + remaining, deleted);
+    await persistClearJob({
+      current_step: "Borrando cuentas...",
+      current_count: deleted,
+      total_count: total,
+    });
+
+    while (true) {
+      const { data: accountRows, error } = await sb
+        .from("tab_accounts")
+        .select("id, parent_account_id")
+        .eq("enterprise_id", enterpriseId);
+      if (error) throw new Error(`cuentas: ${error.message}`);
+      if (!accountRows?.length) break;
+
+      const parentIds = new Set(
+        accountRows
+          .map((row) => row.parent_account_id)
+          .filter((id): id is number => typeof id === "number"),
+      );
+      const leafIds = accountRows
+        .filter((row) => !parentIds.has(row.id))
+        .slice(0, CLEAR_DELETE_BATCH)
+        .map((row) => row.id);
+
+      if (!leafIds.length) {
+        throw new Error("cuentas: no se pudieron identificar cuentas hoja para borrar");
+      }
+
+      deleted += await deleteByIdsAdaptive("tab_accounts", leafIds, "cuentas");
+      updateDeletionSummary("accounts_clear", deleted);
+      await persistClearJob({
+        current_step: "Borrando cuentas...",
+        current_count: deleted,
+        total_count: total,
+      });
+
+      if (shouldYield()) {
+        await queueClearContinuation(clearJobId, enterpriseId);
+        return true;
+      }
+    }
+
+    const remainingAfter = await verifyTableEmpty("tab_accounts", "accounts_clear");
+    if (remainingAfter > 0) {
+      throw new Error(`cuentas: quedaron ${remainingAfter} registros sin borrar`);
+    }
+
+    stepsCompleted.add("accounts_clear");
+    await persistClearJob({
+      current_step: "Borrando cuentas...",
+      current_count: deleted,
+      total_count: total,
+    });
+    return false;
+  };
+
   await persistClearJob();
 
   try {
@@ -1165,38 +1228,63 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       });
     }
 
+    if (!stepsCompleted.has("purchase_journal_links_clear")) {
+      const yielded = await deleteSimpleEnterpriseTable(
+        "tab_purchase_journal_links",
+        "vínculos compra-partida",
+        "purchase_journal_links_clear",
+      );
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("purchase_ledger_clear")) {
+      const yielded = await deleteSimpleEnterpriseTable(
+        "tab_purchase_ledger",
+        "compras",
+        "purchase_ledger_clear",
+      );
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("purchase_books_clear")) {
+      const yielded = await deletePurchaseBooksAdaptive();
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("sales_ledger_clear")) {
+      const yielded = await deleteSimpleEnterpriseTable(
+        "tab_sales_ledger",
+        "ventas",
+        "sales_ledger_clear",
+      );
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("period_inventory_closing_clear")) {
+      const yielded = await deleteSimpleEnterpriseTable(
+        "tab_period_inventory_closing",
+        "cierres de inventario por período",
+        "period_inventory_closing_clear",
+      );
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("periods_clear")) {
+      const yielded = await deleteSimpleEnterpriseTable(
+        "tab_accounting_periods",
+        "períodos",
+        "periods_clear",
+        25,
+      );
+      if (yielded) return;
+    }
+
+    if (!stepsCompleted.has("accounts_clear")) {
+      const yielded = await deleteAccountsTreeAdaptive();
+      if (yielded) return;
+    }
+
     if (!stepsCompleted.has("financial_domain_clear")) {
-      await persistClearJob({
-        current_step: "Borrando compras, períodos y cuentas...",
-        current_count: 0,
-        total_count: 1,
-      });
-      const rpcSummary = await clearEnterpriseBlockViaRpc(
-        sb,
-        enterpriseId,
-        "accounts_periods",
-      );
-      applyRpcClearSummary(rpcSummary);
-
-      const blockingRemaining = rpcSummary.filter(
-        (row) => row.remaining_count > 0,
-      );
-      if (blockingRemaining.length > 0) {
-        throw new Error(
-          `Quedaron remanentes tras el borrado: ${blockingRemaining.map((row) => `${row.block_key}=${row.remaining_count}`).join(", ")}`,
-        );
-      }
-
-      stepsCompleted.add("purchase_journal_links_clear");
-      stepsCompleted.add("purchase_ledger_clear");
-      stepsCompleted.add("purchase_books_clear");
-      stepsCompleted.add("sales_ledger_clear");
-      stepsCompleted.add("journal_entries_clear");
-      stepsCompleted.add("fixed_assets_clear");
-      stepsCompleted.add("asset_categories_clear");
-      stepsCompleted.add("period_inventory_closing_clear");
-      stepsCompleted.add("periods_clear");
-      stepsCompleted.add("accounts_clear");
       stepsCompleted.add("financial_domain_clear");
       await persistClearJob({
         current_step: "Borrado financiero completado",
