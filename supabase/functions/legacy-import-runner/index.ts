@@ -476,66 +476,115 @@ async function clearPeriodsAndAccountsDomainForImport(
   return deleted;
 }
 
-const CLEAR_RPC_STEP_KEYS: Record<string, string> = {
-  tab_purchase_journal_links: "purchase_journal_links_clear",
-  tab_purchase_ledger: "purchase_ledger_clear",
-  tab_purchase_books: "purchase_books_clear",
-  tab_sales_ledger: "sales_ledger_clear",
-  tab_journal_entries: "journal_entries_clear",
-  fixed_assets: "fixed_assets_clear",
-  fixed_asset_categories: "asset_categories_clear",
-  tab_accounting_periods: "periods_clear",
-  tab_accounts: "accounts_clear",
-};
+const HARD_RESET_PHASES = [
+  {
+    phaseKey: "purchase_journal_links_clear",
+    label: "vínculos compra-partida",
+    progressKey: "purchaseJournalLinks",
+  },
+  {
+    phaseKey: "purchase_ledger_clear",
+    label: "compras",
+    progressKey: "purchases",
+  },
+  {
+    phaseKey: "purchase_books_clear",
+    label: "libros de compras",
+    progressKey: "purchaseBooks",
+  },
+  {
+    phaseKey: "journal_entry_details_clear",
+    label: "detalles de partidas",
+    progressKey: "journalEntryDetails",
+  },
+  {
+    phaseKey: "journal_entries_clear",
+    label: "partidas",
+    progressKey: "journalEntries",
+  },
+  {
+    phaseKey: "fixed_asset_depreciation_schedule_clear",
+    label: "depreciaciones de activos",
+    progressKey: "fixedAssetDepreciationSchedule",
+  },
+  {
+    phaseKey: "fixed_asset_event_log_clear",
+    label: "bitácora de activos",
+    progressKey: "fixedAssetEventLog",
+  },
+  {
+    phaseKey: "fixed_assets_clear",
+    label: "activos fijos",
+    progressKey: "fixedAssets",
+  },
+  {
+    phaseKey: "asset_categories_clear",
+    label: "categorías de activos",
+    progressKey: "assetCategories",
+  },
+  {
+    phaseKey: "sales_ledger_clear",
+    label: "ventas",
+    progressKey: "sales",
+  },
+  {
+    phaseKey: "inventory_closings_clear",
+    label: "cierres de inventario por período",
+    progressKey: "inventoryClosings",
+  },
+  {
+    phaseKey: "periods_clear",
+    label: "períodos",
+    progressKey: "periods",
+  },
+  {
+    phaseKey: "accounts_clear",
+    label: "cuentas",
+    progressKey: "accounts",
+  },
+] as const;
 
-const CLEAR_RPC_TABLE_STAT_KEYS: Record<string, string> = {
-  tab_purchase_journal_links: "purchaseJournalLinks",
-  tab_purchase_ledger: "purchases",
-  tab_purchase_books: "purchaseBooks",
-  tab_sales_ledger: "sales",
-  tab_journal_entries: "journalEntries",
-  fixed_assets: "fixedAssets",
-  fixed_asset_categories: "assetCategories",
-  tab_accounting_periods: "periods",
-  tab_accounts: "accounts",
-};
+const HARD_RESET_PHASE_BY_KEY = Object.fromEntries(
+  HARD_RESET_PHASES.map((phase) => [phase.phaseKey, phase]),
+) as Record<
+  string,
+  {
+    phaseKey: string;
+    label: string;
+    progressKey: string;
+  }
+>;
 
-async function clearEnterpriseBlockViaRpc(
+async function runHardResetPhase(
   sb: ReturnType<typeof createClient>,
   enterpriseId: number,
-  block:
-    | "accounts_periods"
-    | "purchases"
-    | "sales"
-    | "journal_entries"
-    | "fixed_assets"
-    | "asset_categories"
-    | "all",
-): Promise<
-  Array<{
-    block_key: string;
-    table_name: string;
-    deleted_count: number;
-    remaining_count: number;
-  }>
-> {
-  const { data, error } = await sb.rpc("clear_legacy_import_block", {
+  phaseKey: string,
+): Promise<{
+  phase_key: string;
+  table_name: string;
+  deleted_count: number;
+  remaining_count: number;
+}> {
+  const { data, error } = await sb.rpc("hard_reset_legacy_import_phase", {
     p_enterprise_id: enterpriseId,
-    p_block: block,
+    p_phase: phaseKey,
   });
 
   if (error) {
-    throw new Error(`limpieza ${block}: ${error.message}`);
+    throw new Error(`limpieza ${phaseKey}: ${error.message}`);
   }
 
-  return Array.isArray(data)
-    ? data.map((row: any) => ({
-        block_key: String(row.block_key),
-        table_name: String(row.table_name),
-        deleted_count: Number(row.deleted_count ?? 0),
-        remaining_count: Number(row.remaining_count ?? 0),
-      }))
-    : [];
+  const row = Array.isArray(data) ? data[0] : null;
+  if (!row) {
+    throw new Error(`limpieza ${phaseKey}: no devolvió resultado`);
+  }
+
+  return {
+    phase_key: String(row.phase_key ?? phaseKey),
+    table_name: String(row.table_name ?? phaseKey),
+    deleted_count: Number(row.deleted_count ?? 0),
+    remaining_count: Number(row.remaining_count ?? 0),
+  };
 }
 
 async function insertCriticalRows<T>(
@@ -708,45 +757,15 @@ async function runClear(clearJobId: string, enterpriseId: number) {
   }
 
   const stepsCompleted = parseCompletedSteps((clearJob as any).steps_completed);
-  const clearResult = {
-    ...(clearJob.result && typeof clearJob.result === "object"
-      ? clearJob.result
-      : {}),
-    deletedByStep:
-      clearJob.result &&
-      typeof clearJob.result === "object" &&
-      (clearJob.result as Record<string, unknown>).deletedByStep &&
-      typeof (clearJob.result as Record<string, unknown>).deletedByStep ===
-        "object"
-        ? { ...((clearJob.result as Record<string, any>).deletedByStep ?? {}) }
-        : {},
-  } as { cleared?: boolean; deletedByStep: Record<string, number> };
-
-  const applyRpcClearSummary = (
-    rows: Array<{
-      table_name: string;
-      deleted_count: number;
-      remaining_count: number;
-    }>,
-  ) => {
-    clearResult.deletedByStep = clearResult.deletedByStep ?? {};
-    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
-    clearResult.tableStats = clearResult.tableStats ?? {};
-
-    for (const row of rows) {
-      const stepKey = CLEAR_RPC_STEP_KEYS[row.table_name] ?? row.table_name;
-      const tableStatKey =
-        CLEAR_RPC_TABLE_STAT_KEYS[row.table_name] ?? row.table_name;
-      clearResult.deletedByStep[stepKey] = Number(row.deleted_count ?? 0);
-      clearResult.verifiedEmptyByStep[stepKey] =
-        Number(row.remaining_count ?? 0) === 0;
-      clearResult.tableStats[tableStatKey] = Number(row.remaining_count ?? 0);
-    }
-
-    clearResult.deletedTotal = Object.values(clearResult.deletedByStep).reduce(
-      (sum, value) => sum + Number(value || 0),
-      0,
-    );
+  const clearResult = mergeResult(clearJob.result);
+  clearResult.deletedByStep = {
+    ...(clearResult.deletedByStep ?? {}),
+  };
+  clearResult.verifiedEmptyByStep = {
+    ...(clearResult.verifiedEmptyByStep ?? {}),
+  };
+  clearResult.tableStats = {
+    ...(clearResult.tableStats ?? {}),
   };
 
   const persistClearJob = async (patch: Record<string, unknown> = {}) => {
@@ -763,312 +782,24 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       .eq("id", clearJobId);
   };
 
-  const updateDeletionSummary = (stepKey: string, deleted: number) => {
-    clearResult.deletedByStep[stepKey] = deleted;
+  const applyPhaseResult = (phaseKey: string, row: {
+    deleted_count: number;
+    remaining_count: number;
+  }) => {
+    const phaseMeta = HARD_RESET_PHASE_BY_KEY[phaseKey];
+    clearResult.deletedByStep = clearResult.deletedByStep ?? {};
+    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
+    clearResult.tableStats = clearResult.tableStats ?? {};
+    clearResult.deletedByStep[phaseKey] = Number(row.deleted_count ?? 0);
+    clearResult.verifiedEmptyByStep[phaseKey] =
+      Number(row.remaining_count ?? 0) === 0;
+    clearResult.tableStats[phaseMeta?.progressKey ?? phaseKey] = Number(
+      row.remaining_count ?? 0,
+    );
     clearResult.deletedTotal = Object.values(clearResult.deletedByStep).reduce(
       (sum, value) => sum + Number(value || 0),
       0,
     );
-  };
-
-  const verifyTableEmpty = async (table: string, stepKey: string) => {
-    const remaining = await countTable(table);
-    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
-    clearResult.tableStats = clearResult.tableStats ?? {};
-    clearResult.verifiedEmptyByStep[stepKey] = remaining === 0;
-    clearResult.tableStats[stepKey] = remaining;
-    return remaining;
-  };
-
-  const countTable = async (table: string) => {
-    const { count } = await sb
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq("enterprise_id", enterpriseId);
-    return count ?? 0;
-  };
-
-  const deleteByIdsAdaptive = async (
-    table: string,
-    ids: Array<string | number>,
-    label: string,
-  ): Promise<number> => {
-    if (!ids.length) return 0;
-
-    const { error } = await sb
-      .from(table)
-      .delete()
-      .in("id", ids as any);
-    if (!error) return ids.length;
-
-    if (isStatementTimeout(error.message) && ids.length > 1) {
-      const mid = Math.floor(ids.length / 2);
-      const left = await deleteByIdsAdaptive(table, ids.slice(0, mid), label);
-      const right = await deleteByIdsAdaptive(table, ids.slice(mid), label);
-      return left + right;
-    }
-
-    if (ids.length > 1) {
-      let deleted = 0;
-      let firstError: string | null = null;
-      for (const id of ids) {
-        const { error: rowError } = await sb
-          .from(table)
-          .delete()
-          .eq("id", id as any);
-        if (rowError) {
-          firstError ??= rowError.message;
-        } else {
-          deleted += 1;
-        }
-      }
-      if (firstError) {
-        throw new Error(`${label}: ${firstError}`);
-      }
-      return deleted;
-    }
-
-    throw new Error(`${label}: ${error.message}`);
-  };
-
-  const deleteByColumnAdaptive = async (
-    table: string,
-    column: string,
-    values: Array<string | number>,
-    label: string,
-  ): Promise<void> => {
-    if (!values.length) return;
-
-    const { error } = await sb
-      .from(table)
-      .delete()
-      .in(column, values as any);
-    if (!error) return;
-
-    if (isStatementTimeout(error.message) && values.length > 1) {
-      const mid = Math.floor(values.length / 2);
-      await deleteByColumnAdaptive(table, column, values.slice(0, mid), label);
-      await deleteByColumnAdaptive(table, column, values.slice(mid), label);
-      return;
-    }
-
-    const { data: dependentRows, error: selectErr } = await sb
-      .from(table)
-      .select("id")
-      .in(column, values as any)
-      .limit(CLEAR_DELETE_BATCH);
-
-    if (selectErr) throw new Error(`${label}: ${selectErr.message}`);
-
-    const dependentIds = (dependentRows ?? []).map((row: any) => row.id);
-    if (!dependentIds.length) return;
-
-    await deleteByIdsAdaptive(table, dependentIds, label);
-  };
-
-  const deletePurchaseBooksAdaptive = async (): Promise<boolean> => {
-    if (stepsCompleted.has("purchase_books_clear")) return false;
-
-    let deletedBooks = clearResult.deletedByStep.purchase_books_clear ?? 0;
-    const { count: remainingBooks } = await sb
-      .from("tab_purchase_books")
-      .select("id", { count: "exact", head: true })
-      .eq("enterprise_id", enterpriseId);
-    const totalBooks = Math.max(
-      deletedBooks + (remainingBooks ?? 0),
-      deletedBooks,
-    );
-    await persistClearJob({
-      current_step: "Borrando libros de compras...",
-      current_count: deletedBooks,
-      total_count: totalBooks,
-    });
-
-    while (true) {
-      const { data: bookRows, error: bookErr } = await sb
-        .from("tab_purchase_books")
-        .select("id")
-        .eq("enterprise_id", enterpriseId)
-        .order("id", { ascending: true })
-        .limit(CLEAR_DELETE_BATCH);
-      if (bookErr) throw new Error(`libros de compras: ${bookErr.message}`);
-      if (!bookRows?.length) break;
-
-      for (const book of bookRows) {
-        await deleteByColumnAdaptive(
-          "tab_purchase_ledger",
-          "purchase_book_id",
-          [book.id],
-          "compras por libro",
-        );
-        const { error: deleteBookErr } = await sb
-          .from("tab_purchase_books")
-          .delete()
-          .eq("id", book.id);
-        if (deleteBookErr) {
-          console.error("purchase_books_clear failed", {
-            enterpriseId,
-            clearJobId,
-            purchaseBookId: book.id,
-            deletedBooks,
-            totalBooks,
-            error: deleteBookErr.message,
-          });
-          throw new Error(
-            `libros de compras [book:${book.id}]: ${deleteBookErr.message}`,
-          );
-        }
-        deletedBooks += 1;
-        updateDeletionSummary("purchase_books_clear", deletedBooks);
-        await persistClearJob({
-          current_step: "Borrando libros de compras...",
-          current_count: deletedBooks,
-          total_count: totalBooks,
-        });
-
-        if (shouldYield()) {
-          await queueClearContinuation(clearJobId, enterpriseId);
-          return true;
-        }
-      }
-    }
-
-    const remaining = await verifyTableEmpty(
-      "tab_purchase_books",
-      "purchase_books_clear",
-    );
-    if (remaining > 0)
-      throw new Error(
-        `libros de compras: quedaron ${remaining} registros sin borrar`,
-      );
-    stepsCompleted.add("purchase_books_clear");
-    await persistClearJob({
-      current_step: "Borrando libros de compras...",
-      current_count: deletedBooks,
-      total_count: totalBooks,
-    });
-    return false;
-  };
-
-  const deleteSimpleEnterpriseTable = async (
-    table: string,
-    label: string,
-    stepKey: string,
-    batchSize = CLEAR_DELETE_BATCH,
-  ): Promise<boolean> => {
-    if (stepsCompleted.has(stepKey)) return false;
-
-    let deleted = clearResult.deletedByStep[stepKey] ?? 0;
-    const remaining = await countTable(table);
-    const total = Math.max(deleted + remaining, deleted);
-    await persistClearJob({
-      current_step: `Borrando ${label}...`,
-      current_count: deleted,
-      total_count: total,
-    });
-
-    while (true) {
-      const { data, error } = await sb
-        .from(table)
-        .select("id")
-        .eq("enterprise_id", enterpriseId)
-        .order("id", { ascending: true })
-        .limit(batchSize);
-      if (error) throw new Error(`${label}: ${error.message}`);
-      if (!data?.length) break;
-
-      deleted += await deleteByIdsAdaptive(
-        table,
-        data.map((row: any) => row.id),
-        label,
-      );
-      updateDeletionSummary(stepKey, deleted);
-      await persistClearJob({
-        current_step: `Borrando ${label}...`,
-        current_count: deleted,
-        total_count: total,
-      });
-
-      if (shouldYield()) {
-        await queueClearContinuation(clearJobId, enterpriseId);
-        return true;
-      }
-    }
-
-    const remainingAfter = await verifyTableEmpty(table, stepKey);
-    if (remainingAfter > 0)
-      throw new Error(
-        `${label}: quedaron ${remainingAfter} registros sin borrar`,
-      );
-    stepsCompleted.add(stepKey);
-    await persistClearJob({
-      current_step: `Borrando ${label}...`,
-      current_count: deleted,
-      total_count: total,
-    });
-    return false;
-  };
-
-  const deleteAccountsTreeAdaptive = async (): Promise<boolean> => {
-    if (stepsCompleted.has("accounts_clear")) return false;
-
-    let deleted = clearResult.deletedByStep.accounts_clear ?? 0;
-    const remaining = await countTable("tab_accounts");
-    const total = Math.max(deleted + remaining, deleted);
-    await persistClearJob({
-      current_step: "Borrando cuentas...",
-      current_count: deleted,
-      total_count: total,
-    });
-
-    while (true) {
-      const { data: accountRows, error } = await sb
-        .from("tab_accounts")
-        .select("id, parent_account_id")
-        .eq("enterprise_id", enterpriseId);
-      if (error) throw new Error(`cuentas: ${error.message}`);
-      if (!accountRows?.length) break;
-
-      const parentIds = new Set(
-        accountRows
-          .map((row) => row.parent_account_id)
-          .filter((id): id is number => typeof id === "number"),
-      );
-      const leafIds = accountRows
-        .filter((row) => !parentIds.has(row.id))
-        .slice(0, CLEAR_DELETE_BATCH)
-        .map((row) => row.id);
-
-      if (!leafIds.length) {
-        throw new Error("cuentas: no se pudieron identificar cuentas hoja para borrar");
-      }
-
-      deleted += await deleteByIdsAdaptive("tab_accounts", leafIds, "cuentas");
-      updateDeletionSummary("accounts_clear", deleted);
-      await persistClearJob({
-        current_step: "Borrando cuentas...",
-        current_count: deleted,
-        total_count: total,
-      });
-
-      if (shouldYield()) {
-        await queueClearContinuation(clearJobId, enterpriseId);
-        return true;
-      }
-    }
-
-    const remainingAfter = await verifyTableEmpty("tab_accounts", "accounts_clear");
-    if (remainingAfter > 0) {
-      throw new Error(`cuentas: quedaron ${remainingAfter} registros sin borrar`);
-    }
-
-    stepsCompleted.add("accounts_clear");
-    await persistClearJob({
-      current_step: "Borrando cuentas...",
-      current_count: deleted,
-      total_count: total,
-    });
-    return false;
   };
 
   await persistClearJob();
@@ -1094,194 +825,35 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       });
     }
 
-    if (!stepsCompleted.has("journal_entries_clear")) {
-      let deletedEntries = clearResult.deletedByStep.journal_entries_clear ?? 0;
-      const remainingEntries = await countTable("tab_journal_entries");
-      const totalEntries = Math.max(
-        deletedEntries + remainingEntries,
-        deletedEntries,
-      );
+    for (const phase of HARD_RESET_PHASES) {
+      if (stepsCompleted.has(phase.phaseKey)) continue;
+
       await persistClearJob({
-        current_step: "Borrando partidas...",
-        current_count: deletedEntries,
-        total_count: totalEntries,
+        current_step: `Borrando ${phase.label}...`,
+        current_count: 0,
+        total_count: 1,
       });
 
-      while (true) {
-        const { data: entryRows, error: entryErr } = await sb
-          .from("tab_journal_entries")
-          .select("id")
-          .eq("enterprise_id", enterpriseId)
-          .order("id", { ascending: true })
-          .limit(CLEAR_DELETE_BATCH);
-        if (entryErr) throw entryErr;
-        if (!entryRows?.length) break;
+      const row = await runHardResetPhase(sb, enterpriseId, phase.phaseKey);
+      applyPhaseResult(phase.phaseKey, row);
 
-        const entryIds = entryRows.map((row) => row.id);
-        await deleteByColumnAdaptive(
-          "tab_journal_entry_details",
-          "journal_entry_id",
-          entryIds,
-          "detalles de partidas",
+      if (Number(row.remaining_count ?? 0) > 0) {
+        throw new Error(
+          `${phase.label}: quedaron ${Number(row.remaining_count ?? 0)} registros sin borrar`,
         );
-        deletedEntries += await deleteByIdsAdaptive(
-          "tab_journal_entries",
-          entryIds,
-          "partidas",
-        );
-        updateDeletionSummary("journal_entries_clear", deletedEntries);
-        await persistClearJob({
-          current_step: "Borrando partidas...",
-          current_count: deletedEntries,
-          total_count: totalEntries,
-        });
-
-        if (shouldYield()) {
-          await queueClearContinuation(clearJobId, enterpriseId);
-          return;
-        }
       }
 
-      const remainingEntriesAfter = await verifyTableEmpty(
-        "tab_journal_entries",
-        "journal_entries_clear",
-      );
-      if (remainingEntriesAfter > 0)
-        throw new Error(
-          `partidas: quedaron ${remainingEntriesAfter} registros sin borrar`,
-        );
-      stepsCompleted.add("journal_entries_clear");
+      stepsCompleted.add(phase.phaseKey);
       await persistClearJob({
-        current_step: "Borrando partidas...",
-        current_count: deletedEntries,
-        total_count: totalEntries,
-      });
-    }
-
-    if (!stepsCompleted.has("fixed_assets_clear")) {
-      let deletedAssets = clearResult.deletedByStep.fixed_assets_clear ?? 0;
-      const remainingAssets = await countTable("fixed_assets");
-      const totalAssets = Math.max(
-        deletedAssets + remainingAssets,
-        deletedAssets,
-      );
-      await persistClearJob({
-        current_step: "Borrando activos fijos...",
-        current_count: deletedAssets,
-        total_count: totalAssets,
+        current_step: `Borrando ${phase.label}...`,
+        current_count: 1,
+        total_count: 1,
       });
 
-      while (true) {
-        const { data: assetRows, error: assetErr } = await sb
-          .from("fixed_assets")
-          .select("id")
-          .eq("enterprise_id", enterpriseId)
-          .order("id", { ascending: true })
-          .limit(CLEAR_DELETE_BATCH);
-        if (assetErr) throw assetErr;
-        if (!assetRows?.length) break;
-
-        const assetIds = assetRows.map((row) => row.id);
-        await deleteByColumnAdaptive(
-          "fixed_asset_depreciation_schedule",
-          "asset_id",
-          assetIds,
-          "depreciaciones de activos",
-        );
-        await deleteByColumnAdaptive(
-          "fixed_asset_event_log",
-          "asset_id",
-          assetIds,
-          "bitácora de activos",
-        );
-        deletedAssets += await deleteByIdsAdaptive(
-          "fixed_assets",
-          assetIds,
-          "activos fijos",
-        );
-        updateDeletionSummary("fixed_assets_clear", deletedAssets);
-        await persistClearJob({
-          current_step: "Borrando activos fijos...",
-          current_count: deletedAssets,
-          total_count: totalAssets,
-        });
-
-        if (shouldYield()) {
-          await queueClearContinuation(clearJobId, enterpriseId);
-          return;
-        }
+      if (shouldYield()) {
+        await queueClearContinuation(clearJobId, enterpriseId);
+        return;
       }
-
-      const remainingAssetsAfter = await verifyTableEmpty(
-        "fixed_assets",
-        "fixed_assets_clear",
-      );
-      if (remainingAssetsAfter > 0)
-        throw new Error(
-          `activos fijos: quedaron ${remainingAssetsAfter} registros sin borrar`,
-        );
-      stepsCompleted.add("fixed_assets_clear");
-      await persistClearJob({
-        current_step: "Borrando activos fijos...",
-        current_count: deletedAssets,
-        total_count: totalAssets,
-      });
-    }
-
-    if (!stepsCompleted.has("purchase_journal_links_clear")) {
-      const yielded = await deleteSimpleEnterpriseTable(
-        "tab_purchase_journal_links",
-        "vínculos compra-partida",
-        "purchase_journal_links_clear",
-      );
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("purchase_ledger_clear")) {
-      const yielded = await deleteSimpleEnterpriseTable(
-        "tab_purchase_ledger",
-        "compras",
-        "purchase_ledger_clear",
-      );
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("purchase_books_clear")) {
-      const yielded = await deletePurchaseBooksAdaptive();
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("sales_ledger_clear")) {
-      const yielded = await deleteSimpleEnterpriseTable(
-        "tab_sales_ledger",
-        "ventas",
-        "sales_ledger_clear",
-      );
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("period_inventory_closing_clear")) {
-      const yielded = await deleteSimpleEnterpriseTable(
-        "tab_period_inventory_closing",
-        "cierres de inventario por período",
-        "period_inventory_closing_clear",
-      );
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("periods_clear")) {
-      const yielded = await deleteSimpleEnterpriseTable(
-        "tab_accounting_periods",
-        "períodos",
-        "periods_clear",
-        25,
-      );
-      if (yielded) return;
-    }
-
-    if (!stepsCompleted.has("accounts_clear")) {
-      const yielded = await deleteAccountsTreeAdaptive();
-      if (yielded) return;
     }
 
     if (!stepsCompleted.has("financial_domain_clear")) {
@@ -1291,6 +863,31 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         current_count: clearResult.deletedTotal ?? 0,
         total_count: clearResult.deletedTotal ?? 0,
       });
+    }
+
+    clearResult.tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
+    const remainingCoreTables = Object.entries(clearResult.tableStats).filter(
+      ([key, value]) =>
+        [
+          "accounts",
+          "periods",
+          "purchaseBooks",
+          "purchases",
+          "sales",
+          "journalEntries",
+          "fixedAssets",
+          "assetCategories",
+          "inventoryClosings",
+          "purchaseJournalLinks",
+        ].includes(key) && Number(value ?? 0) > 0,
+    );
+
+    if (remainingCoreTables.length > 0) {
+      throw new Error(
+        `Quedaron remanentes tras el hard reset: ${remainingCoreTables
+          .map(([key, value]) => `${key}=${value}`)
+          .join(", ")}`,
+      );
     }
 
     if (!stepsCompleted.has("payloads_clear")) {
@@ -1509,176 +1106,158 @@ async function runImport(jobId: string) {
   }
 
   if (!stepsCompleted.has("preclear")) {
-      const clearTable = async (
-        tableKey: string,
-        existingCount: number,
-        fn: () => Promise<number>,
-      ) => {
-      if (existingCount <= 0) return;
-      if (getDecisionForTable(importPlan, tableKey) !== "clear_then_import")
-        return;
-      await updateProgress(
-        `Limpiando ${TABLE_LABELS[tableKey]} existentes...`,
-        0,
-        existingCount,
-        true,
+    const needsClear = (tableKey: string, count: number) =>
+      count > 0 && getDecisionForTable(importPlan, tableKey) === "clear_then_import";
+
+    const clearAccounts = needsClear("accounts", tableStats.accounts ?? 0);
+    const clearPeriods = needsClear("periods", tableStats.periods ?? 0);
+    const clearPurchases =
+      needsClear("purchases", Math.max(tableStats.purchases ?? 0, tableStats.purchaseBooks ?? 0)) ||
+      clearAccounts ||
+      clearPeriods;
+    const clearJournalEntries =
+      needsClear("journalEntries", tableStats.journalEntries ?? 0) ||
+      clearAccounts ||
+      clearPeriods;
+    const clearFixedAssets =
+      needsClear("fixedAssets", tableStats.fixedAssets ?? 0) ||
+      clearAccounts ||
+      clearPeriods;
+    const clearAssetCategories =
+      needsClear("assetCategories", tableStats.assetCategories ?? 0) ||
+      clearAccounts ||
+      clearPeriods;
+    const clearSales =
+      needsClear("sales", tableStats.sales ?? 0) || clearAccounts || clearPeriods;
+    const clearInventoryClosings = clearAccounts || clearPeriods;
+
+    const dependentConflicts = [
+      {
+        key: "purchases",
+        label: TABLE_LABELS.purchases,
+        count: Math.max(tableStats.purchases ?? 0, tableStats.purchaseBooks ?? 0),
+        required: clearAccounts || clearPeriods,
+      },
+      {
+        key: "journalEntries",
+        label: TABLE_LABELS.journalEntries,
+        count: tableStats.journalEntries ?? 0,
+        required: clearAccounts || clearPeriods,
+      },
+      {
+        key: "sales",
+        label: TABLE_LABELS.sales,
+        count: tableStats.sales ?? 0,
+        required: clearAccounts || clearPeriods,
+      },
+      {
+        key: "fixedAssets",
+        label: TABLE_LABELS.fixedAssets,
+        count: tableStats.fixedAssets ?? 0,
+        required: clearAccounts || clearPeriods,
+      },
+      {
+        key: "assetCategories",
+        label: TABLE_LABELS.assetCategories,
+        count: tableStats.assetCategories ?? 0,
+        required: clearAccounts || clearPeriods,
+      },
+    ].filter(
+      (item) =>
+        item.required &&
+        item.count > 0 &&
+        getDecisionForTable(importPlan, item.key) === "skip",
+    );
+
+    if (dependentConflicts.length > 0) {
+      throw new Error(
+        `No se puede borrar cuentas/períodos mientras saltas tablas dependientes: ${dependentConflicts
+          .map((item) => item.label)
+          .join(", ")}.`,
       );
-      const deleted = await fn();
-      result.deletedByStep = result.deletedByStep ?? {};
-      result.deletedByStep[`preclear_${tableKey}`] = deleted;
+    }
+
+    const phasesToRun = HARD_RESET_PHASES.filter((phase) => {
+      switch (phase.phaseKey) {
+        case "purchase_journal_links_clear":
+          return clearPurchases || clearJournalEntries;
+        case "purchase_ledger_clear":
+        case "purchase_books_clear":
+          return clearPurchases;
+        case "journal_entry_details_clear":
+        case "journal_entries_clear":
+          return clearJournalEntries;
+        case "fixed_asset_depreciation_schedule_clear":
+        case "fixed_asset_event_log_clear":
+        case "fixed_assets_clear":
+          return clearFixedAssets || clearAssetCategories;
+        case "asset_categories_clear":
+          return clearAssetCategories;
+        case "sales_ledger_clear":
+          return clearSales;
+        case "inventory_closings_clear":
+          return clearInventoryClosings;
+        case "periods_clear":
+          return clearPeriods;
+        case "accounts_clear":
+          return clearAccounts;
+        default:
+          return false;
+      }
+    });
+
+    result.deletedByStep = result.deletedByStep ?? {};
+    result.verifiedEmptyByStep = result.verifiedEmptyByStep ?? {};
+    result.tableStats = result.tableStats ?? {};
+
+    for (const phase of phasesToRun) {
+      await updateProgress(`Limpiando ${phase.label} existentes...`, 0, 1, true);
+      const row = await runHardResetPhase(sb, enterpriseId, phase.phaseKey);
+      result.deletedByStep[`preclear_${phase.phaseKey}`] = Number(
+        row.deleted_count ?? 0,
+      );
+      result.verifiedEmptyByStep[`preclear_${phase.phaseKey}`] =
+        Number(row.remaining_count ?? 0) === 0;
+      result.tableStats[phase.progressKey] = Number(row.remaining_count ?? 0);
       result.deletedTotal = Object.values(result.deletedByStep).reduce(
         (sum, value) => sum + Number(value || 0),
         0,
       );
-    };
 
-    if ((tableStats.accounts ?? 0) > 0 || (tableStats.periods ?? 0) > 0) {
-      const shouldClearDomain = ["accounts", "periods"].some(
-        (tableKey) =>
-          (tableStats[tableKey] ?? 0) > 0 &&
-          getDecisionForTable(importPlan, tableKey) === "clear_then_import",
-      );
-      if (shouldClearDomain) {
-        await updateProgress(
-          "Limpiando cuentas y períodos existentes...",
-          0,
-          (tableStats.accounts ?? 0) +
-            (tableStats.periods ?? 0) +
-            (tableStats.purchases ?? 0) +
-            (tableStats.sales ?? 0),
-          true,
-        );
-        result.deletedByStep = result.deletedByStep ?? {};
-        result.verifiedEmptyByStep = result.verifiedEmptyByStep ?? {};
-        result.tableStats = result.tableStats ?? {};
-
-        const deletedPurchaseLinks = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "tab_purchase_journal_links",
-          "vínculos compra-partida",
-        );
-        result.deletedByStep.preclear_purchaseJournalLinks = deletedPurchaseLinks;
-        result.verifiedEmptyByStep.preclear_purchaseJournalLinks =
-          (await collectEnterpriseTableStats(sb, enterpriseId)).purchaseJournalLinks === 0;
-
-        const deletedEntries = await clearJournalEntriesForImport(sb, enterpriseId);
-        result.deletedByStep.preclear_journalEntries = deletedEntries;
-
-        const deletedAssets = await clearFixedAssetsForImport(sb, enterpriseId);
-        result.deletedByStep.preclear_fixedAssets = deletedAssets;
-
-        const deletedAssetCategories = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "fixed_asset_categories",
-          "categorías de activos",
-        );
-        result.deletedByStep.preclear_assetCategories = deletedAssetCategories;
-
-        const deletedPurchases = await clearPurchasesForImport(sb, enterpriseId);
-        result.deletedByStep.preclear_purchases = deletedPurchases;
-
-        const deletedSales = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "tab_sales_ledger",
-          "ventas",
-        );
-        result.deletedByStep.preclear_sales = deletedSales;
-
-        const deletedInventoryClosings = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "tab_period_inventory_closing",
-          "cierres de inventario por período",
-        );
-        result.deletedByStep.preclear_periodInventoryClosing = deletedInventoryClosings;
-
-        const deletedPeriods = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "tab_accounting_periods",
-          "períodos",
-          25,
-        );
-        result.deletedByStep.preclear_periods = deletedPeriods;
-
-        const deletedAccounts = await clearAccountsTree(sb, enterpriseId);
-        result.deletedByStep.preclear_accounts = deletedAccounts;
-
-        const refreshedStats = await collectEnterpriseTableStats(sb, enterpriseId);
-        result.verifiedEmptyByStep.preclear_purchaseJournalLinks =
-          (refreshedStats.purchaseJournalLinks ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_journalEntries =
-          (refreshedStats.journalEntries ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_fixedAssets =
-          (refreshedStats.fixedAssets ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_assetCategories =
-          (refreshedStats.assetCategories ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_purchases =
-          (refreshedStats.purchases ?? 0) === 0 && (refreshedStats.purchaseBooks ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_sales =
-          (refreshedStats.sales ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_periodInventoryClosing =
-          (refreshedStats.inventoryClosings ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_periods =
-          (refreshedStats.periods ?? 0) === 0;
-        result.verifiedEmptyByStep.preclear_accounts =
-          (refreshedStats.accounts ?? 0) === 0;
-        result.tableStats = refreshedStats;
-
-        const blockingRemaining = [
-          ["purchaseBooks", refreshedStats.purchaseBooks ?? 0],
-          ["periods", refreshedStats.periods ?? 0],
-          ["accounts", refreshedStats.accounts ?? 0],
-        ].filter(([, count]) => Number(count) > 0);
-
-        if (blockingRemaining.length > 0) {
-          throw new Error(
-            `Quedaron remanentes tras la limpieza previa: ${blockingRemaining.map(([key, count]) => `${key}=${count}`).join(", ")}`,
-          );
-        }
-
-        result.deletedTotal = Object.values(result.deletedByStep).reduce(
-          (sum, value) => sum + Number(value || 0),
-          0,
+      if (Number(row.remaining_count ?? 0) > 0) {
+        throw new Error(
+          `${phase.label}: quedaron ${Number(row.remaining_count ?? 0)} registros tras la limpieza previa.`,
         );
       }
-    } else {
-      await clearTable("journalEntries", tableStats.journalEntries ?? 0, () =>
-        clearJournalEntriesForImport(sb, enterpriseId),
-      );
-      await clearTable(
-        "purchases",
-        Math.max(tableStats.purchases ?? 0, tableStats.purchaseBooks ?? 0),
-        () =>
-        clearPurchasesForImport(sb, enterpriseId),
-      );
-      await clearTable("sales", tableStats.sales ?? 0, () =>
-        clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "tab_sales_ledger",
-          "ventas",
-        ),
-      );
-      await clearTable("fixedAssets", tableStats.fixedAssets ?? 0, () =>
-        clearFixedAssetsForImport(sb, enterpriseId),
-      );
-      await clearTable("assetCategories", tableStats.assetCategories ?? 0, async () => {
-        const assetsDeleted = await clearFixedAssetsForImport(sb, enterpriseId);
-        const categoriesDeleted = await clearSimpleEnterpriseTable(
-          sb,
-          enterpriseId,
-          "fixed_asset_categories",
-          "categorías de activos",
-        );
-        return assetsDeleted + categoriesDeleted;
-      });
     }
 
     result.tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
+    const blockingRemaining = Object.entries(result.tableStats).filter(
+      ([key, count]) => {
+        const value = Number(count ?? 0);
+        if (value <= 0) return false;
+        if (["purchaseBooks", "purchases", "purchaseJournalLinks"].includes(key)) {
+          return clearPurchases || clearJournalEntries;
+        }
+        if (["journalEntries"].includes(key)) return clearJournalEntries;
+        if (["fixedAssets"].includes(key)) return clearFixedAssets || clearAssetCategories;
+        if (["assetCategories"].includes(key)) return clearAssetCategories;
+        if (["sales"].includes(key)) return clearSales;
+        if (["inventoryClosings"].includes(key)) return clearInventoryClosings;
+        if (["periods"].includes(key)) return clearPeriods;
+        if (["accounts"].includes(key)) return clearAccounts;
+        return false;
+      },
+    );
+
+    if (blockingRemaining.length > 0) {
+      throw new Error(
+        `Quedaron remanentes tras la limpieza previa: ${blockingRemaining
+          .map(([key, count]) => `${key}=${count}`)
+          .join(", ")}`,
+      );
+    }
+
     stepsCompleted.add("preclear");
     await sb
       .from("tab_legacy_import_jobs")
