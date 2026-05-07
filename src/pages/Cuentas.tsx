@@ -116,6 +116,43 @@ const Cuentas = () => {
     setDialogOpen(true);
   };
 
+  // Optimistic inline update for quick-edit badges (no full tree reload).
+  const handleInlineUpdate = async (
+    accountId: number,
+    field: 'account_type' | 'balance_type' | 'allows_movement',
+    newValue: string | boolean
+  ): Promise<{ ok: boolean; message?: string }> => {
+    const start = performance.now();
+    const current = accounts.find((a) => a.id === accountId);
+    if (!current) return { ok: false, message: "Cuenta no encontrada" };
+    const oldValue = (current as any)[field];
+
+    // Optimistic patch — mutate only the affected node.
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === accountId ? { ...a, [field]: newValue } as Account : a))
+    );
+
+    const { error } = await supabase
+      .from('tab_accounts')
+      .update({ [field]: newValue } as any)
+      .eq('id', accountId);
+
+    const ms = Math.round(performance.now() - start);
+    // eslint-disable-next-line no-console
+    console.debug('[inline-edit]', { accountId, field, oldValue, newValue, ms, error: error?.message });
+
+    if (error) {
+      // Rollback only the affected node.
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === accountId ? { ...a, [field]: oldValue } as Account : a))
+      );
+      const message = getSafeErrorMessage(error);
+      toast({ variant: "destructive", title: "No se pudo actualizar", description: message });
+      return { ok: false, message };
+    }
+    return { ok: true };
+  };
+
   const handleDelete = async (
     account: Account,
     childrenIds: number[],
