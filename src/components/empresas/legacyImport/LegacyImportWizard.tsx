@@ -32,6 +32,7 @@ interface JobRow {
   finished_at: string | null;
   updated_at?: string | null;
   started_at?: string | null;
+  payload?: { action?: string } | null;
 }
 
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
@@ -45,6 +46,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const [clearing, setClearing] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const isClearJob = !!job && (job.payload?.action === "clear" || !!job.result?.cleared || /^Borrando|^Preparando borrado|^Borrado/i.test(job.current_step ?? ""));
 
   // tick cada segundo cuando hay job activo (para mostrar segundos desde última actualización)
   useEffect(() => {
@@ -77,7 +79,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const fetchActiveJob = useCallback(async () => {
     const { data } = await supabase
       .from("tab_legacy_import_jobs")
-      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at")
+      .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at, payload")
       .eq("enterprise_id", enterpriseId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -203,6 +205,21 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     if (!confirmed) return;
 
     setClearing(true);
+    setJob({
+      id: job?.id ?? `clear-${enterpriseId}-${Date.now()}`,
+      status: "running",
+      current_step: "Preparando borrado...",
+      current_count: 0,
+      total_count: 1,
+      errors: [],
+      result: null,
+      error_message: null,
+      finished_at: null,
+      updated_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      payload: { action: "clear" },
+    });
+    setStep(4);
     try {
       const { data, error } = await supabase.functions.invoke("legacy-import-runner", {
         body: {
@@ -218,7 +235,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
       if (progressJobId) {
         const { data: jobRow } = await supabase
           .from("tab_legacy_import_jobs")
-          .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at")
+          .select("id, status, current_step, current_count, total_count, errors, result, error_message, finished_at, updated_at, started_at, payload")
           .eq("id", progressJobId)
           .maybeSingle();
         if (jobRow) {
@@ -509,7 +526,7 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                   <div className={`flex items-center gap-2 ${isDone ? "text-success" : "text-destructive"}`}>
                     {isDone ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
                     <span className="font-semibold">
-                      {isDone ? "Importación finalizada" : "Importación con error"}
+                      {isDone ? (isClearJob ? "Borrado finalizado" : "Importación finalizada") : (isClearJob ? "Borrado con error" : "Importación con error")}
                     </span>
                   </div>
                   {isFailed && job.error_message && (

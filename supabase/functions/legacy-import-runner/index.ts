@@ -308,6 +308,49 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     await deleteByIdsAdaptive(table, dependentIds, label);
   };
 
+  const deletePurchaseBooksAdaptive = async (): Promise<boolean> => {
+    if (stepsCompleted.has("purchase_books_clear")) return false;
+
+    let deletedBooks = clearResult.deletedByStep.purchase_books_clear ?? 0;
+    const { count: remainingBooks } = await sb
+      .from("tab_purchase_books")
+      .select("id", { count: "exact", head: true })
+      .eq("enterprise_id", enterpriseId);
+    const totalBooks = Math.max(deletedBooks + (remainingBooks ?? 0), deletedBooks);
+    await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+
+    while (true) {
+      const { data: bookRows, error: bookErr } = await sb
+        .from("tab_purchase_books")
+        .select("id")
+        .eq("enterprise_id", enterpriseId)
+        .order("id", { ascending: true })
+        .limit(CLEAR_DELETE_BATCH);
+      if (bookErr) throw new Error(`libros de compras: ${bookErr.message}`);
+      if (!bookRows?.length) break;
+
+      for (const book of bookRows) {
+        await deleteByColumnAdaptive("tab_purchase_ledger", "purchase_book_id", [book.id], "compras por libro");
+        const { error: deleteBookErr } = await sb.from("tab_purchase_books").delete().eq("id", book.id);
+        if (deleteBookErr) {
+          throw new Error(`libros de compras: ${deleteBookErr.message}`);
+        }
+        deletedBooks += 1;
+        clearResult.deletedByStep.purchase_books_clear = deletedBooks;
+        await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+
+        if (shouldYield()) {
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return true;
+        }
+      }
+    }
+
+    stepsCompleted.add("purchase_books_clear");
+    await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+    return false;
+  };
+
   const deleteSimpleEnterpriseTable = async (
     table: string,
     label: string,
@@ -433,7 +476,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     if (await deleteSimpleEnterpriseTable("tab_purchase_ledger", "compras", "purchase_ledger_clear", 75)) return;
     if (await deleteSimpleEnterpriseTable("tab_sales_ledger", "ventas", "sales_ledger_clear", 50)) return;
     if (await deleteSimpleEnterpriseTable("fixed_asset_categories", "categorías de activos", "asset_categories_clear", 75)) return;
-    if (await deleteSimpleEnterpriseTable("tab_purchase_books", "libros de compras", "purchase_books_clear", 75)) return;
+    if (await deletePurchaseBooksAdaptive()) return;
     if (await deleteSimpleEnterpriseTable("tab_accounting_periods", "períodos", "periods_clear", 75)) return;
 
     if (!stepsCompleted.has("accounts_clear")) {
@@ -793,6 +836,10 @@ async function runImport(jobId: string) {
     if (!stepsCompleted.has("purchase_books")) {
       for (const key of bookKeys) {
         const [y, m] = key.split("-").map(Number);
+        if (!Number.isFinite(y) || !Number.isFinite(m) || y < 1900 || y > 2100 || m < 1 || m > 12) {
+          errors.push(`Libro de compras omitido por fecha inválida: ${key}`);
+          continue;
+        }
         const { data: bk } = await sb
           .from("tab_purchase_books")
           .insert({
@@ -988,8 +1035,10 @@ async function runImport(jobId: string) {
       });
     }
 
-    let processed = Math.min(job.current_count ?? 0, prepared.length);
-    const sliceStart = stepsCompleted.has("journal_entries") ? prepared.length : processed;
+    let processed = stepsCompleted.has("journal_entries")
+      ? prepared.length
+      : Math.min(result.journalEntriesCreated + result.journalEntriesAsDraft, prepared.length);
+    const sliceStart = processed;
     const journalSlice = prepared.slice(sliceStart, sliceStart + JOURNAL_SLICE);
     await updateProgress(
       "Importando partidas...",
@@ -1184,6 +1233,7 @@ async function runImport(jobId: string) {
       }
 
       let assetIdx = 0;
+      const usedAssetCodes = new Set<string>();
       const assetRows: any[] = [];
       for (const a of ds.fixedAssets) {
         assetIdx++;
@@ -1195,10 +1245,19 @@ async function runImport(jobId: string) {
           errors.push(`Activo ${a.name}: sin categoría`);
           continue;
         }
+        const baseAssetCode = String(a.code || `LEG-${assetIdx}`).trim() || `LEG-${assetIdx}`;
+        let assetCode = baseAssetCode;
+        let suffix = 1;
+        while (usedAssetCodes.has(assetCode)) {
+          suffix += 1;
+          assetCode = `${baseAssetCode}-${suffix}`;
+        }
+        usedAssetCodes.add(assetCode);
+
         assetRows.push({
           enterprise_id: enterpriseId,
           tenant_id: tenantId,
-          asset_code: a.code,
+          asset_code: assetCode,
           asset_name: a.name,
           category_id: categoryId,
           acquisition_date: a.acquisitionDate,
@@ -1224,8 +1283,21 @@ async function runImport(jobId: string) {
       }
       for (const part of chunk(assetRows, 100)) {
         const { error } = await sb.from("fixed_assets").insert(part);
-        if (error) errors.push(`Activos: ${error.message}`);
-        else result.fixedAssetsCreated += part.length;
+        if (error) {
+          let inserted = 0;
+          let firstErr: string | null = null;
+          for (const row of part) {
+            const { error: rowErr } = await sb.from("fixed_assets").insert(row);
+            if (rowErr) {
+              firstErr ??= rowErr.message;
+              errors.push(`Activos ${row.asset_code}: ${rowErr.message}`);
+            } else {
+              inserted += 1;
+            }
+          }
+          result.fixedAssetsCreated += inserted;
+          if (firstErr) console.warn(`Activos batch falló, ${inserted}/${part.length} insertados. Primer error: ${firstErr}`);
+        } else result.fixedAssetsCreated += part.length;
         await updateProgress(
           "Importando activos fijos...",
           result.fixedAssetsCreated,
@@ -1266,16 +1338,18 @@ async function runImport(jobId: string) {
       stepsCompleted.add("close_periods");
     }
 
+    const finalStatus = errors.length > 0 ? "failed" : "completed";
     await sb
       .from("tab_legacy_import_jobs")
       .update({
-        status: "completed",
+        status: finalStatus,
         current_step: "Importación completa",
         current_count: 1,
         total_count: 1,
         finished_at: new Date().toISOString(),
         result,
         errors,
+        error_message: errors.length > 0 ? errors[0] : null,
         steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", jobId);
