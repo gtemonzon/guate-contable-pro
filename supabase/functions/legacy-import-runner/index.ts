@@ -161,6 +161,23 @@ function isStatementTimeout(message: string) {
   return /statement timeout|canceling statement/i.test(message);
 }
 
+async function collectEnterpriseTableStats(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+) {
+  const stats: Record<string, number> = {};
+  await Promise.all(
+    TABLE_STAT_QUERIES.map(async ({ key, table }) => {
+      const { count } = await sb
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("enterprise_id", enterpriseId);
+      stats[key] = count ?? 0;
+    }),
+  );
+  return stats;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
