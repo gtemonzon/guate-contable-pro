@@ -308,6 +308,49 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     await deleteByIdsAdaptive(table, dependentIds, label);
   };
 
+  const deletePurchaseBooksAdaptive = async (): Promise<boolean> => {
+    if (stepsCompleted.has("purchase_books_clear")) return false;
+
+    let deletedBooks = clearResult.deletedByStep.purchase_books_clear ?? 0;
+    const { count: remainingBooks } = await sb
+      .from("tab_purchase_books")
+      .select("id", { count: "exact", head: true })
+      .eq("enterprise_id", enterpriseId);
+    const totalBooks = Math.max(deletedBooks + (remainingBooks ?? 0), deletedBooks);
+    await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+
+    while (true) {
+      const { data: bookRows, error: bookErr } = await sb
+        .from("tab_purchase_books")
+        .select("id")
+        .eq("enterprise_id", enterpriseId)
+        .order("id", { ascending: true })
+        .limit(CLEAR_DELETE_BATCH);
+      if (bookErr) throw new Error(`libros de compras: ${bookErr.message}`);
+      if (!bookRows?.length) break;
+
+      for (const book of bookRows) {
+        await deleteByColumnAdaptive("tab_purchase_ledger", "purchase_book_id", [book.id], "compras por libro");
+        const { error: deleteBookErr } = await sb.from("tab_purchase_books").delete().eq("id", book.id);
+        if (deleteBookErr) {
+          throw new Error(`libros de compras: ${deleteBookErr.message}`);
+        }
+        deletedBooks += 1;
+        clearResult.deletedByStep.purchase_books_clear = deletedBooks;
+        await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+
+        if (shouldYield()) {
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return true;
+        }
+      }
+    }
+
+    stepsCompleted.add("purchase_books_clear");
+    await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
+    return false;
+  };
+
   const deleteSimpleEnterpriseTable = async (
     table: string,
     label: string,
@@ -433,7 +476,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     if (await deleteSimpleEnterpriseTable("tab_purchase_ledger", "compras", "purchase_ledger_clear", 75)) return;
     if (await deleteSimpleEnterpriseTable("tab_sales_ledger", "ventas", "sales_ledger_clear", 50)) return;
     if (await deleteSimpleEnterpriseTable("fixed_asset_categories", "categorías de activos", "asset_categories_clear", 75)) return;
-    if (await deleteSimpleEnterpriseTable("tab_purchase_books", "libros de compras", "purchase_books_clear", 75)) return;
+    if (await deletePurchaseBooksAdaptive()) return;
     if (await deleteSimpleEnterpriseTable("tab_accounting_periods", "períodos", "periods_clear", 75)) return;
 
     if (!stepsCompleted.has("accounts_clear")) {
