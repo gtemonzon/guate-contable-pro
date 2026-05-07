@@ -248,6 +248,86 @@ async function clearAccountsTree(
   return deleted;
 }
 
+async function clearRowsByForeignKey(
+  sb: ReturnType<typeof createClient>,
+  table: string,
+  foreignKey: string,
+  values: Array<string | number>,
+  label: string,
+): Promise<number> {
+  let deleted = 0;
+  while (values.length > 0) {
+    const { data, error } = await sb
+      .from(table)
+      .select("id")
+      .in(foreignKey, values as any)
+      .limit(100);
+    if (error) throw new Error(`${label}: ${error.message}`);
+    if (!data?.length) break;
+    deleted += await deleteIdsAdaptiveSimple(sb, table, data.map((row: any) => row.id), label);
+  }
+  return deleted;
+}
+
+async function clearJournalEntriesForImport(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  let deleted = 0;
+  while (true) {
+    const { data: entries, error } = await sb
+      .from("tab_journal_entries")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .order("id", { ascending: true })
+      .limit(100);
+    if (error) throw new Error(`partidas: ${error.message}`);
+    if (!entries?.length) break;
+    const ids = entries.map((row) => row.id);
+    await clearRowsByForeignKey(sb, "tab_journal_entry_details", "journal_entry_id", ids, "detalles de partidas");
+    deleted += await deleteIdsAdaptiveSimple(sb, "tab_journal_entries", ids, "partidas");
+  }
+  return deleted;
+}
+
+async function clearFixedAssetsForImport(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  let deleted = 0;
+  while (true) {
+    const { data: assets, error } = await sb
+      .from("fixed_assets")
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .order("id", { ascending: true })
+      .limit(100);
+    if (error) throw new Error(`activos fijos: ${error.message}`);
+    if (!assets?.length) break;
+    const ids = assets.map((row) => row.id);
+    await clearRowsByForeignKey(sb, "fixed_asset_depreciation_schedule", "asset_id", ids, "depreciaciones de activos");
+    await clearRowsByForeignKey(sb, "fixed_asset_event_log", "asset_id", ids, "bitácora de activos");
+    deleted += await deleteIdsAdaptiveSimple(sb, "fixed_assets", ids, "activos fijos");
+  }
+  return deleted;
+}
+
+async function clearPurchasesForImport(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  let deleted = 0;
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_purchase_journal_links", "vínculos compra-partida");
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_purchase_ledger", "compras");
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_purchase_books", "libros de compras");
+  return deleted;
+}
+
+async function clearPeriodsAndAccountsDomainForImport(sb: ReturnType<typeof createClient>, enterpriseId: number) {
+  let deleted = 0;
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_purchase_journal_links", "vínculos compra-partida");
+  deleted += await clearJournalEntriesForImport(sb, enterpriseId);
+  deleted += await clearFixedAssetsForImport(sb, enterpriseId);
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "fixed_asset_categories", "categorías de activos");
+  deleted += await clearPurchasesForImport(sb, enterpriseId);
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_sales_ledger", "ventas");
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_period_inventory_closing", "cierres de inventario por período");
+  deleted += await clearSimpleEnterpriseTable(sb, enterpriseId, "tab_accounting_periods", "períodos");
+  deleted += await clearAccountsTree(sb, enterpriseId);
+  return deleted;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
