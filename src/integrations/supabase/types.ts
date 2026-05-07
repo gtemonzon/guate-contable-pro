@@ -4159,6 +4159,21 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      clear_legacy_import_batch: {
+        Args: {
+          p_batch_size?: number
+          p_enterprise_id: number
+          p_phase: string
+        }
+        Returns: {
+          deleted_count: number
+          done: boolean
+          execution_ms: number
+          phase_key: string
+          remaining_count: number
+          table_name: string
+        }[]
+      }
       clear_legacy_import_block: {
         Args: { p_block: string; p_enterprise_id: number }
         Returns: {
