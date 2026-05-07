@@ -200,6 +200,10 @@ export function LegacyImportWizard({
         .select("id", { count: "exact", head: true })
         .eq("enterprise_id", enterpriseId),
       supabase
+        .from("tab_purchase_books")
+        .select("id", { count: "exact", head: true })
+        .eq("enterprise_id", enterpriseId),
+      supabase
         .from("tab_sales_ledger")
         .select("id", { count: "exact", head: true })
         .eq("enterprise_id", enterpriseId),
@@ -218,11 +222,12 @@ export function LegacyImportWizard({
     ]).then((results) => {
       stats.accounts = results[0].count ?? 0;
       stats.periods = results[1].count ?? 0;
-      stats.purchases = results[2].count ?? 0;
-      stats.sales = results[3].count ?? 0;
-      stats.journalEntries = results[4].count ?? 0;
-      stats.assetCategories = results[5].count ?? 0;
-      stats.fixedAssets = results[6].count ?? 0;
+      stats.purchaseBooks = results[3].count ?? 0;
+      stats.purchases = (results[2].count ?? 0) + (results[3].count ?? 0);
+      stats.sales = results[4].count ?? 0;
+      stats.journalEntries = results[5].count ?? 0;
+      stats.assetCategories = results[6].count ?? 0;
+      stats.fixedAssets = results[7].count ?? 0;
     });
     setTableStats(stats);
     setTableDecisions((prev) => {
@@ -497,6 +502,17 @@ export function LegacyImportWizard({
   const isDone = job?.status === "completed";
   const isFailed = job?.status === "failed";
   const result = job?.result;
+  const clearHasRemnants =
+    !!isClearJob &&
+    !!result &&
+    (((result.verifiedEmptyByStep as Record<string, boolean> | undefined) &&
+      Object.values(result.verifiedEmptyByStep as Record<string, boolean>).some(
+        (value) => value === false,
+      )) ||
+      ((result.tableStats as Record<string, number> | undefined) &&
+        Object.values(result.tableStats as Record<string, number>).some(
+          (value) => Number(value ?? 0) > 0,
+        )));
   const canConfirmPrecheck = tablesNeedingDecision.every(
     (item) => !!tableDecisions[item.key],
   );
@@ -973,13 +989,22 @@ export function LegacyImportWizard({
                       <span className="font-semibold">
                         {isDone
                           ? isClearJob
-                            ? "Borrado finalizado"
+                              ? clearHasRemnants
+                                ? "Borrado incompleto"
+                                : "Borrado finalizado"
                             : "Importación finalizada"
                           : isClearJob
                             ? "Borrado con error"
                             : "Importación con error"}
                       </span>
                     </div>
+                    {isClearJob && clearHasRemnants && (
+                      <Card>
+                        <CardContent className="p-3 text-sm text-destructive">
+                          El proceso terminó, pero todavía quedaron registros en una o más tablas. No se debe volver a importar hasta dejarlas en cero.
+                        </CardContent>
+                      </Card>
+                    )}
                     {isFailed && job.error_message && (
                       <Card>
                         <CardContent className="p-3 text-sm text-destructive">
