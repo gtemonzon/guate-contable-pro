@@ -744,6 +744,34 @@ async function runImport(jobId: string) {
     : [];
   const result = mergeResult(job.result);
   const stepsCompleted = parseCompletedSteps(job.steps_completed);
+  const importPlan = normalizeImportPlan((job as any).import_plan);
+  result.importPlan = importPlan;
+
+  const tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
+  result.tableStats = tableStats;
+
+  if (!stepsCompleted.has("precheck")) {
+    const blockingTables = ["accounts", "periods", "purchases", "sales", "journalEntries", "assetCategories", "fixedAssets"]
+      .filter((key) => tableStats[key] > 0);
+
+    for (const tableKey of blockingTables) {
+      const mode = getDecisionForTable(importPlan, tableKey);
+      if (mode === "skip") {
+        stepsCompleted.add(`skip_${tableKey}`);
+        continue;
+      }
+      if (mode === "import") {
+        throw new Error(`${TABLE_LABELS[tableKey]}: ya existen ${tableStats[tableKey]} registros. Debes elegir borrar esa tabla o saltarla antes de importar.`);
+      }
+    }
+
+    stepsCompleted.add("precheck");
+    await sb.from("tab_legacy_import_jobs").update({
+      result,
+      errors,
+      steps_completed: Array.from(stepsCompleted),
+    }).eq("id", jobId);
+  }
 
   let lastUpdate = 0;
   const updateProgress = async (
@@ -794,7 +822,7 @@ async function runImport(jobId: string) {
       is_bank_account: false,
       is_monetary: false,
     }));
-    if (!stepsCompleted.has("accounts")) {
+    if (!stepsCompleted.has("accounts") && !stepsCompleted.has("skip_accounts")) {
       await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
       for (const part of chunk(accountRows, CHUNK)) {
         const { error } = await sb.from("tab_accounts").insert(part);
@@ -843,7 +871,7 @@ async function runImport(jobId: string) {
       status: "abierto",
       is_default_period: false,
     }));
-    if (!stepsCompleted.has("periods")) {
+    if (!stepsCompleted.has("periods") && !stepsCompleted.has("skip_periods")) {
       await updateProgress("Creando períodos...", 0, years.length, true);
       if (periodRows.length > 0) {
         const { error } = await sb
@@ -1013,17 +1041,19 @@ async function runImport(jobId: string) {
       };
     });
 
-    const purchasesOutcome = await insertBatched(
-      "tab_purchase_ledger",
-      purchaseRows,
-      "Compras",
-      "purchases",
-      "Importando compras...",
-      "purchasesCreated",
-    );
-    if (purchasesOutcome === "yield") {
-      await queueContinuation(jobId);
-      return;
+    if (!stepsCompleted.has("skip_purchases")) {
+      const purchasesOutcome = await insertBatched(
+        "tab_purchase_ledger",
+        purchaseRows,
+        "Compras",
+        "purchases",
+        "Importando compras...",
+        "purchasesCreated",
+      );
+      if (purchasesOutcome === "yield") {
+        await queueContinuation(jobId);
+        return;
+      }
     }
 
     // ---------- 4. Ventas ----------
@@ -1061,27 +1091,30 @@ async function runImport(jobId: string) {
       };
     });
 
-    const salesOutcome = await insertBatched(
-      "tab_sales_ledger",
-      salesRows,
-      "Ventas",
-      "sales",
-      "Importando ventas...",
-      "salesCreated",
-    );
-    if (salesOutcome === "yield") {
-      await queueContinuation(jobId);
-      return;
+    if (!stepsCompleted.has("skip_sales")) {
+      const salesOutcome = await insertBatched(
+        "tab_sales_ledger",
+        salesRows,
+        "Ventas",
+        "sales",
+        "Importando ventas...",
+        "salesCreated",
+      );
+      if (salesOutcome === "yield") {
+        await queueContinuation(jobId);
+        return;
+      }
     }
 
 
     // ---------- 5. Partidas (BATCH) ----------
-    await updateProgress(
-      "Importando partidas...",
-      0,
-      ds.journalEntries.length,
-      true,
-    );
+    if (!stepsCompleted.has("skip_journalEntries")) {
+      await updateProgress(
+        "Importando partidas...",
+        0,
+        ds.journalEntries.length,
+        true,
+      );
     const sortedEntries = [...ds.journalEntries].sort((a, b) =>
       a.date.localeCompare(b.date)
     );
@@ -1255,16 +1288,17 @@ async function runImport(jobId: string) {
       return;
     }
 
-    stepsCompleted.add("journal_entries");
-    await sb.from("tab_legacy_import_jobs").update({
-      result,
-      errors,
-      steps_completed: Array.from(stepsCompleted),
-    }).eq("id", jobId);
+      stepsCompleted.add("journal_entries");
+      await sb.from("tab_legacy_import_jobs").update({
+        result,
+        errors,
+        steps_completed: Array.from(stepsCompleted),
+      }).eq("id", jobId);
+    }
 
     // ---------- 6. Categorías de Activos Fijos ----------
     const categoryIdByLegacy = new Map<string, number>();
-    if (!stepsCompleted.has("asset_categories") && ds.assetCategories.length > 0) {
+    if (!stepsCompleted.has("asset_categories") && !stepsCompleted.has("skip_assetCategories") && ds.assetCategories.length > 0) {
       await updateProgress(
         "Creando categorías de activos...",
         0,
@@ -1313,7 +1347,7 @@ async function runImport(jobId: string) {
     });
 
     // ---------- 7. Activos Fijos ----------
-    if (!stepsCompleted.has("fixed_assets") && ds.fixedAssets.length > 0) {
+    if (!stepsCompleted.has("fixed_assets") && !stepsCompleted.has("skip_fixedAssets") && ds.fixedAssets.length > 0) {
       await updateProgress(
         "Importando activos fijos...",
         0,
