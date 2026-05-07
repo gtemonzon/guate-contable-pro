@@ -740,239 +740,126 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     auth: { persistSession: false },
   });
 
-  const clearStartTs = Date.now();
-  const shouldYield = () => Date.now() - clearStartTs > CLEAR_MAX_RUNTIME_MS;
-
-  const { data: clearJob, error: clearJobErr } = await sb
-    .from("tab_legacy_import_jobs")
-    .select(
-      "id, status, current_step, current_count, total_count, steps_completed, result, started_at",
-    )
-    .eq("id", clearJobId)
-    .single();
-
-  if (clearJobErr || !clearJob) {
-    console.error("Job de borrado no encontrado", clearJobErr);
-    return;
-  }
-
-  const stepsCompleted = parseCompletedSteps((clearJob as any).steps_completed);
-  const clearResult = mergeResult(clearJob.result);
-  clearResult.deletedByStep = {
-    ...(clearResult.deletedByStep ?? {}),
-  };
-  clearResult.verifiedEmptyByStep = {
-    ...(clearResult.verifiedEmptyByStep ?? {}),
-  };
-  clearResult.tableStats = {
-    ...(clearResult.tableStats ?? {}),
+  const clearResult: any = {
+    deletedByStep: {},
+    verifiedEmptyByStep: {},
+    tableStats: {},
+    deletedTotal: 0,
   };
 
-  const persistClearJob = async (patch: Record<string, unknown> = {}) => {
+  const persist = async (patch: Record<string, unknown>) => {
     await sb
       .from("tab_legacy_import_jobs")
       .update({
-        status: "running",
-        started_at: clearJob.started_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        result: clearResult,
-        steps_completed: Array.from(stepsCompleted),
         ...patch,
       })
       .eq("id", clearJobId);
   };
 
-  const applyPhaseResult = (phaseKey: string, row: {
-    deleted_count: number;
-    remaining_count: number;
-  }) => {
-    const phaseMeta = HARD_RESET_PHASE_BY_KEY[phaseKey];
-    clearResult.deletedByStep = clearResult.deletedByStep ?? {};
-    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
-    clearResult.tableStats = clearResult.tableStats ?? {};
-    clearResult.deletedByStep[phaseKey] = Number(row.deleted_count ?? 0);
-    clearResult.verifiedEmptyByStep[phaseKey] =
-      Number(row.remaining_count ?? 0) === 0;
-    clearResult.tableStats[phaseMeta?.progressKey ?? phaseKey] = Number(
-      row.remaining_count ?? 0,
-    );
-    clearResult.deletedTotal = Object.values(clearResult.deletedByStep).reduce(
-      (sum, value) => sum + Number(value || 0),
-      0,
-    );
-  };
-
-  await persistClearJob();
-
   try {
-    if (!stepsCompleted.has("cancel_active_jobs")) {
-      await sb
-        .from("tab_legacy_import_jobs")
-        .update({
-          status: "failed",
-          error_message: "Proceso cancelado manualmente antes del borrado.",
-          finished_at: new Date().toISOString(),
-        })
-        .eq("enterprise_id", enterpriseId)
-        .in("status", ["pending", "running"])
-        .neq("id", clearJobId);
+    await persist({
+      status: "running",
+      started_at: new Date().toISOString(),
+      current_step: "Cancelando trabajos previos...",
+      current_count: 0,
+      total_count: 1,
+      result: clearResult,
+    });
 
-      stepsCompleted.add("cancel_active_jobs");
-      await persistClearJob({
-        current_step: "Preparando borrado...",
-        current_count: 0,
-        total_count: 1,
-      });
-    }
+    // Cancel any other active jobs for this enterprise
+    await sb
+      .from("tab_legacy_import_jobs")
+      .update({
+        status: "failed",
+        error_message: "Cancelado por nuevo borrado.",
+        finished_at: new Date().toISOString(),
+      })
+      .eq("enterprise_id", enterpriseId)
+      .in("status", ["pending", "running"])
+      .neq("id", clearJobId);
 
-    for (const phase of HARD_RESET_PHASES) {
-      if (stepsCompleted.has(phase.phaseKey)) continue;
+    await persist({
+      current_step: "Ejecutando hard reset transaccional...",
+      current_count: 0,
+      total_count: 1,
+    });
 
-      await persistClearJob({
-        current_step: `Borrando ${phase.label}...`,
-        current_count: 0,
-        total_count: 1,
-      });
-
-      const row = await runHardResetPhase(sb, enterpriseId, phase.phaseKey);
-      applyPhaseResult(phase.phaseKey, row);
-
-      if (Number(row.remaining_count ?? 0) > 0) {
-        throw new Error(
-          `${phase.label}: quedaron ${Number(row.remaining_count ?? 0)} registros sin borrar`,
-        );
-      }
-
-      stepsCompleted.add(phase.phaseKey);
-      await persistClearJob({
-        current_step: `Borrando ${phase.label}...`,
-        current_count: 1,
-        total_count: 1,
-      });
-
-      if (shouldYield()) {
-        await queueClearContinuation(clearJobId, enterpriseId);
-        return;
-      }
-    }
-
-    if (!stepsCompleted.has("financial_domain_clear")) {
-      stepsCompleted.add("financial_domain_clear");
-      await persistClearJob({
-        current_step: "Borrado financiero completado",
-        current_count: clearResult.deletedTotal ?? 0,
-        total_count: clearResult.deletedTotal ?? 0,
-      });
-    }
-
-    clearResult.tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
-    const remainingCoreTables = Object.entries(clearResult.tableStats).filter(
-      ([key, value]) =>
-        [
-          "accounts",
-          "periods",
-          "purchaseBooks",
-          "purchases",
-          "sales",
-          "journalEntries",
-          "fixedAssets",
-          "assetCategories",
-          "inventoryClosings",
-          "purchaseJournalLinks",
-        ].includes(key) && Number(value ?? 0) > 0,
+    // Single atomic call - replaces all phase-based logic
+    const { data: resetResult, error: resetErr } = await sb.rpc(
+      "hard_reset_enterprise",
+      { p_enterprise_id: enterpriseId },
     );
 
-    if (remainingCoreTables.length > 0) {
-      throw new Error(
-        `Quedaron remanentes tras el hard reset: ${remainingCoreTables
-          .map(([key, value]) => `${key}=${value}`)
-          .join(", ")}`,
-      );
-    }
+    if (resetErr) throw new Error(resetErr.message);
 
-    if (!stepsCompleted.has("payloads_clear")) {
-      await persistClearJob({
-        current_step: "Limpiando archivos temporales...",
-        current_count: 0,
-        total_count: 1,
-      });
-      const { data: payloadRows, error: payloadErr } = await sb
+    const phases = (resetResult?.phases ?? []) as Array<{
+      table: string;
+      deleted?: number;
+      remaining?: number;
+      ms?: number;
+    }>;
+
+    let total = 0;
+    for (const p of phases) {
+      clearResult.deletedByStep[p.table] = Number(p.deleted ?? 0);
+      clearResult.verifiedEmptyByStep[p.table] = Number(p.remaining ?? 0) === 0;
+      clearResult.tableStats[p.table] = Number(p.remaining ?? 0);
+      total += Number(p.deleted ?? 0);
+    }
+    clearResult.deletedTotal = total;
+    clearResult.totalMs = resetResult?.total_ms ?? 0;
+
+    // Cleanup storage payloads (best-effort)
+    try {
+      const { data: payloadRows } = await sb
         .from("tab_legacy_import_jobs")
         .select("payload_path")
         .eq("enterprise_id", enterpriseId)
         .not("payload_path", "is", null);
-      if (payloadErr) throw payloadErr;
 
       const payloadPaths = (payloadRows ?? [])
-        .map((row) => row.payload_path)
-        .filter((path): path is string => !!path);
+        .map((r: any) => r.payload_path)
+        .filter((p: any): p is string => !!p);
 
       if (payloadPaths.length > 0) {
-        const { error: storageErr } = await sb.storage
-          .from("legacy-imports")
-          .remove(payloadPaths);
-        if (storageErr) {
-          console.warn(
-            "No se pudieron borrar algunos payloads",
-            storageErr.message,
-          );
-        }
+        await sb.storage.from("legacy-imports").remove(payloadPaths);
       }
-
-      stepsCompleted.add("payloads_clear");
-      await persistClearJob({
-        current_step: "Limpiando archivos temporales...",
-        current_count: 1,
-        total_count: 1,
-      });
+    } catch (e) {
+      console.warn("Payload cleanup warning:", e);
     }
 
-    if (!stepsCompleted.has("jobs_clear")) {
-      await persistClearJob({
-        current_step: "Limpiando historial de importación...",
-        current_count: 0,
-        total_count: 1,
-      });
-      const { error: jobsErr } = await sb
-        .from("tab_legacy_import_jobs")
-        .delete()
-        .eq("enterprise_id", enterpriseId)
-        .neq("id", clearJobId);
-      if (jobsErr) throw jobsErr;
-
-      stepsCompleted.add("jobs_clear");
-      await persistClearJob({
-        current_step: "Limpiando historial de importación...",
-        current_count: 1,
-        total_count: 1,
-      });
-    }
+    // Cleanup old job rows
+    await sb
+      .from("tab_legacy_import_jobs")
+      .delete()
+      .eq("enterprise_id", enterpriseId)
+      .neq("id", clearJobId);
 
     clearResult.cleared = true;
+
     await sb
       .from("tab_legacy_import_jobs")
       .update({
         status: "completed",
         current_step: "Borrado completado",
-        current_count: clearResult.deletedTotal ?? 0,
-        total_count: clearResult.deletedTotal ?? 0,
+        current_count: total,
+        total_count: total,
         updated_at: new Date().toISOString(),
         finished_at: new Date().toISOString(),
         result: clearResult,
-        steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", clearJobId);
-  } catch (clearErr: any) {
-    console.error("clear failed", clearErr);
+  } catch (err: any) {
+    console.error("hard_reset_enterprise failed", err);
     await sb
       .from("tab_legacy_import_jobs")
       .update({
         status: "failed",
-        error_message: String(clearErr?.message ?? clearErr),
+        error_message: String(err?.message ?? err),
         finished_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         result: clearResult,
-        steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", clearJobId);
   }
