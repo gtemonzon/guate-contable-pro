@@ -4420,6 +4420,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_user_tenant_id: { Args: { user_uuid: string }; Returns: number }
+      hard_reset_enterprise: {
+        Args: { p_enterprise_id: number }
+        Returns: Json
+      }
       hard_reset_legacy_import_enterprise: {
         Args: { p_enterprise_id: number }
         Returns: {
