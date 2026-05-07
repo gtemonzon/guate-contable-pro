@@ -178,6 +178,76 @@ async function collectEnterpriseTableStats(
   return stats;
 }
 
+async function deleteIdsAdaptiveSimple(
+  sb: ReturnType<typeof createClient>,
+  table: string,
+  ids: Array<string | number>,
+  label: string,
+): Promise<number> {
+  if (!ids.length) return 0;
+  const { error } = await sb.from(table).delete().in("id", ids as any);
+  if (!error) return ids.length;
+  if (isStatementTimeout(error.message) && ids.length > 1) {
+    const mid = Math.floor(ids.length / 2);
+    return (await deleteIdsAdaptiveSimple(sb, table, ids.slice(0, mid), label))
+      + (await deleteIdsAdaptiveSimple(sb, table, ids.slice(mid), label));
+  }
+  if (ids.length > 1) {
+    let deleted = 0;
+    for (const id of ids) {
+      const { error: rowError } = await sb.from(table).delete().eq("id", id as any);
+      if (rowError) throw new Error(`${label}: ${rowError.message}`);
+      deleted += 1;
+    }
+    return deleted;
+  }
+  throw new Error(`${label}: ${error.message}`);
+}
+
+async function clearSimpleEnterpriseTable(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  table: string,
+  label: string,
+  batchSize = 100,
+): Promise<number> {
+  let deleted = 0;
+  while (true) {
+    const { data, error } = await sb
+      .from(table)
+      .select("id")
+      .eq("enterprise_id", enterpriseId)
+      .order("id", { ascending: true })
+      .limit(batchSize);
+    if (error) throw new Error(`${label}: ${error.message}`);
+    if (!data?.length) break;
+    deleted += await deleteIdsAdaptiveSimple(sb, table, data.map((row: any) => row.id), label);
+  }
+  return deleted;
+}
+
+async function clearAccountsTree(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+): Promise<number> {
+  let deleted = 0;
+  while (true) {
+    const { data: accountRows, error } = await sb
+      .from("tab_accounts")
+      .select("id, parent_account_id")
+      .eq("enterprise_id", enterpriseId);
+    if (error) throw new Error(`catálogo de cuentas: ${error.message}`);
+    if (!accountRows?.length) break;
+    const parentIds = new Set(
+      accountRows.map((row) => row.parent_account_id).filter((id): id is number => typeof id === "number"),
+    );
+    const leafIds = accountRows.filter((row) => !parentIds.has(row.id)).slice(0, 100).map((row) => row.id);
+    if (!leafIds.length) break;
+    deleted += await deleteIdsAdaptiveSimple(sb, "tab_accounts", leafIds, "catálogo de cuentas");
+  }
+  return deleted;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
