@@ -836,6 +836,10 @@ async function runImport(jobId: string) {
     if (!stepsCompleted.has("purchase_books")) {
       for (const key of bookKeys) {
         const [y, m] = key.split("-").map(Number);
+        if (!Number.isFinite(y) || !Number.isFinite(m) || y < 1900 || y > 2100 || m < 1 || m > 12) {
+          errors.push(`Libro de compras omitido por fecha inválida: ${key}`);
+          continue;
+        }
         const { data: bk } = await sb
           .from("tab_purchase_books")
           .insert({
@@ -1229,6 +1233,7 @@ async function runImport(jobId: string) {
       }
 
       let assetIdx = 0;
+      const usedAssetCodes = new Set<string>();
       const assetRows: any[] = [];
       for (const a of ds.fixedAssets) {
         assetIdx++;
@@ -1240,10 +1245,19 @@ async function runImport(jobId: string) {
           errors.push(`Activo ${a.name}: sin categoría`);
           continue;
         }
+        const baseAssetCode = String(a.code || `LEG-${assetIdx}`).trim() || `LEG-${assetIdx}`;
+        let assetCode = baseAssetCode;
+        let suffix = 1;
+        while (usedAssetCodes.has(assetCode)) {
+          suffix += 1;
+          assetCode = `${baseAssetCode}-${suffix}`;
+        }
+        usedAssetCodes.add(assetCode);
+
         assetRows.push({
           enterprise_id: enterpriseId,
           tenant_id: tenantId,
-          asset_code: a.code,
+          asset_code: assetCode,
           asset_name: a.name,
           category_id: categoryId,
           acquisition_date: a.acquisitionDate,
