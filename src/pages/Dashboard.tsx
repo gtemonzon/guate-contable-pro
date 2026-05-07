@@ -284,20 +284,18 @@ const Dashboard = () => {
   const dashboardKey = `${currentEntId ?? ''}:${activePeriod?.id ?? ''}`;
   const { modules, readyCount, totalCount, progress, allDone, setModuleStatus } = useDashboardProgress(dashboardKey);
 
-  useEffect(() => { setModuleStatus('kpis', kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [kpiLoading, kpiError, setModuleStatus, dashboardKey]);
-  useEffect(() => { setModuleStatus('bookSummaries', bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [bookLoading, bookError, setModuleStatus, dashboardKey]);
-  useEffect(() => { setModuleStatus('charts', chartLoading ? 'loading' : chartError ? 'error' : 'ready'); }, [chartLoading, chartError, setModuleStatus, dashboardKey]);
-  useEffect(() => { setModuleStatus('recentEntries', recentSuccess ? 'ready' : recentError ? 'error' : 'loading'); }, [recentSuccess, recentError, setModuleStatus, dashboardKey]);
-  useEffect(() => { setModuleStatus('taxData', taxData.loading ? 'loading' : 'ready'); }, [taxData.loading, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('kpis', !currentEntId ? 'ready' : kpiLoading ? 'loading' : kpiError ? 'error' : 'ready'); }, [currentEntId, kpiLoading, kpiError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('bookSummaries', !currentEntId ? 'ready' : bookLoading ? 'loading' : bookError ? 'error' : 'ready'); }, [currentEntId, bookLoading, bookError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('charts', !currentEntId ? 'ready' : chartLoading ? 'loading' : chartError ? 'error' : 'ready'); }, [currentEntId, chartLoading, chartError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('recentEntries', !currentEntId ? 'ready' : recentSuccess ? 'ready' : recentError ? 'error' : 'loading'); }, [currentEntId, recentSuccess, recentError, setModuleStatus, dashboardKey]);
+  useEffect(() => { setModuleStatus('taxData', !currentEntId ? 'ready' : taxData.loading ? 'loading' : 'ready'); }, [currentEntId, taxData.loading, setModuleStatus, dashboardKey]);
   // These modules are self-contained components; mark ready after a tick so overlay doesn't stall
   useEffect(() => {
-    if (currentEntId) {
-      const t = setTimeout(() => {
-        setModuleStatus('pendingEntries', 'ready');
-        setModuleStatus('bankBalances', 'ready');
-      }, 1500);
-      return () => clearTimeout(t);
-    }
+    const t = setTimeout(() => {
+      setModuleStatus('pendingEntries', 'ready');
+      setModuleStatus('bankBalances', 'ready');
+    }, currentEntId ? 1500 : 0);
+    return () => clearTimeout(t);
   }, [currentEntId, setModuleStatus, dashboardKey]);
   useEffect(() => { setModuleStatus('cardConfig', cardConfigDone ? 'ready' : 'loading'); }, [cardConfigDone, setModuleStatus, dashboardKey]);
 
