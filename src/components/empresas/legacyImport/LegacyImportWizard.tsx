@@ -355,8 +355,10 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const isDone = job?.status === "completed";
   const isFailed = job?.status === "failed";
   const result = job?.result;
+  const canConfirmPrecheck = tablesNeedingDecision.every((item) => !!tableDecisions[item.key]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-3xl max-h-[90vh]">
         <DialogHeader>
@@ -658,6 +660,33 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
                     <Button onClick={handleClose}>Cerrar</Button>
                     </div>
                   </div>
+                  {isClearJob && result && (
+                    <Card>
+                      <CardContent className="p-4 space-y-2 text-sm">
+                        <div>Total borrado: <strong>{result.deletedTotal ?? 0}</strong></div>
+                        {result.deletedByStep && Object.keys(result.deletedByStep).length > 0 && (
+                          <div className="space-y-1">
+                            {Object.entries(result.deletedByStep).map(([key, value]) => (
+                              <div key={key} className="flex justify-between gap-3">
+                                <span className="text-muted-foreground">{key}</span>
+                                <strong>{Number(value || 0)}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {result.verifiedEmptyByStep && Object.keys(result.verifiedEmptyByStep).length > 0 && (
+                          <div className="space-y-1 border-t pt-2">
+                            {Object.entries(result.verifiedEmptyByStep).map(([key, value]) => (
+                              <div key={key} className="flex justify-between gap-3">
+                                <span className="text-muted-foreground">{key}</span>
+                                <strong>{value ? "Vacío" : "Con remanentes"}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </div>
@@ -665,5 +694,72 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
         </div>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={precheckOpen} onOpenChange={setPrecheckOpen}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Hay datos existentes en la empresa</AlertDialogTitle>
+          <AlertDialogDescription>
+            Antes de importar, elige qué hacer con cada bloque que ya tiene registros. Si lo saltas, esa tabla no se tocará y se continuará con las demás.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-4 max-h-[55vh] overflow-y-auto min-h-0">
+          {tablesNeedingDecision.map((item) => (
+            <Card key={item.key}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <div className="font-medium">{item.label}</div>
+                    <div className="text-muted-foreground">Existentes: {item.existing} · A importar: {item.incoming}</div>
+                  </div>
+                </div>
+                <RadioGroup
+                  value={tableDecisions[item.key]}
+                  onValueChange={(value) => setTableDecisions((prev) => ({ ...prev, [item.key]: value as TableDecisionMode }))}
+                  className="gap-3"
+                >
+                  <div className="flex items-start gap-3 rounded border p-3">
+                    <RadioGroupItem value="clear_then_import" id={`clear-${item.key}`} />
+                    <Label htmlFor={`clear-${item.key}`} className="space-y-1 cursor-pointer">
+                      <div>Borrar primero y luego importar</div>
+                      <div className="text-xs text-muted-foreground">Úsalo cuando quieras reemplazar completamente esta tabla.</div>
+                    </Label>
+                  </div>
+                  <div className="flex items-start gap-3 rounded border p-3">
+                    <RadioGroupItem value="skip" id={`skip-${item.key}`} />
+                    <Label htmlFor={`skip-${item.key}`} className="space-y-1 cursor-pointer">
+                      <div>Saltar esta tabla</div>
+                      <div className="text-xs text-muted-foreground">No se borrará ni se importará este bloque; se seguirá con los demás.</div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={submitting}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!canConfirmPrecheck || submitting}
+            onClick={async (e) => {
+              e.preventDefault();
+              setSubmitting(true);
+              try {
+                await startImport(tableStats);
+                setPrecheckOpen(false);
+              } catch (error: any) {
+                toast({ variant: "destructive", title: "Error al iniciar importación", description: error.message });
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            {submitting ? "Iniciando..." : "Continuar importación"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
