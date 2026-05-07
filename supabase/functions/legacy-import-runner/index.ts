@@ -1477,6 +1477,7 @@ async function runImport(jobId: string) {
     const blockingTables = [
       "accounts",
       "periods",
+      "purchaseBooks",
       "purchases",
       "sales",
       "journalEntries",
@@ -1509,14 +1510,18 @@ async function runImport(jobId: string) {
   }
 
   if (!stepsCompleted.has("preclear")) {
-    const clearTable = async (tableKey: string, fn: () => Promise<number>) => {
-      if ((tableStats[tableKey] ?? 0) <= 0) return;
+      const clearTable = async (
+        tableKey: string,
+        existingCount: number,
+        fn: () => Promise<number>,
+      ) => {
+      if (existingCount <= 0) return;
       if (getDecisionForTable(importPlan, tableKey) !== "clear_then_import")
         return;
       await updateProgress(
         `Limpiando ${TABLE_LABELS[tableKey]} existentes...`,
         0,
-        tableStats[tableKey],
+        existingCount,
         true,
       );
       const deleted = await fn();
@@ -1538,37 +1543,121 @@ async function runImport(jobId: string) {
         await updateProgress(
           "Limpiando cuentas y períodos existentes...",
           0,
-          (tableStats.accounts ?? 0) + (tableStats.periods ?? 0),
+          (tableStats.accounts ?? 0) +
+            (tableStats.periods ?? 0) +
+            (tableStats.purchaseBooks ?? 0) +
+            (tableStats.purchases ?? 0) +
+            (tableStats.sales ?? 0),
           true,
-        );
-        const clearSummary = await clearEnterpriseBlockViaRpc(
-          sb,
-          enterpriseId,
-          "accounts_periods",
         );
         result.deletedByStep = result.deletedByStep ?? {};
         result.verifiedEmptyByStep = result.verifiedEmptyByStep ?? {};
         result.tableStats = result.tableStats ?? {};
-        clearSummary.forEach((row) => {
-          const stepKey = `preclear_${row.block_key}`;
-          result.deletedByStep![stepKey] = Number(row.deleted_count ?? 0);
-          result.verifiedEmptyByStep![stepKey] =
-            Number(row.remaining_count ?? 0) === 0;
-          result.tableStats![row.block_key] = Number(row.remaining_count ?? 0);
-        });
+
+        const deletedPurchaseLinks = await clearSimpleEnterpriseTable(
+          sb,
+          enterpriseId,
+          "tab_purchase_journal_links",
+          "vínculos compra-partida",
+        );
+        result.deletedByStep.preclear_purchaseJournalLinks = deletedPurchaseLinks;
+        result.verifiedEmptyByStep.preclear_purchaseJournalLinks =
+          (await collectEnterpriseTableStats(sb, enterpriseId)).purchaseJournalLinks === 0;
+
+        const deletedEntries = await clearJournalEntriesForImport(sb, enterpriseId);
+        result.deletedByStep.preclear_journalEntries = deletedEntries;
+
+        const deletedAssets = await clearFixedAssetsForImport(sb, enterpriseId);
+        result.deletedByStep.preclear_fixedAssets = deletedAssets;
+
+        const deletedAssetCategories = await clearSimpleEnterpriseTable(
+          sb,
+          enterpriseId,
+          "fixed_asset_categories",
+          "categorías de activos",
+        );
+        result.deletedByStep.preclear_assetCategories = deletedAssetCategories;
+
+        const deletedPurchases = await clearPurchasesForImport(sb, enterpriseId);
+        result.deletedByStep.preclear_purchases = deletedPurchases;
+
+        const deletedSales = await clearSimpleEnterpriseTable(
+          sb,
+          enterpriseId,
+          "tab_sales_ledger",
+          "ventas",
+        );
+        result.deletedByStep.preclear_sales = deletedSales;
+
+        const deletedInventoryClosings = await clearSimpleEnterpriseTable(
+          sb,
+          enterpriseId,
+          "tab_period_inventory_closing",
+          "cierres de inventario por período",
+        );
+        result.deletedByStep.preclear_periodInventoryClosing = deletedInventoryClosings;
+
+        const deletedPeriods = await clearSimpleEnterpriseTable(
+          sb,
+          enterpriseId,
+          "tab_accounting_periods",
+          "períodos",
+          25,
+        );
+        result.deletedByStep.preclear_periods = deletedPeriods;
+
+        const deletedAccounts = await clearAccountsTree(sb, enterpriseId);
+        result.deletedByStep.preclear_accounts = deletedAccounts;
+
+        const refreshedStats = await collectEnterpriseTableStats(sb, enterpriseId);
+        result.verifiedEmptyByStep.preclear_purchaseJournalLinks =
+          (refreshedStats.purchaseJournalLinks ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_journalEntries =
+          (refreshedStats.journalEntries ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_fixedAssets =
+          (refreshedStats.fixedAssets ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_assetCategories =
+          (refreshedStats.assetCategories ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_purchases =
+          (refreshedStats.purchases ?? 0) === 0 && (refreshedStats.purchaseBooks ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_sales =
+          (refreshedStats.sales ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_periodInventoryClosing =
+          (refreshedStats.inventoryClosings ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_periods =
+          (refreshedStats.periods ?? 0) === 0;
+        result.verifiedEmptyByStep.preclear_accounts =
+          (refreshedStats.accounts ?? 0) === 0;
+        result.tableStats = refreshedStats;
+
+        const blockingRemaining = [
+          ["purchaseBooks", refreshedStats.purchaseBooks ?? 0],
+          ["periods", refreshedStats.periods ?? 0],
+          ["accounts", refreshedStats.accounts ?? 0],
+        ].filter(([, count]) => Number(count) > 0);
+
+        if (blockingRemaining.length > 0) {
+          throw new Error(
+            `Quedaron remanentes tras la limpieza previa: ${blockingRemaining.map(([key, count]) => `${key}=${count}`).join(", ")}`,
+          );
+        }
+
         result.deletedTotal = Object.values(result.deletedByStep).reduce(
           (sum, value) => sum + Number(value || 0),
           0,
         );
       }
     } else {
-      await clearTable("journalEntries", () =>
+      await clearTable("journalEntries", tableStats.journalEntries ?? 0, () =>
         clearJournalEntriesForImport(sb, enterpriseId),
       );
-      await clearTable("purchases", () =>
+      await clearTable(
+        "purchases",
+        Math.max(tableStats.purchases ?? 0, tableStats.purchaseBooks ?? 0),
+        () =>
         clearPurchasesForImport(sb, enterpriseId),
       );
-      await clearTable("sales", () =>
+      await clearTable("sales", tableStats.sales ?? 0, () =>
         clearSimpleEnterpriseTable(
           sb,
           enterpriseId,
@@ -1576,10 +1665,10 @@ async function runImport(jobId: string) {
           "ventas",
         ),
       );
-      await clearTable("fixedAssets", () =>
+      await clearTable("fixedAssets", tableStats.fixedAssets ?? 0, () =>
         clearFixedAssetsForImport(sb, enterpriseId),
       );
-      await clearTable("assetCategories", async () => {
+      await clearTable("assetCategories", tableStats.assetCategories ?? 0, async () => {
         const assetsDeleted = await clearFixedAssetsForImport(sb, enterpriseId);
         const categoriesDeleted = await clearSimpleEnterpriseTable(
           sb,
