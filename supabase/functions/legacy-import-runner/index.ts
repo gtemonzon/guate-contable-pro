@@ -80,6 +80,21 @@ interface ImportResult {
   journalEntriesAsDraft: number;
   assetCategoriesCreated: number;
   fixedAssetsCreated: number;
+  deletedTotal?: number;
+  deletedByStep?: Record<string, number>;
+  verifiedEmptyByStep?: Record<string, boolean>;
+  tableStats?: Record<string, number>;
+  importPlan?: ImportPlan;
+}
+
+interface ImportPlanTableDecision {
+  tableKey: string;
+  mode: "import" | "clear_then_import" | "skip";
+}
+
+interface ImportPlan {
+  clearExisting?: boolean;
+  decisions?: ImportPlanTableDecision[];
 }
 
 const EMPTY_RESULT: ImportResult = {
@@ -92,7 +107,59 @@ const EMPTY_RESULT: ImportResult = {
   journalEntriesAsDraft: 0,
   assetCategoriesCreated: 0,
   fixedAssetsCreated: 0,
+  deletedTotal: 0,
+  deletedByStep: {},
+  verifiedEmptyByStep: {},
+  tableStats: {},
 };
+
+const TABLE_LABELS: Record<string, string> = {
+  accounts: "Cuentas",
+  periods: "Períodos",
+  purchases: "Compras",
+  sales: "Ventas",
+  journalEntries: "Partidas",
+  assetCategories: "Categorías de activos",
+  fixedAssets: "Activos fijos",
+};
+
+const TABLE_STAT_QUERIES = [
+  { key: "accounts", table: "tab_accounts" },
+  { key: "periods", table: "tab_accounting_periods" },
+  { key: "purchaseBooks", table: "tab_purchase_books" },
+  { key: "purchases", table: "tab_purchase_ledger" },
+  { key: "sales", table: "tab_sales_ledger" },
+  { key: "journalEntries", table: "tab_journal_entries" },
+  { key: "fixedAssets", table: "fixed_assets" },
+  { key: "assetCategories", table: "fixed_asset_categories" },
+  { key: "inventoryClosings", table: "tab_period_inventory_closing" },
+  { key: "purchaseJournalLinks", table: "tab_purchase_journal_links" },
+] as const;
+
+function normalizeImportPlan(plan: unknown): Required<ImportPlan> {
+  const raw = plan && typeof plan === "object" ? (plan as ImportPlan) : {};
+  return {
+    clearExisting: raw.clearExisting !== false,
+    decisions: Array.isArray(raw.decisions)
+      ? raw.decisions.filter(
+          (item): item is ImportPlanTableDecision =>
+            !!item &&
+            typeof item === "object" &&
+            typeof item.tableKey === "string" &&
+            ["import", "clear_then_import", "skip"].includes((item as ImportPlanTableDecision).mode),
+        )
+      : [],
+  };
+}
+
+function getDecisionForTable(plan: Required<ImportPlan>, tableKey: string): ImportPlanTableDecision["mode"] {
+  return plan.decisions.find((item) => item.tableKey === tableKey)?.mode
+    ?? (plan.clearExisting ? "clear_then_import" : "import");
+}
+
+function isStatementTimeout(message: string) {
+  return /statement timeout|canceling statement/i.test(message);
+}
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
