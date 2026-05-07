@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import type { Database } from "@/integrations/supabase/types";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
+type InlineField = 'account_type' | 'balance_type' | 'allows_movement';
+
 interface AccountTreeViewProps {
   accounts: Account[];
   onEdit: (account: Account) => void;
@@ -32,18 +34,20 @@ interface AccountTreeViewProps {
     onProgress?: (current: number, total: number, currentName: string) => void
   ) => Promise<{ canDelete: boolean; message?: string; deletedCount?: number }>;
   onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
+  onInlineUpdate?: (
+    accountId: number,
+    field: InlineField,
+    newValue: string | boolean
+  ) => Promise<{ ok: boolean; message?: string }>;
 }
 
 interface TreeNodeProps {
   account: Account;
   children: Account[];
   onEdit: (account: Account) => void;
-  onDelete: (
-    account: Account,
-    childrenIds: number[],
-    onProgress?: (current: number, total: number, currentName: string) => void
-  ) => Promise<{ canDelete: boolean; message?: string; deletedCount?: number }>;
-  onQuickCreate?: (referenceAccount: Account, createType: 'sibling' | 'child') => void;
+  onDelete: AccountTreeViewProps['onDelete'];
+  onQuickCreate?: AccountTreeViewProps['onQuickCreate'];
+  onInlineUpdate?: AccountTreeViewProps['onInlineUpdate'];
   level: number;
   allAccounts: Account[];
 }
@@ -66,17 +70,26 @@ const ACCOUNT_TYPE_COLORS: Record<string, string> = {
   costo: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
 };
 
-function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, allAccounts }: TreeNodeProps) {
+const ACCOUNT_TYPE_CYCLE = ['activo', 'pasivo', 'capital', 'ingreso', 'gasto', 'costo'];
+const BALANCE_TYPE_CYCLE = ['deudor', 'acreedor', 'indiferente'];
+
+function nextInCycle<T>(cycle: T[], current: T): T {
+  const idx = cycle.indexOf(current);
+  return cycle[(idx + 1) % cycle.length] ?? cycle[0];
+}
+
+function TreeNodeBase({ account, children, onEdit, onDelete, onQuickCreate, onInlineUpdate, level, allAccounts }: TreeNodeProps) {
   const [isExpanded, setIsExpanded] = useState(level < 4);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, currentName: "" });
   const [deleteSuccess, setDeleteSuccess] = useState<{ count: number } | null>(null);
+  const [savingField, setSavingField] = useState<InlineField | null>(null);
+  const [pulseField, setPulseField] = useState<InlineField | null>(null);
   const hasChildren = children.length > 0;
   const paddingLeft = `${level * 1.5}rem`;
 
-  // Get all descendant IDs recursively
   const getAllDescendantIds = (parentId: number): number[] => {
     const directChildren = allAccounts.filter(acc => acc.parent_account_id === parentId);
     let ids: number[] = [];
@@ -123,6 +136,46 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
     }
   };
 
+  const runInline = useCallback(
+    async (field: InlineField, nextValue: string | boolean) => {
+      if (!onInlineUpdate || savingField) return;
+      setSavingField(field);
+      const res = await onInlineUpdate(account.id, field, nextValue);
+      setSavingField(null);
+      if (res.ok) {
+        setPulseField(field);
+        setTimeout(() => setPulseField((p) => (p === field ? null : p)), 600);
+      }
+    },
+    [account.id, onInlineUpdate, savingField]
+  );
+
+  const cycleAccountType = () => {
+    const next = nextInCycle(ACCOUNT_TYPE_CYCLE, account.account_type);
+    runInline('account_type', next);
+  };
+  const cycleBalanceType = () => {
+    const current = account.balance_type ?? 'deudor';
+    const next = nextInCycle(BALANCE_TYPE_CYCLE, current);
+    runInline('balance_type', next);
+  };
+  const toggleMovement = () => {
+    runInline('allows_movement', !account.allows_movement);
+  };
+
+  const onKey = (fn: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      fn();
+    }
+  };
+
+  const interactive = !!onInlineUpdate;
+  const pulseClass = (field: InlineField) =>
+    pulseField === field ? 'ring-2 ring-primary/60 ring-offset-1 ring-offset-background' : '';
+  const savingClass = (field: InlineField) =>
+    savingField === field ? 'opacity-60' : '';
+
   const descendantCount = getAllDescendantIds(account.id).length;
   const canCreateChild = !account.allows_movement;
 
@@ -135,6 +188,7 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
         <button
           onClick={() => hasChildren && setIsExpanded(!isExpanded)}
           className="flex items-center justify-center w-6 h-6"
+          aria-label={hasChildren ? (isExpanded ? "Colapsar" : "Expandir") : "Cuenta hoja"}
         >
           {hasChildren ? (
             isExpanded ? (
@@ -147,48 +201,68 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
           )}
         </button>
 
-        <div className="flex-1 flex items-center gap-3">
+        <div className="flex-1 flex items-center gap-3 min-w-0">
           <span className="font-mono text-sm text-muted-foreground min-w-[120px]">
             {account.account_code}
           </span>
-          <span className="font-medium">{account.account_name}</span>
+          <span className="font-medium truncate">{account.account_name}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className={ACCOUNT_TYPE_COLORS[account.account_type]}>
+          {/* Account type badge — quick cycle */}
+          <Badge
+            variant="secondary"
+            role={interactive ? 'button' : undefined}
+            tabIndex={interactive ? 0 : -1}
+            aria-label={`Tipo de cuenta: ${ACCOUNT_TYPE_LABELS[account.account_type]}. Click para cambiar.`}
+            title={interactive ? "Click para cambiar tipo" : undefined}
+            onClick={interactive ? cycleAccountType : undefined}
+            onKeyDown={interactive ? onKey(cycleAccountType) : undefined}
+            className={`${ACCOUNT_TYPE_COLORS[account.account_type]} ${interactive ? 'cursor-pointer select-none' : ''} ${pulseClass('account_type')} ${savingClass('account_type')} transition-all`}
+          >
+            {savingField === 'account_type' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
             {ACCOUNT_TYPE_LABELS[account.account_type]}
           </Badge>
 
-          {account.balance_type === 'deudor' && (
-            <span
-              title="Deudor"
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-400"
-            >
-              D
-            </span>
-          )}
-          {account.balance_type === 'acreedor' && (
-            <span
-              title="Acreedor"
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-red-500/15 text-red-700 dark:text-red-400"
-            >
-              A
-            </span>
-          )}
-          {account.balance_type === 'indiferente' && (
-            <span
-              title="Indiferente"
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold bg-muted text-muted-foreground"
-            >
-              I
-            </span>
-          )}
+          {/* Balance type chip — quick cycle */}
+          {(() => {
+            const bt = account.balance_type ?? 'deudor';
+            const styles: Record<string, string> = {
+              deudor: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+              acreedor: "bg-red-500/15 text-red-700 dark:text-red-400",
+              indiferente: "bg-muted text-muted-foreground",
+            };
+            const label = bt === 'deudor' ? 'Deudor' : bt === 'acreedor' ? 'Acreedor' : 'Indiferente';
+            const letter = bt === 'deudor' ? 'D' : bt === 'acreedor' ? 'A' : 'I';
+            return (
+              <span
+                role={interactive ? 'button' : undefined}
+                tabIndex={interactive ? 0 : -1}
+                aria-label={`Tipo de saldo: ${label}. Click para cambiar.`}
+                title={interactive ? `${label} — click para cambiar` : label}
+                onClick={interactive ? cycleBalanceType : undefined}
+                onKeyDown={interactive ? onKey(cycleBalanceType) : undefined}
+                className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold ${styles[bt]} ${interactive ? 'cursor-pointer select-none' : ''} ${pulseClass('balance_type')} ${savingClass('balance_type')} transition-all`}
+              >
+                {savingField === 'balance_type' ? <Loader2 className="h-3 w-3 animate-spin" /> : letter}
+              </span>
+            );
+          })()}
 
-          {account.allows_movement && (
-            <Badge variant="outline" className="text-xs">
-              Movimiento
-            </Badge>
-          )}
+          {/* Movement toggle */}
+          <Badge
+            variant={account.allows_movement ? "outline" : "secondary"}
+            role={interactive ? 'button' : undefined}
+            tabIndex={interactive ? 0 : -1}
+            aria-label={`Permite movimiento: ${account.allows_movement ? 'sí' : 'no'}. Click para alternar.`}
+            title={interactive ? "Click para alternar movimiento" : undefined}
+            onClick={interactive ? toggleMovement : undefined}
+            onKeyDown={interactive ? onKey(toggleMovement) : undefined}
+            className={`text-xs ${interactive ? 'cursor-pointer select-none' : ''} ${account.allows_movement ? '' : 'opacity-60'} ${pulseClass('allows_movement')} ${savingClass('allows_movement')} transition-all`}
+          >
+            {savingField === 'allows_movement' && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+            {account.allows_movement ? 'Movimiento' : 'Sin mov.'}
+          </Badge>
 
           {!account.is_active && (
             <Badge variant="secondary" className="text-xs">
@@ -202,7 +276,8 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary"
+                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-primary hover:text-primary"
+                  aria-label="Crear cuenta relacionada"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -226,7 +301,8 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
             variant="ghost"
             size="sm"
             onClick={() => onEdit(account)}
-            className="opacity-0 group-hover:opacity-100 transition-opacity"
+            className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+            aria-label="Editar cuenta"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -234,7 +310,8 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
             variant="ghost"
             size="sm"
             onClick={handleDeleteClick}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+            className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-destructive hover:text-destructive"
+            aria-label="Eliminar cuenta"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -329,6 +406,7 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
               onEdit={onEdit}
               onDelete={onDelete}
               onQuickCreate={onQuickCreate}
+              onInlineUpdate={onInlineUpdate}
               level={level + 1}
               allAccounts={allAccounts}
             />
@@ -339,7 +417,24 @@ function TreeNode({ account, children, onEdit, onDelete, onQuickCreate, level, a
   );
 }
 
-export function AccountTreeView({ accounts, onEdit, onDelete, onQuickCreate }: AccountTreeViewProps) {
+// Memoize so unaffected rows don't rerender when a single account mutates.
+const TreeNode = memo(TreeNodeBase, (prev, next) => {
+  if (prev.account !== next.account) return false;
+  if (prev.level !== next.level) return false;
+  if (prev.allAccounts !== next.allAccounts) return false;
+  if (prev.children.length !== next.children.length) return false;
+  for (let i = 0; i < prev.children.length; i++) {
+    if (prev.children[i] !== next.children[i]) return false;
+  }
+  return (
+    prev.onEdit === next.onEdit &&
+    prev.onDelete === next.onDelete &&
+    prev.onQuickCreate === next.onQuickCreate &&
+    prev.onInlineUpdate === next.onInlineUpdate
+  );
+});
+
+export function AccountTreeView({ accounts, onEdit, onDelete, onQuickCreate, onInlineUpdate }: AccountTreeViewProps) {
   const buildTree = (parentId: number | null = null): Account[] => {
     return accounts
       .filter((account) => account.parent_account_id === parentId)
@@ -348,7 +443,7 @@ export function AccountTreeView({ accounts, onEdit, onDelete, onQuickCreate }: A
 
   const renderTree = (parentId: number | null, level: number = 0): JSX.Element[] => {
     const accountsAtLevel = buildTree(parentId);
-    
+
     return accountsAtLevel.map((account) => (
       <TreeNode
         key={account.id}
@@ -357,6 +452,7 @@ export function AccountTreeView({ accounts, onEdit, onDelete, onQuickCreate }: A
         onEdit={onEdit}
         onDelete={onDelete}
         onQuickCreate={onQuickCreate}
+        onInlineUpdate={onInlineUpdate}
         level={level}
         allAccounts={accounts}
       />
