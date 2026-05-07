@@ -333,7 +333,15 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         await deleteByColumnAdaptive("tab_purchase_ledger", "purchase_book_id", [book.id], "compras por libro");
         const { error: deleteBookErr } = await sb.from("tab_purchase_books").delete().eq("id", book.id);
         if (deleteBookErr) {
-          throw new Error(`libros de compras: ${deleteBookErr.message}`);
+          console.error("purchase_books_clear failed", {
+            enterpriseId,
+            clearJobId,
+            purchaseBookId: book.id,
+            deletedBooks,
+            totalBooks,
+            error: deleteBookErr.message,
+          });
+          throw new Error(`libros de compras [book:${book.id}]: ${deleteBookErr.message}`);
         }
         deletedBooks += 1;
         clearResult.deletedByStep.purchase_books_clear = deletedBooks;
