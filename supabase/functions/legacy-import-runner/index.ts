@@ -1477,7 +1477,6 @@ async function runImport(jobId: string) {
     const blockingTables = [
       "accounts",
       "periods",
-      "purchaseBooks",
       "purchases",
       "sales",
       "journalEntries",
@@ -1545,7 +1544,6 @@ async function runImport(jobId: string) {
           0,
           (tableStats.accounts ?? 0) +
             (tableStats.periods ?? 0) +
-            (tableStats.purchaseBooks ?? 0) +
             (tableStats.purchases ?? 0) +
             (tableStats.sales ?? 0),
           true,
