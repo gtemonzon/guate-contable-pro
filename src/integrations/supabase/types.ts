@@ -4114,6 +4114,10 @@ export type Database = {
         Returns: string
       }
       assert_tenant_context: { Args: never; Returns: undefined }
+      bulk_insert_accounts: {
+        Args: { p_accounts: Json; p_enterprise_id: number }
+        Returns: number
+      }
       calculate_fx_settlement: {
         Args: {
           p_open_balance_id: number
