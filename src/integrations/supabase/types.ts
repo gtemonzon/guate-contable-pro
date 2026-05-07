@@ -4155,6 +4155,15 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      clear_legacy_import_block: {
+        Args: { p_block: string; p_enterprise_id: number }
+        Returns: {
+          block_key: string
+          deleted_count: number
+          remaining_count: number
+          table_name: string
+        }[]
+      }
       create_enterprise_with_user_link:
         | {
             Args: {
