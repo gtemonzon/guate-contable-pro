@@ -1,10 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, CheckCircle2, AlertCircle, Loader2, Info, Trash2 } from "lucide-react";
 import { parseLegacyFile } from "./parser";
@@ -35,6 +38,18 @@ interface JobRow {
   payload?: { action?: string } | null;
 }
 
+type TableDecisionMode = "clear_then_import" | "skip";
+
+const TABLE_CONFIG = [
+  { key: "accounts", label: "Cuentas", sourceCount: (dataset: ParsedDataset) => dataset.accounts.length },
+  { key: "periods", label: "Períodos", sourceCount: (dataset: ParsedDataset) => new Set(dataset.journalEntries.map((e) => (e.date || "").slice(0, 4)).filter((y) => /^\d{4}$/.test(y))).size },
+  { key: "purchases", label: "Compras", sourceCount: (dataset: ParsedDataset) => dataset.purchases.length },
+  { key: "sales", label: "Ventas", sourceCount: (dataset: ParsedDataset) => dataset.sales.length },
+  { key: "journalEntries", label: "Partidas", sourceCount: (dataset: ParsedDataset) => dataset.journalEntries.length },
+  { key: "assetCategories", label: "Categorías de activos", sourceCount: (dataset: ParsedDataset) => dataset.assetCategories.length },
+  { key: "fixedAssets", label: "Activos fijos", sourceCount: (dataset: ParsedDataset) => dataset.fixedAssets.length },
+] as const;
+
 export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpriseName }: LegacyImportWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<Step>(1);
@@ -45,6 +60,9 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
   const [job, setJob] = useState<JobRow | null>(null);
   const [clearing, setClearing] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [precheckOpen, setPrecheckOpen] = useState(false);
+  const [tableStats, setTableStats] = useState<Record<string, number>>({});
+  const [tableDecisions, setTableDecisions] = useState<Record<string, TableDecisionMode>>({});
   const [now, setNow] = useState(Date.now());
   const isClearJob = !!job && (job.payload?.action === "clear" || !!job.result?.cleared || /^Borrando|^Preparando borrado|^Borrado/i.test(job.current_step ?? ""));
 
@@ -73,7 +91,53 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     setFile(null);
     setDataset(null);
     setJob(null);
+    setTableStats({});
+    setTableDecisions({});
+    setPrecheckOpen(false);
   };
+
+  const relevantTableRows = useMemo(() => {
+    if (!dataset) return [];
+    return TABLE_CONFIG
+      .map((config) => ({
+        ...config,
+        incoming: config.sourceCount(dataset),
+        existing: tableStats[config.key] ?? 0,
+      }))
+      .filter((item) => item.incoming > 0);
+  }, [dataset, tableStats]);
+
+  const tablesNeedingDecision = relevantTableRows.filter((item) => item.existing > 0);
+
+  const fetchTableStats = useCallback(async () => {
+    const stats: Record<string, number> = {};
+    await Promise.all([
+      supabase.from("tab_accounts").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("tab_accounting_periods").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("tab_purchase_ledger").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("tab_sales_ledger").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("tab_journal_entries").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("fixed_asset_categories").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+      supabase.from("fixed_assets").select("id", { count: "exact", head: true }).eq("enterprise_id", enterpriseId),
+    ]).then((results) => {
+      stats.accounts = results[0].count ?? 0;
+      stats.periods = results[1].count ?? 0;
+      stats.purchases = results[2].count ?? 0;
+      stats.sales = results[3].count ?? 0;
+      stats.journalEntries = results[4].count ?? 0;
+      stats.assetCategories = results[5].count ?? 0;
+      stats.fixedAssets = results[6].count ?? 0;
+    });
+    setTableStats(stats);
+    setTableDecisions((prev) => {
+      const next = { ...prev };
+      for (const key of Object.keys(stats)) {
+        if (stats[key] > 0 && !next[key]) next[key] = "clear_then_import";
+      }
+      return next;
+    });
+    return stats;
+  }, [enterpriseId]);
 
   // Buscar job activo de la empresa al abrir
   const fetchActiveJob = useCallback(async () => {
@@ -146,6 +210,22 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     if (!dataset) return;
     setSubmitting(true);
     try {
+      const stats = await fetchTableStats();
+      const needsDecision = TABLE_CONFIG.some((config) => config.sourceCount(dataset) > 0 && (stats[config.key] ?? 0) > 0);
+      if (needsDecision) {
+        setPrecheckOpen(true);
+        return;
+      }
+      await startImport(stats);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error al iniciar importación", description: e.message });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startImport = async (stats?: Record<string, number>) => {
+      if (!dataset) return;
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("No hay sesión");
 
@@ -174,6 +254,17 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
           created_by: userData.user.id,
           payload_path: payloadPath,
           status: "pending",
+          payload: {
+            importPlan: {
+              clearExisting: true,
+              decisions: TABLE_CONFIG
+                .filter((config) => config.sourceCount(dataset) > 0)
+                .map((config) => ({
+                  tableKey: config.key,
+                  mode: (stats?.[config.key] ?? 0) > 0 ? (tableDecisions[config.key] ?? "clear_then_import") : "clear_then_import",
+                })),
+            },
+          },
         })
         .select("*")
         .single();
@@ -193,11 +284,6 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
         title: "Importación iniciada",
         description: "El proceso continuará en segundo plano. Puedes cerrar esta ventana.",
       });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error al iniciar importación", description: e.message });
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleClearEnterpriseData = async () => {
