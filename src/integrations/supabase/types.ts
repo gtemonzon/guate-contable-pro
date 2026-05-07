@@ -4425,6 +4425,15 @@ export type Database = {
           table_name: string
         }[]
       }
+      hard_reset_legacy_import_phase: {
+        Args: { p_enterprise_id: number; p_phase: string }
+        Returns: {
+          deleted_count: number
+          phase_key: string
+          remaining_count: number
+          table_name: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
