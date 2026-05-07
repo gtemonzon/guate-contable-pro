@@ -536,6 +536,24 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         : {},
   } as { cleared?: boolean; deletedByStep: Record<string, number> };
 
+  const applyRpcClearSummary = (
+    rows: Array<{ table_name: string; deleted_count: number; remaining_count: number }>,
+  ) => {
+    clearResult.deletedByStep = clearResult.deletedByStep ?? {};
+    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
+    clearResult.tableStats = clearResult.tableStats ?? {};
+
+    for (const row of rows) {
+      const stepKey = CLEAR_RPC_STEP_KEYS[row.table_name] ?? row.table_name;
+      const tableStatKey = CLEAR_RPC_TABLE_STAT_KEYS[row.table_name] ?? row.table_name;
+      clearResult.deletedByStep[stepKey] = Number(row.deleted_count ?? 0);
+      clearResult.verifiedEmptyByStep[stepKey] = Number(row.remaining_count ?? 0) === 0;
+      clearResult.tableStats[tableStatKey] = Number(row.remaining_count ?? 0);
+    }
+
+    clearResult.deletedTotal = Object.values(clearResult.deletedByStep).reduce((sum, value) => sum + Number(value || 0), 0);
+  };
+
   const persistClearJob = async (patch: Record<string, unknown> = {}) => {
     await sb.from("tab_legacy_import_jobs").update({
       status: "running",
@@ -819,54 +837,28 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
     }
 
-    if (await deleteSimpleEnterpriseTable("tab_purchase_journal_links", "vínculos compra-partida", "purchase_journal_links_clear", 100)) return;
-    if (await deleteSimpleEnterpriseTable("tab_purchase_ledger", "compras", "purchase_ledger_clear", 75)) return;
-    if (await deleteSimpleEnterpriseTable("tab_sales_ledger", "ventas", "sales_ledger_clear", 50)) return;
-    if (await deleteSimpleEnterpriseTable("fixed_asset_categories", "categorías de activos", "asset_categories_clear", 75)) return;
-    if (await deletePurchaseBooksAdaptive()) return;
-    if (await deleteSimpleEnterpriseTable("tab_period_inventory_closing", "cierres de inventario por período", "period_inventory_closing_clear", 75)) return;
-    if (await deleteSimpleEnterpriseTable("tab_accounting_periods", "períodos", "periods_clear", 75)) return;
+    if (!stepsCompleted.has("financial_domain_clear")) {
+      await persistClearJob({ current_step: "Borrando compras, períodos y cuentas...", current_count: 0, total_count: 1 });
+      const rpcSummary = await clearEnterpriseBlockViaRpc(sb, enterpriseId, "accounts_periods");
+      applyRpcClearSummary(rpcSummary);
 
-    if (!stepsCompleted.has("accounts_clear")) {
-      let deletedAccounts = clearResult.deletedByStep.accounts_clear ?? 0;
-      const remainingAccounts = await countTable("tab_accounts");
-      const totalAccounts = Math.max(deletedAccounts + remainingAccounts, deletedAccounts);
-      await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
-
-      while (true) {
-        const { data: accountRows, error: accountErr } = await sb
-          .from("tab_accounts")
-          .select("id, parent_account_id")
-          .eq("enterprise_id", enterpriseId);
-        if (accountErr) throw accountErr;
-        if (!accountRows?.length) break;
-
-        const parentIds = new Set(
-          accountRows
-            .map((row) => row.parent_account_id)
-            .filter((id): id is number => typeof id === "number"),
-        );
-        const leafIds = accountRows
-          .filter((row) => !parentIds.has(row.id))
-          .slice(0, CLEAR_DELETE_BATCH)
-          .map((row) => row.id);
-
-        if (!leafIds.length) break;
-
-        deletedAccounts += await deleteByIdsAdaptive("tab_accounts", leafIds, "catálogo de cuentas");
-        updateDeletionSummary("accounts_clear", deletedAccounts);
-        await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
-
-        if (shouldYield()) {
-          await queueClearContinuation(clearJobId, enterpriseId);
-          return;
-        }
+      const blockingRemaining = rpcSummary.filter((row) => row.remaining_count > 0);
+      if (blockingRemaining.length > 0) {
+        throw new Error(`Quedaron remanentes tras el borrado: ${blockingRemaining.map((row) => `${row.block_key}=${row.remaining_count}`).join(", ")}`);
       }
 
-      const remainingAccountsAfter = await verifyTableEmpty("tab_accounts", "accounts_clear");
-      if (remainingAccountsAfter > 0) throw new Error(`catálogo de cuentas: quedaron ${remainingAccountsAfter} registros sin borrar`);
+      stepsCompleted.add("purchase_journal_links_clear");
+      stepsCompleted.add("purchase_ledger_clear");
+      stepsCompleted.add("purchase_books_clear");
+      stepsCompleted.add("sales_ledger_clear");
+      stepsCompleted.add("journal_entries_clear");
+      stepsCompleted.add("fixed_assets_clear");
+      stepsCompleted.add("asset_categories_clear");
+      stepsCompleted.add("period_inventory_closing_clear");
+      stepsCompleted.add("periods_clear");
       stepsCompleted.add("accounts_clear");
-      await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
+      stepsCompleted.add("financial_domain_clear");
+      await persistClearJob({ current_step: "Borrado financiero completado", current_count: clearResult.deletedTotal ?? 0, total_count: clearResult.deletedTotal ?? 0 });
     }
 
     if (!stepsCompleted.has("payloads_clear")) {
