@@ -4416,6 +4416,24 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_user_tenant_id: { Args: { user_uuid: string }; Returns: number }
+      hard_reset_legacy_import_enterprise: {
+        Args: { p_enterprise_id: number }
+        Returns: {
+          deleted_count: number
+          phase_key: string
+          remaining_count: number
+          table_name: string
+        }[]
+      }
+      hard_reset_legacy_import_phase: {
+        Args: { p_enterprise_id: number; p_phase: string }
+        Returns: {
+          deleted_count: number
+          phase_key: string
+          remaining_count: number
+          table_name: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
