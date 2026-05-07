@@ -205,6 +205,21 @@ export function LegacyImportWizard({ open, onOpenChange, enterpriseId, enterpris
     if (!confirmed) return;
 
     setClearing(true);
+    setJob({
+      id: job?.id ?? `clear-${enterpriseId}-${Date.now()}`,
+      status: "running",
+      current_step: "Preparando borrado...",
+      current_count: 0,
+      total_count: 1,
+      errors: [],
+      result: null,
+      error_message: null,
+      finished_at: null,
+      updated_at: new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      payload: { action: "clear" },
+    });
+    setStep(4);
     try {
       const { data, error } = await supabase.functions.invoke("legacy-import-runner", {
         body: {
