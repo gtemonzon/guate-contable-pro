@@ -1296,13 +1296,19 @@ async function runImport(jobId: string) {
         ds.accounts.length,
         true,
       );
-      result.accountsCreated = await insertCriticalRows(
-        sb,
-        "tab_accounts",
-        accountRows,
-        "Cuentas",
-        20,
+      // Usar RPC bulk_insert_accounts: activa app.import_mode dentro de la
+      // misma transacción para evitar el seq scan en audit_event_log que
+      // disparaban los triggers de auditoría en cada insert (causa real del
+      // statement timeout). Inserta las 178 cuentas en una sola sentencia.
+      const { data: insertedCount, error: bulkErr } = await sb.rpc(
+        "bulk_insert_accounts",
+        {
+          p_enterprise_id: enterpriseId,
+          p_accounts: accountRows as any,
+        },
       );
+      if (bulkErr) throw new Error(`Cuentas: ${bulkErr.message}`);
+      result.accountsCreated = Number(insertedCount ?? accountRows.length);
       await updateProgress(
         "Insertando cuentas...",
         result.accountsCreated,
