@@ -1055,21 +1055,17 @@ async function runImport(jobId: string) {
     }));
     if (!stepsCompleted.has("accounts") && !stepsCompleted.has("skip_accounts")) {
       await updateProgress("Insertando cuentas...", 0, ds.accounts.length, true);
-      for (const part of chunk(accountRows, CHUNK)) {
-        const { error } = await sb.from("tab_accounts").insert(part);
-        if (error) errors.push(`Cuentas: ${error.message}`);
-        else result.accountsCreated += part.length;
-        await updateProgress(
-          "Insertando cuentas...",
-          result.accountsCreated,
-          accountRows.length,
-        );
-      }
+      result.accountsCreated = await insertCriticalRows(sb, "tab_accounts", accountRows, "Cuentas", 20);
+      await updateProgress(
+        "Insertando cuentas...",
+        result.accountsCreated,
+        accountRows.length,
+      );
 
       const { error: linkErr } = await sb.rpc("link_account_parents_by_code", {
         p_enterprise_id: enterpriseId,
       });
-      if (linkErr) errors.push(`Jerarquía cuentas: ${linkErr.message}`);
+      if (linkErr) throw new Error(`Jerarquía cuentas: ${linkErr.message}`);
       stepsCompleted.add("accounts");
       await sb.from("tab_legacy_import_jobs").update({
         result,
@@ -1105,11 +1101,7 @@ async function runImport(jobId: string) {
     if (!stepsCompleted.has("periods") && !stepsCompleted.has("skip_periods")) {
       await updateProgress("Creando períodos...", 0, years.length, true);
       if (periodRows.length > 0) {
-        const { error } = await sb
-          .from("tab_accounting_periods")
-          .insert(periodRows);
-        if (error) errors.push(`Períodos: ${error.message}`);
-        else result.periodsCreated += periodRows.length;
+        result.periodsCreated = await insertCriticalRows(sb, "tab_accounting_periods", periodRows, "Períodos", 10);
       }
       stepsCompleted.add("periods");
       await sb.from("tab_legacy_import_jobs").update({
@@ -1210,7 +1202,7 @@ async function runImport(jobId: string) {
       return "done";
     }
 
-    if (!stepsCompleted.has("purchase_books")) {
+    if (!stepsCompleted.has("purchase_books") && !stepsCompleted.has("skip_purchases")) {
       for (const key of bookKeys) {
         const [y, m] = key.split("-").map(Number);
         if (!Number.isFinite(y) || !Number.isFinite(m) || y < 1900 || y > 2100 || m < 1 || m > 12) {
@@ -1233,7 +1225,7 @@ async function runImport(jobId: string) {
       await sb.from("tab_legacy_import_jobs").update({
         steps_completed: Array.from(stepsCompleted),
       }).eq("id", jobId);
-    } else {
+    } else if (!stepsCompleted.has("skip_purchases")) {
       const { data: existingBooks } = await sb
         .from("tab_purchase_books")
         .select("id, year, month")
