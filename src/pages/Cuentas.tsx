@@ -501,6 +501,7 @@ const Cuentas = () => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onQuickCreate={handleQuickCreate}
+              onInlineUpdate={handleInlineUpdate}
             />
           </CardContent>
         </Card>
