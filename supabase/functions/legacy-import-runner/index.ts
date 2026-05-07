@@ -298,6 +298,20 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     }).eq("id", clearJobId);
   };
 
+  const updateDeletionSummary = (stepKey: string, deleted: number) => {
+    clearResult.deletedByStep[stepKey] = deleted;
+    clearResult.deletedTotal = Object.values(clearResult.deletedByStep).reduce((sum, value) => sum + Number(value || 0), 0);
+  };
+
+  const verifyTableEmpty = async (table: string, stepKey: string) => {
+    const remaining = await countTable(table);
+    clearResult.verifiedEmptyByStep = clearResult.verifiedEmptyByStep ?? {};
+    clearResult.tableStats = clearResult.tableStats ?? {};
+    clearResult.verifiedEmptyByStep[stepKey] = remaining === 0;
+    clearResult.tableStats[stepKey] = remaining;
+    return remaining;
+  };
+
   const countTable = async (table: string) => {
     const { count } = await sb
       .from(table)
@@ -316,7 +330,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     const { error } = await sb.from(table).delete().in("id", ids as any);
     if (!error) return ids.length;
 
-    if (/statement timeout|canceling statement/i.test(error.message) && ids.length > 1) {
+    if (isStatementTimeout(error.message) && ids.length > 1) {
       const mid = Math.floor(ids.length / 2);
       const left = await deleteByIdsAdaptive(table, ids.slice(0, mid), label);
       const right = await deleteByIdsAdaptive(table, ids.slice(mid), label);
@@ -354,7 +368,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     const { error } = await sb.from(table).delete().in(column, values as any);
     if (!error) return;
 
-    if (/statement timeout|canceling statement/i.test(error.message) && values.length > 1) {
+    if (isStatementTimeout(error.message) && values.length > 1) {
       const mid = Math.floor(values.length / 2);
       await deleteByColumnAdaptive(table, column, values.slice(0, mid), label);
       await deleteByColumnAdaptive(table, column, values.slice(mid), label);
@@ -411,7 +425,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
           throw new Error(`libros de compras [book:${book.id}]: ${deleteBookErr.message}`);
         }
         deletedBooks += 1;
-        clearResult.deletedByStep.purchase_books_clear = deletedBooks;
+        updateDeletionSummary("purchase_books_clear", deletedBooks);
         await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
 
         if (shouldYield()) {
@@ -421,6 +435,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       }
     }
 
+    const remaining = await verifyTableEmpty("tab_purchase_books", "purchase_books_clear");
+    if (remaining > 0) throw new Error(`libros de compras: quedaron ${remaining} registros sin borrar`);
     stepsCompleted.add("purchase_books_clear");
     await persistClearJob({ current_step: "Borrando libros de compras...", current_count: deletedBooks, total_count: totalBooks });
     return false;
@@ -450,7 +466,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       if (!data?.length) break;
 
       deleted += await deleteByIdsAdaptive(table, data.map((row: any) => row.id), label);
-      clearResult.deletedByStep[stepKey] = deleted;
+      updateDeletionSummary(stepKey, deleted);
       await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
 
       if (shouldYield()) {
@@ -459,6 +475,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       }
     }
 
+    const remaining = await verifyTableEmpty(table, stepKey);
+    if (remaining > 0) throw new Error(`${label}: quedaron ${remaining} registros sin borrar`);
     stepsCompleted.add(stepKey);
     await persistClearJob({ current_step: `Borrando ${label}...`, current_count: deleted, total_count: total });
     return false;
@@ -502,7 +520,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         const entryIds = entryRows.map((row) => row.id);
         await deleteByColumnAdaptive("tab_journal_entry_details", "journal_entry_id", entryIds, "detalles de partidas");
         deletedEntries += await deleteByIdsAdaptive("tab_journal_entries", entryIds, "partidas");
-        clearResult.deletedByStep.journal_entries_clear = deletedEntries;
+        updateDeletionSummary("journal_entries_clear", deletedEntries);
         await persistClearJob({ current_step: "Borrando partidas...", current_count: deletedEntries, total_count: totalEntries });
 
         if (shouldYield()) {
@@ -511,6 +529,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         }
       }
 
+      const remainingEntriesAfter = await verifyTableEmpty("tab_journal_entries", "journal_entries_clear");
+      if (remainingEntriesAfter > 0) throw new Error(`partidas: quedaron ${remainingEntriesAfter} registros sin borrar`);
       stepsCompleted.add("journal_entries_clear");
       await persistClearJob({ current_step: "Borrando partidas...", current_count: deletedEntries, total_count: totalEntries });
     }
@@ -535,7 +555,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         await deleteByColumnAdaptive("fixed_asset_depreciation_schedule", "asset_id", assetIds, "depreciaciones de activos");
         await deleteByColumnAdaptive("fixed_asset_event_log", "asset_id", assetIds, "bitácora de activos");
         deletedAssets += await deleteByIdsAdaptive("fixed_assets", assetIds, "activos fijos");
-        clearResult.deletedByStep.fixed_assets_clear = deletedAssets;
+        updateDeletionSummary("fixed_assets_clear", deletedAssets);
         await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
 
         if (shouldYield()) {
@@ -544,14 +564,18 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         }
       }
 
+      const remainingAssetsAfter = await verifyTableEmpty("fixed_assets", "fixed_assets_clear");
+      if (remainingAssetsAfter > 0) throw new Error(`activos fijos: quedaron ${remainingAssetsAfter} registros sin borrar`);
       stepsCompleted.add("fixed_assets_clear");
       await persistClearJob({ current_step: "Borrando activos fijos...", current_count: deletedAssets, total_count: totalAssets });
     }
 
+    if (await deleteSimpleEnterpriseTable("tab_purchase_journal_links", "vínculos compra-partida", "purchase_journal_links_clear", 100)) return;
     if (await deleteSimpleEnterpriseTable("tab_purchase_ledger", "compras", "purchase_ledger_clear", 75)) return;
     if (await deleteSimpleEnterpriseTable("tab_sales_ledger", "ventas", "sales_ledger_clear", 50)) return;
     if (await deleteSimpleEnterpriseTable("fixed_asset_categories", "categorías de activos", "asset_categories_clear", 75)) return;
     if (await deletePurchaseBooksAdaptive()) return;
+    if (await deleteSimpleEnterpriseTable("tab_period_inventory_closing", "cierres de inventario por período", "period_inventory_closing_clear", 75)) return;
     if (await deleteSimpleEnterpriseTable("tab_accounting_periods", "períodos", "periods_clear", 75)) return;
 
     if (!stepsCompleted.has("accounts_clear")) {
@@ -581,7 +605,7 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         if (!leafIds.length) break;
 
         deletedAccounts += await deleteByIdsAdaptive("tab_accounts", leafIds, "catálogo de cuentas");
-        clearResult.deletedByStep.accounts_clear = deletedAccounts;
+        updateDeletionSummary("accounts_clear", deletedAccounts);
         await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
 
         if (shouldYield()) {
@@ -590,6 +614,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         }
       }
 
+      const remainingAccountsAfter = await verifyTableEmpty("tab_accounts", "accounts_clear");
+      if (remainingAccountsAfter > 0) throw new Error(`catálogo de cuentas: quedaron ${remainingAccountsAfter} registros sin borrar`);
       stepsCompleted.add("accounts_clear");
       await persistClearJob({ current_step: "Borrando catálogo de cuentas...", current_count: deletedAccounts, total_count: totalAccounts });
     }
@@ -637,8 +663,8 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     await sb.from("tab_legacy_import_jobs").update({
       status: "completed",
       current_step: "Borrado completado",
-      current_count: 1,
-      total_count: 1,
+      current_count: clearResult.deletedTotal ?? 0,
+      total_count: clearResult.deletedTotal ?? 0,
       updated_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       result: clearResult,
