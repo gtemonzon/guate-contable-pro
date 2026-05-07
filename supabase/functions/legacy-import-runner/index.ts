@@ -999,6 +999,18 @@ async function runImport(jobId: string) {
   const tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
   result.tableStats = tableStats;
 
+  await sb
+    .from("tab_legacy_import_jobs")
+    .update({
+      status: "running",
+      started_at: job.started_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      errors,
+      result,
+      steps_completed: Array.from(stepsCompleted),
+    })
+    .eq("id", jobId);
+
   if (!stepsCompleted.has("precheck")) {
     const blockingTables = ["accounts", "periods", "purchases", "sales", "journalEntries", "assetCategories", "fixedAssets"]
       .filter((key) => tableStats[key] > 0);
@@ -1071,17 +1083,6 @@ async function runImport(jobId: string) {
       steps_completed: Array.from(stepsCompleted),
     }).eq("id", jobId);
   }
-
-  await sb
-    .from("tab_legacy_import_jobs")
-    .update({
-      status: "running",
-      started_at: job.started_at ?? new Date().toISOString(),
-      errors,
-      result,
-      steps_completed: Array.from(stepsCompleted),
-    })
-    .eq("id", jobId);
 
   try {
     // ---------- 1. Cuentas ----------
