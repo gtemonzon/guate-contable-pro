@@ -784,17 +784,40 @@ async function isJobStillActive(
   return !!data && (data.status === "pending" || data.status === "running");
 }
 
+// Soft time budget per invocation (ms). Edge function CPU limit is around 150s;
+// stop earlier and queue a continuation to remain well within bounds.
+const CLEAR_TIME_BUDGET_MS = 60_000;
+
 async function runClear(clearJobId: string, enterpriseId: number) {
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { persistSession: false },
   });
 
+  const startedAt = Date.now();
+
+  // Load existing job state to support resume
+  const { data: jobRow } = await sb
+    .from("tab_legacy_import_jobs")
+    .select("result, payload, started_at")
+    .eq("id", clearJobId)
+    .maybeSingle();
+
+  const previousResult: any =
+    jobRow?.result && typeof jobRow.result === "object" ? jobRow.result : {};
+
   const clearResult: any = {
-    deletedByStep: {},
-    verifiedEmptyByStep: {},
-    tableStats: {},
-    deletedTotal: 0,
+    deletedByStep: previousResult.deletedByStep ?? {},
+    verifiedEmptyByStep: previousResult.verifiedEmptyByStep ?? {},
+    tableStats: previousResult.tableStats ?? {},
+    phaseTimings: previousResult.phaseTimings ?? {},
+    completedPhases: Array.isArray(previousResult.completedPhases)
+      ? [...previousResult.completedPhases]
+      : [],
+    deletedTotal: Number(previousResult.deletedTotal ?? 0),
+    cleared: false,
   };
+
+  const completedSet = new Set<string>(clearResult.completedPhases);
 
   const persist = async (patch: Record<string, unknown>) => {
     await sb
@@ -806,58 +829,145 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       .eq("id", clearJobId);
   };
 
+  const isFirstRun = completedSet.size === 0;
+
   try {
-    await persist({
-      status: "running",
-      started_at: new Date().toISOString(),
-      current_step: "Cancelando trabajos previos...",
-      current_count: 0,
-      total_count: 1,
-      result: clearResult,
-    });
+    if (isFirstRun) {
+      await persist({
+        status: "running",
+        started_at: jobRow?.started_at ?? new Date().toISOString(),
+        current_step: "Cancelando trabajos previos...",
+        current_count: 0,
+        total_count: RESUMABLE_CLEAR_PHASES.length,
+        result: clearResult,
+      });
 
-    // Cancel any other active jobs for this enterprise
-    await sb
-      .from("tab_legacy_import_jobs")
-      .update({
-        status: "failed",
-        error_message: "Cancelado por nuevo borrado.",
-        finished_at: new Date().toISOString(),
-      })
-      .eq("enterprise_id", enterpriseId)
-      .in("status", ["pending", "running"])
-      .neq("id", clearJobId);
-
-    await persist({
-      current_step: "Ejecutando hard reset transaccional...",
-      current_count: 0,
-      total_count: 1,
-    });
-
-    // Single atomic call - replaces all phase-based logic
-    const { data: resetResult, error: resetErr } = await sb.rpc(
-      "hard_reset_enterprise",
-      { p_enterprise_id: enterpriseId },
-    );
-
-    if (resetErr) throw new Error(resetErr.message);
-
-    const phases = (resetResult?.phases ?? []) as Array<{
-      table: string;
-      deleted?: number;
-      remaining?: number;
-      ms?: number;
-    }>;
-
-    let total = 0;
-    for (const p of phases) {
-      clearResult.deletedByStep[p.table] = Number(p.deleted ?? 0);
-      clearResult.verifiedEmptyByStep[p.table] = Number(p.remaining ?? 0) === 0;
-      clearResult.tableStats[p.table] = Number(p.remaining ?? 0);
-      total += Number(p.deleted ?? 0);
+      // Cancel any other active jobs for this enterprise
+      await sb
+        .from("tab_legacy_import_jobs")
+        .update({
+          status: "failed",
+          error_message: "Cancelado por nuevo borrado.",
+          finished_at: new Date().toISOString(),
+        })
+        .eq("enterprise_id", enterpriseId)
+        .in("status", ["pending", "running"])
+        .neq("id", clearJobId);
+    } else {
+      await persist({
+        status: "running",
+        current_step: "Reanudando borrado...",
+        current_count: completedSet.size,
+        total_count: RESUMABLE_CLEAR_PHASES.length,
+        result: clearResult,
+      });
     }
-    clearResult.deletedTotal = total;
-    clearResult.totalMs = resetResult?.total_ms ?? 0;
+
+    for (let i = 0; i < RESUMABLE_CLEAR_PHASES.length; i++) {
+      const phase = RESUMABLE_CLEAR_PHASES[i];
+      if (completedSet.has(phase.phaseKey)) continue;
+
+      // Time budget check: queue continuation if running long
+      if (Date.now() - startedAt > CLEAR_TIME_BUDGET_MS) {
+        clearResult.completedPhases = Array.from(completedSet);
+        await persist({
+          current_step: `Pausa para continuar: ${phase.label}`,
+          current_count: completedSet.size,
+          total_count: RESUMABLE_CLEAR_PHASES.length,
+          result: clearResult,
+        });
+        await queueClearContinuation(clearJobId, enterpriseId);
+        return;
+      }
+
+      let phaseDeleted = 0;
+      let phaseMs = 0;
+      let safetyIterations = 0;
+
+      // Loop batches until the phase reports done=true
+      while (true) {
+        safetyIterations += 1;
+        if (safetyIterations > 5000) {
+          throw new Error(
+            `Fase ${phase.phaseKey} excedió el máximo de iteraciones`,
+          );
+        }
+
+        const phaseStart = Date.now();
+        const { data, error } = await sb.rpc("clear_legacy_import_batch", {
+          p_enterprise_id: enterpriseId,
+          p_phase: phase.phaseKey,
+          p_batch_size: phase.batchSize,
+        });
+
+        if (error) {
+          throw new Error(`limpieza ${phase.phaseKey}: ${error.message}`);
+        }
+
+        const row = Array.isArray(data) ? data[0] : null;
+        if (!row) {
+          throw new Error(
+            `limpieza ${phase.phaseKey}: sin resultado del batch`,
+          );
+        }
+
+        const deleted = Number((row as any).deleted_count ?? 0);
+        const remaining = Number((row as any).remaining_count ?? 0);
+        const done = Boolean((row as any).done);
+        const execMs = Number(
+          (row as any).execution_ms ?? Date.now() - phaseStart,
+        );
+
+        phaseDeleted += deleted;
+        phaseMs += execMs;
+
+        clearResult.deletedByStep[phase.progressKey] =
+          (clearResult.deletedByStep[phase.progressKey] ?? 0) + deleted;
+        clearResult.tableStats[phase.phaseKey] = remaining;
+        clearResult.verifiedEmptyByStep[phase.progressKey] = remaining === 0;
+
+        await persist({
+          current_step: `Borrando ${phase.label} (${remaining} restantes)`,
+          current_count: completedSet.size,
+          total_count: RESUMABLE_CLEAR_PHASES.length,
+          result: clearResult,
+        });
+
+        if (done) break;
+
+        // Mid-phase time check: continuation
+        if (Date.now() - startedAt > CLEAR_TIME_BUDGET_MS) {
+          clearResult.phaseTimings[phase.phaseKey] =
+            (clearResult.phaseTimings[phase.phaseKey] ?? 0) + phaseMs;
+          clearResult.deletedTotal += phaseDeleted;
+          await persist({
+            current_step: `Pausa en ${phase.label} (continúa)`,
+            current_count: completedSet.size,
+            total_count: RESUMABLE_CLEAR_PHASES.length,
+            result: clearResult,
+          });
+          await queueClearContinuation(clearJobId, enterpriseId);
+          return;
+        }
+      }
+
+      completedSet.add(phase.phaseKey);
+      clearResult.completedPhases = Array.from(completedSet);
+      clearResult.deletedTotal += phaseDeleted;
+      clearResult.phaseTimings[phase.phaseKey] =
+        (clearResult.phaseTimings[phase.phaseKey] ?? 0) + phaseMs;
+
+      console.log(
+        `[clear] ${phase.phaseKey}: deleted=${phaseDeleted} ms=${phaseMs}`,
+      );
+
+      await persist({
+        current_step: `${phase.label} completado`,
+        current_count: completedSet.size,
+        total_count: RESUMABLE_CLEAR_PHASES.length,
+        result: clearResult,
+      });
+    }
 
     // Cleanup storage payloads (best-effort)
     try {
@@ -892,15 +1002,15 @@ async function runClear(clearJobId: string, enterpriseId: number) {
       .update({
         status: "completed",
         current_step: "Borrado completado",
-        current_count: total,
-        total_count: total,
+        current_count: RESUMABLE_CLEAR_PHASES.length,
+        total_count: RESUMABLE_CLEAR_PHASES.length,
         updated_at: new Date().toISOString(),
         finished_at: new Date().toISOString(),
         result: clearResult,
       })
       .eq("id", clearJobId);
   } catch (err: any) {
-    console.error("hard_reset_enterprise failed", err);
+    console.error("clear_legacy_import_batch failed", err);
     await sb
       .from("tab_legacy_import_jobs")
       .update({
