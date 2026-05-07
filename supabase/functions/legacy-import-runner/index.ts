@@ -975,6 +975,27 @@ async function runImport(jobId: string) {
   );
   result.importPlan = importPlan;
 
+  let lastUpdate = 0;
+  const updateProgress = async (
+    step: string,
+    current: number,
+    total: number,
+    force = false,
+  ) => {
+    const now = Date.now();
+    if (!force && now - lastUpdate < 800) return;
+    lastUpdate = now;
+    await sb
+      .from("tab_legacy_import_jobs")
+      .update({
+        current_step: step,
+        current_count: current,
+        total_count: total,
+        errors,
+      })
+      .eq("id", jobId);
+  };
+
   const tableStats = await collectEnterpriseTableStats(sb, enterpriseId);
   result.tableStats = tableStats;
 
@@ -1018,9 +1039,16 @@ async function runImport(jobId: string) {
       );
       if (shouldClearDomain) {
         await updateProgress("Limpiando cuentas y períodos existentes...", 0, (tableStats.accounts ?? 0) + (tableStats.periods ?? 0), true);
-        const deleted = await clearPeriodsAndAccountsDomainForImport(sb, enterpriseId);
+        const clearSummary = await clearEnterpriseBlockViaRpc(sb, enterpriseId, "accounts_periods");
         result.deletedByStep = result.deletedByStep ?? {};
-        result.deletedByStep.preclear_accounts_periods = deleted;
+        result.verifiedEmptyByStep = result.verifiedEmptyByStep ?? {};
+        result.tableStats = result.tableStats ?? {};
+        clearSummary.forEach((row) => {
+          const stepKey = `preclear_${row.block_key}`;
+          result.deletedByStep![stepKey] = Number(row.deleted_count ?? 0);
+          result.verifiedEmptyByStep![stepKey] = Number(row.remaining_count ?? 0) === 0;
+          result.tableStats![row.block_key] = Number(row.remaining_count ?? 0);
+        });
         result.deletedTotal = Object.values(result.deletedByStep).reduce((sum, value) => sum + Number(value || 0), 0);
       }
     } else {
@@ -1043,27 +1071,6 @@ async function runImport(jobId: string) {
       steps_completed: Array.from(stepsCompleted),
     }).eq("id", jobId);
   }
-
-  let lastUpdate = 0;
-  const updateProgress = async (
-    step: string,
-    current: number,
-    total: number,
-    force = false,
-  ) => {
-    const now = Date.now();
-    if (!force && now - lastUpdate < 800) return; // throttle
-    lastUpdate = now;
-    await sb
-      .from("tab_legacy_import_jobs")
-      .update({
-        current_step: step,
-        current_count: current,
-        total_count: total,
-        errors,
-      })
-      .eq("id", jobId);
-  };
 
   await sb
     .from("tab_legacy_import_jobs")
