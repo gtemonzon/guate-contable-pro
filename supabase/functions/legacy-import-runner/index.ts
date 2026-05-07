@@ -328,6 +328,54 @@ async function clearPeriodsAndAccountsDomainForImport(sb: ReturnType<typeof crea
   return deleted;
 }
 
+const CLEAR_RPC_STEP_KEYS: Record<string, string> = {
+  tab_purchase_journal_links: "purchase_journal_links_clear",
+  tab_purchase_ledger: "purchase_ledger_clear",
+  tab_purchase_books: "purchase_books_clear",
+  tab_sales_ledger: "sales_ledger_clear",
+  tab_journal_entries: "journal_entries_clear",
+  fixed_assets: "fixed_assets_clear",
+  fixed_asset_categories: "asset_categories_clear",
+  tab_accounting_periods: "periods_clear",
+  tab_accounts: "accounts_clear",
+};
+
+const CLEAR_RPC_TABLE_STAT_KEYS: Record<string, string> = {
+  tab_purchase_journal_links: "purchaseJournalLinks",
+  tab_purchase_ledger: "purchases",
+  tab_purchase_books: "purchaseBooks",
+  tab_sales_ledger: "sales",
+  tab_journal_entries: "journalEntries",
+  fixed_assets: "fixedAssets",
+  fixed_asset_categories: "assetCategories",
+  tab_accounting_periods: "periods",
+  tab_accounts: "accounts",
+};
+
+async function clearEnterpriseBlockViaRpc(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  block: "accounts_periods" | "purchases" | "sales" | "journal_entries" | "fixed_assets" | "asset_categories" | "all",
+): Promise<Array<{ block_key: string; table_name: string; deleted_count: number; remaining_count: number }>> {
+  const { data, error } = await sb.rpc("clear_legacy_import_block", {
+    p_enterprise_id: enterpriseId,
+    p_block: block,
+  });
+
+  if (error) {
+    throw new Error(`limpieza ${block}: ${error.message}`);
+  }
+
+  return Array.isArray(data)
+    ? data.map((row: any) => ({
+        block_key: String(row.block_key),
+        table_name: String(row.table_name),
+        deleted_count: Number(row.deleted_count ?? 0),
+        remaining_count: Number(row.remaining_count ?? 0),
+      }))
+    : [];
+}
+
 async function insertCriticalRows<T>(
   sb: ReturnType<typeof createClient>,
   table: string,
