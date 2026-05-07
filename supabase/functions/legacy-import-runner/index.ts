@@ -1031,8 +1031,10 @@ async function runImport(jobId: string) {
       });
     }
 
-    let processed = Math.min(job.current_count ?? 0, prepared.length);
-    const sliceStart = stepsCompleted.has("journal_entries") ? prepared.length : processed;
+    let processed = stepsCompleted.has("journal_entries")
+      ? prepared.length
+      : Math.min(result.journalEntriesCreated + result.journalEntriesAsDraft, prepared.length);
+    const sliceStart = processed;
     const journalSlice = prepared.slice(sliceStart, sliceStart + JOURNAL_SLICE);
     await updateProgress(
       "Importando partidas...",
@@ -1267,8 +1269,21 @@ async function runImport(jobId: string) {
       }
       for (const part of chunk(assetRows, 100)) {
         const { error } = await sb.from("fixed_assets").insert(part);
-        if (error) errors.push(`Activos: ${error.message}`);
-        else result.fixedAssetsCreated += part.length;
+        if (error) {
+          let inserted = 0;
+          let firstErr: string | null = null;
+          for (const row of part) {
+            const { error: rowErr } = await sb.from("fixed_assets").insert(row);
+            if (rowErr) {
+              firstErr ??= rowErr.message;
+              errors.push(`Activos ${row.asset_code}: ${rowErr.message}`);
+            } else {
+              inserted += 1;
+            }
+          }
+          result.fixedAssetsCreated += inserted;
+          if (firstErr) console.warn(`Activos batch falló, ${inserted}/${part.length} insertados. Primer error: ${firstErr}`);
+        } else result.fixedAssetsCreated += part.length;
         await updateProgress(
           "Importando activos fijos...",
           result.fixedAssetsCreated,
@@ -1309,16 +1324,18 @@ async function runImport(jobId: string) {
       stepsCompleted.add("close_periods");
     }
 
+    const finalStatus = errors.length > 0 ? "failed" : "completed";
     await sb
       .from("tab_legacy_import_jobs")
       .update({
-        status: "completed",
+        status: finalStatus,
         current_step: "Importación completa",
         current_count: 1,
         total_count: 1,
         finished_at: new Date().toISOString(),
         result,
         errors,
+        error_message: errors.length > 0 ? errors[0] : null,
         steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", jobId);
