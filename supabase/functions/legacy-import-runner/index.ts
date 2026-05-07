@@ -328,6 +328,40 @@ async function clearPeriodsAndAccountsDomainForImport(sb: ReturnType<typeof crea
   return deleted;
 }
 
+async function insertCriticalRows<T>(
+  sb: ReturnType<typeof createClient>,
+  table: string,
+  rows: T[],
+  label: string,
+  batchSize = 25,
+): Promise<number> {
+  let inserted = 0;
+
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const part = rows.slice(i, i + batchSize);
+    const { error } = await sb.from(table).insert(part as any);
+
+    if (!error) {
+      inserted += part.length;
+      continue;
+    }
+
+    if (!isStatementTimeout(error.message) && part.length === 1) {
+      throw new Error(`${label}: ${error.message}`);
+    }
+
+    for (const row of part) {
+      const { error: rowError } = await sb.from(table).insert(row as any);
+      if (rowError) {
+        throw new Error(`${label}: ${rowError.message}`);
+      }
+      inserted += 1;
+    }
+  }
+
+  return inserted;
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
