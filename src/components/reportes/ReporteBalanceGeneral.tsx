@@ -27,9 +27,12 @@ interface AccountBalance {
   account_code: string;
   account_name: string;
   account_type: string;
+  balance_type: string | null;
   level: number;
   parent_account_id: number | null;
   balance: number;
+  total_debit: number;
+  total_credit: number;
 }
 
 export default function ReporteBalanceGeneral() {
