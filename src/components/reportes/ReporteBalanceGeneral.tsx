@@ -124,9 +124,12 @@ export default function ReporteBalanceGeneral() {
         account_code: row.account_code,
         account_name: row.account_name,
         account_type: row.account_type,
+        balance_type: row.balance_type ?? null,
         level: row.level,
         parent_account_id: row.parent_account_id ? Number(row.parent_account_id) : null,
         balance: Number(row.balance),
+        total_debit: Number(row.total_debit ?? 0),
+        total_credit: Number(row.total_credit ?? 0),
       }));
 
       // Calculate period result from PnL (excludes closing entries)
