@@ -179,16 +179,39 @@ export default function ReporteBalanceGeneral() {
       childrenByParent.set(acc.parent_account_id, list);
     }
 
-    const aggCache = new Map<number, number>();
+    // Aggregate raw debit/credit for each account (own + descendants), then
+    // express the total according to the ROOT account's balance_type. This
+    // ensures that, e.g., "Pérdidas Acumuladas" (deudor) under "Patrimonio"
+    // (acreedor) correctly subtracts from capital instead of adding.
+    const rawAggCache = new Map<number, { debit: number; credit: number }>();
+    const getRawAggregated = (accId: number): { debit: number; credit: number } => {
+      const cached = rawAggCache.get(accId);
+      if (cached) return cached;
+      const acc = accountBalances.find(a => a.id === accId);
+      if (!acc) {
+        const empty = { debit: 0, credit: 0 };
+        rawAggCache.set(accId, empty);
+        return empty;
+      }
+      let debit = acc.total_debit;
+      let credit = acc.total_credit;
+      const children = childrenByParent.get(accId) || [];
+      for (const c of children) {
+        const sub = getRawAggregated(c.id);
+        debit += sub.debit;
+        credit += sub.credit;
+      }
+      const total = { debit, credit };
+      rawAggCache.set(accId, total);
+      return total;
+    };
     const getAggregatedBalance = (accId: number): number => {
-      const cached = aggCache.get(accId);
-      if (cached !== undefined) return cached;
       const acc = accountBalances.find(a => a.id === accId);
       if (!acc) return 0;
-      const children = childrenByParent.get(accId) || [];
-      const total = acc.balance + children.reduce((sum, c) => sum + getAggregatedBalance(c.id), 0);
-      aggCache.set(accId, total);
-      return total;
+      const { debit, credit } = getRawAggregated(accId);
+      // Normalize to the root account's natural balance side
+      const isDeudor = acc.balance_type === 'deudor' || acc.account_type === 'activo';
+      return isDeudor ? debit - credit : credit - debit;
     };
 
     const pushAccountTree = (root: AccountBalance, signMultiplier: number, depth: number, parentId?: number | null) => {
