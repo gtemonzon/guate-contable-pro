@@ -286,6 +286,12 @@ export async function importLegacyData(
 
     const generalDescription = entry.description || "Importación legado";
 
+    // Detectar tipo de partida basado en descripción para que reportes funcionen correctamente
+    const upperDesc = generalDescription.toUpperCase();
+    let detectedType: "diario" | "apertura" | "cierre" = "diario";
+    if (/\b(RE)?APERTURA\b/.test(upperDesc)) detectedType = "apertura";
+    else if (/\bCIERRE\b/.test(upperDesc)) detectedType = "cierre";
+
     const { data: hdr, error: hErr } = await supabase
       .from("tab_journal_entries")
       .insert({
@@ -294,7 +300,7 @@ export async function importLegacyData(
         entry_number: entryNumber,
         entry_date: entry.date,
         description: generalDescription,
-        entry_type: "diario",
+        entry_type: detectedType,
         document_reference: entry.reference || null,
         currency_code: "GTQ",
         exchange_rate: 1,
