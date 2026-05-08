@@ -152,7 +152,7 @@ export default function ReporteBalanceGeneral() {
       }));
 
       if (format && format.sections.length > 0) {
-        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts);
+        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts, periodIsClosed);
         setReportLines(lines);
       } else {
         const simpleLines: ReportLine[] = accountBalances
@@ -178,7 +178,7 @@ export default function ReporteBalanceGeneral() {
     }
   };
 
-  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[]): ReportLine[] => {
+  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[], periodIsClosed: boolean = false): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
 
@@ -268,7 +268,9 @@ export default function ReporteBalanceGeneral() {
     const rootExpenseAccounts = pnlAccounts.filter(a => (a.account_type === "gasto" || a.account_type === "costo") && a.parent_account_id === null);
     const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
     const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
-    const periodResult = totalIngresos - totalGastos;
+    // Si el período está cerrado, el cierre contable ya capitalizó el resultado
+    // en el patrimonio. Mostrarlo de nuevo causaría doble suma.
+    const periodResult = periodIsClosed ? 0 : (totalIngresos - totalGastos);
 
     for (const section of sections) {
       if (!section.show_in_report) continue;
