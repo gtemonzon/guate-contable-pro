@@ -96,6 +96,7 @@ export function FinancialStatementDesigner() {
           { section_name: 'CAPITAL', section_type: 'group', display_order: 7, show_in_report: true, accounts: [] },
           { section_name: 'RESULTADO DEL PERÍODO', section_type: 'calculated', display_order: 8, show_in_report: true, accounts: [] },
           { section_name: 'TOTAL CAPITAL', section_type: 'total', display_order: 9, show_in_report: true, accounts: [] },
+          { section_name: 'TOTAL PASIVO Y CAPITAL', section_type: 'grand_total', display_order: 10, show_in_report: true, accounts: [] },
         ]);
       } else {
         setLocalSections([
