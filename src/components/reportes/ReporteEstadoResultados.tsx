@@ -389,7 +389,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "total",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: total,
           isBold: true,
           showLine: true,
