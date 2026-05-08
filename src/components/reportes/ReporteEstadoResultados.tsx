@@ -442,7 +442,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "calculated",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: calculated,
           isBold: true,
           showLine: true,
