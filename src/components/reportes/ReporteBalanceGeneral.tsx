@@ -105,7 +105,7 @@ export default function ReporteBalanceGeneral() {
       const year = new Date(reportDate + 'T00:00:00').getFullYear();
       const periodStart = `${year}-01-01`;
 
-      const [balanceRes, pnlRes] = await Promise.all([
+      const [balanceRes, pnlRes, periodRes] = await Promise.all([
         supabase.rpc('get_balance_sheet', {
           p_enterprise_id: currentEnterpriseId,
           p_as_of_date: reportDate,
@@ -115,9 +115,20 @@ export default function ReporteBalanceGeneral() {
           p_start_date: periodStart,
           p_end_date: reportDate,
         }),
+        supabase
+          .from('tab_accounting_periods')
+          .select('status')
+          .eq('enterprise_id', currentEnterpriseId)
+          .lte('start_date', reportDate)
+          .gte('end_date', reportDate)
+          .maybeSingle(),
       ]);
 
       if (balanceRes.error) throw balanceRes.error;
+
+      // Si el período del año del reporte está cerrado, los asientos de cierre
+      // ya capitalizaron el resultado en el patrimonio. No debe sumarse otra vez.
+      const periodIsClosed = periodRes.data?.status === 'cerrado';
 
       const accountBalances: AccountBalance[] = (balanceRes.data || []).map((row: any) => ({
         id: Number(row.account_id),
@@ -141,7 +152,7 @@ export default function ReporteBalanceGeneral() {
       }));
 
       if (format && format.sections.length > 0) {
-        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts);
+        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts, periodIsClosed);
         setReportLines(lines);
       } else {
         const simpleLines: ReportLine[] = accountBalances
@@ -167,7 +178,7 @@ export default function ReporteBalanceGeneral() {
     }
   };
 
-  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[]): ReportLine[] => {
+  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[], periodIsClosed: boolean = false): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
 
@@ -257,7 +268,9 @@ export default function ReporteBalanceGeneral() {
     const rootExpenseAccounts = pnlAccounts.filter(a => (a.account_type === "gasto" || a.account_type === "costo") && a.parent_account_id === null);
     const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
     const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
-    const periodResult = totalIngresos - totalGastos;
+    // Si el período está cerrado, el cierre contable ya capitalizó el resultado
+    // en el patrimonio. Mostrarlo de nuevo causaría doble suma.
+    const periodResult = periodIsClosed ? 0 : (totalIngresos - totalGastos);
 
     for (const section of sections) {
       if (!section.show_in_report) continue;

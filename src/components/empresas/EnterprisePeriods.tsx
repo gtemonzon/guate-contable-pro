@@ -251,7 +251,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     {activePeriodId === period.id ? (
-                      <Button size="sm" variant="outline" disabled>
+                      <Button size="sm" variant="outline" disabled title="Período actualmente activo">
                         <CheckCircle2 className="h-4 w-4" />
                       </Button>
                     ) : (
@@ -263,7 +263,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                         title={
                           period.status !== "abierto"
                             ? "Solo puedes activar períodos abiertos"
-                            : "Activar este período"
+                            : "Activar este período como el período de trabajo"
                         }
                       >
                         Activar
@@ -273,6 +273,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleEdit(period)}
+                      title="Editar fechas y datos del período"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -281,7 +282,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                         size="sm"
                         variant="ghost"
                         onClick={() => setClosingWizardPeriod(period)}
-                        title="Iniciar asistente de cierre"
+                        title="Iniciar asistente de cierre del período (genera partidas de costo de ventas, cierre y traslado)"
                       >
                         <PlayCircle className="h-4 w-4 mr-1" />
                         Cerrar
@@ -291,6 +292,7 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleReopenPeriod(period.id, period)}
+                        title="Reabrir período cerrado (permite registrar y modificar partidas nuevamente)"
                       >
                         <LockOpen className="h-4 w-4" />
                       </Button>

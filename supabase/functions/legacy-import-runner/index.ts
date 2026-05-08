@@ -1718,6 +1718,12 @@ async function runImport(jobId: string) {
         const entryNumber = `${ymKey}-${String(next).padStart(5, "0")}`;
         const generalDescription = entry.description || "Importación legado";
 
+        // Detectar tipo de partida desde la descripción
+        const upperDesc = generalDescription.toUpperCase();
+        let detectedType: "diario" | "apertura" | "cierre" = "diario";
+        if (/\b(RE)?APERTURA\b/.test(upperDesc)) detectedType = "apertura";
+        else if (/\bCIERRE\b/.test(upperDesc)) detectedType = "cierre";
+
         prepared.push({
           header: {
             enterprise_id: enterpriseId,
@@ -1725,7 +1731,7 @@ async function runImport(jobId: string) {
             entry_number: entryNumber,
             entry_date: entry.date,
             description: generalDescription,
-            entry_type: "diario",
+            entry_type: detectedType,
             document_reference: entry.reference || null,
             currency_code: "GTQ",
             exchange_rate: 1,
