@@ -4325,6 +4325,18 @@ export type Database = {
           supplier_nit: string
         }[]
       }
+      get_book_summaries_latest: {
+        Args: { p_enterprise_id: number }
+        Returns: {
+          base: number
+          cnt: number
+          ledger: string
+          month: number
+          total: number
+          vat: number
+          year: number
+        }[]
+      }
       get_enterprise_functional_currency: {
         Args: { _enterprise_id: number }
         Returns: string
