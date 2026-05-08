@@ -295,13 +295,27 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: E
             </Tooltip>
           )}
           {onVoid && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => onVoid(entry.id)}>
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => onVoid(entry.id)}>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Anular partida (genera reverso)</p>
+              </TooltipContent>
+            </Tooltip>
           )}
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Cerrar panel</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
