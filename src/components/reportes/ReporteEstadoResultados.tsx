@@ -350,7 +350,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "subtotal",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: subtotal,
           isBold: true,
           showLine: true,
