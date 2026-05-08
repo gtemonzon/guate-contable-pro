@@ -219,6 +219,37 @@ export default function ReporteEstadoResultados() {
     }
   };
 
+  // Estandariza nombres de líneas de resultado: usa "Margen / Resultado" en lugar
+  // de "Utilidad", para que sea sign-neutral cuando hay pérdidas.
+  const normalizeResultLabel = (label: string): string => {
+    const l = label.toLowerCase().trim();
+    // Margen Bruto
+    if (l.includes('utilidad bruta') || l.includes('pérdida bruta') || l.includes('perdida bruta')) {
+      return 'MARGEN BRUTO';
+    }
+    // Resultado en Operación
+    if (
+      l.includes('utilidad de operación') || l.includes('utilidad de operacion') ||
+      l.includes('utilidad en operación') || l.includes('utilidad en operacion') ||
+      l.includes('utilidad operativa') ||
+      l.includes('pérdida de operación') || l.includes('perdida de operacion') ||
+      l.includes('pérdida en operación') || l.includes('perdida en operacion') ||
+      l.includes('pérdida operativa') || l.includes('perdida operativa')
+    ) {
+      return 'RESULTADO EN OPERACIÓN';
+    }
+    // Resultado Neto
+    if (
+      l.includes('utilidad neta') || l.includes('utilidad del período') || l.includes('utilidad del periodo') ||
+      l.includes('pérdida neta') || l.includes('perdida neta') ||
+      l.includes('pérdida del período') || l.includes('perdida del periodo') ||
+      l.includes('resultado del período') || l.includes('resultado del periodo')
+    ) {
+      return 'RESULTADO NETO';
+    }
+    return label;
+  };
+
   const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[]): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
@@ -319,7 +350,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "subtotal",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: subtotal,
           isBold: true,
           showLine: true,
@@ -358,7 +389,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "total",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: total,
           isBold: true,
           showLine: true,
@@ -411,7 +442,7 @@ export default function ReporteEstadoResultados() {
 
         lines.push({
           type: "calculated",
-          label: section.section_name,
+          label: normalizeResultLabel(section.section_name),
           amount: calculated,
           isBold: true,
           showLine: true,
