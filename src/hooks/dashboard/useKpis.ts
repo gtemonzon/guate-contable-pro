@@ -1,6 +1,9 @@
 /**
  * useKpis — fetches KPI data (activos, pasivos, utilidad, liquidez)
- * using the DB-side `get_account_balances_by_period` and `get_period_profit` functions.
+ *
+ * Performance: 1 round-trip via the consolidated `get_dashboard_kpis` RPC,
+ * which returns current + previous balances and current + previous profit
+ * in a single JSONB payload.
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,7 +25,6 @@ interface RpcBalanceRow {
   balance: number;
 }
 
-// Normalise RPC result (account_id → id) to match AccountBalance
 function normaliseRpcRows(rows: RpcBalanceRow[]) {
   return rows.map((r) => ({
     id:           r.account_id,
@@ -31,27 +33,8 @@ function normaliseRpcRows(rows: RpcBalanceRow[]) {
     account_name: r.account_name,
     account_type: r.account_type as import('@/domain/accounting/types').AccountType,
     balance_type: r.balance_type as import('@/domain/accounting/types').BalanceType | null,
-    balance:      r.balance,
+    balance:      Number(r.balance ?? 0),
   }));
-}
-
-async function fetchBalances(enterpriseId: number, endDate: string) {
-  const { data, error } = await supabase.rpc('get_account_balances_by_period', {
-    p_enterprise_id: enterpriseId,
-    p_end_date: endDate,
-  });
-  if (error) throw error;
-  return normaliseRpcRows((data ?? []) as RpcBalanceRow[]);
-}
-
-async function fetchProfit(enterpriseId: number, startDate: string, endDate: string) {
-  const { data, error } = await supabase.rpc('get_period_profit', {
-    p_enterprise_id: enterpriseId,
-    p_start_date: startDate,
-    p_end_date: endDate,
-  });
-  if (error) throw error;
-  return Number(data ?? 0);
 }
 
 function buildDateRange(period: ActivePeriod | null): {
@@ -91,22 +74,35 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
     staleTime: 60_000,
     queryFn: async () => {
       const { startDate, endDate, prevStartDate, prevEndDate } = buildDateRange(activePeriod);
-      const eid = enterpriseId!;
 
-      const [curr, prev, profit, prevProfit] = await Promise.all([
-        fetchBalances(eid, endDate),
-        fetchBalances(eid, prevEndDate),
-        fetchProfit(eid, startDate, endDate),
-        fetchProfit(eid, prevStartDate, prevEndDate),
-      ]);
+      const { data, error } = await supabase.rpc('get_dashboard_kpis', {
+        p_enterprise_id: enterpriseId!,
+        p_start_date:    startDate,
+        p_end_date:      endDate,
+        p_prev_start:    prevStartDate,
+        p_prev_end:      prevEndDate,
+      });
+      if (error) throw error;
+
+      const payload = (data ?? {}) as {
+        current_balances?:  RpcBalanceRow[];
+        previous_balances?: RpcBalanceRow[];
+        current_profit?:    number;
+        previous_profit?:   number;
+      };
+
+      const curr = normaliseRpcRows(payload.current_balances ?? []);
+      const prev = normaliseRpcRows(payload.previous_balances ?? []);
+      const profit     = Number(payload.current_profit  ?? 0);
+      const prevProfit = Number(payload.previous_profit ?? 0);
 
       const totalActivos = sumBalancesByType(curr, 'activo');
       const totalPasivos = sumBalancesByType(curr, 'pasivo');
       const prevActivos  = sumBalancesByType(prev, 'activo');
       const prevPasivos  = sumBalancesByType(prev, 'pasivo');
 
-      const currentAssets = sumBalancesByCodePrefix(curr, '1.1', '1-1', '11');
-      const currentLiab   = sumBalancesByCodePrefix(curr, '2.1', '2-1', '21');
+      const currentAssets  = sumBalancesByCodePrefix(curr, '1.1', '1-1', '11');
+      const currentLiab    = sumBalancesByCodePrefix(curr, '2.1', '2-1', '21');
       const prevCurrAssets = sumBalancesByCodePrefix(prev, '1.1', '1-1', '11');
       const prevCurrLiab   = sumBalancesByCodePrefix(prev, '2.1', '2-1', '21');
 

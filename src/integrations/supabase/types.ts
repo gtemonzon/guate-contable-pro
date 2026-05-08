@@ -4337,6 +4337,16 @@ export type Database = {
           year: number
         }[]
       }
+      get_dashboard_kpis: {
+        Args: {
+          p_end_date: string
+          p_enterprise_id: number
+          p_prev_end: string
+          p_prev_start: string
+          p_start_date: string
+        }
+        Returns: Json
+      }
       get_enterprise_functional_currency: {
         Args: { _enterprise_id: number }
         Returns: string
