@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type FormatType = 'balance_general' | 'estado_resultados';
-export type SectionType = 'group' | 'subtotal' | 'total' | 'calculated';
+export type SectionType = 'group' | 'subtotal' | 'total' | 'calculated' | 'grand_total';
 
 export interface SectionAccount {
   id?: number;

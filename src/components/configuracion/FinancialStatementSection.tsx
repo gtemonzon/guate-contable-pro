@@ -23,6 +23,7 @@ const SECTION_TYPE_LABELS: Record<SectionType, string> = {
   subtotal: 'Subtotal',
   total: 'Total',
   calculated: 'Calculado',
+  grand_total: 'Total General',
 };
 
 const SECTION_TYPE_COLORS: Record<SectionType, string> = {
@@ -30,6 +31,7 @@ const SECTION_TYPE_COLORS: Record<SectionType, string> = {
   subtotal: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   total: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   calculated: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  grand_total: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
 };
 
 export function FinancialStatementSection({
@@ -88,6 +90,7 @@ export function FinancialStatementSection({
               <SelectItem value="subtotal">Subtotal</SelectItem>
               <SelectItem value="total">Total</SelectItem>
               <SelectItem value="calculated">Calculado</SelectItem>
+              <SelectItem value="grand_total">Total General</SelectItem>
             </SelectContent>
           </Select>
 

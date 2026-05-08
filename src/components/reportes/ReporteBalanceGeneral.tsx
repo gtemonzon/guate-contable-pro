@@ -333,7 +333,32 @@ export default function ReporteBalanceGeneral() {
       } else if (section.section_type === "calculated") {
         sectionTotals.set(section.section_name, periodResult);
         lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
+      } else if (section.section_type === "grand_total") {
+        // Suma todos los "total" anteriores excepto el primero (TOTAL ACTIVO).
+        // Esto permite mostrar "TOTAL PASIVO Y CAPITAL" como suma de TOTAL PASIVO + TOTAL CAPITAL.
+        const previousTotals = sections
+          .slice(0, sections.indexOf(section))
+          .filter(s => s.section_type === 'total');
+        const grandTotal = previousTotals.slice(1).reduce(
+          (sum, s) => sum + (sectionTotals.get(s.section_name) || 0),
+          0
+        );
+        sectionTotals.set(section.section_name, grandTotal);
+        lines.push({ type: "total", label: section.section_name, amount: grandTotal, isBold: true, showLine: true });
       }
+    }
+
+    // Compatibilidad con formatos guardados antes de añadir "grand_total":
+    // si hay 2+ "total" y no existe ningún "grand_total", añadimos automáticamente
+    // "TOTAL PASIVO Y CAPITAL" para que el balance cuadre visualmente.
+    const hasGrandTotal = sections.some(s => s.section_type === 'grand_total');
+    const totalSections = sections.filter(s => s.section_type === 'total');
+    if (!hasGrandTotal && totalSections.length >= 2) {
+      const grandTotal = totalSections.slice(1).reduce(
+        (sum, s) => sum + (sectionTotals.get(s.section_name) || 0),
+        0
+      );
+      lines.push({ type: "total", label: "TOTAL PASIVO Y CAPITAL", amount: grandTotal, isBold: true, showLine: true });
     }
 
     return lines;
