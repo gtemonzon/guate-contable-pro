@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Calendar, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, X, MoreHorizontal } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface YearMonthFilterProps {
   entries: { entry_date: string }[];
@@ -147,34 +148,96 @@ export default function YearMonthFilter({
           </Badge>
         </Button>
 
-        {/* Botones de Años */}
-        {availableYears.map((year) => (
-          <Button
-            key={year}
-            variant={isYearSelected(year) ? "default" : "outline"}
-            size="sm"
-            onClick={() => handleYearClick(year)}
-            className={cn(
-              "transition-all",
-              isYearSelected(year) && "ring-2 ring-primary ring-offset-2"
-            )}
-          >
-            {year}
-            <Badge 
-              variant={isYearSelected(year) ? "secondary" : "outline"} 
-              className="ml-2 text-xs"
-            >
-              {countByYear[year] || 0}
-            </Badge>
-            {isYearSelected(year) && availableMonthsForYear.length > 0 && (
-              expandedYear === year ? (
-                <ChevronUp className="ml-1 h-3 w-3" />
-              ) : (
-                <ChevronDown className="ml-1 h-3 w-3" />
-              )
-            )}
-          </Button>
-        ))}
+        {/* Botones de Años — recientes 5 visibles, resto en dropdown */}
+        {(() => {
+          const RECENT_COUNT = 5;
+          const recentYears = availableYears.slice(0, RECENT_COUNT);
+          const olderYears = availableYears.slice(RECENT_COUNT);
+          const selectedInOlder =
+            selectedYear && selectedYear !== "all" && olderYears.includes(selectedYear);
+          // Si el año seleccionado está en "older", lo fijamos también en visibles
+          const visibleYears = selectedInOlder
+            ? [...recentYears, selectedYear!]
+            : recentYears;
+
+          return (
+            <>
+              {visibleYears.map((year) => (
+                <Button
+                  key={year}
+                  variant={isYearSelected(year) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleYearClick(year)}
+                  aria-selected={isYearSelected(year)}
+                  className={cn(
+                    "transition-all",
+                    isYearSelected(year) && "ring-2 ring-primary ring-offset-2"
+                  )}
+                >
+                  {year}
+                  <Badge
+                    variant={isYearSelected(year) ? "secondary" : "outline"}
+                    className="ml-2 text-xs"
+                  >
+                    {countByYear[year] || 0}
+                  </Badge>
+                  {isYearSelected(year) && availableMonthsForYear.length > 0 && (
+                    expandedYear === year ? (
+                      <ChevronUp className="ml-1 h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="ml-1 h-3 w-3" />
+                    )
+                  )}
+                </Button>
+              ))}
+
+              {olderYears.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={selectedInOlder ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "transition-all",
+                        selectedInOlder && "ring-2 ring-primary ring-offset-2"
+                      )}
+                    >
+                      <MoreHorizontal className="h-4 w-4 mr-1" />
+                      Más
+                      <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-1" align="end">
+                    <div className="max-h-72 overflow-y-auto flex flex-col">
+                      {olderYears.map((year) => (
+                        <button
+                          key={year}
+                          type="button"
+                          onClick={() => handleYearClick(year)}
+                          aria-selected={isYearSelected(year)}
+                          className={cn(
+                            "flex items-center justify-between rounded-sm px-2 py-1.5 text-sm",
+                            "hover:bg-accent hover:text-accent-foreground",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isYearSelected(year) && "bg-primary text-primary-foreground hover:bg-primary/90"
+                          )}
+                        >
+                          <span>{year}</span>
+                          <Badge
+                            variant={isYearSelected(year) ? "secondary" : "outline"}
+                            className="ml-2 text-xs"
+                          >
+                            {countByYear[year] || 0}
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Selector de Meses (visible cuando hay un año seleccionado) */}
