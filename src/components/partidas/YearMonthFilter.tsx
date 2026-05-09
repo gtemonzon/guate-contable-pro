@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Calendar, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, X, MoreHorizontal } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface YearMonthFilterProps {
   entries: { entry_date: string }[];
