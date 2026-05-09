@@ -90,7 +90,7 @@ export async function importLegacyData(
     account_code: a.code,
     account_name: a.name,
     account_type: a.type,
-    level: Math.max(1, Math.ceil(a.code.length / 2)),
+    level: a.code.length === 8 ? 5 : a.code.length === 6 ? 4 : a.code.length === 4 ? 3 : a.code.length === 2 ? 2 : 1,
     allows_movement: a.allowsMovement,
     requires_cost_center: false,
     is_active: true,
