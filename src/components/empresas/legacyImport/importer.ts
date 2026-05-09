@@ -90,7 +90,7 @@ export async function importLegacyData(
     account_code: a.code,
     account_name: a.name,
     account_type: a.type,
-    level: Math.max(1, Math.ceil(a.code.length / 2)),
+    level: a.code.length === 8 ? 5 : a.code.length === 6 ? 4 : a.code.length === 4 ? 3 : a.code.length === 2 ? 2 : 1,
     allows_movement: a.allowsMovement,
     requires_cost_center: false,
     is_active: true,
@@ -105,6 +105,13 @@ export async function importLegacyData(
     else result.accountsCreated += part.length;
     onProgress({ step: "Insertando cuentas...", current: result.accountsCreated, total: accountRows.length });
   }
+
+  // Vincular cuentas padre por prefijo de código (longitud fija 1/2/4/6/8)
+  // y ajustar level + allows_movement automáticamente.
+  const { error: linkErr } = await supabase.rpc("link_account_parents_by_code", {
+    p_enterprise_id: enterpriseId,
+  });
+  if (linkErr) result.errors.push(`Jerarquía cuentas: ${linkErr.message}`);
 
   const { data: accRows } = await supabase
     .from("tab_accounts")
