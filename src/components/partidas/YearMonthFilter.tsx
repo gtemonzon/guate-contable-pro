@@ -238,6 +238,7 @@ export default function YearMonthFilter({
             </>
           );
         })()}
+      </div>
 
       {/* Selector de Meses (visible cuando hay un año seleccionado) */}
       {selectedYear && expandedYear === selectedYear && availableMonthsForYear.length > 0 && (
