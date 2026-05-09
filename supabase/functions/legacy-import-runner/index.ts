@@ -1318,7 +1318,7 @@ async function runImport(jobId: string) {
   try {
     // ---------- 1. Cuentas ----------
     const levelByLen = (len: number) =>
-      len === 6 ? 4 : len === 4 ? 3 : len === 2 ? 2 : 1;
+      len === 8 ? 5 : len === 6 ? 4 : len === 4 ? 3 : len === 2 ? 2 : 1;
     const accountRows = ds.accounts.map((a) => ({
       enterprise_id: enterpriseId,
       account_code: a.code,
