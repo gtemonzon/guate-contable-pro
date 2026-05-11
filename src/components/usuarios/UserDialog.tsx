@@ -143,6 +143,16 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     fetchEnterprises(enterprisesTenantId);
   }, [open, enterprisesTenantId]);
 
+  // When the effective tenant changes, drop any enterprise role assignments
+  // that no longer belong to the selected tenant, and allow tenant-admin
+  // auto-assignment to re-run for the new tenant.
+  useEffect(() => {
+    if (!open) return;
+    if (isEditing) return; // editing flow loads roles explicitly
+    setEnterpriseRoles([]);
+    setAutoAssignedTenantAdminRoles(false);
+  }, [enterprisesTenantId, open, isEditing]);
+
   // Fetch tenants when tenant admin toggle is activated
   useEffect(() => {
     if (isTenantAdmin && currentUserIsSuperAdmin && tenants.length === 0) {
