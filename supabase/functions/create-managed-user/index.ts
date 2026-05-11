@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const requestedTenantId = Number(body.tenant_id);
     const isTenantAdmin = Boolean(body.is_tenant_admin);
     const isActive = body.is_active ?? true;
-    const enterpriseRoles = Array.isArray(body.enterprise_roles) ? body.enterprise_roles : [];
+    const requestedEnterpriseRoles = Array.isArray(body.enterprise_roles) ? body.enterprise_roles : [];
 
     if (!email || !password || !fullName) {
       return jsonResponse({ error: "Email, nombre y contraseña son obligatorios" }, 400);
@@ -100,19 +100,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "La oficina contable seleccionada no es válida" }, 400);
     }
 
+    const { data: tenantEnterprises, error: enterprisesError } = await adminClient
+      .from("tab_enterprises")
+      .select("id")
+      .eq("tenant_id", requestedTenantId)
+      .eq("is_active", true);
+
+    if (enterprisesError) {
+      return jsonResponse({ error: "No se pudieron validar las empresas asignadas" }, 400);
+    }
+
+    const validEnterpriseIds = new Set((tenantEnterprises || []).map((item) => item.id));
+    const enterpriseRoles = isTenantAdmin
+      ? Array.from(validEnterpriseIds).map((enterpriseId) => ({
+          enterprise_id: enterpriseId,
+          role: "enterprise_admin",
+        }))
+      : requestedEnterpriseRoles.filter((item, index, array) => {
+          if (!item?.enterprise_id || !item.role) return false;
+          return array.findIndex((candidate) => candidate.enterprise_id === item.enterprise_id) === index;
+        });
+
     if (enterpriseRoles.length > 0) {
-      const enterpriseIds = [...new Set(enterpriseRoles.map((item) => item.enterprise_id))];
-      const { data: validEnterprises, error: enterprisesError } = await adminClient
-        .from("tab_enterprises")
-        .select("id")
-        .eq("tenant_id", requestedTenantId)
-        .in("id", enterpriseIds);
-
-      if (enterprisesError) {
-        return jsonResponse({ error: "No se pudieron validar las empresas asignadas" }, 400);
-      }
-
-      const validEnterpriseIds = new Set((validEnterprises || []).map((item) => item.id));
       const invalidAssignment = enterpriseRoles.find((item) => !validEnterpriseIds.has(item.enterprise_id));
       if (invalidAssignment) {
         return jsonResponse({ error: "Hay empresas asignadas que no pertenecen a la oficina contable seleccionada" }, 400);
