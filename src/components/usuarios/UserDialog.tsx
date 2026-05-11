@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -79,6 +79,9 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   const [currentUserIsSuperAdmin, setCurrentUserIsSuperAdmin] = useState(false);
   const [currentUserTenantId, setCurrentUserTenantId] = useState<number | null>(null);
   const [autoAssignedTenantAdminRoles, setAutoAssignedTenantAdminRoles] = useState(false);
+  const [loadingEnterprises, setLoadingEnterprises] = useState(false);
+  const [currentUserInfoLoaded, setCurrentUserInfoLoaded] = useState(false);
+  const enterpriseRequestRef = useRef(0);
   const isEditing = !!user;
 
   const form = useForm<UserFormData>({
@@ -109,9 +112,23 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     return currentUserTenantId ?? userTenantId;
   }, [currentUserIsSuperAdmin, currentUserTenantId, selectedTenantId, user]);
 
+  const sanitizedEnterpriseRoles = useMemo(() => {
+    const validEnterpriseIds = new Set(enterprises.map((enterprise) => enterprise.id));
+    const seen = new Set<number>();
+
+    return enterpriseRoles.filter((role) => {
+      if (!role.role || seen.has(role.enterprise_id)) return false;
+      if (!validEnterpriseIds.has(role.enterprise_id)) return false;
+
+      seen.add(role.enterprise_id);
+      return true;
+    });
+  }, [enterpriseRoles, enterprises]);
+
   useEffect(() => {
     if (open) {
       setAutoAssignedTenantAdminRoles(false);
+      setCurrentUserInfoLoaded(false);
       fetchCurrentUserInfo();
       if (user) {
         form.reset({
@@ -140,18 +157,19 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   // Fetch enterprises according to the effective tenant context
   useEffect(() => {
     if (!open) return;
+    if (!currentUserInfoLoaded) return;
     fetchEnterprises(enterprisesTenantId);
-  }, [open, enterprisesTenantId]);
+  }, [open, currentUserInfoLoaded, enterprisesTenantId]);
 
   // When the effective tenant changes, drop any enterprise role assignments
   // that no longer belong to the selected tenant, and allow tenant-admin
   // auto-assignment to re-run for the new tenant.
   useEffect(() => {
     if (!open) return;
-    if (isEditing) return; // editing flow loads roles explicitly
+    setEnterprises([]);
     setEnterpriseRoles([]);
     setAutoAssignedTenantAdminRoles(false);
-  }, [enterprisesTenantId, open, isEditing]);
+  }, [enterprisesTenantId, open]);
 
   // Fetch tenants when tenant admin toggle is activated
   useEffect(() => {
@@ -182,6 +200,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       }
     } catch (error) {
       console.error("Error fetching current user info:", error);
+    } finally {
+      setCurrentUserInfoLoaded(true);
     }
   };
 
@@ -201,7 +221,17 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
   };
 
   const fetchEnterprises = async (tenantId: number | null) => {
+    const requestId = ++enterpriseRequestRef.current;
+
+    if (!tenantId) {
+      setLoadingEnterprises(false);
+      setEnterprises([]);
+      return;
+    }
+
     try {
+      setLoadingEnterprises(true);
+
       let query = supabase
         .from("tab_enterprises")
         .select("id, business_name")
@@ -215,11 +245,18 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       const { data, error } = await query;
 
       if (error) throw error;
+      if (requestId !== enterpriseRequestRef.current) return;
       setEnterprises(data || []);
     } catch (error: unknown) {
+      if (requestId !== enterpriseRequestRef.current) return;
+      setEnterprises([]);
       toast.error("Error al cargar empresas", {
         description: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      if (requestId === enterpriseRequestRef.current) {
+        setLoadingEnterprises(false);
+      }
     }
   };
 
@@ -321,6 +358,16 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     // For non-super admins creating tenant admins, use their own tenant
     const finalTenantId = data.selected_tenant_id || currentUserTenantId;
 
+    if (!finalTenantId) {
+      toast.error("Debe seleccionar la oficina contable del usuario");
+      return;
+    }
+
+    if (loadingEnterprises) {
+      toast.error("Espera a que termine de cargar la lista de empresas");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -350,8 +397,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
 
         if (deleteEntError) throw deleteEntError;
 
-        if (enterpriseRoles.length > 0) {
-          const enterpriseRelations = enterpriseRoles.map((er) => ({
+        if (sanitizedEnterpriseRoles.length > 0) {
+          const enterpriseRelations = sanitizedEnterpriseRoles.map((er) => ({
             user_id: user.id,
             enterprise_id: er.enterprise_id,
             role: er.role,
@@ -374,8 +421,8 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           console.error("Error deleting old roles:", deleteRolesError);
         }
 
-        if (enterpriseRoles.length > 0) {
-          const roleRecords = enterpriseRoles.map((er) => ({
+        if (sanitizedEnterpriseRoles.length > 0) {
+          const roleRecords = sanitizedEnterpriseRoles.map((er) => ({
             user_id: user.id,
             enterprise_id: er.enterprise_id,
             role: er.role as Database['public']['Enums']['app_role'],
@@ -406,7 +453,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
             tenant_id: finalTenantId,
             is_tenant_admin: data.is_tenant_admin,
             is_active: data.is_active,
-            enterprise_roles: enterpriseRoles,
+            enterprise_roles: sanitizedEnterpriseRoles,
           },
         });
 
@@ -542,7 +589,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                 />
 
                 {/* Tenant selector - only visible for super admins when tenant admin is enabled */}
-                {isTenantAdmin && currentUserIsSuperAdmin && (
+                {currentUserIsSuperAdmin && (
                   <FormField
                     control={form.control}
                     name="selected_tenant_id"
@@ -553,7 +600,9 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                           Oficina Contable (Tenant)
                         </FormLabel>
                         <FormDescription className="mb-2">
-                          Selecciona la oficina contable que administrará este usuario
+                          {isTenantAdmin
+                            ? "Selecciona la oficina contable que administrará este usuario"
+                            : "Selecciona la oficina contable a la que pertenecerá este usuario"}
                         </FormDescription>
                         <Select
                           value={field.value?.toString() || ""}
@@ -621,8 +670,17 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                   <p className="text-sm text-muted-foreground">
                     Asigna un rol específico para cada empresa. El rol determina los permisos del usuario en esa empresa.
                   </p>
-                  
-                  {enterprises.length === 0 ? (
+
+                  {currentUserIsSuperAdmin && !selectedTenantId ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      Selecciona primero una oficina contable para cargar sus empresas
+                    </p>
+                  ) : loadingEnterprises ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cargando empresas...
+                    </div>
+                  ) : enterprises.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-4 text-center">
                       No hay empresas disponibles
                     </p>
@@ -672,7 +730,7 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
               </Button>
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !currentUserInfoLoaded || (currentUserIsSuperAdmin && !selectedTenantId)}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEditing ? "Actualizar" : "Crear"}
