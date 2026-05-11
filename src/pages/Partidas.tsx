@@ -106,6 +106,7 @@ export default function Partidas() {
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [splitViewOpen, setSplitViewOpen] = useState(true);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
+  const [yearCounts, setYearCounts] = useState<Record<string, number>>({});
   
   // Filtros
   const [filterNumber, setFilterNumber] = useState("");
