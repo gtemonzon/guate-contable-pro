@@ -457,7 +457,7 @@ const Cuentas = () => {
                 <SelectItem value="all">Todos los tipos</SelectItem>
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="pasivo">Pasivo</SelectItem>
-                <SelectItem value="capital">Capital</SelectItem>
+                <SelectItem value="capital">Patrimonio</SelectItem>
                 <SelectItem value="ingreso">Ingreso</SelectItem>
                 <SelectItem value="gasto">Gasto</SelectItem>
                 <SelectItem value="costo">Costo</SelectItem>
