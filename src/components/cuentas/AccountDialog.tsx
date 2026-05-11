@@ -387,7 +387,7 @@ export function AccountDialog({
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Capital, Ingreso | Indiferente: Permite sobregiro
+                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Patrimonio, Ingreso | Indiferente: Permite sobregiro
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
