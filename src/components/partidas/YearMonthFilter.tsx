@@ -11,6 +11,8 @@ interface YearMonthFilterProps {
   selectedMonths: number[];
   onYearChange: (year: string | null) => void;
   onMonthsChange: (months: number[]) => void;
+  /** Optional override for available years and per-year counts (used when entries are loaded lazily by year). */
+  yearCountsOverride?: Record<string, number>;
 }
 
 const MONTH_NAMES = [
