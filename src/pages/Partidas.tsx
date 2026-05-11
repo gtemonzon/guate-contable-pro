@@ -302,6 +302,12 @@ export default function Partidas() {
     }
   };
 
+  // Re-apply filters whenever entries or filter state changes
+  useEffect(() => {
+    applyFilters();
+    setCurrentPage(1);
+  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths, sortField, sortDir]);
+
   const fetchOpenPeriods = async (enterpriseId: string) => {
     try {
       const { data, error } = await supabase
