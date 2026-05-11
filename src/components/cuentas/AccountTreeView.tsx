@@ -45,7 +45,7 @@ interface AccountTreeViewProps {
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   activo: "Activo",
   pasivo: "Pasivo",
-  capital: "Capital",
+  capital: "Patrimonio",
   ingreso: "Ingreso",
   gasto: "Gasto",
   costo: "Costo",
