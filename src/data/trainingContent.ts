@@ -113,8 +113,12 @@ export const TRAINING_PHASES: Phase[] = [
           "El sistema asigna numeración secuencial atómica con formato PREFIX-YYYY-MM-#### al contabilizar.",
           "Soporta múltiples monedas, vínculo con facturas, automatización de líneas bancarias y gestión de cheques.",
           "Las partidas anuladas generan una contrapartida automática (REV-) vinculada bidireccionalmente.",
+          "Carga por año: la página muestra los conteos reales por año/mes en los tabs y carga el detalle completo solo del año seleccionado (por defecto el año actual). Esto evita el antiguo tope de 1,000 registros y mantiene la vista rápida en empresas con miles de partidas.",
         ],
-        tips: ["Usa atajos de teclado: Ctrl+S guardar, Ctrl+Enter contabilizar, Ctrl+N nueva línea."],
+        tips: [
+          "Usa atajos de teclado: Ctrl+Enter contabilizar, Ctrl+Shift+Enter guardar borrador, Alt+N nuevo registro.",
+          "Cambia de tab de año para descargar el detalle de ese año; usa 'Todo' solo cuando necesites consultar varios años.",
+        ],
       },
       {
         id: "2.2-libros-fiscales",
