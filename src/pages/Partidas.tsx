@@ -800,7 +800,7 @@ export default function Partidas() {
           if (!open) setEditingEntry(null);
         }}
         onSuccess={(savedEntryId?: number) => {
-          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           if (savedEntryId) {
             setSelectedEntryId(savedEntryId);
             setSplitViewOpen(true);
@@ -827,7 +827,7 @@ export default function Partidas() {
         periodIsOpen={voidingEntry ? isEntryInOpenPeriod(voidingEntry as JournalEntry) : false}
         canPost={permissions.canPostEntries}
         onSuccess={() => {
-          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           setDetailRefreshKey(k => k + 1);
         }}
       />
@@ -848,7 +848,7 @@ export default function Partidas() {
             document_reference: metadataEntry.document_reference || null,
           }}
           onSuccess={() => {
-            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
             setSelectedEntryId(metadataEntry.id);
             setDetailRefreshKey(k => k + 1);
           }}
@@ -861,7 +861,7 @@ export default function Partidas() {
           onOpenChange={setShowFxWizard}
           enterpriseId={Number(currentEnterpriseId)}
           onPosted={() => {
-            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           }}
         />
       )}
