@@ -60,11 +60,11 @@ const helpSections: HelpSection[] = [
       { title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
     ],
     tips: [
+      "El cambio de 'Capital' a 'Patrimonio' en /cuentas es solo de etiqueta: no requiere migrar datos ni reconfigurar nada.",
+      "Si tras el cierre ve cuentas de gasto/ingreso (cuenta 5, 6 o 7) sin detalle en el Estado de Resultados, era por partidas de cierre mal clasificadas; ya están corregidas.",
+      "El libro diario carga por año por defecto: cambie de tab para que descargue el detalle del año seleccionado sin tope.",
       "Configure las autorizaciones SAT desde Empresas → editar empresa → pestaña 'Libros SAT' antes de imprimir libros oficiales.",
       "El consumo de folios se registra automáticamente con el número real de páginas generadas en el PDF, no estimado.",
-      "Si ve el banner rojo de 'Sin conexión', evite presionar Guardar en formularios largos hasta que la conexión se restablezca.",
-      "Use el botón de copiar al portapapeles en el ISR Trimestral para pegar directamente el monto en el formulario SAT.",
-      "Las operaciones largas (copiar / eliminar) ya no permiten cerrar el modal accidentalmente mientras están en curso.",
     ],
   },
   {
