@@ -388,64 +388,19 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
           return;
         }
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password,
-          options: {
-            data: {
-              full_name: data.full_name,
-            },
+        const { error: createUserError } = await supabase.functions.invoke("create-managed-user", {
+          body: {
+            email: data.email,
+            password: data.password,
+            full_name: data.full_name,
+            tenant_id: finalTenantId,
+            is_tenant_admin: data.is_tenant_admin,
+            is_active: data.is_active,
+            enterprise_roles: enterpriseRoles,
           },
         });
 
-        if (authError) throw authError;
-        if (!authData.user) throw new Error("No se pudo crear el usuario");
-
-        // The trigger will create the user in tab_users
-        // Wait a bit for the trigger to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Update user info including tenant admin status
-        const { error: userError } = await supabase
-          .from("tab_users")
-          .update({
-            is_active: data.is_active,
-            is_tenant_admin: data.is_tenant_admin,
-            tenant_id: finalTenantId,
-          })
-          .eq("id", authData.user.id);
-
-        if (userError) throw userError;
-
-        // Add enterprise assignments
-        if (enterpriseRoles.length > 0) {
-          const enterpriseRelations = enterpriseRoles.map((er) => ({
-            user_id: authData.user.id,
-            enterprise_id: er.enterprise_id,
-            role: er.role,
-          }));
-
-          const { error: entError } = await supabase
-            .from("tab_user_enterprises")
-            .insert(enterpriseRelations);
-
-          if (entError) throw entError;
-
-          // Also insert into user_roles
-          const roleRecords = enterpriseRoles.map((er) => ({
-            user_id: authData.user.id,
-            enterprise_id: er.enterprise_id,
-            role: er.role as Database['public']['Enums']['app_role'],
-          }));
-
-          const { error: rolesError } = await supabase
-            .from("user_roles")
-            .insert(roleRecords);
-
-          if (rolesError) {
-            console.error("Error inserting roles:", rolesError);
-          }
-        }
+        if (createUserError) throw createUserError;
 
         toast.success("Usuario creado correctamente");
       }
