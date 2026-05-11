@@ -217,12 +217,16 @@ export const TRAINING_PHASES: Phase[] = [
         icon: FileBarChart,
         route: "/reportes",
         content: [
-          "Balance General: el 'Resultado del Período' se calcula en paralelo desde el Estado de Resultados.",
-          "Estado de Resultados: usa el formato configurable desde el Diseñador de Estados Financieros.",
+          "Balance General: el 'Resultado del Período' se calcula en paralelo desde el Estado de Resultados. El total 'Pasivo y Patrimonio' suma correctamente las cuentas 2 (Pasivo) más las cuentas 3 (Patrimonio).",
+          "Estado de Resultados: usa el formato configurable desde el Diseñador de Estados Financieros. El 'Resultado Neto' acumula correctamente los grupos posteriores al último subtotal calculado (ej. 'OTROS INGRESOS Y GASTOS').",
+          "Exclusión automática de partidas de cierre: los reportes operativos (Estado de Resultados, Balance General, Mayor, Variaciones) excluyen partidas con entry_type 'cierre' (CIER, TRAS, APER) para no inflar saldos con traslados de resultado.",
           "Libro Diario, Mayor, Compras, Ventas y Bancos: con exportación a Excel y PDF, con manejo de folios para libros autorizados.",
           "Análisis de Variaciones: compara saldos entre dos períodos con filtro de actividad.",
         ],
-        tips: ["Configura el formato de tus estados financieros en Configuración > Diseñador de Estados Financieros."],
+        tips: [
+          "Configura el formato de tus estados financieros en Configuración > Diseñador de Estados Financieros.",
+          "Si una cuenta de gasto/ingreso aparece sin detalle en el Estado de Resultados, probablemente solo tiene movimientos de cierre — esos están correctamente excluidos del operativo.",
+        ],
       },
       {
         id: "3.3-impuestos",
