@@ -49,6 +49,7 @@ export const TRAINING_PHASES: Phase[] = [
         content: [
           "El catálogo es jerárquico: el nivel se deriva automáticamente de la cantidad de segmentos del código (1, 1.1, 1.1.01...).",
           "Marca las cuentas que permiten movimiento (hojas) y las que son de título (totalizadoras).",
+          "Tipos de cuenta: Activo, Pasivo, Patrimonio (cuenta 3, antes llamado 'Capital'; incluye capital aportado y resultados acumulados), Ingresos, Costos y Gastos.",
           "Define cuentas como bancarias, monetarias en moneda extranjera o de tipo indiferente según sea necesario.",
           "Puedes copiar el catálogo de otra empresa para acelerar la configuración.",
         ],
