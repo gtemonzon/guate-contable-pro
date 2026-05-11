@@ -519,6 +519,7 @@ export default function Partidas() {
             selectedMonths={filterMonths}
             onYearChange={setFilterYear}
             onMonthsChange={setFilterMonths}
+            yearCountsOverride={yearCounts}
           />
           
           <div className="h-5 w-px bg-border" />
