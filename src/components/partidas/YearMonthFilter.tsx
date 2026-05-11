@@ -11,6 +11,8 @@ interface YearMonthFilterProps {
   selectedMonths: number[];
   onYearChange: (year: string | null) => void;
   onMonthsChange: (months: number[]) => void;
+  /** Optional override for available years and per-year counts (used when entries are loaded lazily by year). */
+  yearCountsOverride?: Record<string, number>;
 }
 
 const MONTH_NAMES = [
@@ -29,18 +31,24 @@ export default function YearMonthFilter({
   selectedMonths,
   onYearChange,
   onMonthsChange,
+  yearCountsOverride,
 }: YearMonthFilterProps) {
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
-  // Extraer años únicos de las entradas, ordenados de más reciente a más antiguo
+  // Extraer años únicos: prioriza override (cuando se carga por año), si no, deriva de entries
   const availableYears = useMemo(() => {
+    if (yearCountsOverride) {
+      return Object.keys(yearCountsOverride)
+        .filter((k) => k !== "all")
+        .sort((a, b) => parseInt(b) - parseInt(a));
+    }
     const yearsSet = new Set<string>();
     entries.forEach(entry => {
       const year = entry.entry_date.substring(0, 4);
       yearsSet.add(year);
     });
     return Array.from(yearsSet).sort((a, b) => parseInt(b) - parseInt(a));
-  }, [entries]);
+  }, [entries, yearCountsOverride]);
 
   // Extraer meses disponibles para el año seleccionado
   const availableMonthsForYear = useMemo(() => {
@@ -57,15 +65,16 @@ export default function YearMonthFilter({
     return Array.from(monthsSet).sort((a, b) => a - b);
   }, [entries, selectedYear]);
 
-  // Contar registros por año
+  // Contar registros por año (override prioritario)
   const countByYear = useMemo(() => {
+    if (yearCountsOverride) return yearCountsOverride;
     const counts: Record<string, number> = { all: entries.length };
     entries.forEach(entry => {
       const year = entry.entry_date.substring(0, 4);
       counts[year] = (counts[year] || 0) + 1;
     });
     return counts;
-  }, [entries]);
+  }, [entries, yearCountsOverride]);
 
   // Contar registros por mes del año seleccionado
   const countByMonth = useMemo(() => {

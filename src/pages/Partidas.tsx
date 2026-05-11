@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,7 @@ export default function Partidas() {
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
   const [splitViewOpen, setSplitViewOpen] = useState(true);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
+  const [yearCounts, setYearCounts] = useState<Record<string, number>>({});
   
   // Filtros
   const [filterNumber, setFilterNumber] = useState("");
@@ -169,9 +171,9 @@ export default function Partidas() {
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
-    
+
     if (enterpriseId) {
-      fetchEntries(enterpriseId);
+      initializeForEnterprise(enterpriseId);
       fetchOpenPeriods(enterpriseId);
       fetchedEnterpriseRef.current = enterpriseId;
     } else {
@@ -188,13 +190,16 @@ export default function Partidas() {
       if (newEnterpriseId === fetchedEnterpriseRef.current) return;
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
-        fetchEntries(newEnterpriseId);
+        setDefaultYearApplied(false);
+        setFilterYear(null);
+        initializeForEnterprise(newEnterpriseId);
         fetchOpenPeriods(newEnterpriseId);
         fetchedEnterpriseRef.current = newEnterpriseId;
       } else {
         setEntries([]);
         setFilteredEntries([]);
         setOpenPeriods([]);
+        setYearCounts({});
         fetchedEnterpriseRef.current = null;
       }
     };
@@ -208,29 +213,65 @@ export default function Partidas() {
     };
   }, []);
 
+  // Refetch entries when the selected year filter changes (lazy loading per year)
   useEffect(() => {
-    applyFilters();
-    setCurrentPage(1);
-  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths, sortField, sortDir]);
+    if (!currentEnterpriseId) return;
+    if (!defaultYearApplied) return; // initial load handles the first fetch
+    fetchEntries(currentEnterpriseId, filterYear);
+  }, [filterYear, defaultYearApplied, currentEnterpriseId]);
 
-  // Default filter: current year if it has entries, else most recent year with entries
-  useEffect(() => {
-    if (defaultYearApplied || loading || entries.length === 0) return;
-    const years = new Set(entries.map(e => e.entry_date.substring(0, 4)));
-    const currentYear = String(new Date().getFullYear());
-    if (years.has(currentYear)) {
-      setFilterYear(currentYear);
-    } else {
-      const sorted = Array.from(years).sort((a, b) => b.localeCompare(a));
-      if (sorted[0]) setFilterYear(sorted[0]);
-    }
-    setDefaultYearApplied(true);
-  }, [entries, loading, defaultYearApplied]);
-
-  const fetchEntries = async (enterpriseId: string) => {
+  /**
+   * Initial load per enterprise:
+   *  1) Fetch a slim list of entry_dates to know which years exist and their counts (for the tabs).
+   *  2) Pick the default year (current year if it has data, else most recent).
+   *  3) Fetch full entries only for that year.
+   */
+  const initializeForEnterprise = async (enterpriseId: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      setEntries([]);
+      const allDates = await fetchAllRecords<{ entry_date: string }>(
+        supabase
+          .from("tab_journal_entries")
+          .select("entry_date")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .is("deleted_at", null)
+      );
+
+      const counts: Record<string, number> = { all: allDates.length };
+      allDates.forEach((row) => {
+        const y = row.entry_date.substring(0, 4);
+        counts[y] = (counts[y] || 0) + 1;
+      });
+      setYearCounts(counts);
+
+      // Determine default year
+      const years = Object.keys(counts).filter((k) => k !== "all");
+      const currentYear = String(new Date().getFullYear());
+      let defaultYear: string | null = null;
+      if (years.includes(currentYear)) {
+        defaultYear = currentYear;
+      } else if (years.length > 0) {
+        defaultYear = years.sort((a, b) => b.localeCompare(a))[0];
+      }
+
+      setFilterYear(defaultYear);
+      setDefaultYearApplied(true);
+      await fetchEntries(enterpriseId, defaultYear);
+    } catch (error: unknown) {
+      toast({
+        title: "Error al cargar partidas",
+        description: getSafeErrorMessage(error),
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
+  const fetchEntries = async (enterpriseId: string, year: string | null) => {
+    try {
+      setLoading(true);
+      let query = supabase
         .from("tab_journal_entries")
         .select("*")
         .eq("enterprise_id", parseInt(enterpriseId))
@@ -238,13 +279,17 @@ export default function Partidas() {
         .order("entry_date", { ascending: false })
         .order("entry_number", { ascending: false });
 
-      if (error) throw error;
-      
+      if (year) {
+        query = query.gte("entry_date", `${year}-01-01`).lte("entry_date", `${year}-12-31`);
+      }
+
+      const data = await fetchAllRecords<JournalEntry>(query);
+
       const mappedData = (data || []).map(entry => ({
         ...entry,
         status: (entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus,
       }));
-      
+
       setEntries(mappedData);
     } catch (error: unknown) {
       toast({
@@ -256,6 +301,12 @@ export default function Partidas() {
       setLoading(false);
     }
   };
+
+  // Re-apply filters whenever entries or filter state changes
+  useEffect(() => {
+    applyFilters();
+    setCurrentPage(1);
+  }, [entries, filterNumber, filterType, filterStatus, filterYear, filterMonths, sortField, sortDir]);
 
   const fetchOpenPeriods = async (enterpriseId: string) => {
     try {
@@ -468,6 +519,7 @@ export default function Partidas() {
             selectedMonths={filterMonths}
             onYearChange={setFilterYear}
             onMonthsChange={setFilterMonths}
+            yearCountsOverride={yearCounts}
           />
           
           <div className="h-5 w-px bg-border" />
@@ -749,7 +801,7 @@ export default function Partidas() {
           if (!open) setEditingEntry(null);
         }}
         onSuccess={(savedEntryId?: number) => {
-          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           if (savedEntryId) {
             setSelectedEntryId(savedEntryId);
             setSplitViewOpen(true);
@@ -776,7 +828,7 @@ export default function Partidas() {
         periodIsOpen={voidingEntry ? isEntryInOpenPeriod(voidingEntry as JournalEntry) : false}
         canPost={permissions.canPostEntries}
         onSuccess={() => {
-          if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           setDetailRefreshKey(k => k + 1);
         }}
       />
@@ -797,7 +849,7 @@ export default function Partidas() {
             document_reference: metadataEntry.document_reference || null,
           }}
           onSuccess={() => {
-            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
             setSelectedEntryId(metadataEntry.id);
             setDetailRefreshKey(k => k + 1);
           }}
@@ -810,7 +862,7 @@ export default function Partidas() {
           onOpenChange={setShowFxWizard}
           enterpriseId={Number(currentEnterpriseId)}
           onPosted={() => {
-            if (currentEnterpriseId) fetchEntries(currentEnterpriseId);
+            if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
           }}
         />
       )}
