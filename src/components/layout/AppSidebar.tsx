@@ -17,14 +17,14 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface MenuItem {
   title: string;
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   requiredPermission?: keyof ReturnType<typeof useUserPermissions>;
-  children?: MenuItem[]; // sub-items (single nesting level)
+  children?: MenuItem[];
 }
 
 interface MenuSection {
@@ -34,7 +34,8 @@ interface MenuSection {
 
 type MenuItemOrSection = MenuItem | MenuSection;
 
-const STORAGE_KEY = "sidebar-groups-open";
+const STORAGE_KEY = "sidebar-active-group";
+const STORAGE_SUBGROUP_KEY = "sidebar-active-subgroup";
 
 const allMenuItems: MenuItemOrSection[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -66,7 +67,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
       {
         title: "Organización",
-        url: "#organizacion", // group header, not navigable
+        url: "#organizacion",
         icon: Network,
         children: [
           { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
@@ -87,23 +88,6 @@ const allMenuItems: MenuItemOrSection[] = [
   },
 ];
 
-function loadOpenState(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveOpenState(state: Record<string, boolean>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore quota errors
-  }
-}
-
 export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -111,38 +95,23 @@ export function AppSidebar() {
   const { data: openTicketsCount } = useOpenTicketsCount();
   const location = useLocation();
 
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => loadOpenState());
-
-  // Filtrar menú basado en permisos
   const filteredMenuItems = useMemo(() => {
     if (permissions.isLoading) return allMenuItems;
 
     const filterItem = (item: MenuItem): MenuItem | null => {
-      // Filter children first
       let filteredChildren: MenuItem[] | undefined;
       if (item.children) {
-        filteredChildren = item.children
-          .map(filterItem)
-          .filter(Boolean) as MenuItem[];
-        if (filteredChildren.length === 0 && item.url.startsWith("#")) {
-          // Group header without visible children → hide
-          return null;
-        }
+        filteredChildren = item.children.map(filterItem).filter(Boolean) as MenuItem[];
+        if (filteredChildren.length === 0 && item.url.startsWith("#")) return null;
       }
-
-      if (item.requiredPermission && permissions[item.requiredPermission] !== true) {
-        return null;
-      }
-
+      if (item.requiredPermission && permissions[item.requiredPermission] !== true) return null;
       return filteredChildren ? { ...item, children: filteredChildren } : item;
     };
 
     return allMenuItems
       .map((item) => {
         if ("items" in item) {
-          const filteredItems = item.items
-            .map(filterItem)
-            .filter(Boolean) as MenuItem[];
+          const filteredItems = item.items.map(filterItem).filter(Boolean) as MenuItem[];
           if (filteredItems.length === 0) return null;
           return { ...item, items: filteredItems };
         }
@@ -151,85 +120,126 @@ export function AppSidebar() {
       .filter(Boolean) as MenuItemOrSection[];
   }, [permissions]);
 
-  // Determine which group contains the active route
-  const activeGroupTitle = useMemo(() => {
+  // Find which group/subgroup contains the current route
+  const { activeGroupTitle, activeSubgroupTitle } = useMemo(() => {
     const path = location.pathname;
     for (const section of filteredMenuItems) {
-      if ("items" in section) {
-        const match = section.items.some((item) => {
-          if (item.url === path) return true;
-          if (item.children?.some((c) => c.url === path)) return true;
-          return false;
-        });
-        if (match) return section.title;
+      if (!("items" in section)) continue;
+      for (const item of section.items) {
+        if (item.url === path) return { activeGroupTitle: section.title, activeSubgroupTitle: null as string | null };
+        if (item.children?.some((c) => c.url === path)) {
+          return { activeGroupTitle: section.title, activeSubgroupTitle: item.title };
+        }
       }
     }
-    return null;
+    return { activeGroupTitle: null as string | null, activeSubgroupTitle: null as string | null };
   }, [filteredMenuItems, location.pathname]);
 
-  // Force-open the active group when route changes (without closing user-opened ones)
+  // Single open main group (accordion). Initialize from storage or active route.
+  const [openGroup, setOpenGroup] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [openSubgroup, setOpenSubgroup] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(STORAGE_SUBGROUP_KEY);
+    } catch {
+      return null;
+    }
+  });
+
+  // Sync open group with active route
   useEffect(() => {
-    if (!activeGroupTitle) return;
-    setOpenGroups((prev) => {
-      if (prev[activeGroupTitle]) return prev;
-      const next = { ...prev, [activeGroupTitle]: true };
-      saveOpenState(next);
+    if (activeGroupTitle && activeGroupTitle !== openGroup) {
+      setOpenGroup(activeGroupTitle);
+      try { localStorage.setItem(STORAGE_KEY, activeGroupTitle); } catch {}
+    }
+    if (activeSubgroupTitle && activeSubgroupTitle !== openSubgroup) {
+      setOpenSubgroup(activeSubgroupTitle);
+      try { localStorage.setItem(STORAGE_SUBGROUP_KEY, activeSubgroupTitle); } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupTitle, activeSubgroupTitle]);
+
+  const toggleGroup = useCallback((title: string) => {
+    setOpenGroup((prev) => {
+      const next = prev === title ? null : title;
+      try {
+        if (next) localStorage.setItem(STORAGE_KEY, next);
+        else localStorage.removeItem(STORAGE_KEY);
+      } catch {}
       return next;
     });
-  }, [activeGroupTitle]);
+  }, []);
 
-  const isGroupOpen = (title: string): boolean => {
-    if (title in openGroups) return openGroups[title];
-    // Default: open the active group, close the rest
-    return title === activeGroupTitle;
-  };
-
-  const toggleGroup = (title: string) => {
-    setOpenGroups((prev) => {
-      const next = { ...prev, [title]: !isGroupOpen(title) };
-      saveOpenState(next);
+  const toggleSubgroup = useCallback((title: string) => {
+    setOpenSubgroup((prev) => {
+      const next = prev === title ? null : title;
+      try {
+        if (next) localStorage.setItem(STORAGE_SUBGROUP_KEY, next);
+        else localStorage.removeItem(STORAGE_SUBGROUP_KEY);
+      } catch {}
       return next;
     });
-  };
+  }, []);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
-      "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
-      isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "",
+      "relative flex items-center gap-2 rounded-md transition-colors duration-150",
+      "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/40",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+      isActive
+        ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r before:bg-sidebar-primary"
+        : "",
     ].join(" ");
 
   const renderMenuItem = (item: MenuItem) => {
-    // Sub-group header (Organización): collapsible inside the section
+    // Sub-group header (e.g. Organización)
     if (item.children && item.url.startsWith("#")) {
-      const subOpen = isGroupOpen(item.title);
       const childActive = item.children.some((c) => c.url === location.pathname);
-      const effectiveOpen = subOpen || childActive;
+      const subOpen = isCollapsed ? true : (openSubgroup === item.title || childActive);
       return (
         <Collapsible
           key={item.title}
-          open={isCollapsed ? true : effectiveOpen}
-          onOpenChange={() => !isCollapsed && toggleGroup(item.title)}
+          open={subOpen}
+          onOpenChange={() => !isCollapsed && toggleSubgroup(item.title)}
         >
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton className="text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30">
+              <SidebarMenuButton
+                aria-expanded={subOpen}
+                className={[
+                  "transition-colors",
+                  childActive
+                    ? "text-sidebar-foreground font-medium bg-sidebar-accent/25"
+                    : "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
+                ].join(" ")}
+              >
                 <item.icon className="h-4 w-4" />
                 {!isCollapsed && (
                   <>
                     <span className="truncate flex-1">{item.title}</span>
                     <ChevronDown
-                      className={`h-4 w-4 transition-transform ${effectiveOpen ? "rotate-180" : ""}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${subOpen ? "rotate-180" : ""}`}
                     />
                   </>
                 )}
               </SidebarMenuButton>
             </CollapsibleTrigger>
-            <CollapsibleContent>
-              <SidebarMenuSub>
+            <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+              <SidebarMenuSub className="ml-1 border-l border-sidebar-border/60 pl-2">
                 {item.children.map((child) => (
                   <SidebarMenuSubItem key={child.title}>
                     <SidebarMenuSubButton asChild>
-                      <NavLink to={child.url} className={navLinkClass}>
+                      <NavLink
+                        to={child.url}
+                        end
+                        className={navLinkClass}
+                        aria-current={location.pathname === child.url ? "page" : undefined}
+                      >
                         <child.icon className="h-4 w-4" />
                         {!isCollapsed && <span className="truncate">{child.title}</span>}
                       </NavLink>
@@ -246,7 +256,12 @@ export function AppSidebar() {
     return (
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton asChild>
-          <NavLink to={item.url} className={navLinkClass}>
+          <NavLink
+            to={item.url}
+            end
+            className={navLinkClass}
+            aria-current={location.pathname === item.url ? "page" : undefined}
+          >
             <item.icon className="h-4 w-4" />
             {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
             {!isCollapsed && item.url === "/soporte" && !!openTicketsCount && openTicketsCount > 0 && (
@@ -262,32 +277,39 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r [&_*]:text-sidebar-foreground">
-      <SidebarContent>
+      <SidebarContent className="gap-1 py-2">
         {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
-            const open = isCollapsed ? true : isGroupOpen(section.title);
+            const isActiveSection = section.title === activeGroupTitle;
+            const open = isCollapsed ? true : openGroup === section.title;
             return (
               <Collapsible
                 key={`${section.title}-${idx}`}
                 open={open}
                 onOpenChange={() => !isCollapsed && toggleGroup(section.title)}
               >
-                <SidebarGroup>
+                <SidebarGroup className="py-1">
                   {!isCollapsed && (
                     <CollapsibleTrigger asChild>
-                      <SidebarGroupLabel className="text-sidebar-foreground/80 font-semibold cursor-pointer hover:text-sidebar-foreground flex items-center justify-between group">
+                      <SidebarGroupLabel
+                        aria-expanded={open}
+                        className={[
+                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors",
+                          isActiveSection
+                            ? "text-sidebar-foreground"
+                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground",
+                        ].join(" ")}
+                      >
                         <span>{section.title}</span>
                         <ChevronDown
-                          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+                          className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
                         />
                       </SidebarGroupLabel>
                     </CollapsibleTrigger>
                   )}
-                  <CollapsibleContent>
+                  <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
                     <SidebarGroupContent>
-                      <SidebarMenu>
-                        {section.items.map(renderMenuItem)}
-                      </SidebarMenu>
+                      <SidebarMenu>{section.items.map(renderMenuItem)}</SidebarMenu>
                     </SidebarGroupContent>
                   </CollapsibleContent>
                 </SidebarGroup>
@@ -296,12 +318,17 @@ export function AppSidebar() {
           }
 
           return (
-            <SidebarGroup key={`${section.title}-${idx}`}>
+            <SidebarGroup key={`${section.title}-${idx}`} className="py-1">
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={section.url} className={navLinkClass}>
+                    <SidebarMenuButton asChild tooltip={section.title}>
+                      <NavLink
+                        to={section.url}
+                        end
+                        className={navLinkClass}
+                        aria-current={location.pathname === section.url ? "page" : undefined}
+                      >
                         <section.icon className="h-4 w-4" />
                         {!isCollapsed && <span className="truncate">{section.title}</span>}
                       </NavLink>
