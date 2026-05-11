@@ -408,8 +408,23 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
       onClose();
     } catch (error: unknown) {
       console.error("Error al guardar usuario:", error);
+
+      let description = error instanceof Error ? error.message : String(error);
+      const functionError = error as { context?: Response } | null;
+
+      if (functionError?.context instanceof Response) {
+        try {
+          const payload = await functionError.context.json();
+          if (payload && typeof payload.error === "string") {
+            description = payload.error;
+          }
+        } catch {
+          // Keep the original message when the function response cannot be parsed.
+        }
+      }
+
       toast.error("Error al guardar usuario", {
-        description: error instanceof Error ? error.message : String(error),
+        description,
       });
     } finally {
       setLoading(false);
