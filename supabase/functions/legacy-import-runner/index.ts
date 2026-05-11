@@ -1723,6 +1723,8 @@ async function runImport(jobId: string) {
         let detectedType: "diario" | "apertura" | "cierre" = "diario";
         if (/\b(RE)?APERTURA\b/.test(upperDesc)) detectedType = "apertura";
         else if (/\bCIERRE\b/.test(upperDesc)) detectedType = "cierre";
+        // Traslado de resultado al patrimonio: también es operación de cierre, no operativa
+        else if (/RESULTADO DEL PERIODO|RESULTADO DEL PERÍODO|TRASLADO DE RESULTADO|RESULTADO DEL EJERCICIO|RESULTADO DEL EJERICIO/.test(upperDesc)) detectedType = "cierre";
 
         prepared.push({
           header: {
