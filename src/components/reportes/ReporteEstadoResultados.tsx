@@ -358,33 +358,33 @@ export default function ReporteEstadoResultados() {
       } else if (section.section_type === "total") {
         // For Estado de Resultados, the "total" should take the last calculated/subtotal value
         // and add any groups that appear after it (like OTROS INGRESOS Y GASTOS)
-        let total = 0;
+        let baseValue = 0;
+        let extraGroups = 0;
         let foundLastCalculatedOrSubtotal = false;
-        
-        // Find the most recent calculated or subtotal value before this total
+
+        // Iterate backwards from the section just before the total
         for (let i = sections.indexOf(section) - 1; i >= 0; i--) {
           const prevSection = sections[i];
           if (prevSection.section_type === "total") {
             break;
           }
-          
-          // If we haven't found a calculated/subtotal yet, look for groups to add
+
           if (!foundLastCalculatedOrSubtotal) {
             if (prevSection.section_type === "calculated" || prevSection.section_type === "subtotal") {
-              total = sectionTotals.get(prevSection.section_name) || 0;
+              // Anchor the base on the most recent operating result; stop walking groups behind it
+              baseValue = sectionTotals.get(prevSection.section_name) || 0;
               foundLastCalculatedOrSubtotal = true;
             } else if (prevSection.section_type === "group") {
-              // Add groups that appear after the last calculated (like OTROS INGRESOS Y GASTOS)
+              // Groups that appear AFTER the last operating result (e.g. OTROS INGRESOS Y GASTOS)
+              // are net contributions: ingresos add, gastos subtract. Section accounts already
+              // carry their sign_multiplier, so we just sum the resulting group value.
               const groupVal = sectionTotals.get(prevSection.section_name) || 0;
-              const sectionNameLower = prevSection.section_name.toLowerCase();
-              // For "otros ingresos y gastos" sections, add positive for income, subtract for expense
-              if (sectionNameLower.includes("otros") && (sectionNameLower.includes("ingreso") || sectionNameLower.includes("gasto"))) {
-                total += groupVal; // Net effect (ingresos - gastos already in the group value)
-              }
+              extraGroups += groupVal;
             }
           }
         }
-        
+
+        const total = baseValue + extraGroups;
         sectionTotals.set(section.section_name, total);
 
         lines.push({
