@@ -49,6 +49,7 @@ export const TRAINING_PHASES: Phase[] = [
         content: [
           "El catálogo es jerárquico: el nivel se deriva automáticamente de la cantidad de segmentos del código (1, 1.1, 1.1.01...).",
           "Marca las cuentas que permiten movimiento (hojas) y las que son de título (totalizadoras).",
+          "Tipos de cuenta: Activo, Pasivo, Patrimonio (cuenta 3, antes llamado 'Capital'; incluye capital aportado y resultados acumulados), Ingresos, Costos y Gastos.",
           "Define cuentas como bancarias, monetarias en moneda extranjera o de tipo indiferente según sea necesario.",
           "Puedes copiar el catálogo de otra empresa para acelerar la configuración.",
         ],
@@ -112,8 +113,12 @@ export const TRAINING_PHASES: Phase[] = [
           "El sistema asigna numeración secuencial atómica con formato PREFIX-YYYY-MM-#### al contabilizar.",
           "Soporta múltiples monedas, vínculo con facturas, automatización de líneas bancarias y gestión de cheques.",
           "Las partidas anuladas generan una contrapartida automática (REV-) vinculada bidireccionalmente.",
+          "Carga por año: la página muestra los conteos reales por año/mes en los tabs y carga el detalle completo solo del año seleccionado (por defecto el año actual). Esto evita el antiguo tope de 1,000 registros y mantiene la vista rápida en empresas con miles de partidas.",
         ],
-        tips: ["Usa atajos de teclado: Ctrl+S guardar, Ctrl+Enter contabilizar, Ctrl+N nueva línea."],
+        tips: [
+          "Usa atajos de teclado: Ctrl+Enter contabilizar, Ctrl+Shift+Enter guardar borrador, Alt+N nuevo registro.",
+          "Cambia de tab de año para descargar el detalle de ese año; usa 'Todo' solo cuando necesites consultar varios años.",
+        ],
       },
       {
         id: "2.2-libros-fiscales",
@@ -212,12 +217,16 @@ export const TRAINING_PHASES: Phase[] = [
         icon: FileBarChart,
         route: "/reportes",
         content: [
-          "Balance General: el 'Resultado del Período' se calcula en paralelo desde el Estado de Resultados.",
-          "Estado de Resultados: usa el formato configurable desde el Diseñador de Estados Financieros.",
+          "Balance General: el 'Resultado del Período' se calcula en paralelo desde el Estado de Resultados. El total 'Pasivo y Patrimonio' suma correctamente las cuentas 2 (Pasivo) más las cuentas 3 (Patrimonio).",
+          "Estado de Resultados: usa el formato configurable desde el Diseñador de Estados Financieros. El 'Resultado Neto' acumula correctamente los grupos posteriores al último subtotal calculado (ej. 'OTROS INGRESOS Y GASTOS').",
+          "Exclusión automática de partidas de cierre: los reportes operativos (Estado de Resultados, Balance General, Mayor, Variaciones) excluyen partidas con entry_type 'cierre' (CIER, TRAS, APER) para no inflar saldos con traslados de resultado.",
           "Libro Diario, Mayor, Compras, Ventas y Bancos: con exportación a Excel y PDF, con manejo de folios para libros autorizados.",
           "Análisis de Variaciones: compara saldos entre dos períodos con filtro de actividad.",
         ],
-        tips: ["Configura el formato de tus estados financieros en Configuración > Diseñador de Estados Financieros."],
+        tips: [
+          "Configura el formato de tus estados financieros en Configuración > Diseñador de Estados Financieros.",
+          "Si una cuenta de gasto/ingreso aparece sin detalle en el Estado de Resultados, probablemente solo tiene movimientos de cierre — esos están correctamente excluidos del operativo.",
+        ],
       },
       {
         id: "3.3-impuestos",
