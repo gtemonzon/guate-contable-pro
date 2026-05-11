@@ -334,15 +334,39 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, periodResult);
         lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
       } else if (section.section_type === "grand_total") {
-        // Suma todos los "total" anteriores excepto el primero (TOTAL ACTIVO).
-        // Esto permite mostrar "TOTAL PASIVO Y CAPITAL" como suma de TOTAL PASIVO + TOTAL CAPITAL.
-        const previousTotals = sections
-          .slice(0, sections.indexOf(section))
-          .filter(s => s.section_type === 'total');
-        const grandTotal = previousTotals.slice(1).reduce(
-          (sum, s) => sum + (sectionTotals.get(s.section_name) || 0),
-          0
-        );
+        let grandTotal = 0;
+
+        if (section.accounts && section.accounts.length > 0) {
+          // Si el diseñador asignó cuentas explícitas (p.ej. cuenta 2 y cuenta 3),
+          // sumarlas directamente con su jerarquía completa, igual que un grupo.
+          for (const sectionAccount of section.accounts) {
+            const account = accountBalances.find(a => a.id === sectionAccount.account_id);
+            if (!account) continue;
+            if (sectionAccount.include_children) {
+              grandTotal += getAggregatedBalance(account.id) * sectionAccount.sign_multiplier;
+            } else {
+              grandTotal += account.balance * sectionAccount.sign_multiplier;
+            }
+          }
+          // Incluir resultados calculados previos (resultado del período) que no
+          // están reflejados en las cuentas patrimoniales hasta el cierre anual.
+          for (let i = 0; i < sections.indexOf(section); i++) {
+            const prev = sections[i];
+            if (prev.section_type === 'calculated') {
+              grandTotal += sectionTotals.get(prev.section_name) || 0;
+            }
+          }
+        } else {
+          // Fallback histórico: sumar todos los "total" anteriores excepto el primero (TOTAL ACTIVO).
+          const previousTotals = sections
+            .slice(0, sections.indexOf(section))
+            .filter(s => s.section_type === 'total');
+          grandTotal = previousTotals.slice(1).reduce(
+            (sum, s) => sum + (sectionTotals.get(s.section_name) || 0),
+            0
+          );
+        }
+
         sectionTotals.set(section.section_name, grandTotal);
         lines.push({ type: "total", label: section.section_name, amount: grandTotal, isBold: true, showLine: true });
       }
