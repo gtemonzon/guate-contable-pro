@@ -357,7 +357,7 @@ export function AccountDialog({
                       <SelectContent>
                         <SelectItem value="activo">Activo</SelectItem>
                         <SelectItem value="pasivo">Pasivo</SelectItem>
-                        <SelectItem value="capital">Capital</SelectItem>
+                        <SelectItem value="capital">Patrimonio</SelectItem>
                         <SelectItem value="ingreso">Ingreso</SelectItem>
                         <SelectItem value="gasto">Gasto</SelectItem>
                         <SelectItem value="costo">Costo</SelectItem>
@@ -387,7 +387,7 @@ export function AccountDialog({
                       </SelectContent>
                     </Select>
                     <FormDescription>
-                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Capital, Ingreso | Indiferente: Permite sobregiro
+                      Deudor: Activo, Gasto, Costo | Acreedor: Pasivo, Patrimonio, Ingreso | Indiferente: Permite sobregiro
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

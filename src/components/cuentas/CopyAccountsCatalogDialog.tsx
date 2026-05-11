@@ -408,7 +408,7 @@ export function CopyAccountsCatalogDialog({
                   <span className="font-medium">{summary.pasivo}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Capital:</span>
+                  <span className="text-muted-foreground">Patrimonio:</span>
                   <span className="font-medium">{summary.capital}</span>
                 </div>
                 <div className="flex justify-between">
