@@ -191,8 +191,8 @@ export function AppSidebar() {
       "relative flex items-center gap-2 rounded-md transition-all duration-200",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
       isActive
-        ? "bg-sidebar-primary/15 text-sidebar-primary font-semibold shadow-sm ring-1 ring-sidebar-primary/20 before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-r-full before:bg-sidebar-primary [&_svg]:text-sidebar-primary [&_svg]:scale-110"
-        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 [&_svg]:text-sidebar-foreground/60 hover:[&_svg]:text-sidebar-foreground",
+        ? "bg-sidebar-accent/70 text-sidebar-primary-foreground font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-r-full before:bg-sidebar-primary-foreground [&_svg]:text-sidebar-primary-foreground"
+        : "bg-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 border-none shadow-none ring-0 outline-none [&_svg]:text-sidebar-foreground/50 hover:[&_svg]:text-sidebar-foreground",
     ].join(" ");
 
   const renderMenuItem = (item: MenuItem) => {
@@ -213,8 +213,8 @@ export function AppSidebar() {
                 className={[
                   "transition-colors",
                   childActive
-                    ? "text-sidebar-foreground font-medium bg-sidebar-accent/25"
-                    : "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
+                    ? "text-sidebar-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20",
                 ].join(" ")}
               >
                 <item.icon className="h-4 w-4" />
@@ -229,7 +229,7 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-              <SidebarMenuSub className="ml-1 border-l border-sidebar-border/60 pl-2">
+              <SidebarMenuSub className="ml-1 pl-2">
                 {item.children.map((child) => (
                   <SidebarMenuSubItem key={child.title}>
                     <SidebarMenuSubButton asChild>
