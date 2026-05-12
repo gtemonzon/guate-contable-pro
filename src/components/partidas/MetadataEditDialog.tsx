@@ -28,9 +28,17 @@ interface MetadataEditDialogProps {
     beneficiary_name: string | null;
     bank_reference: string | null;
     document_reference: string | null;
+    entry_type?: string | null;
   };
   onSuccess: () => void;
 }
+
+const ENTRY_TYPES: { value: string; label: string }[] = [
+  { value: "diario", label: "Diario" },
+  { value: "ajuste", label: "Ajuste" },
+  { value: "apertura", label: "Apertura" },
+  { value: "cierre", label: "Cierre" },
+];
 
 export function MetadataEditDialog({
   open,
