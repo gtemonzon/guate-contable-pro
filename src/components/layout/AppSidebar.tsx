@@ -229,7 +229,7 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </CollapsibleTrigger>
             <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
-              <SidebarMenuSub className="ml-1 border-l border-sidebar-border/60 pl-2">
+              <SidebarMenuSub className="ml-1 pl-2">
                 {item.children.map((child) => (
                   <SidebarMenuSubItem key={child.title}>
                     <SidebarMenuSubButton asChild>
