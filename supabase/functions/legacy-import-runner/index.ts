@@ -581,8 +581,8 @@ const RESUMABLE_CLEAR_PHASES = [
   { phaseKey: "tab_fx_settlements", label: "liquidaciones cambiarias", progressKey: "fxSettlements", batchSize: 250 },
   { phaseKey: "tab_fx_open_balances", label: "saldos abiertos en moneda extranjera", progressKey: "fxOpenBalances", batchSize: 250 },
   { phaseKey: "tab_fx_revaluation_runs", label: "corridas de revaluación cambiaria", progressKey: "fxRevaluationRuns", batchSize: 100 },
-  { phaseKey: "tab_journal_entry_details", label: "detalles de partidas", progressKey: "journalEntryDetails", batchSize: 1000 },
-  { phaseKey: "tab_journal_entries", label: "partidas", progressKey: "journalEntries", batchSize: 250 },
+  { phaseKey: "tab_journal_entry_details", label: "detalles de partidas", progressKey: "journalEntryDetails", batchSize: 250 },
+  { phaseKey: "tab_journal_entries", label: "partidas", progressKey: "journalEntries", batchSize: 25 },
   { phaseKey: "tab_integrity_validations", label: "validaciones de integridad", progressKey: "integrityValidations", batchSize: 100 },
   { phaseKey: "tab_accounting_periods", label: "períodos", progressKey: "periods", batchSize: 100 },
   { phaseKey: "tab_book_folio_consumption", label: "folios consumidos", progressKey: "bookFolioConsumption", batchSize: 100 },
@@ -634,6 +634,55 @@ async function runHardResetPhase(
     deleted_count: Number(row.deleted_count ?? 0),
     remaining_count: Number(row.remaining_count ?? 0),
   };
+}
+
+async function runResumablePhaseUntilEmpty(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  phase: {
+    phaseKey: string;
+    label: string;
+    progressKey: string;
+    batchSize: number;
+  },
+  onProgress?: (remaining: number) => Promise<void>,
+) {
+  let deletedTotal = 0;
+  let remaining = 0;
+  let safetyIterations = 0;
+
+  while (true) {
+    safetyIterations += 1;
+    if (safetyIterations > 5000) {
+      throw new Error(`Fase ${phase.phaseKey} excedió el máximo de iteraciones`);
+    }
+
+    const { data, error } = await sb.rpc("clear_legacy_import_batch", {
+      p_enterprise_id: enterpriseId,
+      p_phase: phase.phaseKey.replace(/_clear$/, ""),
+      p_batch_size: phase.batchSize,
+    });
+
+    if (error) {
+      throw new Error(`limpieza ${phase.phaseKey}: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row) {
+      throw new Error(`limpieza ${phase.phaseKey}: sin resultado del batch`);
+    }
+
+    deletedTotal += Number((row as any).deleted_count ?? 0);
+    remaining = Number((row as any).remaining_count ?? 0);
+
+    if (onProgress) {
+      await onProgress(remaining);
+    }
+
+    if (Boolean((row as any).done)) {
+      return { deleted_count: deletedTotal, remaining_count: remaining };
+    }
+  }
 }
 
 async function insertCriticalRows<T>(
@@ -1258,7 +1307,56 @@ async function runImport(jobId: string) {
 
     for (const phase of phasesToRun) {
       await updateProgress(`Limpiando ${phase.label} existentes...`, 0, 1, true);
-      const row = await runHardResetPhase(sb, enterpriseId, phase.phaseKey);
+      const row = await runResumablePhaseUntilEmpty(
+        sb,
+        enterpriseId,
+        {
+          phaseKey:
+            phase.phaseKey === "purchase_journal_links_clear"
+              ? "tab_purchase_journal_links"
+              : phase.phaseKey === "purchase_ledger_clear"
+                ? "tab_purchase_ledger"
+                : phase.phaseKey === "purchase_books_clear"
+                  ? "tab_purchase_books"
+                  : phase.phaseKey === "journal_entry_details_clear"
+                    ? "tab_journal_entry_details"
+                    : phase.phaseKey === "journal_entries_clear"
+                      ? "tab_journal_entries"
+                      : phase.phaseKey === "fixed_asset_depreciation_schedule_clear"
+                        ? "fixed_asset_depreciation_schedule"
+                        : phase.phaseKey === "fixed_asset_event_log_clear"
+                          ? "fixed_asset_event_log"
+                          : phase.phaseKey === "fixed_assets_clear"
+                            ? "fixed_assets"
+                            : phase.phaseKey === "asset_categories_clear"
+                              ? "fixed_asset_categories"
+                              : phase.phaseKey === "sales_ledger_clear"
+                                ? "tab_sales_ledger"
+                                : phase.phaseKey === "inventory_closings_clear"
+                                  ? "tab_period_inventory_closing"
+                                  : phase.phaseKey === "periods_clear"
+                                    ? "tab_accounting_periods"
+                                    : "tab_accounts",
+          label: phase.label,
+          progressKey: phase.progressKey,
+          batchSize:
+            phase.phaseKey === "tab_accounts" || phase.phaseKey === "accounts_clear"
+              ? 100
+              : phase.phaseKey === "journal_entries_clear"
+                ? 50
+                : phase.phaseKey === "journal_entry_details_clear"
+                  ? 250
+                  : 100,
+        },
+        async (remaining) => {
+          await updateProgress(
+            `Limpiando ${phase.label} existentes...`,
+            remaining > 0 ? 1 : 0,
+            1,
+            true,
+          );
+        },
+      );
       result.deletedByStep[`preclear_${phase.phaseKey}`] = Number(
         row.deleted_count ?? 0,
       );
