@@ -4544,17 +4544,30 @@ export type Database = {
         Returns: undefined
       }
       reverse_fx_revaluation: { Args: { p_run_id: number }; Returns: number }
-      update_posted_entry_metadata: {
-        Args: {
-          p_bank_reference?: string
-          p_beneficiary_name?: string
-          p_description?: string
-          p_document_reference?: string
-          p_journal_entry_id: number
-          p_reason?: string
-        }
-        Returns: Json
-      }
+      update_posted_entry_metadata:
+        | {
+            Args: {
+              p_bank_reference?: string
+              p_beneficiary_name?: string
+              p_description?: string
+              p_document_reference?: string
+              p_journal_entry_id: number
+              p_reason?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_bank_reference?: string
+              p_beneficiary_name?: string
+              p_description?: string
+              p_document_reference?: string
+              p_entry_type?: string
+              p_journal_entry_id: number
+              p_reason?: string
+            }
+            Returns: Json
+          }
       user_is_linked_to_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
