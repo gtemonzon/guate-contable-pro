@@ -98,26 +98,38 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
         }
       }
 
-      const { data, error } = await supabase.rpc('get_dashboard_kpis', {
-        p_enterprise_id: enterpriseId!,
-        p_start_date:    startDate,
-        p_end_date:      effectiveEnd,
-        p_prev_start:    prevStartDate,
-        p_prev_end:      effectivePrevEnd,
-      });
-      if (error) throw error;
+      // Use the same RPCs as the Balance General report so the dashboard KPIs
+      // match exactly (excludes closing/transfer/voided entries, applies fiscal floor).
+      const yearOf = (d: string) => d.slice(0, 4);
+      const currPnlStart = `${yearOf(effectiveEnd)}-01-01`;
+      const prevPnlStart = `${yearOf(effectivePrevEnd)}-01-01`;
 
-      const payload = (data ?? {}) as {
-        current_balances?:  RpcBalanceRow[];
-        previous_balances?: RpcBalanceRow[];
-        current_profit?:    number;
-        previous_profit?:   number;
-      };
+      const [bsCurr, bsPrev, pnlCurr, pnlPrev] = await Promise.all([
+        supabase.rpc('get_balance_sheet', { p_enterprise_id: enterpriseId!, p_as_of_date: effectiveEnd }),
+        supabase.rpc('get_balance_sheet', { p_enterprise_id: enterpriseId!, p_as_of_date: effectivePrevEnd }),
+        supabase.rpc('get_pnl', { p_enterprise_id: enterpriseId!, p_start_date: currPnlStart, p_end_date: effectiveEnd }),
+        supabase.rpc('get_pnl', { p_enterprise_id: enterpriseId!, p_start_date: prevPnlStart, p_end_date: effectivePrevEnd }),
+      ]);
+      if (bsCurr.error) throw bsCurr.error;
+      if (bsPrev.error) throw bsPrev.error;
+      if (pnlCurr.error) throw pnlCurr.error;
+      if (pnlPrev.error) throw pnlPrev.error;
 
-      const curr = normaliseRpcRows(payload.current_balances ?? []);
-      const prev = normaliseRpcRows(payload.previous_balances ?? []);
-      const profit     = Number(payload.current_profit  ?? 0);
-      const prevProfit = Number(payload.previous_profit ?? 0);
+      const curr = normaliseRpcRows((bsCurr.data ?? []) as RpcBalanceRow[]);
+      const prev = normaliseRpcRows((bsPrev.data ?? []) as RpcBalanceRow[]);
+
+      // get_pnl rows: parents have zero direct movements (only leaves carry value),
+      // so a straight sum is safe and matches the Balance General "Resultado del Período".
+      const sumProfit = (rows: any[]) =>
+        rows.reduce((sum: number, r: any) => {
+          const t = r.account_type;
+          const bal = Number(r.balance ?? 0);
+          if (t === 'ingreso') return sum + bal;
+          if (t === 'gasto' || t === 'costo') return sum - bal;
+          return sum;
+        }, 0);
+      const profit     = sumProfit((pnlCurr.data ?? []) as any[]);
+      const prevProfit = sumProfit((pnlPrev.data ?? []) as any[]);
 
       const totalActivos = sumBalancesByType(curr, 'activo');
       const totalPasivos = sumBalancesByType(curr, 'pasivo');
