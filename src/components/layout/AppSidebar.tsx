@@ -186,20 +186,28 @@ export function AppSidebar() {
     });
   }, []);
 
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  const isRouteActive = useCallback(
+    (url: string) => {
+      if (!url || url.startsWith("#")) return false;
+      const path = location.pathname;
+      return path === url || path.startsWith(url + "/");
+    },
+    [location.pathname]
+  );
+
+  const buildNavClass = (active: boolean) =>
     [
-      "relative flex items-center gap-2 rounded-lg transition-all duration-200",
+      "relative flex items-center gap-2 rounded-lg transition-colors duration-200 w-full",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-      "border-0 outline-none",
-      isActive
-        ? "bg-sidebar-accent/50 text-sidebar-accent-foreground font-semibold shadow-sm [&_svg]:text-sidebar-accent-foreground"
+      active
+        ? "bg-sidebar-accent/50 text-sidebar-accent-foreground font-semibold shadow-sm hover:bg-sidebar-accent/60 [&_svg]:text-sidebar-accent-foreground"
         : "bg-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 [&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground",
     ].join(" ");
 
   const renderMenuItem = (item: MenuItem) => {
     // Sub-group header (e.g. Organización)
     if (item.children && item.url.startsWith("#")) {
-      const childActive = item.children.some((c) => c.url === location.pathname);
+      const childActive = item.children.some((c) => isRouteActive(c.url));
       const subOpen = isCollapsed ? true : (openSubgroup === item.title || childActive);
       return (
         <Collapsible
@@ -212,7 +220,7 @@ export function AppSidebar() {
               <SidebarMenuButton
                 aria-expanded={subOpen}
                 className={[
-                  "transition-colors",
+                  "transition-colors rounded-lg",
                   childActive
                     ? "text-sidebar-foreground font-medium"
                     : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20",
@@ -231,21 +239,24 @@ export function AppSidebar() {
             </CollapsibleTrigger>
             <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
               <SidebarMenuSub className="ml-1 pl-2">
-                {item.children.map((child) => (
-                  <SidebarMenuSubItem key={child.title}>
-                    <SidebarMenuSubButton asChild>
-                      <NavLink
-                        to={child.url}
-                        end
-                        className={navLinkClass}
-                        aria-current={location.pathname === child.url ? "page" : undefined}
-                      >
-                        <child.icon className="h-4 w-4" />
-                        {!isCollapsed && <span className="truncate">{child.title}</span>}
-                      </NavLink>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                ))}
+                {item.children.map((child) => {
+                  const childIsActive = isRouteActive(child.url);
+                  return (
+                    <SidebarMenuSubItem key={child.title}>
+                      <SidebarMenuSubButton asChild isActive={childIsActive}>
+                        <NavLink
+                          to={child.url}
+                          end
+                          className={buildNavClass(childIsActive)}
+                          aria-current={childIsActive ? "page" : undefined}
+                        >
+                          <child.icon className="h-4 w-4" />
+                          {!isCollapsed && <span className="truncate">{child.title}</span>}
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })}
               </SidebarMenuSub>
             </CollapsibleContent>
           </SidebarMenuItem>
@@ -253,14 +264,15 @@ export function AppSidebar() {
       );
     }
 
+    const active = isRouteActive(item.url);
     return (
       <SidebarMenuItem key={item.title}>
-        <SidebarMenuButton asChild>
+        <SidebarMenuButton asChild isActive={active}>
           <NavLink
             to={item.url}
             end
-            className={navLinkClass}
-            aria-current={location.pathname === item.url ? "page" : undefined}
+            className={buildNavClass(active)}
+            aria-current={active ? "page" : undefined}
           >
             <item.icon className="h-4 w-4" />
             {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
