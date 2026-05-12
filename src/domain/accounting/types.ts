@@ -34,6 +34,7 @@ export interface KPIData {
   totalPasivos: KPIMetric;
   utilidadPeriodo: KPIMetric;
   liquidez: KPIMetric;
+  asOfDate: string | null; // YYYY-MM-DD — date the balances are reported at
 }
 
 export interface KPIMetric {
