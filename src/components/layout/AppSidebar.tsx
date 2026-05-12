@@ -276,7 +276,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r [&_*]:text-sidebar-foreground">
-      <SidebarContent className="gap-1 py-2">
+      <SidebarContent className="gap-2 py-3">
         {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
             const isActiveSection = section.title === activeGroupTitle;
