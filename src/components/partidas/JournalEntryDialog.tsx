@@ -453,6 +453,7 @@ export default function JournalEntryDialog({
             beneficiary_name: form.beneficiaryName || null,
             bank_reference: form.bankReference || null,
             document_reference: form.documentReference || null,
+            entry_type: form.entryType || 'diario',
           }}
           onSuccess={() => {
             onSuccess();
