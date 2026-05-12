@@ -329,17 +329,18 @@ export function AppSidebar() {
             );
           }
 
+          const sectionActive = isRouteActive(section.url);
           return (
             <SidebarGroup key={`${section.title}-${idx}`} className="py-1">
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip={section.title}>
+                    <SidebarMenuButton asChild tooltip={section.title} isActive={sectionActive}>
                       <NavLink
                         to={section.url}
                         end
-                        className={navLinkClass}
-                        aria-current={location.pathname === section.url ? "page" : undefined}
+                        className={buildNavClass(sectionActive)}
+                        aria-current={sectionActive ? "page" : undefined}
                       >
                         <section.icon className="h-4 w-4" />
                         {!isCollapsed && <span className="truncate">{section.title}</span>}
