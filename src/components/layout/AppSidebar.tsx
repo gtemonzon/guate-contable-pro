@@ -213,8 +213,8 @@ export function AppSidebar() {
                 className={[
                   "transition-colors",
                   childActive
-                    ? "text-sidebar-foreground font-medium bg-sidebar-accent/25"
-                    : "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/30",
+                    ? "text-sidebar-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20",
                 ].join(" ")}
               >
                 <item.icon className="h-4 w-4" />
