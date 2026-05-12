@@ -118,23 +118,16 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
       const curr = normaliseRpcRows((bsCurr.data ?? []) as RpcBalanceRow[]);
       const prev = normaliseRpcRows((bsPrev.data ?? []) as RpcBalanceRow[]);
 
-      // Period profit = sum of (ingreso - gasto) leaf balances from PnL
-      // get_pnl returns balances already signed: ingreso positive when credit > debit, gasto positive when debit > credit
-      const sumProfit = (rows: any[]) => {
-        // Only include leaf accounts (no children) to avoid double counting in hierarchical PnL output
-        const ids = new Set(rows.map((r: any) => Number(r.account_id)));
-        const isParent = new Set(
-          rows.map((r: any) => r.parent_account_id != null ? Number(r.parent_account_id) : null).filter(Boolean) as number[]
-        );
-        return rows.reduce((sum: number, r: any) => {
-          if (isParent.has(Number(r.account_id))) return sum;
+      // get_pnl rows: parents have zero direct movements (only leaves carry value),
+      // so a straight sum is safe and matches the Balance General "Resultado del Período".
+      const sumProfit = (rows: any[]) =>
+        rows.reduce((sum: number, r: any) => {
           const t = r.account_type;
           const bal = Number(r.balance ?? 0);
           if (t === 'ingreso') return sum + bal;
           if (t === 'gasto' || t === 'costo') return sum - bal;
           return sum;
         }, 0);
-      };
       const profit     = sumProfit((pnlCurr.data ?? []) as any[]);
       const prevProfit = sumProfit((pnlPrev.data ?? []) as any[]);
 
