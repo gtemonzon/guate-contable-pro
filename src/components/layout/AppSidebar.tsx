@@ -188,11 +188,12 @@ export function AppSidebar() {
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
-      "relative flex items-center gap-2 rounded-md transition-all duration-200",
+      "relative flex items-center gap-2 rounded-lg transition-all duration-200",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+      "border-0 outline-none",
       isActive
-        ? "bg-sidebar-accent/70 text-sidebar-primary-foreground font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-r-full before:bg-sidebar-primary-foreground [&_svg]:text-sidebar-primary-foreground"
-        : "bg-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 border-none shadow-none ring-0 outline-none [&_svg]:text-sidebar-foreground/50 hover:[&_svg]:text-sidebar-foreground",
+        ? "bg-sidebar-accent/50 text-sidebar-accent-foreground font-semibold shadow-sm [&_svg]:text-sidebar-accent-foreground"
+        : "bg-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/20 [&_svg]:text-sidebar-foreground/55 hover:[&_svg]:text-sidebar-foreground",
     ].join(" ");
 
   const renderMenuItem = (item: MenuItem) => {
