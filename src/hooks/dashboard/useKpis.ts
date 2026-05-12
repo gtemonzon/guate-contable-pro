@@ -75,12 +75,35 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
     queryFn: async () => {
       const { startDate, endDate, prevStartDate, prevEndDate } = buildDateRange(activePeriod);
 
+      // Find the date of the last posted entry within the active period (clamped to endDate).
+      // Use it as the effective "as-of" date so KPIs reflect the actual most recent data.
+      let effectiveEnd = endDate;
+      let effectivePrevEnd = prevEndDate;
+      if (enterpriseId) {
+        const { data: lastRow } = await supabase
+          .from('tab_journal_entries')
+          .select('entry_date')
+          .eq('enterprise_id', enterpriseId)
+          .eq('is_posted', true)
+          .is('deleted_at', null)
+          .lte('entry_date', endDate)
+          .order('entry_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastRow?.entry_date) {
+          effectiveEnd = lastRow.entry_date;
+          const d = new Date(effectiveEnd);
+          d.setFullYear(d.getFullYear() - 1);
+          effectivePrevEnd = d.toISOString().split('T')[0];
+        }
+      }
+
       const { data, error } = await supabase.rpc('get_dashboard_kpis', {
         p_enterprise_id: enterpriseId!,
         p_start_date:    startDate,
-        p_end_date:      endDate,
+        p_end_date:      effectiveEnd,
         p_prev_start:    prevStartDate,
-        p_prev_end:      prevEndDate,
+        p_prev_end:      effectivePrevEnd,
       });
       if (error) throw error;
 
@@ -118,6 +141,7 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
           change: liquidity - prevLiquidity,
           trend:  (liquidity - prevLiquidity) > 0 ? 'up' : (liquidity - prevLiquidity) < 0 ? 'down' : 'neutral',
         },
+        asOfDate: effectiveEnd,
       };
     },
   });
