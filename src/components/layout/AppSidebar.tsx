@@ -293,10 +293,10 @@ export function AppSidebar() {
                       <SidebarGroupLabel
                         aria-expanded={open}
                         className={[
-                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors",
+                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
                           isActiveSection
-                            ? "text-sidebar-foreground"
-                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground",
+                            ? "text-sidebar-primary"
+                            : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
                         ].join(" ")}
                       >
                         <span>{section.title}</span>
