@@ -399,7 +399,17 @@ const Dashboard = () => {
       )}
 
       {/* KPIs */}
+      {kpiData?.asOfDate && (
+        <p className="text-xs text-muted-foreground -mb-2">
+          Saldos acumulados al{" "}
+          <span className="font-semibold text-foreground">
+            {new Date(kpiData.asOfDate + "T00:00:00").toLocaleDateString("es-GT", { day: "2-digit", month: "long", year: "numeric" })}
+          </span>{" "}
+          (fecha de la última partida registrada)
+        </p>
+      )}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
         {kpis.map((kpi) => (
           <Card key={kpi.title} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(kpi.link)}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
