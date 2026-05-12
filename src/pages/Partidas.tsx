@@ -847,6 +847,7 @@ export default function Partidas() {
             beneficiary_name: metadataEntry.beneficiary_name || null,
             bank_reference: metadataEntry.bank_reference || null,
             document_reference: metadataEntry.document_reference || null,
+            entry_type: metadataEntry.entry_type || 'diario',
           }}
           onSuccess={() => {
             if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);

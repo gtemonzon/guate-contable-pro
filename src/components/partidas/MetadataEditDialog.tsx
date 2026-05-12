@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileEdit, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -27,9 +28,17 @@ interface MetadataEditDialogProps {
     beneficiary_name: string | null;
     bank_reference: string | null;
     document_reference: string | null;
+    entry_type?: string | null;
   };
   onSuccess: () => void;
 }
+
+const ENTRY_TYPES: { value: string; label: string }[] = [
+  { value: "diario", label: "Diario" },
+  { value: "ajuste", label: "Ajuste" },
+  { value: "apertura", label: "Apertura" },
+  { value: "cierre", label: "Cierre" },
+];
 
 export function MetadataEditDialog({
   open,
@@ -43,17 +52,18 @@ export function MetadataEditDialog({
   const [beneficiaryName, setBeneficiaryName] = useState(currentValues.beneficiary_name || "");
   const [bankReference, setBankReference] = useState(currentValues.bank_reference || "");
   const [documentReference, setDocumentReference] = useState(currentValues.document_reference || "");
+  const [entryType, setEntryType] = useState(currentValues.entry_type || "diario");
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Reset when opening
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen) {
       setDescription(currentValues.description);
       setBeneficiaryName(currentValues.beneficiary_name || "");
       setBankReference(currentValues.bank_reference || "");
       setDocumentReference(currentValues.document_reference || "");
+      setEntryType(currentValues.entry_type || "diario");
       setReason("");
     }
     onOpenChange(newOpen);
@@ -63,7 +73,8 @@ export function MetadataEditDialog({
     description !== currentValues.description ||
     beneficiaryName !== (currentValues.beneficiary_name || "") ||
     bankReference !== (currentValues.bank_reference || "") ||
-    documentReference !== (currentValues.document_reference || "");
+    documentReference !== (currentValues.document_reference || "") ||
+    entryType !== (currentValues.entry_type || "diario");
 
   const handleSave = async () => {
     if (!reason.trim()) {
@@ -78,7 +89,6 @@ export function MetadataEditDialog({
     try {
       setLoading(true);
 
-      // Build params: only send changed fields
       const rpcParams = {
         p_journal_entry_id: entryId,
         p_reason: reason.trim(),
@@ -86,6 +96,7 @@ export function MetadataEditDialog({
         p_beneficiary_name: beneficiaryName !== (currentValues.beneficiary_name || "") ? (beneficiaryName || null) : undefined,
         p_bank_reference: bankReference !== (currentValues.bank_reference || "") ? (bankReference || null) : undefined,
         p_document_reference: documentReference !== (currentValues.document_reference || "") ? (documentReference || null) : undefined,
+        p_entry_type: entryType !== (currentValues.entry_type || "diario") ? entryType : undefined,
       };
 
       const { error } = await supabase.rpc("update_posted_entry_metadata", rpcParams as any);
@@ -130,6 +141,23 @@ export function MetadataEditDialog({
               rows={2}
               className="mt-1.5"
             />
+          </div>
+
+          <div>
+            <Label htmlFor="meta-entry-type">Tipo de partida</Label>
+            <Select value={entryType} onValueChange={setEntryType}>
+              <SelectTrigger id="meta-entry-type" className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ENTRY_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Las partidas de tipo <strong>Cierre</strong> y <strong>Apertura</strong> se excluyen de los reportes operativos.
+            </p>
           </div>
 
           <div>
