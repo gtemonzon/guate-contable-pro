@@ -144,6 +144,23 @@ export function MetadataEditDialog({
           </div>
 
           <div>
+            <Label htmlFor="meta-entry-type">Tipo de partida</Label>
+            <Select value={entryType} onValueChange={setEntryType}>
+              <SelectTrigger id="meta-entry-type" className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ENTRY_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Las partidas de tipo <strong>Cierre</strong> y <strong>Apertura</strong> se excluyen de los reportes operativos.
+            </p>
+          </div>
+
+          <div>
             <Label htmlFor="meta-beneficiary">Nombre del beneficiario</Label>
             <Input
               id="meta-beneficiary"
