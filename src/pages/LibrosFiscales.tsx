@@ -2218,12 +2218,15 @@ export default function LibrosFiscales() {
                           
                           if (p.expense_account_id) {
                             // Respetar IVA real: si vat_amount es 0, la base es el total
+                            // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
+                            const idpAmount = Number((p as any).idp_amount) || 0;
                             const baseAmount = p.vat_amount > 0
-                              ? (p.base_amount || p.total_amount - p.vat_amount)
-                              : p.total_amount;
+                              ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
+                              : (Number(p.total_amount) - idpAmount);
+                            const expenseAmount = Number(baseAmount) + idpAmount;
                             expenseByAccount.set(
                               p.expense_account_id,
-                              (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
+                              (expenseByAccount.get(p.expense_account_id) || 0) + (expenseAmount * multiplier)
                             );
                           }
                           // Usar IVA real con multiplicador, no recalcular
