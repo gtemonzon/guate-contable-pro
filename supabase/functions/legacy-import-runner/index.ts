@@ -1307,7 +1307,56 @@ async function runImport(jobId: string) {
 
     for (const phase of phasesToRun) {
       await updateProgress(`Limpiando ${phase.label} existentes...`, 0, 1, true);
-      const row = await runHardResetPhase(sb, enterpriseId, phase.phaseKey);
+      const row = await runResumablePhaseUntilEmpty(
+        sb,
+        enterpriseId,
+        {
+          phaseKey:
+            phase.phaseKey === "purchase_journal_links_clear"
+              ? "tab_purchase_journal_links"
+              : phase.phaseKey === "purchase_ledger_clear"
+                ? "tab_purchase_ledger"
+                : phase.phaseKey === "purchase_books_clear"
+                  ? "tab_purchase_books"
+                  : phase.phaseKey === "journal_entry_details_clear"
+                    ? "tab_journal_entry_details"
+                    : phase.phaseKey === "journal_entries_clear"
+                      ? "tab_journal_entries"
+                      : phase.phaseKey === "fixed_asset_depreciation_schedule_clear"
+                        ? "fixed_asset_depreciation_schedule"
+                        : phase.phaseKey === "fixed_asset_event_log_clear"
+                          ? "fixed_asset_event_log"
+                          : phase.phaseKey === "fixed_assets_clear"
+                            ? "fixed_assets"
+                            : phase.phaseKey === "asset_categories_clear"
+                              ? "fixed_asset_categories"
+                              : phase.phaseKey === "sales_ledger_clear"
+                                ? "tab_sales_ledger"
+                                : phase.phaseKey === "inventory_closings_clear"
+                                  ? "tab_period_inventory_closing"
+                                  : phase.phaseKey === "periods_clear"
+                                    ? "tab_accounting_periods"
+                                    : "tab_accounts",
+          label: phase.label,
+          progressKey: phase.progressKey,
+          batchSize:
+            phase.phaseKey === "tab_accounts" || phase.phaseKey === "accounts_clear"
+              ? 100
+              : phase.phaseKey === "journal_entries_clear"
+                ? 50
+                : phase.phaseKey === "journal_entry_details_clear"
+                  ? 250
+                  : 100,
+        },
+        async (remaining) => {
+          await updateProgress(
+            `Limpiando ${phase.label} existentes...`,
+            remaining > 0 ? 1 : 0,
+            1,
+            true,
+          );
+        },
+      );
       result.deletedByStep[`preclear_${phase.phaseKey}`] = Number(
         row.deleted_count ?? 0,
       );
