@@ -188,12 +188,11 @@ export function AppSidebar() {
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
-      "relative flex items-center gap-2 rounded-md transition-colors duration-150",
-      "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent/40",
+      "relative flex items-center gap-2 rounded-md transition-all duration-200",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
       isActive
-        ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:rounded-r before:bg-sidebar-primary"
-        : "",
+        ? "bg-sidebar-primary/15 text-sidebar-primary font-semibold shadow-sm ring-1 ring-sidebar-primary/20 before:absolute before:left-0 before:top-1 before:bottom-1 before:w-[3px] before:rounded-r-full before:bg-sidebar-primary [&_svg]:text-sidebar-primary [&_svg]:scale-110"
+        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/40 [&_svg]:text-sidebar-foreground/60 hover:[&_svg]:text-sidebar-foreground",
     ].join(" ");
 
   const renderMenuItem = (item: MenuItem) => {
@@ -277,7 +276,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r [&_*]:text-sidebar-foreground">
-      <SidebarContent className="gap-1 py-2">
+      <SidebarContent className="gap-2 py-3">
         {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
             const isActiveSection = section.title === activeGroupTitle;
@@ -294,10 +293,10 @@ export function AppSidebar() {
                       <SidebarGroupLabel
                         aria-expanded={open}
                         className={[
-                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors",
+                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
                           isActiveSection
-                            ? "text-sidebar-foreground"
-                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground",
+                            ? "text-sidebar-primary"
+                            : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
                         ].join(" ")}
                       >
                         <span>{section.title}</span>
