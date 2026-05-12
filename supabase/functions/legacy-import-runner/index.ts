@@ -636,6 +636,55 @@ async function runHardResetPhase(
   };
 }
 
+async function runResumablePhaseUntilEmpty(
+  sb: ReturnType<typeof createClient>,
+  enterpriseId: number,
+  phase: {
+    phaseKey: string;
+    label: string;
+    progressKey: string;
+    batchSize: number;
+  },
+  onProgress?: (remaining: number) => Promise<void>,
+) {
+  let deletedTotal = 0;
+  let remaining = 0;
+  let safetyIterations = 0;
+
+  while (true) {
+    safetyIterations += 1;
+    if (safetyIterations > 5000) {
+      throw new Error(`Fase ${phase.phaseKey} excedió el máximo de iteraciones`);
+    }
+
+    const { data, error } = await sb.rpc("clear_legacy_import_batch", {
+      p_enterprise_id: enterpriseId,
+      p_phase: phase.phaseKey.replace(/_clear$/, ""),
+      p_batch_size: phase.batchSize,
+    });
+
+    if (error) {
+      throw new Error(`limpieza ${phase.phaseKey}: ${error.message}`);
+    }
+
+    const row = Array.isArray(data) ? data[0] : null;
+    if (!row) {
+      throw new Error(`limpieza ${phase.phaseKey}: sin resultado del batch`);
+    }
+
+    deletedTotal += Number((row as any).deleted_count ?? 0);
+    remaining = Number((row as any).remaining_count ?? 0);
+
+    if (onProgress) {
+      await onProgress(remaining);
+    }
+
+    if (Boolean((row as any).done)) {
+      return { deleted_count: deletedTotal, remaining_count: remaining };
+    }
+  }
+}
+
 async function insertCriticalRows<T>(
   sb: ReturnType<typeof createClient>,
   table: string,
