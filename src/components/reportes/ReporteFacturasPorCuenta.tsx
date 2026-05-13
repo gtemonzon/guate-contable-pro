@@ -111,14 +111,23 @@ export default function ReporteFacturasPorCuenta() {
     setAccounts(data || []);
   };
 
+  // Only "movement" (leaf) accounts: no other account uses this code as a prefix
+  const leafAccounts = useMemo(() => {
+    const codes = accounts.map(a => a.account_code);
+    return accounts.filter(a => !codes.some(c => c !== a.account_code && c.startsWith(a.account_code + ".")) &&
+      // also accept leaves with no dotted children (codes that no longer extends)
+      !codes.some(c => c !== a.account_code && c.startsWith(a.account_code) && c.length > a.account_code.length));
+  }, [accounts]);
+
   const filteredAccounts = useMemo(() => {
     const q = accountSearch.trim().toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter(a =>
+    const base = leafAccounts;
+    if (!q) return base;
+    return base.filter(a =>
       a.account_code.toLowerCase().includes(q) ||
       a.account_name.toLowerCase().includes(q)
     );
-  }, [accounts, accountSearch]);
+  }, [leafAccounts, accountSearch]);
 
   const toggleAccount = (id: number) => {
     setSelectedAccounts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -155,85 +164,71 @@ export default function ReporteFacturasPorCuenta() {
     setLoading(true);
     setReportGenerated(false);
     try {
-      // 1. Get journal entries (posted, not deleted) in range for this enterprise that are linked to a purchase invoice
-      const { data: links, error: linksErr } = await supabase
-        .from("tab_purchase_journal_links")
+      // Query purchase ledger filtered by expense_account_id (the account where the
+      // invoice's base+IDP got posted). Falls back to invoice_date for the range.
+      const { data: purchases, error: pErr } = await supabase
+        .from("tab_purchase_ledger")
         .select(`
-          purchase_id,
-          journal_entry_id,
-          journal_entry:tab_journal_entries!inner(id, entry_number, entry_date, description, is_posted, deleted_at, enterprise_id),
-          purchase:tab_purchase_ledger!inner(id, invoice_date, invoice_series, invoice_number, supplier_nit, supplier_name, deleted_at)
+          id, invoice_date, invoice_series, invoice_number,
+          supplier_nit, supplier_name,
+          total_amount, vat_amount, base_amount, idp_amount,
+          expense_account_id, journal_entry_id,
+          journal_entry:tab_journal_entries(id, entry_number, entry_date, description)
         `)
         .eq("enterprise_id", parseInt(enterpriseId))
-        .gte("journal_entry.entry_date", startDate)
-        .lte("journal_entry.entry_date", endDate)
-        .eq("journal_entry.is_posted", true)
-        .is("journal_entry.deleted_at", null)
-        .is("purchase.deleted_at", null);
+        .in("expense_account_id", selectedAccounts)
+        .gte("invoice_date", startDate)
+        .lte("invoice_date", endDate)
+        .is("deleted_at", null)
+        .order("invoice_date", { ascending: true });
 
-      if (linksErr) throw linksErr;
-      const validLinks = (links || []).filter((l: any) => l.journal_entry && l.purchase);
-
-      if (validLinks.length === 0) {
-        setGroups([]);
-        setReportGenerated(true);
-        toast({ title: "Sin resultados", description: "No se encontraron facturas para los criterios seleccionados" });
-        return;
-      }
-
-      const jeIds = Array.from(new Set(validLinks.map((l: any) => Number(l.journal_entry_id))));
-      const linkByJe = new Map<number, any>();
-      for (const l of validLinks) linkByJe.set(Number(l.journal_entry_id), l);
-
-      // 2. Fetch journal entry details for those JE ids and selected accounts
-      const { data: details, error: detErr } = await supabase
-        .from("tab_journal_entry_details")
-        .select("id, journal_entry_id, account_id, debit_amount, credit_amount, description")
-        .in("journal_entry_id", jeIds)
-        .in("account_id", selectedAccounts)
-        .is("deleted_at", null);
-
-      if (detErr) throw detErr;
+      if (pErr) throw pErr;
 
       const accountById = new Map(accounts.map(a => [a.id, a]));
       const groupMap = new Map<number, AccountGroup>();
 
-      for (const d of (details || []) as any[]) {
-        const link = linkByJe.get(Number(d.journal_entry_id));
-        if (!link) continue;
-        const acc = accountById.get(Number(d.account_id));
+      for (const p of (purchases || []) as any[]) {
+        const accId = Number(p.expense_account_id);
+        const acc = accountById.get(accId);
         if (!acc) continue;
-        const amount = Number(d.debit_amount || 0) - Number(d.credit_amount || 0);
+        const total = Number(p.total_amount) || 0;
+        const vat = Number(p.vat_amount) || 0;
+        // Gross expense = total - vat (includes IDP for fuel)
+        const amount = +(total - vat).toFixed(2);
+        const je = Array.isArray(p.journal_entry) ? p.journal_entry[0] : p.journal_entry;
         const row: InvoiceRow = {
-          detail_id: Number(d.id),
-          journal_entry_id: Number(d.journal_entry_id),
-          entry_number: link.journal_entry.entry_number,
-          entry_date: link.journal_entry.entry_date,
-          entry_description: link.journal_entry.description,
-          line_description: d.description,
+          detail_id: Number(p.id),
+          journal_entry_id: je?.id ? Number(je.id) : Number(p.journal_entry_id) || 0,
+          entry_number: je?.entry_number || "—",
+          entry_date: je?.entry_date || p.invoice_date,
+          entry_description: je?.description || "",
+          line_description: null,
           amount,
-          purchase_id: Number(link.purchase.id),
-          invoice_date: link.purchase.invoice_date,
-          invoice_series: link.purchase.invoice_series,
-          invoice_number: link.purchase.invoice_number,
-          supplier_nit: link.purchase.supplier_nit,
-          supplier_name: link.purchase.supplier_name,
+          purchase_id: Number(p.id),
+          invoice_date: p.invoice_date,
+          invoice_series: p.invoice_series,
+          invoice_number: p.invoice_number,
+          supplier_nit: p.supplier_nit,
+          supplier_name: p.supplier_name,
         };
-        let g = groupMap.get(acc.id);
-        if (!g) { g = { account: acc, rows: [], total: 0 }; groupMap.set(acc.id, g); }
+        let g = groupMap.get(accId);
+        if (!g) { g = { account: acc, rows: [], total: 0 }; groupMap.set(accId, g); }
         g.rows.push(row);
         g.total += amount;
       }
 
       const result = Array.from(groupMap.values())
-        .map(g => ({ ...g, rows: g.rows.sort((a, b) => a.invoice_date.localeCompare(b.invoice_date)) }))
         .sort((a, b) => a.account.account_code.localeCompare(b.account.account_code));
 
       setGroups(result);
-      setExpanded(new Set()); // collapsed by default
+      setExpanded(new Set());
       setReportGenerated(true);
       const totalRows = result.reduce((s, g) => s + g.rows.length, 0);
-      toast({ title: "Reporte generado", description: `${totalRows} facturas en ${result.length} cuenta(s)` });
+      if (totalRows === 0) {
+        toast({ title: "Sin resultados", description: "No se encontraron facturas para los criterios seleccionados" });
+      } else {
+        toast({ title: "Reporte generado", description: `${totalRows} facturas en ${result.length} cuenta(s)` });
+      }
     } catch (err) {
       toast({ title: "Error al generar reporte", description: getSafeErrorMessage(err), variant: "destructive" });
     } finally {

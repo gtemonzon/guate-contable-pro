@@ -31,7 +31,7 @@ export default function Reportes() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-7xl grid-cols-9">
+        <TabsList className="grid w-full max-w-7xl grid-cols-9 divide-x divide-border/60">
           <TabsTrigger value="compras">Compras</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
           <TabsTrigger value="partidas">Partidas</TabsTrigger>
@@ -40,7 +40,7 @@ export default function Reportes() {
           <TabsTrigger value="balance">Balance</TabsTrigger>
           <TabsTrigger value="resultados">Resultados</TabsTrigger>
           <TabsTrigger value="variaciones">Variaciones</TabsTrigger>
-          <TabsTrigger value="facturas-por-cuenta">Facturas x Cuenta</TabsTrigger>
+          <TabsTrigger value="facturas-por-cuenta">Fact x Cta</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compras">
