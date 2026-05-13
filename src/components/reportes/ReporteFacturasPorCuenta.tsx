@@ -111,14 +111,23 @@ export default function ReporteFacturasPorCuenta() {
     setAccounts(data || []);
   };
 
+  // Only "movement" (leaf) accounts: no other account uses this code as a prefix
+  const leafAccounts = useMemo(() => {
+    const codes = accounts.map(a => a.account_code);
+    return accounts.filter(a => !codes.some(c => c !== a.account_code && c.startsWith(a.account_code + ".")) &&
+      // also accept leaves with no dotted children (codes that no longer extends)
+      !codes.some(c => c !== a.account_code && c.startsWith(a.account_code) && c.length > a.account_code.length));
+  }, [accounts]);
+
   const filteredAccounts = useMemo(() => {
     const q = accountSearch.trim().toLowerCase();
-    if (!q) return accounts;
-    return accounts.filter(a =>
+    const base = leafAccounts;
+    if (!q) return base;
+    return base.filter(a =>
       a.account_code.toLowerCase().includes(q) ||
       a.account_name.toLowerCase().includes(q)
     );
-  }, [accounts, accountSearch]);
+  }, [leafAccounts, accountSearch]);
 
   const toggleAccount = (id: number) => {
     setSelectedAccounts(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
