@@ -9,6 +9,7 @@ import ReporteEstadoResultados from "@/components/reportes/ReporteEstadoResultad
 import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
 import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 import ReporteVariaciones from "@/components/reportes/ReporteVariaciones";
+import ReporteFacturasPorCuenta from "@/components/reportes/ReporteFacturasPorCuenta";
 
 export default function Reportes() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,7 +31,7 @@ export default function Reportes() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-6xl grid-cols-8">
+        <TabsList className="grid w-full max-w-7xl grid-cols-9">
           <TabsTrigger value="compras">Compras</TabsTrigger>
           <TabsTrigger value="ventas">Ventas</TabsTrigger>
           <TabsTrigger value="partidas">Partidas</TabsTrigger>
@@ -39,6 +40,7 @@ export default function Reportes() {
           <TabsTrigger value="balance">Balance</TabsTrigger>
           <TabsTrigger value="resultados">Resultados</TabsTrigger>
           <TabsTrigger value="variaciones">Variaciones</TabsTrigger>
+          <TabsTrigger value="facturas-por-cuenta">Facturas x Cuenta</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compras">
@@ -64,6 +66,9 @@ export default function Reportes() {
         </TabsContent>
         <TabsContent value="variaciones">
           <Card><CardContent className="pt-6"><ReporteVariaciones /></CardContent></Card>
+        </TabsContent>
+        <TabsContent value="facturas-por-cuenta">
+          <Card><CardContent className="pt-6"><ReporteFacturasPorCuenta /></CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>
