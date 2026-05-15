@@ -1,16 +1,63 @@
 // SAT Guatemala CSV/XLS column mappings
 // These mappings allow flexible detection of SAT-exported files
 
-// Normalize header: remove accents, special chars, convert to lowercase
+/**
+ * Repair common UTF-8 mojibake produced when SAT files (UTF-8) are read as Latin1/Windows-1252.
+ * Examples:
+ *   "Fecha de emisiÃ³n"          -> "Fecha de emisión"
+ *   "NÃºmero de AutorizaciÃ³n"   -> "Número de Autorización"
+ *   "PetrÃ³leo"                  -> "Petróleo"
+ *
+ * Strategy: if the string contains the tell-tale "Ã" / "Â" sequences, attempt a
+ * round-trip re-decoding (UTF-8 bytes that were mis-read as Latin1). Fall back to
+ * an explicit replacement table for the most common Spanish corruptions.
+ */
+export function repairMojibake(input: string): string {
+  if (!input) return input;
+  if (!/[ÃÂ]/.test(input)) return input;
+
+  // Try TextDecoder round-trip first (most accurate).
+  try {
+    if (typeof TextEncoder !== "undefined" && typeof TextDecoder !== "undefined") {
+      const bytes = new Uint8Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        bytes[i] = input.charCodeAt(i) & 0xff;
+      }
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      // Only accept the repair if it reduced the mojibake markers.
+      if (!/Ã.|Â./.test(decoded) || (decoded.match(/[ÃÂ]/g)?.length ?? 0) < (input.match(/[ÃÂ]/g)?.length ?? 0)) {
+        return decoded;
+      }
+    }
+  } catch {
+    // ignore and fall through to manual map
+  }
+
+  const map: Record<string, string> = {
+    "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú", "Ã±": "ñ", "Ã¼": "ü",
+    "Ã": "Á", "Ã‰": "É", "Ã": "Í", "Ã“": "Ó", "Ãš": "Ú", "Ã‘": "Ñ", "Ãœ": "Ü",
+    "Â¿": "¿", "Â¡": "¡", "Âº": "º", "Âª": "ª", "Â°": "°", "Â´": "´", "Â·": "·",
+    "Â": "",
+  };
+  let out = input;
+  for (const [bad, good] of Object.entries(map)) {
+    out = out.split(bad).join(good);
+  }
+  return out;
+}
+
+// Normalize header: repair mojibake, lowercase, strip accents, collapse spaces.
 export function normalizeHeader(header: string): string {
-  return header
+  if (header == null) return "";
+  return repairMojibake(String(header))
+    .replace(/\uFEFF/g, "") // BOM
     .toLowerCase()
-    .trim()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove accents
-    .replace(/[()]/g, "") // Remove parentheses
-    .replace(/\s+/g, " ") // Normalize spaces
-    .trim(); // Trim again after replacements
+    .replace(/[()._\-/\\:;,]/g, " ") // Punctuation -> space
+    .replace(/[^\p{L}\p{N} ]/gu, " ") // Strip remaining symbols
+    .replace(/\s+/g, " ") // Collapse spaces
+    .trim();
 }
 
 // SAT column mappings for purchases (emisor data)
