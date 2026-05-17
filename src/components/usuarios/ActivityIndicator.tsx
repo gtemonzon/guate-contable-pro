@@ -72,9 +72,10 @@ const ActivityIndicator = ({ lastActivityAt, currentEnterpriseName }: ActivityIn
           <div className="space-y-1">
             <p className="font-medium">{config.label}</p>
             <p className="text-xs text-muted-foreground">{getTimeAgo()}</p>
-            {status === "active" && currentEnterpriseName && (
+            {currentEnterpriseName && (
               <p className="text-xs">
-                Trabajando en: <span className="font-medium">{currentEnterpriseName}</span>
+                {status === "active" ? "Trabajando en" : "Última empresa"}:{" "}
+                <span className="font-medium">{currentEnterpriseName}</span>
               </p>
             )}
           </div>
