@@ -608,6 +608,7 @@ export function useDeclaracionCalculo(
       debitoFiscal: Math.round(debitoFiscal),
       // Compras desglosadas
       comprasBienes: Math.round(comprasBienes),
+      comprasCombustibles: Math.round(comprasCombustibles),
       comprasServicios: Math.round(comprasServicios),
       importaciones: Math.round(importaciones),
       comprasActivosFijos: Math.round(comprasActivosFijos),
@@ -617,6 +618,7 @@ export function useDeclaracionCalculo(
       comprasNetoGravadas: Math.round(comprasNetoGravadas),
       // Crédito fiscal desglosado
       creditoFiscalBienes: Math.round(creditoFiscalBienes),
+      creditoFiscalCombustibles: Math.round(creditoFiscalCombustibles),
       creditoFiscalServicios: Math.round(creditoFiscalServicios),
       creditoFiscalImportaciones: Math.round(creditoFiscalImportaciones),
       creditoFiscalActivosFijos: Math.round(creditoFiscalActivosFijos),
