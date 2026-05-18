@@ -54,6 +54,7 @@ export interface IVAGeneralCalculo {
   debitoFiscal: number; // Casilla 26
   // Compras desglosadas por tipo de operación
   comprasBienes: number; // Casilla 27 - Otras compras / Bienes
+  comprasCombustibles: number; // Combustibles (base sin IDP)
   comprasServicios: number; // Casilla 28 - Servicios
   importaciones: number; // Casilla 29 - Importaciones
   comprasActivosFijos: number; // Casilla 30 - Activos fijos (si aplica)
@@ -63,6 +64,7 @@ export interface IVAGeneralCalculo {
   comprasNetoGravadas: number; // Neto de compras gravadas
   // Crédito fiscal
   creditoFiscalBienes: number; // IVA de bienes
+  creditoFiscalCombustibles: number; // IVA recuperable de combustibles (excluye IDP)
   creditoFiscalServicios: number; // IVA de servicios
   creditoFiscalImportaciones: number; // IVA de importaciones
   creditoFiscalActivosFijos: number; // IVA de activos fijos
@@ -489,9 +491,11 @@ export function useDeclaracionCalculo(
     const OPERATION_TYPE_ACTIVOS_FIJOS = 3;
     const OPERATION_TYPE_IMPORTACIONES = 4;
     const OPERATION_TYPE_OTRAS = 5;
+    const OPERATION_TYPE_COMBUSTIBLE = 7;
 
     // Inicializar compras por tipo de operación
     let comprasBienes = 0;
+    let comprasCombustibles = 0;
     let comprasServicios = 0;
     let importaciones = 0;
     let comprasActivosFijos = 0;
@@ -500,6 +504,7 @@ export function useDeclaracionCalculo(
 
     // Crédito fiscal por tipo
     let creditoFiscalBienes = 0;
+    let creditoFiscalCombustibles = 0;
     let creditoFiscalServicios = 0;
     let creditoFiscalImportaciones = 0;
     let creditoFiscalActivosFijos = 0;
@@ -551,6 +556,11 @@ export function useDeclaracionCalculo(
           comprasActivosFijos += baseAmount;
           creditoFiscalActivosFijos += vatAmount;
           break;
+        case OPERATION_TYPE_COMBUSTIBLE:
+          // Combustibles: base ya excluye IDP (no recuperable)
+          comprasCombustibles += baseAmount;
+          creditoFiscalCombustibles += vatAmount;
+          break;
         case OPERATION_TYPE_BIENES:
         case OPERATION_TYPE_OTRAS:
         default:
@@ -563,9 +573,9 @@ export function useDeclaracionCalculo(
 
     // Calcular totales
     // Total compras gravadas incluye las exentas (FPEQ, FESP) para el cálculo del neto
-    const totalComprasGravadas = comprasBienes + comprasServicios + importaciones + comprasActivosFijos + comprasExentas;
+    const totalComprasGravadas = comprasBienes + comprasCombustibles + comprasServicios + importaciones + comprasActivosFijos + comprasExentas;
     const comprasNetoGravadas = totalComprasGravadas - notasCreditoCompras;
-    const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
+    const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalCombustibles + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
     const creditoFiscal = creditoFiscalBruto - notasCreditoIVA;
 
     const totalVentas = ventasGravadasLocales + exportaciones + ventasExentas;
@@ -598,6 +608,7 @@ export function useDeclaracionCalculo(
       debitoFiscal: Math.round(debitoFiscal),
       // Compras desglosadas
       comprasBienes: Math.round(comprasBienes),
+      comprasCombustibles: Math.round(comprasCombustibles),
       comprasServicios: Math.round(comprasServicios),
       importaciones: Math.round(importaciones),
       comprasActivosFijos: Math.round(comprasActivosFijos),
@@ -607,6 +618,7 @@ export function useDeclaracionCalculo(
       comprasNetoGravadas: Math.round(comprasNetoGravadas),
       // Crédito fiscal desglosado
       creditoFiscalBienes: Math.round(creditoFiscalBienes),
+      creditoFiscalCombustibles: Math.round(creditoFiscalCombustibles),
       creditoFiscalServicios: Math.round(creditoFiscalServicios),
       creditoFiscalImportaciones: Math.round(creditoFiscalImportaciones),
       creditoFiscalActivosFijos: Math.round(creditoFiscalActivosFijos),

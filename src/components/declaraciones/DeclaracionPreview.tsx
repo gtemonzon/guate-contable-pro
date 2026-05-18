@@ -146,6 +146,9 @@ export function DeclaracionPreview({
                   {ivaGeneral.comprasBienes > 0 && (
                     <CasillaRow label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
                   )}
+                  {ivaGeneral.comprasCombustibles > 0 && (
+                    <CasillaRow label="Combustibles" value={ivaGeneral.comprasCombustibles} />
+                  )}
                   {ivaGeneral.comprasServicios > 0 && (
                     <CasillaRow label="Compras de Servicios" value={ivaGeneral.comprasServicios} />
                   )}
@@ -203,6 +206,9 @@ export function DeclaracionPreview({
                 <div className="bg-muted/30 rounded-lg p-3">
                   {ivaGeneral.creditoFiscalBienes > 0 && (
                     <CasillaRow label="IVA Otras Compras (Bienes)" value={ivaGeneral.creditoFiscalBienes} />
+                  )}
+                  {ivaGeneral.creditoFiscalCombustibles > 0 && (
+                    <CasillaRow label="IVA Combustibles" value={ivaGeneral.creditoFiscalCombustibles} />
                   )}
                   {ivaGeneral.creditoFiscalServicios > 0 && (
                     <CasillaRow label="IVA Servicios" value={ivaGeneral.creditoFiscalServicios} />
