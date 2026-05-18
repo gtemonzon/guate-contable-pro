@@ -54,6 +54,7 @@ export interface IVAGeneralCalculo {
   debitoFiscal: number; // Casilla 26
   // Compras desglosadas por tipo de operación
   comprasBienes: number; // Casilla 27 - Otras compras / Bienes
+  comprasCombustibles: number; // Combustibles (base sin IDP)
   comprasServicios: number; // Casilla 28 - Servicios
   importaciones: number; // Casilla 29 - Importaciones
   comprasActivosFijos: number; // Casilla 30 - Activos fijos (si aplica)
@@ -63,6 +64,7 @@ export interface IVAGeneralCalculo {
   comprasNetoGravadas: number; // Neto de compras gravadas
   // Crédito fiscal
   creditoFiscalBienes: number; // IVA de bienes
+  creditoFiscalCombustibles: number; // IVA recuperable de combustibles (excluye IDP)
   creditoFiscalServicios: number; // IVA de servicios
   creditoFiscalImportaciones: number; // IVA de importaciones
   creditoFiscalActivosFijos: number; // IVA de activos fijos
