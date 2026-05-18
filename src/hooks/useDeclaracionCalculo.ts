@@ -556,6 +556,11 @@ export function useDeclaracionCalculo(
           comprasActivosFijos += baseAmount;
           creditoFiscalActivosFijos += vatAmount;
           break;
+        case OPERATION_TYPE_COMBUSTIBLE:
+          // Combustibles: base ya excluye IDP (no recuperable)
+          comprasCombustibles += baseAmount;
+          creditoFiscalCombustibles += vatAmount;
+          break;
         case OPERATION_TYPE_BIENES:
         case OPERATION_TYPE_OTRAS:
         default:
@@ -568,9 +573,9 @@ export function useDeclaracionCalculo(
 
     // Calcular totales
     // Total compras gravadas incluye las exentas (FPEQ, FESP) para el cálculo del neto
-    const totalComprasGravadas = comprasBienes + comprasServicios + importaciones + comprasActivosFijos + comprasExentas;
+    const totalComprasGravadas = comprasBienes + comprasCombustibles + comprasServicios + importaciones + comprasActivosFijos + comprasExentas;
     const comprasNetoGravadas = totalComprasGravadas - notasCreditoCompras;
-    const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
+    const creditoFiscalBruto = creditoFiscalBienes + creditoFiscalCombustibles + creditoFiscalServicios + creditoFiscalImportaciones + creditoFiscalActivosFijos;
     const creditoFiscal = creditoFiscalBruto - notasCreditoIVA;
 
     const totalVentas = ventasGravadasLocales + exportaciones + ventasExentas;
