@@ -146,6 +146,9 @@ export function DeclaracionPreview({
                   {ivaGeneral.comprasBienes > 0 && (
                     <CasillaRow label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
                   )}
+                  {ivaGeneral.comprasCombustibles > 0 && (
+                    <CasillaRow label="Combustibles" value={ivaGeneral.comprasCombustibles} />
+                  )}
                   {ivaGeneral.comprasServicios > 0 && (
                     <CasillaRow label="Compras de Servicios" value={ivaGeneral.comprasServicios} />
                   )}
