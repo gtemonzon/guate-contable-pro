@@ -262,7 +262,10 @@ export function useDeclaracionCalculo(
     }
   };
 
-  // Calculate suggested crédito remanente based on VAT credit account balance (saldo anterior)
+  // Calculate suggested crédito remanente based on the previous month's movements only
+  // (debits - credits of the VAT credit account during the immediately previous month).
+  // This avoids including prior-year opening balances (APER) that may not reflect the
+  // actual fiscal remanente declared with SAT.
   const calcularCreditoRemanenteSugerido = async () => {
     if (!enterpriseId) return;
 
@@ -281,10 +284,14 @@ export function useDeclaracionCalculo(
 
       const vatCreditAccountId = configData.vat_credit_account_id;
 
-      // Calculate the start date of the selected month (we need balance BEFORE this date)
-      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      // Previous month range (immediately prior to the selected month)
+      const prevMonthDate = new Date(year, month - 2, 1); // month is 1-indexed
+      const prevYear = prevMonthDate.getFullYear();
+      const prevMonth = prevMonthDate.getMonth() + 1;
+      const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+      const prevEnd = new Date(prevYear, prevMonth, 0).toISOString().split('T')[0];
 
-      // Get all journal entry details for the VAT credit account BEFORE the selected month
+      // Get journal entry details for the VAT credit account within the previous month only
       const { data: journalDetails } = await supabase
         .from("tab_journal_entry_details")
         .select(`
@@ -299,14 +306,15 @@ export function useDeclaracionCalculo(
         .eq("account_id", vatCreditAccountId)
         .eq("tab_journal_entries.enterprise_id", enterpriseId)
         .eq("tab_journal_entries.is_posted", true)
-        .lt("tab_journal_entries.entry_date", startDate);
+        .gte("tab_journal_entries.entry_date", prevStart)
+        .lte("tab_journal_entries.entry_date", prevEnd);
 
       if (!journalDetails || journalDetails.length === 0) {
         setCreditoRemanenteSugerido(0);
         return;
       }
 
-      // Calculate the balance: for a debit account (IVA por Cobrar), balance = debit - credit
+      // For a debit account (IVA por Cobrar), remanente = debit - credit of previous month
       let totalDebit = 0;
       let totalCredit = 0;
 
@@ -315,10 +323,10 @@ export function useDeclaracionCalculo(
         totalCredit += Number(detail.credit_amount) || 0;
       });
 
-      const saldoAnterior = totalDebit - totalCredit;
-      
-      // Only set positive balance as suggested (negative would mean we owe, not a credit)
-      setCreditoRemanenteSugerido(Math.max(0, saldoAnterior));
+      const remanente = totalDebit - totalCredit;
+
+      // Only positive balance is a credit available; negative means tax payable
+      setCreditoRemanenteSugerido(Math.max(0, remanente));
 
     } catch (err) {
       console.error("Error calculating suggested crédito remanente:", err);
