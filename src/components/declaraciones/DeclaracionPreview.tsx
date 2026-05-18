@@ -143,6 +143,9 @@ export function DeclaracionPreview({
               <div>
                 <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Compras (Base)</h4>
                 <div className="bg-muted/30 rounded-lg p-3">
+                  {ivaGeneral.comprasExentas > 0 && (
+                    <CasillaRow label="Compras Exentas" value={ivaGeneral.comprasExentas} />
+                  )}
                   {ivaGeneral.comprasBienes > 0 && (
                     <CasillaRow label="Otras Compras (Bienes)" value={ivaGeneral.comprasBienes} />
                   )}
@@ -157,9 +160,6 @@ export function DeclaracionPreview({
                   )}
                   {ivaGeneral.comprasActivosFijos > 0 && (
                     <CasillaRow label="Activos Fijos" value={ivaGeneral.comprasActivosFijos} />
-                  )}
-                  {ivaGeneral.comprasExentas > 0 && (
-                    <CasillaRow label="Compras Exentas" value={ivaGeneral.comprasExentas} />
                   )}
                   {ivaGeneral.notasCreditoCompras > 0 && (
                     <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-destructive">
