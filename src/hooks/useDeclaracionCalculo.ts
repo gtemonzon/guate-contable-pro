@@ -491,9 +491,11 @@ export function useDeclaracionCalculo(
     const OPERATION_TYPE_ACTIVOS_FIJOS = 3;
     const OPERATION_TYPE_IMPORTACIONES = 4;
     const OPERATION_TYPE_OTRAS = 5;
+    const OPERATION_TYPE_COMBUSTIBLE = 7;
 
     // Inicializar compras por tipo de operación
     let comprasBienes = 0;
+    let comprasCombustibles = 0;
     let comprasServicios = 0;
     let importaciones = 0;
     let comprasActivosFijos = 0;
@@ -502,6 +504,7 @@ export function useDeclaracionCalculo(
 
     // Crédito fiscal por tipo
     let creditoFiscalBienes = 0;
+    let creditoFiscalCombustibles = 0;
     let creditoFiscalServicios = 0;
     let creditoFiscalImportaciones = 0;
     let creditoFiscalActivosFijos = 0;
