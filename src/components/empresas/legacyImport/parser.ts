@@ -122,23 +122,25 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
       const exentas = num(pickKey(r, ["exentas", "exento"]));
       const ivaRaw = num(pickKey(r, ["iva", "vat"]));
 
-      // Determinar tipo de operación según en qué columna está el monto
+      // Las columnas de monto (precio/bienes/servicios/activos/importaciones) en el
+      // Excel legado YA INCLUYEN el IVA. No hay que sumarlo otra vez al total.
       let operationTypeCode: ParsedPurchase["operationTypeCode"] = "BIENES";
-      let netAmount = 0;
+      let columnWithVat = 0;
       let idpAmount = 0;
-      if (activos > 0) { operationTypeCode = "ACTIVOS_FIJOS"; netAmount = activos; }
-      else if (importaciones > 0) { operationTypeCode = "IMPORTACIONES"; netAmount = importaciones; }
-      else if (servicios > 0) { operationTypeCode = "SERVICIOS"; netAmount = servicios; }
+      if (activos > 0) { operationTypeCode = "ACTIVOS_FIJOS"; columnWithVat = activos; }
+      else if (importaciones > 0) { operationTypeCode = "IMPORTACIONES"; columnWithVat = importaciones; }
+      else if (servicios > 0) { operationTypeCode = "SERVICIOS"; columnWithVat = servicios; }
       else if (bienes > 0 && exentas > 0) {
-        // Combustible: OTRAS + IDP en exentas
+        // Combustible: bienes (c/IVA) + IDP en exentas
         operationTypeCode = "OTRAS";
-        netAmount = bienes;
+        columnWithVat = bienes;
         idpAmount = exentas;
       }
-      else if (bienes > 0) { operationTypeCode = "BIENES"; netAmount = bienes; }
-      else if (exentas > 0) { operationTypeCode = "OTRAS"; netAmount = exentas; }
+      else if (bienes > 0) { operationTypeCode = "BIENES"; columnWithVat = bienes; }
+      else if (exentas > 0) { operationTypeCode = "OTRAS"; columnWithVat = exentas; }
 
-      const total = netAmount + idpAmount + ivaRaw;
+      const netAmount = Math.max(0, columnWithVat - ivaRaw);
+      const total = columnWithVat + idpAmount;
 
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
@@ -173,14 +175,15 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
       const exentas = num(pickKey(r, ["exentas", "exento"]));
       const ivaRaw = num(pickKey(r, ["iva", "vat"]));
 
-      // Determinar tipo de operación según en qué columna está el monto
+      // Las columnas precio/servicios/exentas en el Excel legado YA INCLUYEN el IVA.
       let operationTypeCode = "BIENES";
-      let netAmount = 0;
-      if (servicios > 0) { operationTypeCode = "SERVICIOS"; netAmount = servicios; }
-      else if (bienes > 0) { operationTypeCode = "BIENES"; netAmount = bienes; }
-      else if (exentas > 0) { operationTypeCode = "OTRAS"; netAmount = exentas; }
+      let columnWithVat = 0;
+      if (servicios > 0) { operationTypeCode = "SERVICIOS"; columnWithVat = servicios; }
+      else if (bienes > 0) { operationTypeCode = "BIENES"; columnWithVat = bienes; }
+      else if (exentas > 0) { operationTypeCode = "OTRAS"; columnWithVat = exentas; }
 
-      const total = netAmount + ivaRaw;
+      const netAmount = Math.max(0, columnWithVat - ivaRaw);
+      const total = columnWithVat;
 
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
