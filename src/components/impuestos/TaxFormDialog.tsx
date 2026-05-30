@@ -244,7 +244,7 @@ export default function TaxFormDialog({
     setIsAnalyzing(true);
     try {
       // Extract text from PDF in client-side
-      const pdfText = await extractTextFromPdf(file);
+      const pdfText = await extractTextFromPdf(target);
       
       console.log("Extracted PDF text length:", pdfText.length);
       console.log("PDF text preview:", pdfText.substring(0, 500));
