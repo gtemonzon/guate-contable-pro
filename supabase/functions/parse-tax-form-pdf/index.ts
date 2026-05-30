@@ -601,6 +601,8 @@ function mergeExtractions(primary: ExtractedData | null, fallback: ExtractedData
   merged.fieldsFound = count;
   return merged;
 }
+
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
