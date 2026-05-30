@@ -237,8 +237,9 @@ export default function TaxFormDialog({
     return fullText;
   };
 
-  const handleAnalyzePdf = async () => {
-    if (!file) return;
+  const handleAnalyzePdf = async (fileOverride?: File) => {
+    const target = fileOverride || file;
+    if (!target) return;
 
     setIsAnalyzing(true);
     try {
