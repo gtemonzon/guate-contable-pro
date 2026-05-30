@@ -688,7 +688,7 @@ serve(async (req) => {
 
 
     // Fallback / merge with regex extraction
-    const regexData = extractDataFromText(pdfText);
+    const regexData = extractDataFromText(safePdfText);
     const finalData = mergeExtractions(extractedData, regexData);
 
     return new Response(
