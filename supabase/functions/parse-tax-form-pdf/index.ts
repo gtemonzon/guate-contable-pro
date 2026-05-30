@@ -534,11 +534,20 @@ serve(async (req) => {
       );
     }
 
-    // Extract data using regex patterns
-    const extractedData = extractDataFromText(pdfText);
+    // Try AI extraction first (Lovable AI / Gemini) for robust parsing across SAT form variants
+    let extractedData: ExtractedData | null = null;
+    try {
+      extractedData = await extractWithAI(pdfText);
+    } catch (e) {
+      console.warn("AI extraction failed, falling back to regex:", e);
+    }
+
+    // Fallback / merge with regex extraction
+    const regexData = extractDataFromText(pdfText);
+    const finalData = mergeExtractions(extractedData, regexData);
 
     return new Response(
-      JSON.stringify(extractedData),
+      JSON.stringify(finalData),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
