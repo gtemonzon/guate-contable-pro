@@ -564,7 +564,7 @@ Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "user", content: userContent },
       ],
       tools: [tool],
       tool_choice: { type: "function", function: { name: "extract_tax_form" } },
