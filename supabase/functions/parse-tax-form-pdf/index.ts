@@ -657,32 +657,35 @@ serve(async (req) => {
       );
     }
 
-    const { pdfText } = await req.json();
+    const { pdfText, pdfBase64 } = await req.json();
 
-    if (!pdfText || typeof pdfText !== "string") {
+    if ((!pdfText || typeof pdfText !== "string") && !pdfBase64) {
       return new Response(
-        JSON.stringify({ error: "No se proporcionó texto del PDF", fieldsFound: 0 }),
+        JSON.stringify({ error: "No se proporcionó texto ni PDF", fieldsFound: 0 }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
+    const safePdfText: string = typeof pdfText === "string" ? pdfText : "";
+
     // Input validation: limit text size to prevent DoS attacks (max 5MB)
     const MAX_PDF_TEXT_SIZE = 5 * 1024 * 1024; // 5MB
-    if (pdfText.length > MAX_PDF_TEXT_SIZE) {
-      console.warn(`PDF text exceeds size limit: ${pdfText.length} bytes`);
+    if (safePdfText.length > MAX_PDF_TEXT_SIZE) {
+      console.warn(`PDF text exceeds size limit: ${safePdfText.length} bytes`);
       return new Response(
         JSON.stringify({ error: "El texto del PDF excede el tamaño máximo permitido (5MB)", fieldsFound: 0 }),
         { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Try AI extraction first (Lovable AI / Gemini) for robust parsing across SAT form variants
+    // Try AI extraction first (Lovable AI / Gemini) — uses PDF directly when scanned
     let extractedData: ExtractedData | null = null;
     try {
-      extractedData = await extractWithAI(pdfText);
+      extractedData = await extractWithAI(safePdfText, typeof pdfBase64 === "string" ? pdfBase64 : undefined);
     } catch (e) {
       console.warn("AI extraction failed, falling back to regex:", e);
     }
+
 
     // Fallback / merge with regex extraction
     const regexData = extractDataFromText(pdfText);
