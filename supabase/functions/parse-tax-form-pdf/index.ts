@@ -483,7 +483,10 @@ function extractDataFromText(text: string): ExtractedData {
   return result;
 }
 
-async function extractWithAI(pdfText: string): Promise<ExtractedData | null> {
+async function extractWithAI(
+  pdfText: string,
+  pdfBase64?: string,
+): Promise<ExtractedData | null> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
     console.warn("LOVABLE_API_KEY not set; skipping AI extraction");
@@ -498,6 +501,7 @@ async function extractWithAI(pdfText: string): Promise<ExtractedData | null> {
 Reglas:
 - formNumber: número del formulario SAT (7, 8 u 11 dígitos, sin espacios). Aparece como "Número de Formulario".
 - accessCode: número de acceso de 9 dígitos sin espacios. Aparece como "Número de Acceso".
+
 - taxType: tipo de impuesto en MAYÚSCULAS (ej: "IVA", "IVA PEQUEÑO CONTRIBUYENTE", "ISR MENSUAL", "ISR TRIMESTRAL", "ISO", "ISR ANUAL", "IUSI", "IETAAP"). Usa el nombre del formulario tal como aparece, en mayúsculas.
 - periodType: "mensual", "trimestral" o "anual" según corresponda.
 - periodMonth: número de mes 1-12 (para trimestral usa el mes inicial: Q1=1, Q2=4, Q3=7, Q4=10).
