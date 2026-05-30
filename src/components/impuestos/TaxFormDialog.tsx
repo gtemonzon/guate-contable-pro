@@ -460,7 +460,7 @@ export default function TaxFormDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleAnalyzePdf}
+                      onClick={() => handleAnalyzePdf()}
                       disabled={isAnalyzing || loading}
                       className="gap-1"
                     >
