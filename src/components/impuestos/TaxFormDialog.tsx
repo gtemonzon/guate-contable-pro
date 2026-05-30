@@ -123,6 +123,8 @@ export default function TaxFormDialog({
     onFile: (f) => {
       setFile(f);
       setExistingFileName(null);
+      // Auto-analyze on drop
+      setTimeout(() => handleAnalyzePdf(f), 0);
     },
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
     disabled: loading || isAnalyzing,
