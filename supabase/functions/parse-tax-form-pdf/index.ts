@@ -483,6 +483,125 @@ function extractDataFromText(text: string): ExtractedData {
   return result;
 }
 
+async function extractWithAI(pdfText: string): Promise<ExtractedData | null> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.warn("LOVABLE_API_KEY not set; skipping AI extraction");
+    return null;
+  }
+
+  // Truncate to keep prompt reasonable
+  const text = pdfText.slice(0, 20000);
+
+  const systemPrompt = `Eres un extractor de datos de formularios de impuestos de la SAT de Guatemala (Declaraguate). Devuelves SOLO JSON válido conforme al esquema solicitado.
+
+Reglas:
+- formNumber: número del formulario SAT (7, 8 u 11 dígitos, sin espacios). Aparece como "Número de Formulario".
+- accessCode: número de acceso de 9 dígitos sin espacios. Aparece como "Número de Acceso".
+- taxType: tipo de impuesto en MAYÚSCULAS (ej: "IVA", "IVA PEQUEÑO CONTRIBUYENTE", "ISR MENSUAL", "ISR TRIMESTRAL", "ISO", "ISR ANUAL", "IUSI", "IETAAP"). Usa el nombre del formulario tal como aparece, en mayúsculas.
+- periodType: "mensual", "trimestral" o "anual" según corresponda.
+- periodMonth: número de mes 1-12 (para trimestral usa el mes inicial: Q1=1, Q2=4, Q3=7, Q4=10).
+- periodYear: año en 4 dígitos.
+- paymentDate: fecha de presentación o pago en formato YYYY-MM-DD. Usa "Fecha de presentación" de la constancia, o "¿Cuándo pagará este formulario?", o "Fecha máxima de pago".
+- amountPaid: número decimal del "TOTAL A PAGAR" o "Impuesto a pagar".
+
+Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
+
+  const userPrompt = `Extrae los datos del siguiente texto de formulario SAT:\n\n${text}`;
+
+  const tool = {
+    type: "function",
+    function: {
+      name: "extract_tax_form",
+      description: "Extrae datos estructurados de un formulario SAT",
+      parameters: {
+        type: "object",
+        properties: {
+          formNumber: { type: "string" },
+          accessCode: { type: "string" },
+          taxType: { type: "string" },
+          periodType: { type: "string", enum: ["mensual", "trimestral", "anual"] },
+          periodMonth: { type: "integer", minimum: 1, maximum: 12 },
+          periodYear: { type: "integer", minimum: 2000, maximum: 2100 },
+          paymentDate: { type: "string", description: "YYYY-MM-DD" },
+          amountPaid: { type: "number" },
+        },
+        additionalProperties: false,
+      },
+    },
+  };
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      tools: [tool],
+      tool_choice: { type: "function", function: { name: "extract_tax_form" } },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error("AI gateway error", response.status, body);
+    return null;
+  }
+
+  const data = await response.json();
+  const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+  if (!toolCall?.function?.arguments) return null;
+
+  let args: Record<string, unknown>;
+  try {
+    args = JSON.parse(toolCall.function.arguments);
+  } catch {
+    return null;
+  }
+
+  const result: ExtractedData = { fieldsFound: 0 };
+  const assign = <K extends keyof ExtractedData>(k: K, v: ExtractedData[K]) => {
+    if (v !== undefined && v !== null && v !== "") {
+      (result[k] as ExtractedData[K]) = v;
+      if (k !== "fieldsFound") result.fieldsFound++;
+    }
+  };
+  assign("formNumber", typeof args.formNumber === "string" ? onlyDigits(args.formNumber) : undefined);
+  assign("accessCode", typeof args.accessCode === "string" ? onlyDigits(args.accessCode) : undefined);
+  assign("taxType", typeof args.taxType === "string" ? args.taxType.toUpperCase() : undefined);
+  assign("periodType", typeof args.periodType === "string" ? args.periodType : undefined);
+  assign("periodMonth", typeof args.periodMonth === "number" ? args.periodMonth : undefined);
+  assign("periodYear", typeof args.periodYear === "number" ? args.periodYear : undefined);
+  assign("paymentDate", typeof args.paymentDate === "string" ? args.paymentDate : undefined);
+  assign("amountPaid", typeof args.amountPaid === "number" ? args.amountPaid : undefined);
+
+  return result;
+}
+
+function mergeExtractions(primary: ExtractedData | null, fallback: ExtractedData): ExtractedData {
+  if (!primary) return fallback;
+  const merged: ExtractedData = { ...primary };
+  const keys: (keyof ExtractedData)[] = [
+    "formNumber", "accessCode", "taxType", "periodType",
+    "periodMonth", "periodYear", "paymentDate", "amountPaid",
+  ];
+  let count = 0;
+  for (const k of keys) {
+    if (merged[k] === undefined && fallback[k] !== undefined) {
+      (merged[k] as unknown) = fallback[k];
+    }
+    if (merged[k] !== undefined) count++;
+  }
+  merged.fieldsFound = count;
+  return merged;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -534,11 +653,20 @@ serve(async (req) => {
       );
     }
 
-    // Extract data using regex patterns
-    const extractedData = extractDataFromText(pdfText);
+    // Try AI extraction first (Lovable AI / Gemini) for robust parsing across SAT form variants
+    let extractedData: ExtractedData | null = null;
+    try {
+      extractedData = await extractWithAI(pdfText);
+    } catch (e) {
+      console.warn("AI extraction failed, falling back to regex:", e);
+    }
+
+    // Fallback / merge with regex extraction
+    const regexData = extractDataFromText(pdfText);
+    const finalData = mergeExtractions(extractedData, regexData);
 
     return new Response(
-      JSON.stringify(extractedData),
+      JSON.stringify(finalData),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {

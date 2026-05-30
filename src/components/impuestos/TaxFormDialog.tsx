@@ -123,6 +123,8 @@ export default function TaxFormDialog({
     onFile: (f) => {
       setFile(f);
       setExistingFileName(null);
+      // Auto-analyze on drop
+      setTimeout(() => handleAnalyzePdf(f), 0);
     },
     onError: (message) => toast({ variant: "destructive", title: "Error", description: message }),
     disabled: loading || isAnalyzing,
@@ -213,6 +215,8 @@ export default function TaxFormDialog({
       }
       setFile(selectedFile);
       setExistingFileName(null);
+      // Auto-analyze on selection
+      setTimeout(() => handleAnalyzePdf(selectedFile), 0);
     }
   };
 
@@ -233,13 +237,14 @@ export default function TaxFormDialog({
     return fullText;
   };
 
-  const handleAnalyzePdf = async () => {
-    if (!file) return;
+  const handleAnalyzePdf = async (fileOverride?: File) => {
+    const target = fileOverride || file;
+    if (!target) return;
 
     setIsAnalyzing(true);
     try {
       // Extract text from PDF in client-side
-      const pdfText = await extractTextFromPdf(file);
+      const pdfText = await extractTextFromPdf(target);
       
       console.log("Extracted PDF text length:", pdfText.length);
       console.log("PDF text preview:", pdfText.substring(0, 500));
@@ -455,7 +460,7 @@ export default function TaxFormDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleAnalyzePdf}
+                      onClick={() => handleAnalyzePdf()}
                       disabled={isAnalyzing || loading}
                       className="gap-1"
                     >
