@@ -2336,6 +2336,64 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Require authentication for triggering imports
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Allow internal service-role continuations (function calling itself)
+    const isInternalContinuation = authHeader === `Bearer ${SERVICE_ROLE}`;
+
+    if (!isInternalContinuation) {
+      // Verify JWT and that caller owns / has access to the job
+      const { client: userClient, user } = await createAuthedClient(authHeader);
+      if (!user?.id) {
+        return new Response(JSON.stringify({ error: "No autorizado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
+        auth: { persistSession: false },
+      });
+
+      const { data: jobRow, error: jobErr } = await adminClient
+        .from("tab_legacy_import_jobs")
+        .select("id, created_by, enterprise_id")
+        .eq("id", jobId)
+        .maybeSingle();
+
+      if (jobErr || !jobRow) {
+        return new Response(JSON.stringify({ error: "Job no encontrado" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let allowed = jobRow.created_by === user.id;
+      if (!allowed) {
+        const { data: link } = await adminClient
+          .from("tab_user_enterprises")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .eq("enterprise_id", jobRow.enterprise_id)
+          .maybeSingle();
+        allowed = !!link;
+      }
+
+      if (!allowed) {
+        return new Response(JSON.stringify({ error: "Sin acceso a este job" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     EdgeRuntime.waitUntil(runImport(jobId));
     return new Response(JSON.stringify({ ok: true, jobId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
