@@ -483,7 +483,10 @@ function extractDataFromText(text: string): ExtractedData {
   return result;
 }
 
-async function extractWithAI(pdfText: string): Promise<ExtractedData | null> {
+async function extractWithAI(
+  pdfText: string,
+  pdfBase64?: string,
+): Promise<ExtractedData | null> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
     console.warn("LOVABLE_API_KEY not set; skipping AI extraction");
@@ -498,6 +501,7 @@ async function extractWithAI(pdfText: string): Promise<ExtractedData | null> {
 Reglas:
 - formNumber: número del formulario SAT (7, 8 u 11 dígitos, sin espacios). Aparece como "Número de Formulario".
 - accessCode: número de acceso de 9 dígitos sin espacios. Aparece como "Número de Acceso".
+
 - taxType: tipo de impuesto en MAYÚSCULAS (ej: "IVA", "IVA PEQUEÑO CONTRIBUYENTE", "ISR MENSUAL", "ISR TRIMESTRAL", "ISO", "ISR ANUAL", "IUSI", "IETAAP"). Usa el nombre del formulario tal como aparece, en mayúsculas.
 - periodType: "mensual", "trimestral" o "anual" según corresponda.
 - periodMonth: número de mes 1-12 (para trimestral usa el mes inicial: Q1=1, Q2=4, Q3=7, Q4=10).
@@ -507,7 +511,26 @@ Reglas:
 
 Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
 
-  const userPrompt = `Extrae los datos del siguiente texto de formulario SAT:\n\n${text}`;
+  // Build user content: multimodal (with PDF for OCR) or text-only
+  let userContent: unknown;
+  if (pdfBase64) {
+    userContent = [
+      {
+        type: "text",
+        text: "Extrae los datos del siguiente formulario SAT en PDF (puede estar escaneado, aplica OCR si es necesario):",
+      },
+      {
+        type: "file",
+        file: {
+          filename: "formulario.pdf",
+          file_data: `data:application/pdf;base64,${pdfBase64}`,
+        },
+      },
+    ];
+  } else {
+    userContent = `Extrae los datos del siguiente texto de formulario SAT:\n\n${text}`;
+  }
+
 
   const tool = {
     type: "function",
@@ -541,7 +564,7 @@ Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
       model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        { role: "user", content: userContent },
       ],
       tools: [tool],
       tool_choice: { type: "function", function: { name: "extract_tax_form" } },
@@ -634,35 +657,38 @@ serve(async (req) => {
       );
     }
 
-    const { pdfText } = await req.json();
+    const { pdfText, pdfBase64 } = await req.json();
 
-    if (!pdfText || typeof pdfText !== "string") {
+    if ((!pdfText || typeof pdfText !== "string") && !pdfBase64) {
       return new Response(
-        JSON.stringify({ error: "No se proporcionó texto del PDF", fieldsFound: 0 }),
+        JSON.stringify({ error: "No se proporcionó texto ni PDF", fieldsFound: 0 }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
+    const safePdfText: string = typeof pdfText === "string" ? pdfText : "";
+
     // Input validation: limit text size to prevent DoS attacks (max 5MB)
     const MAX_PDF_TEXT_SIZE = 5 * 1024 * 1024; // 5MB
-    if (pdfText.length > MAX_PDF_TEXT_SIZE) {
-      console.warn(`PDF text exceeds size limit: ${pdfText.length} bytes`);
+    if (safePdfText.length > MAX_PDF_TEXT_SIZE) {
+      console.warn(`PDF text exceeds size limit: ${safePdfText.length} bytes`);
       return new Response(
         JSON.stringify({ error: "El texto del PDF excede el tamaño máximo permitido (5MB)", fieldsFound: 0 }),
         { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Try AI extraction first (Lovable AI / Gemini) for robust parsing across SAT form variants
+    // Try AI extraction first (Lovable AI / Gemini) — uses PDF directly when scanned
     let extractedData: ExtractedData | null = null;
     try {
-      extractedData = await extractWithAI(pdfText);
+      extractedData = await extractWithAI(safePdfText, typeof pdfBase64 === "string" ? pdfBase64 : undefined);
     } catch (e) {
       console.warn("AI extraction failed, falling back to regex:", e);
     }
 
+
     // Fallback / merge with regex extraction
-    const regexData = extractDataFromText(pdfText);
+    const regexData = extractDataFromText(safePdfText);
     const finalData = mergeExtractions(extractedData, regexData);
 
     return new Response(

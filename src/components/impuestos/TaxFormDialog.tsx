@@ -237,23 +237,44 @@ export default function TaxFormDialog({
     return fullText;
   };
 
+  const fileToBase64 = (f: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Strip the data URL prefix to send only base64
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+
   const handleAnalyzePdf = async (fileOverride?: File) => {
     const target = fileOverride || file;
     if (!target) return;
 
     setIsAnalyzing(true);
     try {
-      // Extract text from PDF in client-side
+      // Extract text from PDF client-side (works for digital PDFs)
       const pdfText = await extractTextFromPdf(target);
-      
+
       console.log("Extracted PDF text length:", pdfText.length);
       console.log("PDF text preview:", pdfText.substring(0, 500));
 
+      // If text is too short, the PDF is likely scanned — send base64 for OCR via Gemini
+      const needsOcr = pdfText.trim().length < 100;
+      const pdfBase64 = needsOcr ? await fileToBase64(target) : undefined;
+      if (needsOcr) {
+        console.log("PDF parece escaneado, enviando como imagen para OCR con IA");
+      }
+
       const { data, error } = await supabase.functions.invoke("parse-tax-form-pdf", {
-        body: { pdfText },
+        body: { pdfText, pdfBase64 },
       });
 
       if (error) throw error;
+
 
       const extractedData = data as ExtractedPdfData;
 
