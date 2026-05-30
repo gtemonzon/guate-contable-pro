@@ -511,7 +511,26 @@ Reglas:
 
 Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
 
-  const userPrompt = `Extrae los datos del siguiente texto de formulario SAT:\n\n${text}`;
+  // Build user content: multimodal (with PDF for OCR) or text-only
+  let userContent: unknown;
+  if (pdfBase64) {
+    userContent = [
+      {
+        type: "text",
+        text: "Extrae los datos del siguiente formulario SAT en PDF (puede estar escaneado, aplica OCR si es necesario):",
+      },
+      {
+        type: "file",
+        file: {
+          filename: "formulario.pdf",
+          file_data: `data:application/pdf;base64,${pdfBase64}`,
+        },
+      },
+    ];
+  } else {
+    userContent = `Extrae los datos del siguiente texto de formulario SAT:\n\n${text}`;
+  }
+
 
   const tool = {
     type: "function",
