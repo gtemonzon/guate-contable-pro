@@ -215,6 +215,8 @@ export default function TaxFormDialog({
       }
       setFile(selectedFile);
       setExistingFileName(null);
+      // Auto-analyze on selection
+      setTimeout(() => handleAnalyzePdf(selectedFile), 0);
     }
   };
 
