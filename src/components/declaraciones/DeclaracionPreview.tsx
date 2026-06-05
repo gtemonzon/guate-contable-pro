@@ -295,7 +295,23 @@ export function DeclaracionPreview({
 
                 {/* Exención IVA */}
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
-                  <span className="text-sm">(-) Exención IVA Realizada</span>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm">(-) Exención IVA Realizada</span>
+                    {exencionIVASugerida > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs gap-1 w-fit"
+                        onClick={() => {
+                          onExencionIVAChange?.(exencionIVASugerida);
+                          toast({ title: "Sugerencia aplicada", description: `Exenciones IVA emitidas del mes: ${formatCurrency(exencionIVASugerida)}` });
+                        }}
+                      >
+                        <Info className="h-3 w-3" />
+                        Sugerido constancias: {formatCurrency(exencionIVASugerida)}
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
@@ -309,6 +325,20 @@ export function DeclaracionPreview({
                     <CopyButton value={exencionIVA} />
                   </div>
                 </div>
+
+                {(vatRetenidoTercerosInfo > 0 || vatRetenidoEmitidoInfo > 0) && (
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertDescription className="text-xs space-y-0.5">
+                      {vatRetenidoTercerosInfo > 0 && (
+                        <div>IVA retenido por terceros a la empresa (recibido): <span className="font-mono font-medium">{formatCurrency(vatRetenidoTercerosInfo)}</span> — declárese en el rubro correspondiente del SAT-2237.</div>
+                      )}
+                      {vatRetenidoEmitidoInfo > 0 && (
+                        <div>IVA retenido a proveedores (emitido por la empresa): <span className="font-mono font-medium">{formatCurrency(vatRetenidoEmitidoInfo)}</span> — debe enterarse a SAT con el formulario correspondiente.</div>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 
                 {ivaGeneral.ivaAPagar > 0 ? (
                   <TotalRow label="IVA A PAGAR" value={ivaGeneral.ivaAPagar} isHighlight />
