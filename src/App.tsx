@@ -56,6 +56,7 @@ const Inbox = lazyRetry(() => import("./pages/Inbox"));
 const Soporte = lazyRetry(() => import("./pages/Soporte"));
 const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
 const Nomina = lazyRetry(() => import("./pages/Nomina"));
+const RetencionesExenciones = lazyRetry(() => import("./pages/RetencionesExenciones"));
 
 // Loading fallback component
 const PageLoader = () => (
