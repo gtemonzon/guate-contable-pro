@@ -278,6 +278,10 @@ export default function GenerarDeclaracion() {
           onExencionIVAChange={setExencionIVA}
           retencionISR={retencionISR}
           onRetencionISRChange={setRetencionISR}
+          retencionISRSugerida={certTotals?.isrRetainedReceived ?? 0}
+          exencionIVASugerida={certTotals?.vatExemptionIssuedBase ?? 0}
+          vatRetenidoTercerosInfo={certTotals?.vatRetainedReceived ?? 0}
+          vatRetenidoEmitidoInfo={certTotals?.vatRetainedIssued ?? 0}
           inventarioFinalEstimado={inventarioFinalEstimado}
           onInventarioFinalEstimadoChange={setInventarioFinalEstimado}
           otrosValores={otrosValores}
