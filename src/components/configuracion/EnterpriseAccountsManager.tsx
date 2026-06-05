@@ -48,6 +48,11 @@ export function EnterpriseAccountsManager() {
     payroll_salaries_payable_account_id: null as number | null,
     payroll_indemnizacion_provision_account_id: null as number | null,
     payroll_aguinaldo_bono14_provision_account_id: null as number | null,
+    account_vat_retained_receivable_id: null as number | null,
+    account_vat_retained_payable_id: null as number | null,
+    account_vat_exemption_control_id: null as number | null,
+    account_isr_retained_receivable_id: null as number | null,
+    account_isr_retained_payable_id: null as number | null,
   });
 
   useEffect(() => {
