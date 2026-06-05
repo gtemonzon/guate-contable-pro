@@ -20,6 +20,7 @@ import {
   REGIME_LABELS,
 } from "@/hooks/useTaxCertificates";
 import { validateNIT } from "@/utils/nitValidation";
+import { generateJournalEntryFromCertificate } from "@/services/taxCertificateJournalEntry";
 
 interface Props {
   open: boolean;
