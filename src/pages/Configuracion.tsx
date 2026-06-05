@@ -16,10 +16,13 @@ import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreMa
 import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
+import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
+import { useTenant } from "@/contexts/TenantContext";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') || 'enterprise-accounts';
+  const { isSuperAdmin } = useTenant();
 
   return (
     <div className="container mx-auto p-6">
