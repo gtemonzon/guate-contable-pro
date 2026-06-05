@@ -267,6 +267,12 @@ export default function RetencionesExenciones() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="reconciliation">
+          <ReconciliationPanel month={filters.month ?? null} year={filters.year ?? null} />
+        </TabsContent>
+      </Tabs>
 
       <CertificateFormPanel
         open={open}
