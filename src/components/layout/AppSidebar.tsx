@@ -54,6 +54,12 @@ const allMenuItems: MenuItemOrSection[] = [
     ],
   },
   {
+    title: "Gestión Tributaria",
+    items: [
+      { title: "Retenciones y Exenciones", url: "/retenciones-exenciones", icon: ShieldCheck, requiredPermission: "canViewAccounts" },
+    ],
+  },
+  {
     title: "Consultas",
     items: [
       { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
