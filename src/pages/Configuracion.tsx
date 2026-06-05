@@ -49,6 +49,7 @@ export default function Configuracion() {
           <TabsTrigger value="backup">Respaldo</TabsTrigger>
           <TabsTrigger value="integrity">Integridad</TabsTrigger>
           <TabsTrigger value="health">Estado del Sistema</TabsTrigger>
+          {isSuperAdmin && <TabsTrigger value="isr-categories">Categorías ISR (Global)</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="enterprise-accounts" className="mt-6">
