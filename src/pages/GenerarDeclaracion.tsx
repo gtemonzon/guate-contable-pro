@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Loader2, Calculator, AlertCircle } from "lucide-react";
 import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
+import { useCertificatePeriodTotals } from "@/hooks/useTaxCertificates";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
