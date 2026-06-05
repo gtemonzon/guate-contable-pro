@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck } from "lucide-react";
 import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink, useLocation } from "react-router-dom";
 import {
