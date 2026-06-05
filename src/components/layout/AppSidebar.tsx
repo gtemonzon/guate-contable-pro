@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck } from "lucide-react";
 import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -51,6 +51,12 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote, requiredPermission: "canBankReconciliation" },
       { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
       { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
+    ],
+  },
+  {
+    title: "Gestión Tributaria",
+    items: [
+      { title: "Retenciones y Exenciones", url: "/retenciones-exenciones", icon: ShieldCheck, requiredPermission: "canViewAccounts" },
     ],
   },
   {

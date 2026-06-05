@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EnterpriseIssuanceProfiles } from "@/components/empresas/EnterpriseIssuanceProfiles";
 
 interface EnterpriseTaxesProps {
   enterpriseId: number;
@@ -232,6 +233,8 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
 
   return (
     <div className="space-y-4">
+      <EnterpriseIssuanceProfiles enterpriseId={enterpriseId} />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Impuestos Aplicables</CardTitle>
