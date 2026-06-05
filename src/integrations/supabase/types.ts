@@ -1570,6 +1570,11 @@ export type Database = {
       }
       tab_enterprise_config: {
         Row: {
+          account_isr_retained_payable_id: number | null
+          account_isr_retained_receivable_id: number | null
+          account_vat_exemption_control_id: number | null
+          account_vat_retained_payable_id: number | null
+          account_vat_retained_receivable_id: number | null
           cost_of_sales_account_id: number | null
           cost_of_sales_method: string | null
           created_at: string | null
@@ -1581,6 +1586,9 @@ export type Database = {
           id: number
           initial_inventory_account_id: number | null
           inventory_account_id: number | null
+          issues_isr_retention_certificates: boolean
+          issues_vat_exemption_certificates: boolean
+          issues_vat_retention_certificates: boolean
           payroll_aguinaldo_bono14_provision_account_id: number | null
           payroll_aguinaldo_expense_account_id: number | null
           payroll_bonificacion_expense_account_id: number | null
@@ -1606,6 +1614,11 @@ export type Database = {
           vat_debit_account_id: number | null
         }
         Insert: {
+          account_isr_retained_payable_id?: number | null
+          account_isr_retained_receivable_id?: number | null
+          account_vat_exemption_control_id?: number | null
+          account_vat_retained_payable_id?: number | null
+          account_vat_retained_receivable_id?: number | null
           cost_of_sales_account_id?: number | null
           cost_of_sales_method?: string | null
           created_at?: string | null
@@ -1617,6 +1630,9 @@ export type Database = {
           id?: never
           initial_inventory_account_id?: number | null
           inventory_account_id?: number | null
+          issues_isr_retention_certificates?: boolean
+          issues_vat_exemption_certificates?: boolean
+          issues_vat_retention_certificates?: boolean
           payroll_aguinaldo_bono14_provision_account_id?: number | null
           payroll_aguinaldo_expense_account_id?: number | null
           payroll_bonificacion_expense_account_id?: number | null
@@ -1642,6 +1658,11 @@ export type Database = {
           vat_debit_account_id?: number | null
         }
         Update: {
+          account_isr_retained_payable_id?: number | null
+          account_isr_retained_receivable_id?: number | null
+          account_vat_exemption_control_id?: number | null
+          account_vat_retained_payable_id?: number | null
+          account_vat_retained_receivable_id?: number | null
           cost_of_sales_account_id?: number | null
           cost_of_sales_method?: string | null
           created_at?: string | null
@@ -1653,6 +1674,9 @@ export type Database = {
           id?: never
           initial_inventory_account_id?: number | null
           inventory_account_id?: number | null
+          issues_isr_retention_certificates?: boolean
+          issues_vat_exemption_certificates?: boolean
+          issues_vat_retention_certificates?: boolean
           payroll_aguinaldo_bono14_provision_account_id?: number | null
           payroll_aguinaldo_expense_account_id?: number | null
           payroll_bonificacion_expense_account_id?: number | null
@@ -1678,6 +1702,41 @@ export type Database = {
           vat_debit_account_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tab_enterprise_config_account_isr_retained_payable_id_fkey"
+            columns: ["account_isr_retained_payable_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_isr_retained_receivable_id_fkey"
+            columns: ["account_isr_retained_receivable_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_vat_exemption_control_id_fkey"
+            columns: ["account_vat_exemption_control_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_vat_retained_payable_id_fkey"
+            columns: ["account_vat_retained_payable_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_vat_retained_receivable_id_fkey"
+            columns: ["account_vat_retained_receivable_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tab_enterprise_config_cost_of_sales_account_id_fkey"
             columns: ["cost_of_sales_account_id"]
@@ -2446,6 +2505,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tab_isr_income_categories: {
+        Row: {
+          created_at: string
+          default_percentage: number
+          description: string | null
+          display_order: number
+          id: number
+          is_active: boolean
+          name: string
+          regime: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_percentage?: number
+          description?: string | null
+          display_order?: number
+          id?: number
+          is_active?: boolean
+          name: string
+          regime: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_percentage?: number
+          description?: string | null
+          display_order?: number
+          id?: number
+          is_active?: boolean
+          name?: string
+          regime?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       tab_journal_entries: {
         Row: {
@@ -3611,6 +3706,210 @@ export type Database = {
             columns: ["operation_type_id"]
             isOneToOne: false
             referencedRelation: "tab_operation_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_tax_certificate_ingestion_sources: {
+        Row: {
+          certificate_id: number | null
+          created_at: string
+          created_by: string
+          enterprise_id: number
+          error_message: string | null
+          id: number
+          raw_payload: Json | null
+          source_type: string
+          status: string
+          storage_path: string | null
+          tenant_id: number
+          updated_at: string
+        }
+        Insert: {
+          certificate_id?: number | null
+          created_at?: string
+          created_by: string
+          enterprise_id: number
+          error_message?: string | null
+          id?: number
+          raw_payload?: Json | null
+          source_type: string
+          status?: string
+          storage_path?: string | null
+          tenant_id: number
+          updated_at?: string
+        }
+        Update: {
+          certificate_id?: number | null
+          created_at?: string
+          created_by?: string
+          enterprise_id?: number
+          error_message?: string | null
+          id?: number
+          raw_payload?: Json | null
+          source_type?: string
+          status?: string
+          storage_path?: string | null
+          tenant_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_tax_certificate_ingestion_sources_certificate_id_fkey"
+            columns: ["certificate_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tax_certificates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificate_ingestion_sources_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificate_ingestion_sources_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_tax_certificates: {
+        Row: {
+          authorization_number: string | null
+          base_amount: number
+          counterpart_name: string
+          counterpart_nit: string
+          created_at: string
+          created_by: string
+          direction: string
+          document_number: string
+          document_type: string
+          enterprise_id: number
+          id: number
+          isr_category_id: number | null
+          isr_regime: string | null
+          issue_date: string
+          journal_entry_id: number | null
+          notes: string | null
+          percentage: number
+          period_id: number | null
+          purchase_ledger_id: number | null
+          sales_ledger_id: number | null
+          series: string | null
+          status: string
+          tax_amount: number
+          tenant_id: number
+          updated_at: string
+          vat_amount: number
+        }
+        Insert: {
+          authorization_number?: string | null
+          base_amount?: number
+          counterpart_name: string
+          counterpart_nit: string
+          created_at?: string
+          created_by: string
+          direction: string
+          document_number: string
+          document_type: string
+          enterprise_id: number
+          id?: number
+          isr_category_id?: number | null
+          isr_regime?: string | null
+          issue_date: string
+          journal_entry_id?: number | null
+          notes?: string | null
+          percentage?: number
+          period_id?: number | null
+          purchase_ledger_id?: number | null
+          sales_ledger_id?: number | null
+          series?: string | null
+          status?: string
+          tax_amount?: number
+          tenant_id: number
+          updated_at?: string
+          vat_amount?: number
+        }
+        Update: {
+          authorization_number?: string | null
+          base_amount?: number
+          counterpart_name?: string
+          counterpart_nit?: string
+          created_at?: string
+          created_by?: string
+          direction?: string
+          document_number?: string
+          document_type?: string
+          enterprise_id?: number
+          id?: number
+          isr_category_id?: number | null
+          isr_regime?: string | null
+          issue_date?: string
+          journal_entry_id?: number | null
+          notes?: string | null
+          percentage?: number
+          period_id?: number | null
+          purchase_ledger_id?: number | null
+          sales_ledger_id?: number | null
+          series?: string | null
+          status?: string
+          tax_amount?: number
+          tenant_id?: number
+          updated_at?: string
+          vat_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_tax_certificates_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_isr_category_id_fkey"
+            columns: ["isr_category_id"]
+            isOneToOne: false
+            referencedRelation: "tab_isr_income_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounting_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_purchase_ledger_id_fkey"
+            columns: ["purchase_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "tab_purchase_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_sales_ledger_id_fkey"
+            columns: ["sales_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "tab_sales_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_tax_certificates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
             referencedColumns: ["id"]
           },
         ]
