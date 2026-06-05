@@ -20,6 +20,8 @@ import {
 import { CertificateFormPanel } from "@/components/retenciones/CertificateFormPanel";
 import { useToast } from "@/hooks/use-toast";
 import { exportCertificatesToExcel, exportCertificatesToPdf } from "@/components/retenciones/certificateExport";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReconciliationPanel } from "@/components/retenciones/ReconciliationPanel";
 
 const MONTHS = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -127,6 +129,13 @@ export default function RetencionesExenciones() {
         </div>
       </div>
 
+      <Tabs defaultValue="list" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list">Constancias</TabsTrigger>
+          <TabsTrigger value="reconciliation">Conciliación</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-6">
       {/* Filters */}
       <Card>
         <CardContent className="pt-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -258,6 +267,12 @@ export default function RetencionesExenciones() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="reconciliation">
+          <ReconciliationPanel month={filters.month ?? null} year={filters.year ?? null} />
+        </TabsContent>
+      </Tabs>
 
       <CertificateFormPanel
         open={open}
