@@ -49,13 +49,13 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Activos Fijos", url: "/activos-fijos", icon: Package, requiredPermission: "canViewAccounts" },
       { title: "Nómina", url: "/nomina", icon: UserCog, requiredPermission: "canViewAccounts" },
       { title: "Conciliación Bancaria", url: "/conciliacion", icon: Banknote, requiredPermission: "canBankReconciliation" },
-      { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
-      { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
     ],
   },
   {
     title: "Gestión Tributaria",
     items: [
+      { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
+      { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
       { title: "Retenciones y Exenciones", url: "/retenciones-exenciones", icon: ShieldCheck, requiredPermission: "canViewAccounts" },
     ],
   },
