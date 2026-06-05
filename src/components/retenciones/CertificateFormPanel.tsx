@@ -141,14 +141,35 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
     }
 
     try {
-      await save.mutateAsync({
+      const savedId = await save.mutateAsync({
         id: certificate?.id,
         data: { ...form, enterprise_id: selectedEnterpriseId },
       });
-      toast({
-        title: "Guardado",
-        description: generateJournal ? "Constancia guardada. La partida contable se generará en un paso siguiente." : "Constancia guardada.",
-      });
+
+      if (generateJournal) {
+        try {
+          const result = await generateJournalEntryFromCertificate(savedId);
+          if (result.skipped) {
+            toast({
+              title: "Constancia guardada",
+              description: "Las exenciones de IVA no requieren partida contable.",
+            });
+          } else {
+            toast({
+              title: "Constancia guardada",
+              description: `Partida contable creada como borrador (#${result.entryId}). Revísala antes de publicarla.`,
+            });
+          }
+        } catch (je) {
+          toast({
+            title: "Constancia guardada, pero la partida falló",
+            description: je instanceof Error ? je.message : String(je),
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({ title: "Constancia guardada" });
+      }
       onOpenChange(false);
     } catch (e) {
       toast({ title: "Error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
