@@ -12,6 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EnterpriseIssuanceProfiles } from "@/components/empresas/EnterpriseIssuanceProfiles";
 
 interface EnterpriseTaxesProps {
   enterpriseId: number;
