@@ -48,6 +48,11 @@ export function EnterpriseAccountsManager() {
     payroll_salaries_payable_account_id: null as number | null,
     payroll_indemnizacion_provision_account_id: null as number | null,
     payroll_aguinaldo_bono14_provision_account_id: null as number | null,
+    account_vat_retained_receivable_id: null as number | null,
+    account_vat_retained_payable_id: null as number | null,
+    account_vat_exemption_control_id: null as number | null,
+    account_isr_retained_receivable_id: null as number | null,
+    account_isr_retained_payable_id: null as number | null,
   });
 
   useEffect(() => {
@@ -89,6 +94,11 @@ export function EnterpriseAccountsManager() {
         payroll_salaries_payable_account_id: config.payroll_salaries_payable_account_id ?? null,
         payroll_indemnizacion_provision_account_id: config.payroll_indemnizacion_provision_account_id ?? null,
         payroll_aguinaldo_bono14_provision_account_id: config.payroll_aguinaldo_bono14_provision_account_id ?? null,
+        account_vat_retained_receivable_id: config.account_vat_retained_receivable_id ?? null,
+        account_vat_retained_payable_id: config.account_vat_retained_payable_id ?? null,
+        account_vat_exemption_control_id: config.account_vat_exemption_control_id ?? null,
+        account_isr_retained_receivable_id: config.account_isr_retained_receivable_id ?? null,
+        account_isr_retained_payable_id: config.account_isr_retained_payable_id ?? null,
       });
     }
   }, [config]);
@@ -154,6 +164,11 @@ export function EnterpriseAccountsManager() {
       payroll_salaries_payable_account_id: formData.payroll_salaries_payable_account_id,
       payroll_indemnizacion_provision_account_id: formData.payroll_indemnizacion_provision_account_id,
       payroll_aguinaldo_bono14_provision_account_id: formData.payroll_aguinaldo_bono14_provision_account_id,
+      account_vat_retained_receivable_id: formData.account_vat_retained_receivable_id,
+      account_vat_retained_payable_id: formData.account_vat_retained_payable_id,
+      account_vat_exemption_control_id: formData.account_vat_exemption_control_id,
+      account_isr_retained_receivable_id: formData.account_isr_retained_receivable_id,
+      account_isr_retained_payable_id: formData.account_isr_retained_payable_id,
     });
   };
 
@@ -407,6 +422,38 @@ export function EnterpriseAccountsManager() {
                       value={formData[key as keyof typeof formData] as number | null}
                       onValueChange={(v) => setFormData(p => ({ ...p, [key]: v }))}
                       placeholder="Seleccionar cuenta de pasivo"
+                    />
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Retenciones y Exenciones Section */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold">Retenciones y Exenciones</h3>
+                <p className="text-sm text-muted-foreground">
+                  Cuentas usadas por el módulo de Retenciones y Exenciones para generar partidas a partir de constancias de ISR/IVA emitidas y recibidas.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { key: 'account_isr_retained_receivable_id', label: 'ISR Retenido por Cobrar', desc: 'Activo: ISR retenido por clientes a la empresa (constancias recibidas).' },
+                  { key: 'account_isr_retained_payable_id', label: 'ISR Retenido por Pagar', desc: 'Pasivo: ISR retenido por la empresa a proveedores (constancias emitidas).' },
+                  { key: 'account_vat_retained_receivable_id', label: 'IVA Retenido por Cobrar', desc: 'Activo: IVA retenido por clientes a la empresa (constancias recibidas).' },
+                  { key: 'account_vat_retained_payable_id', label: 'IVA Retenido por Pagar', desc: 'Pasivo: IVA retenido por la empresa a proveedores (constancias emitidas).' },
+                  { key: 'account_vat_exemption_control_id', label: 'Control de Exenciones IVA', desc: 'Cuenta de control informativa para exenciones de IVA (opcional).' },
+                ].map(({ key, label, desc }) => (
+                  <div key={key} className="space-y-2">
+                    <Label>{label}</Label>
+                    <AccountCombobox
+                      accounts={accounts}
+                      value={formData[key as keyof typeof formData] as number | null}
+                      onValueChange={(v) => setFormData(p => ({ ...p, [key]: v }))}
+                      placeholder="Seleccionar cuenta"
                     />
                     <p className="text-xs text-muted-foreground">{desc}</p>
                   </div>

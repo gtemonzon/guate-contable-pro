@@ -16,10 +16,13 @@ import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreMa
 import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
+import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
+import { useTenant } from "@/contexts/TenantContext";
 
 export default function Configuracion() {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') || 'enterprise-accounts';
+  const { isSuperAdmin } = useTenant();
 
   return (
     <div className="container mx-auto p-6">
@@ -46,6 +49,7 @@ export default function Configuracion() {
           <TabsTrigger value="backup">Respaldo</TabsTrigger>
           <TabsTrigger value="integrity">Integridad</TabsTrigger>
           <TabsTrigger value="health">Estado del Sistema</TabsTrigger>
+          {isSuperAdmin && <TabsTrigger value="isr-categories">Categorías ISR (Global)</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="enterprise-accounts" className="mt-6">
@@ -134,6 +138,12 @@ export default function Configuracion() {
         <TabsContent value="health" className="mt-6">
           <SystemHealthCheck />
         </TabsContent>
+
+        {isSuperAdmin && (
+          <TabsContent value="isr-categories" className="mt-6">
+            <IsrCategoriesManager />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

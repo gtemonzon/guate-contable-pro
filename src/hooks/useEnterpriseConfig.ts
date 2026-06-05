@@ -39,6 +39,12 @@ export interface EnterpriseConfig {
   payroll_salaries_payable_account_id: number | null;
   payroll_indemnizacion_provision_account_id: number | null;
   payroll_aguinaldo_bono14_provision_account_id: number | null;
+  // Retenciones y exenciones (Block 2)
+  account_vat_retained_receivable_id: number | null;
+  account_vat_retained_payable_id: number | null;
+  account_vat_exemption_control_id: number | null;
+  account_isr_retained_receivable_id: number | null;
+  account_isr_retained_payable_id: number | null;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
@@ -74,6 +80,11 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   payroll_salaries_payable_account_id: null,
   payroll_indemnizacion_provision_account_id: null,
   payroll_aguinaldo_bono14_provision_account_id: null,
+  account_vat_retained_receivable_id: null,
+  account_vat_retained_payable_id: null,
+  account_vat_exemption_control_id: null,
+  account_isr_retained_receivable_id: null,
+  account_isr_retained_payable_id: null,
 });
 
 export function useEnterpriseConfig(enterpriseId: number | null) {
@@ -144,6 +155,11 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         payroll_salaries_payable_account_id: newConfig.payroll_salaries_payable_account_id,
         payroll_indemnizacion_provision_account_id: newConfig.payroll_indemnizacion_provision_account_id,
         payroll_aguinaldo_bono14_provision_account_id: newConfig.payroll_aguinaldo_bono14_provision_account_id,
+        account_vat_retained_receivable_id: newConfig.account_vat_retained_receivable_id,
+        account_vat_retained_payable_id: newConfig.account_vat_retained_payable_id,
+        account_vat_exemption_control_id: newConfig.account_vat_exemption_control_id,
+        account_isr_retained_receivable_id: newConfig.account_isr_retained_receivable_id,
+        account_isr_retained_payable_id: newConfig.account_isr_retained_payable_id,
       };
 
       const { data: existing } = await supabase
