@@ -138,6 +138,12 @@ export default function Configuracion() {
         <TabsContent value="health" className="mt-6">
           <SystemHealthCheck />
         </TabsContent>
+
+        {isSuperAdmin && (
+          <TabsContent value="isr-categories" className="mt-6">
+            <IsrCategoriesManager />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
