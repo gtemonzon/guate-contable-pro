@@ -194,3 +194,68 @@ export function useDeleteCertificate() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tax_certificates"] }),
   });
 }
+
+export interface CertificatePeriodTotals {
+  isrRetainedReceived: number;
+  isrRetainedIssued: number;
+  vatRetainedReceived: number;
+  vatRetainedIssued: number;
+  vatExemptionReceivedBase: number;
+  vatExemptionIssuedBase: number;
+  count: number;
+}
+
+/**
+ * Totales de constancias tributarias por período, usados por el módulo de Declaraciones
+ * para sugerir retenciones a aplicar y mostrar exenciones del mes.
+ * Excluye constancias en estado 'void'.
+ */
+export function useCertificatePeriodTotals(
+  enterpriseId: number | null,
+  month: number | null,
+  year: number | null,
+) {
+  return useQuery({
+    queryKey: ["tax_certificates_totals", enterpriseId, month, year],
+    enabled: !!enterpriseId && !!month && !!year,
+    queryFn: async (): Promise<CertificatePeriodTotals> => {
+      const start = new Date(year!, month! - 1, 1).toISOString().slice(0, 10);
+      const end = new Date(year!, month!, 0).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from("tab_tax_certificates" as never)
+        .select("document_type, direction, tax_amount, base_amount, status")
+        .eq("enterprise_id", enterpriseId!)
+        .gte("issue_date", start)
+        .lte("issue_date", end);
+      if (error) throw error;
+
+      const totals: CertificatePeriodTotals = {
+        isrRetainedReceived: 0,
+        isrRetainedIssued: 0,
+        vatRetainedReceived: 0,
+        vatRetainedIssued: 0,
+        vatExemptionReceivedBase: 0,
+        vatExemptionIssuedBase: 0,
+        count: 0,
+      };
+      type Row = { document_type: string; direction: string; tax_amount: number; base_amount: number; status: string };
+      for (const r of (data ?? []) as unknown as Row[]) {
+        if (r.status === "void") continue;
+        totals.count += 1;
+        const tax = Number(r.tax_amount);
+        const base = Number(r.base_amount);
+        if (r.document_type === "isr_retention") {
+          if (r.direction === "received") totals.isrRetainedReceived += tax;
+          else totals.isrRetainedIssued += tax;
+        } else if (r.document_type === "vat_retention") {
+          if (r.direction === "received") totals.vatRetainedReceived += tax;
+          else totals.vatRetainedIssued += tax;
+        } else if (r.document_type === "vat_exemption") {
+          if (r.direction === "received") totals.vatExemptionReceivedBase += base;
+          else totals.vatExemptionIssuedBase += base;
+        }
+      }
+      return totals;
+    },
+  });
+}
