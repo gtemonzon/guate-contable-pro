@@ -25,6 +25,11 @@ interface DeclaracionPreviewProps {
   onExencionIVAChange?: (value: number) => void;
   retencionISR?: number;
   onRetencionISRChange?: (value: number) => void;
+  // Sugerencias provenientes del módulo de Retenciones y Exenciones
+  retencionISRSugerida?: number;
+  exencionIVASugerida?: number;
+  vatRetenidoTercerosInfo?: number; // informativo: IVA retenido por terceros (recibido) en el mes
+  vatRetenidoEmitidoInfo?: number; // informativo: IVA retenido a proveedores (emitido) en el mes
   // ISR Trimestral inputs
   inventarioFinalEstimado?: number;
   onInventarioFinalEstimadoChange?: (value: number) => void;
