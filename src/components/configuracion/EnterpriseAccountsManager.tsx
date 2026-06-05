@@ -164,6 +164,11 @@ export function EnterpriseAccountsManager() {
       payroll_salaries_payable_account_id: formData.payroll_salaries_payable_account_id,
       payroll_indemnizacion_provision_account_id: formData.payroll_indemnizacion_provision_account_id,
       payroll_aguinaldo_bono14_provision_account_id: formData.payroll_aguinaldo_bono14_provision_account_id,
+      account_vat_retained_receivable_id: formData.account_vat_retained_receivable_id,
+      account_vat_retained_payable_id: formData.account_vat_retained_payable_id,
+      account_vat_exemption_control_id: formData.account_vat_exemption_control_id,
+      account_isr_retained_receivable_id: formData.account_isr_retained_receivable_id,
+      account_isr_retained_payable_id: formData.account_isr_retained_payable_id,
     });
   };
 
