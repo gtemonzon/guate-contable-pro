@@ -62,6 +62,8 @@ export default function GenerarDeclaracion() {
     inventarioFinalEstimado, otrosValores, isrPagadoAnterior
   );
 
+  const { data: certTotals } = useCertificatePeriodTotals(enterpriseId, selectedMonth, selectedYear);
+
   // Load active enterprise
   useEffect(() => {
     const stored = localStorage.getItem("currentEnterpriseId");
