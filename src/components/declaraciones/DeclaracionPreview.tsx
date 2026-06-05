@@ -460,8 +460,22 @@ export function DeclaracionPreview({
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Retenciones</h4>
             <div className="bg-muted/30 rounded-lg p-3">
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm">(-) Retención ISR Realizada</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm">(-) Retención ISR Realizada por terceros</span>
+                  {retencionISRSugerida > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs gap-1 w-fit"
+                      onClick={() => {
+                        onRetencionISRChange?.(retencionISRSugerida);
+                        toast({ title: "Sugerencia aplicada", description: `Suma de constancias ISR recibidas: ${formatCurrency(retencionISRSugerida)}` });
+                      }}
+                    >
+                      <Info className="h-3 w-3" />
+                      Sugerido constancias: {formatCurrency(retencionISRSugerida)}
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Input
