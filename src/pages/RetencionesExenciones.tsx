@@ -20,6 +20,8 @@ import {
 import { CertificateFormPanel } from "@/components/retenciones/CertificateFormPanel";
 import { useToast } from "@/hooks/use-toast";
 import { exportCertificatesToExcel, exportCertificatesToPdf } from "@/components/retenciones/certificateExport";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReconciliationPanel } from "@/components/retenciones/ReconciliationPanel";
 
 const MONTHS = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
