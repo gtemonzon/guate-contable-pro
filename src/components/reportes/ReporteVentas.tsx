@@ -13,6 +13,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import {
   Table,
   TableBody,
@@ -63,6 +64,7 @@ export default function ReporteVentas() {
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { strategy } = useEnterpriseTaxRegime();
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -308,7 +310,7 @@ export default function ReporteVentas() {
 
     return {
       filename: `Ventas_${monthNames[selectedMonth - 1]}_${selectedYear}`,
-      title: `Libro de Ventas - ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+      title: `Libro de Ventas — ${monthNames[selectedMonth - 1]} ${selectedYear} (${strategy.label})`,
       enterpriseName,
       headers,
       data,

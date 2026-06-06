@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 
 
 interface FELDocumentType {
@@ -153,6 +154,7 @@ export default function LibrosFiscales() {
   const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
+  const { strategy } = useEnterpriseTaxRegime();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read URL params from global search navigation
@@ -1455,9 +1457,22 @@ export default function LibrosFiscales() {
           }}
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="compras">Libro de Compras</TabsTrigger>
-            <TabsTrigger value="ventas">Libro de Ventas</TabsTrigger>
+            <TabsTrigger value="compras">
+              {strategy.combinedBook ? "Compras (Libro Compras y Ventas)" : "Libro de Compras"}
+            </TabsTrigger>
+            <TabsTrigger value="ventas">
+              {strategy.combinedBook ? "Ventas (Libro Compras y Ventas)" : "Libro de Ventas"}
+            </TabsTrigger>
           </TabsList>
+
+          {(strategy.combinedBook || strategy.headerNote) && (
+            <div className="mt-3 rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm">
+              <strong>{strategy.label}.</strong>{" "}
+              {strategy.combinedBook
+                ? "El reporte oficial es el Libro de Compras y Ventas combinado (formato SAT). Disponible en Reportes ▸ Compras y Ventas."
+                : strategy.headerNote}
+            </div>
+          )}
 
           <TabsContent value="compras" className="space-y-2 mt-4">
             <div className="space-y-2">
