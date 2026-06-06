@@ -154,6 +154,7 @@ export default function LibrosFiscales() {
   const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
+  const { strategy } = useEnterpriseTaxRegime();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read URL params from global search navigation
