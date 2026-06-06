@@ -64,6 +64,7 @@ export default function ReporteVentas() {
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>("all");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { strategy } = useEnterpriseTaxRegime();
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
