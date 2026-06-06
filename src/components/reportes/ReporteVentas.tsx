@@ -13,6 +13,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import {
   Table,
   TableBody,
