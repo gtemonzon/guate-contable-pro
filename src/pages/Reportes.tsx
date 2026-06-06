@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import ReporteCompras from "@/components/reportes/ReporteCompras";
 import ReporteVentas from "@/components/reportes/ReporteVentas";
+import ReporteComprasVentas from "@/components/reportes/ReporteComprasVentas";
 import ReportePartidas from "@/components/reportes/ReportePartidas";
 import ReporteBalanceGeneral from "@/components/reportes/ReporteBalanceGeneral";
 import ReporteEstadoResultados from "@/components/reportes/ReporteEstadoResultados";
@@ -10,10 +11,21 @@ import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
 import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 import ReporteVariaciones from "@/components/reportes/ReporteVariaciones";
 import ReporteFacturasPorCuenta from "@/components/reportes/ReporteFacturasPorCuenta";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 
 export default function Reportes() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "compras";
+  const { strategy } = useEnterpriseTaxRegime();
+  const combined = strategy.combinedBook;
+  const defaultTab = combined ? "compras-ventas" : "compras";
+  const rawTab = searchParams.get("tab") || defaultTab;
+  // Coerce stale tabs to the regime-appropriate one
+  const activeTab =
+    combined && (rawTab === "compras" || rawTab === "ventas")
+      ? "compras-ventas"
+      : !combined && rawTab === "compras-ventas"
+      ? "compras"
+      : rawTab;
 
   const handleTabChange = (value: string) => {
     setSearchParams(prev => {
@@ -23,17 +35,27 @@ export default function Reportes() {
     });
   };
 
+  const gridCols = combined ? "grid-cols-8" : "grid-cols-9";
+
   return (
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Reportes</h1>
-        <p className="text-muted-foreground">Genera reportes de compras, ventas, partidas, estados financieros y bancos</p>
+        <p className="text-muted-foreground">
+          Genera reportes de compras, ventas, partidas, estados financieros y bancos
+        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full max-w-7xl grid-cols-9 divide-x divide-border/60">
-          <TabsTrigger value="compras">Compras</TabsTrigger>
-          <TabsTrigger value="ventas">Ventas</TabsTrigger>
+        <TabsList className={`grid w-full max-w-7xl ${gridCols} divide-x divide-border/60`}>
+          {combined ? (
+            <TabsTrigger value="compras-ventas">Compras y Ventas</TabsTrigger>
+          ) : (
+            <>
+              <TabsTrigger value="compras">Compras</TabsTrigger>
+              <TabsTrigger value="ventas">Ventas</TabsTrigger>
+            </>
+          )}
           <TabsTrigger value="partidas">Partidas</TabsTrigger>
           <TabsTrigger value="mayor">Mayor</TabsTrigger>
           <TabsTrigger value="bancos">Bancos</TabsTrigger>
@@ -43,12 +65,20 @@ export default function Reportes() {
           <TabsTrigger value="facturas-por-cuenta">Fact x Cta</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="compras">
-          <Card><CardContent className="pt-6"><ReporteCompras /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="ventas">
-          <Card><CardContent className="pt-6"><ReporteVentas /></CardContent></Card>
-        </TabsContent>
+        {combined ? (
+          <TabsContent value="compras-ventas">
+            <Card><CardContent className="pt-6"><ReporteComprasVentas /></CardContent></Card>
+          </TabsContent>
+        ) : (
+          <>
+            <TabsContent value="compras">
+              <Card><CardContent className="pt-6"><ReporteCompras /></CardContent></Card>
+            </TabsContent>
+            <TabsContent value="ventas">
+              <Card><CardContent className="pt-6"><ReporteVentas /></CardContent></Card>
+            </TabsContent>
+          </>
+        )}
         <TabsContent value="partidas">
           <Card><CardContent className="pt-6"><ReportePartidas /></CardContent></Card>
         </TabsContent>
