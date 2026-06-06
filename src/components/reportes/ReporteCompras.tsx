@@ -60,6 +60,7 @@ export default function ReporteCompras() {
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { toast } = useToast();
+  const { strategy } = useEnterpriseTaxRegime();
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
