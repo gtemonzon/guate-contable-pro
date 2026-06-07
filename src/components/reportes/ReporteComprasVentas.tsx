@@ -54,6 +54,7 @@ export default function ReporteComprasVentas() {
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
 
