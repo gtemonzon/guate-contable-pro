@@ -396,6 +396,24 @@ export default function ReporteCompras() {
         estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
 
+      {reportGenerated && purchases.length === 0 && (
+        <div className="rounded-lg border p-12 text-center space-y-4 bg-muted/30">
+          <p className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
+            No hay compras registradas en este período
+          </p>
+          <p className="text-xl font-bold text-foreground">SIN MOVIMIENTOS</p>
+          <div className="text-xs text-muted-foreground pt-4 border-t border-border mt-4 space-y-1">
+            <p className="font-medium">{enterpriseName}</p>
+            <p>NIT: {enterpriseNit || "—"}</p>
+            <p>Régimen: {strategy.label}</p>
+            <p>Libro de Compras — {monthNames[selectedMonth - 1]} {selectedYear}</p>
+          </div>
+          <p className="text-xs text-muted-foreground italic mt-2">
+            El período fue evaluado y no contiene transacciones.
+          </p>
+        </div>
+      )}
+
       {purchases.length > 0 && (
         <div className="space-y-4">
           <div className="rounded-lg border overflow-auto max-h-[500px]">
