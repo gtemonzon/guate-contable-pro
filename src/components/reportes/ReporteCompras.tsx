@@ -213,6 +213,7 @@ export default function ReporteCompras() {
           .order("invoice_number", { ascending: true })
       );
       setPurchases(data || []);
+      setReportGenerated(true);
       
       if (!data || data.length === 0) {
         toast({
