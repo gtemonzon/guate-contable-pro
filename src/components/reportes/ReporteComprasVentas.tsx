@@ -294,7 +294,7 @@ export default function ReporteComprasVentas() {
             Generar Reporte
           </Button>
         </div>
-        {hasData && (
+        {reportGenerated && (
           <div className="flex items-end gap-2">
             <Button variant="outline" onClick={exportPDF} className="flex-1">
               <Download className="h-4 w-4 mr-2" />PDF
