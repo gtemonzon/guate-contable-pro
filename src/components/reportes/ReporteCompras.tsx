@@ -52,6 +52,7 @@ interface OperationType {
 export default function ReporteCompras() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [purchases, setPurchases] = useState<PurchaseData[]>([]);
@@ -59,6 +60,7 @@ export default function ReporteCompras() {
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
 
