@@ -235,22 +235,27 @@ export default function ReporteComprasVentas() {
     ]);
     const activeSales = sales.filter(s => !s.is_annulled);
     const rows = Math.max(purchases.length, activeSales.length);
-    for (let i = 0; i < rows; i++) {
-      const p = purchases[i];
-      const s = activeSales[i];
-      aoa.push([
-        p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : "",
-        p?.invoice_number ?? "",
-        p?.supplier_nit ?? "",
-        p?.supplier_name ?? "",
-        p ? (Number(p.total_amount) || 0).toFixed(2) : "",
-        "",
-        s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : "",
-        s?.invoice_number ?? "",
-        s?.customer_nit ?? "",
-        s?.customer_name ?? "",
-        s ? (Number(s.total_amount) || 0).toFixed(2) : "",
-      ]);
+    const hasAnyData = purchases.length > 0 || activeSales.length > 0;
+    if (!hasAnyData) {
+      aoa.push(["SIN MOVIMIENTOS EN EL PERÍODO", "", "", "", "", "", "", "", "", "", ""]);
+    } else {
+      for (let i = 0; i < rows; i++) {
+        const p = purchases[i];
+        const s = activeSales[i];
+        aoa.push([
+          p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && purchases.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          p?.invoice_number ?? "",
+          p?.supplier_nit ?? "",
+          p?.supplier_name ?? "",
+          p ? (Number(p.total_amount) || 0).toFixed(2) : "",
+          "",
+          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          s?.invoice_number ?? "",
+          s?.customer_nit ?? "",
+          s?.customer_name ?? "",
+          s ? (Number(s.total_amount) || 0).toFixed(2) : "",
+        ]);
+      }
     }
     aoa.push([]);
     aoa.push(["", "", "", "Subtotal:", totals.totalPurchases.toFixed(2), "", "", "", "", "Subtotal:", totals.totalSales.toFixed(2)]);
