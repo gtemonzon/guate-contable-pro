@@ -161,7 +161,9 @@ export default function ReporteComprasVentas() {
       margin: { left: leftX, right: pageWidth - (leftX + half) },
       tableWidth: half,
       head: [["Fecha", "No. Doc", "NIT", "Proveedor", "Monto"]],
-      body: purchases.map(p => [
+      body: purchases.length === 0
+        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
+        : purchases.map(p => [
         new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
         p.invoice_number,
         p.supplier_nit,
@@ -187,7 +189,9 @@ export default function ReporteComprasVentas() {
       margin: { left: rightX, right: margin },
       tableWidth: half,
       head: [["Fecha", "No. Doc", "NIT", "Cliente", "Monto"]],
-      body: sales.filter(s => !s.is_annulled).map(s => [
+      body: sales.filter(s => !s.is_annulled).length === 0
+        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
+        : sales.filter(s => !s.is_annulled).map(s => [
         new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
         s.invoice_number,
         s.customer_nit || "C/F",
