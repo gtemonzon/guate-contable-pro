@@ -88,12 +88,13 @@ export default function ReporteVentas() {
     try {
       const { data, error } = await supabase
         .from("tab_enterprises")
-        .select("business_name")
+        .select("business_name, nit")
         .eq("id", parseInt(enterpriseId))
         .single();
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
+      setEnterpriseNit(data?.nit || "");
     } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
@@ -239,6 +240,7 @@ export default function ReporteVentas() {
           .order("invoice_number", { ascending: true })
       );
       setSales(data || []);
+      setReportGenerated(true);
       
       if (!data || data.length === 0) {
         toast({
