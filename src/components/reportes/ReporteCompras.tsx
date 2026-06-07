@@ -262,7 +262,9 @@ export default function ReporteCompras() {
 
   const buildExportOptions = (format: 'excel' | 'pdf') => {
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Proveedor", "Base", "IVA", "Total"];
-    const data = purchases.map(p => {
+    const data = purchases.length === 0
+      ? [["SIN MOVIMIENTOS", "", "", "", "", "", "", "", ""]]
+      : purchases.map(p => {
       const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
       const multiplier = docType?.affects_total ?? 1;
       return [
