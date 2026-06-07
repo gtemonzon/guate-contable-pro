@@ -290,7 +290,9 @@ export default function ReporteVentas() {
   const buildExportOptions = (format: 'excel' | 'pdf') => {
     const activeSales = sales.filter(s => !s.is_annulled);
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Cliente", "Neto", "IVA", "Total"];
-    const data = activeSales.map(s => {
+    const data = activeSales.length === 0
+      ? [["SIN MOVIMIENTOS", "", "", "", "", "", "", "", ""]]
+      : activeSales.map(s => {
       const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
       const multiplier = docType?.affects_total ?? 1;
       return [
