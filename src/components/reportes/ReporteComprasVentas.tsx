@@ -54,6 +54,7 @@ export default function ReporteComprasVentas() {
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
 
@@ -114,6 +115,7 @@ export default function ReporteComprasVentas() {
       ]);
       setPurchases(p || []);
       setSales(s || []);
+      setReportGenerated(true);
       if ((!p || p.length === 0) && (!s || s.length === 0)) {
         toast({ title: "Sin datos", description: "No hay registros para el período seleccionado" });
       }
@@ -159,7 +161,9 @@ export default function ReporteComprasVentas() {
       margin: { left: leftX, right: pageWidth - (leftX + half) },
       tableWidth: half,
       head: [["Fecha", "No. Doc", "NIT", "Proveedor", "Monto"]],
-      body: purchases.map(p => [
+      body: purchases.length === 0
+        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
+        : purchases.map(p => [
         new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
         p.invoice_number,
         p.supplier_nit,
@@ -185,7 +189,9 @@ export default function ReporteComprasVentas() {
       margin: { left: rightX, right: margin },
       tableWidth: half,
       head: [["Fecha", "No. Doc", "NIT", "Cliente", "Monto"]],
-      body: sales.filter(s => !s.is_annulled).map(s => [
+      body: sales.filter(s => !s.is_annulled).length === 0
+        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
+        : sales.filter(s => !s.is_annulled).map(s => [
         new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
         s.invoice_number,
         s.customer_nit || "C/F",
@@ -229,22 +235,27 @@ export default function ReporteComprasVentas() {
     ]);
     const activeSales = sales.filter(s => !s.is_annulled);
     const rows = Math.max(purchases.length, activeSales.length);
-    for (let i = 0; i < rows; i++) {
-      const p = purchases[i];
-      const s = activeSales[i];
-      aoa.push([
-        p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : "",
-        p?.invoice_number ?? "",
-        p?.supplier_nit ?? "",
-        p?.supplier_name ?? "",
-        p ? (Number(p.total_amount) || 0).toFixed(2) : "",
-        "",
-        s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : "",
-        s?.invoice_number ?? "",
-        s?.customer_nit ?? "",
-        s?.customer_name ?? "",
-        s ? (Number(s.total_amount) || 0).toFixed(2) : "",
-      ]);
+    const hasAnyData = purchases.length > 0 || activeSales.length > 0;
+    if (!hasAnyData) {
+      aoa.push(["SIN MOVIMIENTOS EN EL PERÍODO", "", "", "", "", "", "", "", "", "", ""]);
+    } else {
+      for (let i = 0; i < rows; i++) {
+        const p = purchases[i];
+        const s = activeSales[i];
+        aoa.push([
+          p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && purchases.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          p?.invoice_number ?? "",
+          p?.supplier_nit ?? "",
+          p?.supplier_name ?? "",
+          p ? (Number(p.total_amount) || 0).toFixed(2) : "",
+          "",
+          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          s?.invoice_number ?? "",
+          s?.customer_nit ?? "",
+          s?.customer_name ?? "",
+          s ? (Number(s.total_amount) || 0).toFixed(2) : "",
+        ]);
+      }
     }
     aoa.push([]);
     aoa.push(["", "", "", "Subtotal:", totals.totalPurchases.toFixed(2), "", "", "", "", "Subtotal:", totals.totalSales.toFixed(2)]);
@@ -292,7 +303,7 @@ export default function ReporteComprasVentas() {
             Generar Reporte
           </Button>
         </div>
-        {hasData && (
+        {reportGenerated && (
           <div className="flex items-end gap-2">
             <Button variant="outline" onClick={exportPDF} className="flex-1">
               <Download className="h-4 w-4 mr-2" />PDF
@@ -304,71 +315,117 @@ export default function ReporteComprasVentas() {
         )}
       </div>
 
-      {hasData && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-lg border">
-            <div className="px-4 py-2 bg-primary/10 font-semibold border-b">Compras</div>
-            <div className="max-h-[500px] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>No. Doc</TableHead>
-                    <TableHead>NIT</TableHead>
-                    <TableHead>Proveedor</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {purchases.map((p, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
-                      <TableCell>{p.invoice_number}</TableCell>
-                      <TableCell>{p.supplier_nit}</TableCell>
-                      <TableCell>{p.supplier_name}</TableCell>
-                      <TableCell className="text-right">Q {formatCurrency(p.total_amount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
-              <span>Subtotal Compras ({totals.purchaseCount})</span>
-              <span>Q {formatCurrency(totals.totalPurchases)}</span>
-            </div>
+      {reportGenerated && purchases.length === 0 && activeSales.length === 0 && (
+        <div className="rounded-lg border p-16 text-center space-y-4 bg-muted/30">
+          <p className="text-xl font-bold text-foreground">SIN MOVIMIENTOS EN EL PERÍODO</p>
+          <p className="text-lg font-semibold text-muted-foreground">
+            NO HAY COMPRAS NI VENTAS REGISTRADAS EN ESTE PERÍODO
+          </p>
+          <div className="text-xs text-muted-foreground pt-4 border-t border-border mt-4 space-y-1">
+            <p className="font-medium">{enterpriseName}</p>
+            <p>NIT: {enterpriseNit || "—"}</p>
+            <p>Régimen: {strategy.label}</p>
+            <p>Libro de Compras y Ventas — {monthNames[selectedMonth - 1]} {selectedYear}</p>
           </div>
+          <p className="text-xs text-muted-foreground italic mt-2">
+            El período fue evaluado y no contiene transacciones.
+          </p>
+        </div>
+      )}
 
-          <div className="rounded-lg border">
-            <div className="px-4 py-2 bg-green-500/10 font-semibold border-b">Ventas</div>
-            <div className="max-h-[500px] overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>No. Doc</TableHead>
-                    <TableHead>NIT</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeSales.map((s, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
-                      <TableCell>{s.invoice_number}</TableCell>
-                      <TableCell>{s.customer_nit || "C/F"}</TableCell>
-                      <TableCell>{s.customer_name || "Consumidor Final"}</TableCell>
-                      <TableCell className="text-right">Q {formatCurrency(s.total_amount)}</TableCell>
+      {reportGenerated && (purchases.length > 0 || activeSales.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {purchases.length === 0 ? (
+            <div className="rounded-lg border">
+              <div className="px-4 py-2 bg-primary/10 font-semibold border-b">Compras</div>
+              <div className="p-12 text-center space-y-4 bg-muted/30 flex flex-col items-center justify-center min-h-[300px]">
+                <p className="text-lg font-semibold text-muted-foreground">SIN MOVIMIENTOS</p>
+                <p className="text-xs text-muted-foreground">No hay compras registradas en este período</p>
+              </div>
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Compras (0)</span>
+                <span>Q {formatCurrency(0)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border">
+              <div className="px-4 py-2 bg-primary/10 font-semibold border-b">Compras</div>
+              <div className="max-h-[500px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>No. Doc</TableHead>
+                      <TableHead>NIT</TableHead>
+                      <TableHead>Proveedor</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {purchases.map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
+                        <TableCell>{p.invoice_number}</TableCell>
+                        <TableCell>{p.supplier_nit}</TableCell>
+                        <TableCell>{p.supplier_name}</TableCell>
+                        <TableCell className="text-right">Q {formatCurrency(p.total_amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Compras ({totals.purchaseCount})</span>
+                <span>Q {formatCurrency(totals.totalPurchases)}</span>
+              </div>
             </div>
-            <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
-              <span>Subtotal Ventas ({totals.saleCount})</span>
-              <span>Q {formatCurrency(totals.totalSales)}</span>
+          )}
+
+          {activeSales.length === 0 ? (
+            <div className="rounded-lg border">
+              <div className="px-4 py-2 bg-green-500/10 font-semibold border-b">Ventas</div>
+              <div className="p-12 text-center space-y-4 bg-muted/30 flex flex-col items-center justify-center min-h-[300px]">
+                <p className="text-lg font-semibold text-muted-foreground">SIN MOVIMIENTOS</p>
+                <p className="text-xs text-muted-foreground">No hay ventas registradas en este período</p>
+              </div>
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Ventas (0)</span>
+                <span>Q {formatCurrency(0)}</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-lg border">
+              <div className="px-4 py-2 bg-green-500/10 font-semibold border-b">Ventas</div>
+              <div className="max-h-[500px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>No. Doc</TableHead>
+                      <TableHead>NIT</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activeSales.map((s, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
+                        <TableCell>{s.invoice_number}</TableCell>
+                        <TableCell>{s.customer_nit || "C/F"}</TableCell>
+                        <TableCell>{s.customer_name || "Consumidor Final"}</TableCell>
+                        <TableCell className="text-right">Q {formatCurrency(s.total_amount)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Ventas ({totals.saleCount})</span>
+                <span>Q {formatCurrency(totals.totalSales)}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

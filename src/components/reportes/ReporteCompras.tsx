@@ -52,6 +52,7 @@ interface OperationType {
 export default function ReporteCompras() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [purchases, setPurchases] = useState<PurchaseData[]>([]);
@@ -59,6 +60,7 @@ export default function ReporteCompras() {
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
 
@@ -82,12 +84,13 @@ export default function ReporteCompras() {
     try {
       const { data, error } = await supabase
         .from("tab_enterprises")
-        .select("business_name")
+        .select("business_name, nit")
         .eq("id", parseInt(enterpriseId))
         .single();
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
+      setEnterpriseNit(data?.nit || "");
     } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
@@ -210,6 +213,7 @@ export default function ReporteCompras() {
           .order("invoice_number", { ascending: true })
       );
       setPurchases(data || []);
+      setReportGenerated(true);
       
       if (!data || data.length === 0) {
         toast({
@@ -258,7 +262,9 @@ export default function ReporteCompras() {
 
   const buildExportOptions = (format: 'excel' | 'pdf') => {
     const headers = ["Fecha", "Serie", "Número", "Tipo Doc", "NIT", "Proveedor", "Base", "IVA", "Total"];
-    const data = purchases.map(p => {
+    const data = purchases.length === 0
+      ? [["SIN MOVIMIENTOS", "", "", "", "", "", "", "", ""]]
+      : purchases.map(p => {
       const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
       const multiplier = docType?.affects_total ?? 1;
       return [
@@ -370,7 +376,7 @@ export default function ReporteCompras() {
           </Button>
         </div>
 
-        {purchases.length > 0 && (
+        {reportGenerated && (
           <div className="flex items-end">
             <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="w-full">
               <Download className="h-4 w-4 mr-2" />
@@ -389,6 +395,24 @@ export default function ReporteCompras() {
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
         estimatePageCount={() => estimatePdfPageCount(buildExportOptions('pdf'))}
       />
+
+      {reportGenerated && purchases.length === 0 && (
+        <div className="rounded-lg border p-12 text-center space-y-4 bg-muted/30">
+          <p className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
+            No hay compras registradas en este período
+          </p>
+          <p className="text-xl font-bold text-foreground">SIN MOVIMIENTOS</p>
+          <div className="text-xs text-muted-foreground pt-4 border-t border-border mt-4 space-y-1">
+            <p className="font-medium">{enterpriseName}</p>
+            <p>NIT: {enterpriseNit || "—"}</p>
+            <p>Régimen: {strategy.label}</p>
+            <p>Libro de Compras — {monthNames[selectedMonth - 1]} {selectedYear}</p>
+          </div>
+          <p className="text-xs text-muted-foreground italic mt-2">
+            El período fue evaluado y no contiene transacciones.
+          </p>
+        </div>
+      )}
 
       {purchases.length > 0 && (
         <div className="space-y-4">
