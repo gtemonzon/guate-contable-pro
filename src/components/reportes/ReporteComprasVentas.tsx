@@ -115,6 +115,7 @@ export default function ReporteComprasVentas() {
       ]);
       setPurchases(p || []);
       setSales(s || []);
+      setReportGenerated(true);
       if ((!p || p.length === 0) && (!s || s.length === 0)) {
         toast({ title: "Sin datos", description: "No hay registros para el período seleccionado" });
       }
