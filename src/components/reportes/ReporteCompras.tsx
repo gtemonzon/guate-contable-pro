@@ -376,7 +376,7 @@ export default function ReporteCompras() {
           </Button>
         </div>
 
-        {purchases.length > 0 && (
+        {reportGenerated && (
           <div className="flex items-end">
             <Button variant="outline" onClick={() => setExportDialogOpen(true)} className="w-full">
               <Download className="h-4 w-4 mr-2" />
