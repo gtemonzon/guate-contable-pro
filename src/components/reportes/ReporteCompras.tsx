@@ -84,12 +84,13 @@ export default function ReporteCompras() {
     try {
       const { data, error } = await supabase
         .from("tab_enterprises")
-        .select("business_name")
+        .select("business_name, nit")
         .eq("id", parseInt(enterpriseId))
         .single();
 
       if (error) throw error;
       setEnterpriseName(data?.business_name || "");
+      setEnterpriseNit(data?.nit || "");
     } catch (error: unknown) {
       console.error("Error fetching enterprise:", error);
     }
