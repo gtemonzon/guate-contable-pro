@@ -198,7 +198,24 @@ export const TRAINING_PHASES: Phase[] = [
           "Disposición: usa el asistente para baja de activos (venta, robo, descarte) que genera la partida con ganancia/pérdida automáticamente.",
         ],
       },
-    ],
+      {
+        id: "2.7-retenciones",
+        title: "Retenciones y Exenciones",
+        description: "Gestione certificados de retención y exención de impuestos.",
+        icon: ShieldCheck,
+        route: "/retenciones-exenciones",
+        content: [
+          "Registre certificados de retención de IVA e ISR recibidos de sus clientes (retenciones sobre ventas) o emitidos a proveedores (retenciones sobre compras).",
+          "Para cada certificado capture: número, serie, NIT, nombre, monto retenido, fecha y tipo (IVA, ISR, etc.).",
+          "Conciliación automática: el sistema cruza certificados contra las facturas registradas en libros fiscales y muestra diferencias.",
+          "Panel de conciliación: visualice facturas con y sin certificado, certificados sin factura vinculada, y montos discrepantes.",
+          "Exporte certificados a Excel o PDF para presentación a la SAT o para auditoría interna.",
+        ],
+        tips: [
+          "Concilie certificados mensualmente para detectar retenciones faltantes antes de la declaración.",
+          "Los certificados de retención afectan el cálculo de IVA a pagar en la declaración mensual.",
+        ],
+      },
   },
   {
     id: "phase-3",
