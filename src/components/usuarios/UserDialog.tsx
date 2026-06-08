@@ -719,6 +719,15 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                   )}
                 </div>
               </TabsContent>
+
+              {isEditing && user?.id && (
+                <TabsContent value="capacitacion" className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Historial de lecciones de capacitación completadas por este usuario.
+                  </p>
+                  <UserTrainingProgress userId={user.id} />
+                </TabsContent>
+              )}
             </Tabs>
 
             <DialogFooter>
