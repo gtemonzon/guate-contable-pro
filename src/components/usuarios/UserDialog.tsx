@@ -36,6 +36,7 @@ import { Loader2, Building2, Shield } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleSelector, RoleBadge } from "./RoleSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import UserTrainingProgress from "./UserTrainingProgress";
 
 const userFormSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -505,9 +506,10 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <Tabs defaultValue="general" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className={`grid w-full ${isEditing ? "grid-cols-3" : "grid-cols-2"}`}>
                 <TabsTrigger value="general">Información General</TabsTrigger>
                 <TabsTrigger value="empresas">Empresas y Roles</TabsTrigger>
+                {isEditing && <TabsTrigger value="capacitacion">Capacitación</TabsTrigger>}
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
@@ -717,6 +719,15 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
                   )}
                 </div>
               </TabsContent>
+
+              {isEditing && user?.id && (
+                <TabsContent value="capacitacion" className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Historial de lecciones de capacitación completadas por este usuario.
+                  </p>
+                  <UserTrainingProgress userId={user.id} />
+                </TabsContent>
+              )}
             </Tabs>
 
             <DialogFooter>
