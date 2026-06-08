@@ -44,6 +44,9 @@ const helpSections: HelpSection[] = [
     description: "Mejoras y nuevas funcionalidades incorporadas recientemente al sistema.",
     isNew: true,
     steps: [
+      { title: "Régimen Fiscal en Libros SAT", description: "Los libros de Compras y Ventas ahora se adaptan automáticamente al régimen fiscal de la empresa. Contribuyente General tiene libros separados con columnas completas de IVA. Pequeño Contribuyente usa un libro combinado (Compras a la izquierda, Ventas a la derecha). ONG Exenta y Profesional Liberal usan formatos simplificados sin columna de IVA. Verifique el régimen en Empresas → editar empresa → Impuestos." },
+      { title: "Sin Movimientos en Libros SAT", description: "Si un período no tiene transacciones de compras o ventas, el reporte muestra explícitamente 'SIN MOVIMIENTOS' en lugar de una hoja en blanco. Esto aplica a PDF, Excel y la vista en pantalla. En el libro combinado de Pequeño Contribuyente, si solo un lado está vacío se indica 'SIN MOVIMIENTOS' en ese panel; si ambos están vacíos, aparece un mensaje centralizado. Esta funcionalidad cumple requisitos de auditoría al demostrar que el período fue evaluado." },
+      { title: "Retenciones y Exenciones", description: "Nuevo módulo en Gestión Tributaria para registrar certificados de retención de IVA e ISR. Permite capturar número, serie, NIT, nombre, monto retenido, fecha y tipo. Incluye panel de conciliación que cruza certificados contra facturas registradas en libros fiscales, mostrando diferencias, certificados sin factura y facturas sin certificado. Exporta a Excel y PDF." },
       { title: "Tipo de cuenta 'Patrimonio' (antes 'Capital')", description: "En el catálogo de cuentas (/cuentas), el tipo de cuenta antes llamado 'Capital' ahora se muestra como 'Patrimonio'. El cambio es solo de etiqueta visual: aplica a todas las empresas y refleja mejor que la cuenta 3 incluye tanto el capital aportado como los resultados acumulados del ejercicio. No requiere ninguna acción de su parte." },
       { title: "Balance General — Total Pasivo y Patrimonio corregido", description: "El total de 'Pasivo y Patrimonio' del Balance General ahora suma correctamente las cuentas de tipo Pasivo (cuenta 2) más las de Patrimonio (cuenta 3). Antes, en el formato configurado desde el Diseñador de Estados Financieros, el total podía estar tomando solo la cuenta 2 cuando la sección de cierre incluía varios grupos. Verifique en /reportes que el cuadre Activo = Pasivo + Patrimonio refleja la realidad." },
       { title: "Estado de Resultados — total acumulado correctamente", description: "El 'RESULTADO NETO' del Estado de Resultados ahora acumula correctamente los grupos que aparecen después del último subtotal calculado (ej. 'OTROS INGRESOS Y GASTOS'). Antes el último grupo podía sobrescribir el resultado en lugar de sumarlo." },
@@ -60,6 +63,9 @@ const helpSections: HelpSection[] = [
       { title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
     ],
     tips: [
+      "Verifique que el régimen fiscal esté correcto en Empresas → editar empresa → Impuestos antes de generar libros SAT.",
+      "Si un período no tiene transacciones, el reporte muestra 'SIN MOVIMIENTOS' en lugar de una hoja en blanco.",
+      "Concilie certificados de retención mensualmente en Gestión Tributaria → Retenciones y Exenciones antes de declarar.",
       "El cambio de 'Capital' a 'Patrimonio' en /cuentas es solo de etiqueta: no requiere migrar datos ni reconfigurar nada.",
       "Si tras el cierre ve cuentas de gasto/ingreso (cuenta 5, 6 o 7) sin detalle en el Estado de Resultados, era por partidas de cierre mal clasificadas; ya están corregidas.",
       "El libro diario carga por año por defecto: cambie de tab para que descargue el detalle del año seleccionado sin tope.",
@@ -290,16 +296,26 @@ const helpSections: HelpSection[] = [
       {
         id: "libros-fiscales",
         title: "Compras y Ventas (Libros Fiscales)",
-        description: "Registre e importe las compras y ventas para los libros de IVA.",
+        description: "Registre e importe facturas fiscales adaptados al régimen de la empresa.",
         route: "/libros-fiscales",
         steps: [
-          { title: "Seleccionar Mes y Pestaña", description: "Use los selectores de Mes y Año. Cambie entre pestaña Compras y Ventas. El libro se crea automáticamente si no existe." },
+          { title: "Verificar Régimen Fiscal", description: "El sistema adapta automáticamente los libros al régimen fiscal configurado en la empresa. Revise en Empresas → editar empresa → Impuestos que el régimen sea correcto: Contribuyente General, Pequeño Contribuyente, Profesional Liberal u ONG Exenta." },
+          { title: "Contribuyente General — Libros Separados", description: "Si el régimen es General, verá pestañas separadas de Compras y Ventas con columnas completas de IVA (base imponible, IVA, total). Exporte cada libro individualmente a PDF o Excel." },
+          { title: "Pequeño Contribuyente — Libro Combinado", description: "Si el régimen es Pequeño Contribuyente, verá un solo libro con Compras a la izquierda y Ventas a la derecha, en formato SAT específico. Exporte a PDF (landscape) o Excel (una sola hoja)." },
+          { title: "Régimen Exento — Libros Simplificados", description: "ONG Exenta y Profesional Liberal usan formatos simplificados sin columna de IVA (exentos). El encabezado del reporte indica el régimen aplicado." },
+          { title: "Seleccionar Mes y Pestaña", description: "Use los selectores de Mes y Año. Cambie entre pestaña Compras y Ventas (o vea el combinado según el régimen). El libro se crea automáticamente si no existe." },
           { title: "Ingreso Rápido con Alt+N", description: "Presione Alt+N para crear un nuevo registro. El sistema guarda el actual antes de crear el nuevo." },
           { title: "Autoguardado Inteligente", description: "Los cambios se guardan automáticamente. El indicador muestra el estado (Guardando… / Guardado)." },
           { title: "Importar desde SAT (CSV o PDF)", description: "Haga clic en 'Importar'. Suba el CSV del portal SAT o el PDF de consulta de compras. El sistema extrae los datos automáticamente." },
           { title: "Generar Partida Automática del Mes", description: "Haga clic en 'Generar Partida' para crear el asiento contable del mes. El correlativo usa el formato estándar (ej: VENT-2021-03-0001 o COMP-2021-03-0001). Requiere cuentas especiales configuradas." },
+          { title: "Períodos Sin Movimientos", description: "Si no hay transacciones en el período seleccionado, el reporte mostrará explícitamente 'SIN MOVIMIENTOS' en la vista y en las exportaciones a PDF/Excel, cumpliendo requisitos de auditoría." },
         ],
-        tips: ["Alt+N es la forma más rápida de capturar múltiples facturas en secuencia.", "Los archivos CSV del SAT no deben modificarse antes de importar.", "Las partidas generadas desde libros fiscales usan el mismo sistema de numeración atómica que las partidas manuales."],
+        tips: [
+          "Alt+N es la forma más rápida de capturar múltiples facturas en secuencia.",
+          "Los archivos CSV del SAT no deben modificarse antes de importar.",
+          "Las partidas generadas desde libros fiscales usan el mismo sistema de numeración atómica que las partidas manuales.",
+          "El mensaje 'SIN MOVIMIENTOS' también aparece en las exportaciones: nunca se generará un reporte completamente en blanco.",
+        ],
       },
       {
         id: "asistente-compras",
@@ -359,6 +375,24 @@ const helpSections: HelpSection[] = [
           { title: "Generar Póliza Contable", description: "Genera automáticamente la partida con gastos por sueldos, provisiones y cuentas por pagar (IGSS, ISR, salarios) usando las cuentas configuradas." },
         ],
         tips: ["Configure las cuentas de nómina en Configuración > Cuentas Especiales antes de generar la primera póliza.", "En Guatemala las vacaciones suelen ser deducibles al pagarse, no al provisionarse: actívelas solo si su política contable lo justifica."],
+      },
+      {
+        id: "retenciones",
+        title: "Retenciones y Exenciones",
+        description: "Gestione certificados de retención de IVA e ISR y concílielos con las facturas registradas.",
+        route: "/retenciones-exenciones",
+        isNew: true,
+        steps: [
+          { title: "Registrar Certificado de Retención", description: "Haga clic en 'Nuevo Certificado'. Capture: número, serie, NIT, nombre del retenedor, monto retenido, fecha y tipo (IVA, ISR). El sistema valida el NIT con algoritmo Módulo 11." },
+          { title: "Ver Lista y Filtrar", description: "La lista muestra todos los certificados con indicadores de estado: conciliado, pendiente o discrepante. Filtre por tipo, fecha o estado." },
+          { title: "Conciliar con Facturas", description: "En el panel de conciliación, el sistema cruza automáticamente los certificados contra las facturas registradas en libros fiscales. Muestra: facturas con certificado, facturas sin certificado, certificados sin factura vinculada, y montos discrepantes." },
+          { title: "Exportar Certificados", description: "Exporte el listado completo a Excel o PDF para presentación a la SAT o para auditoría interna." },
+        ],
+        tips: [
+          "Concilie certificados mensualmente para detectar retenciones faltantes antes de generar la declaración.",
+          "Los certificados de retención afectan el cálculo de IVA a pagar: se restan del débito fiscal en la declaración mensual.",
+          "Un certificado 'discrepante' indica que el monto retenido no coincide con el calculado desde la factura: revise NIT o monto.",
+        ],
       },
       {
         id: "formularios",
@@ -571,6 +605,26 @@ const faqItems = [
   {
     question: "¿Qué formato tienen las reversiones?",
     answer: "Las reversiones usan el formato REV-YYYY-MM-#### donde el año y mes corresponden a la fecha de la partida original. El número secuencial es independiente por mes, asegurando un correlativo limpio y organizado.",
+  },
+  {
+    question: "¿Cómo se adaptan los libros de Compras y Ventas al régimen fiscal?",
+    answer: "El sistema lee el régimen fiscal configurado en la empresa (Empresas → editar → Impuestos) y ajusta automáticamente el formato: Contribuyente General usa libros separados con IVA; Pequeño Contribuyente usa libro combinado (Compras izquierda, Ventas derecha); ONG Exenta y Profesional Liberal usan formatos simplificados sin columna de IVA. No requiere configuración adicional.",
+  },
+  {
+    question: "¿Qué pasa si un período no tiene compras o ventas?",
+    answer: "El reporte muestra explícitamente 'SIN MOVIMIENTOS' en la vista y en las exportaciones a PDF/Excel. Esto demuestra ante auditoría que el período fue evaluado y no contiene transacciones. Nunca se generará un reporte completamente en blanco.",
+  },
+  {
+    question: "¿Cómo registro un certificado de retención?",
+    answer: "Vaya a Gestión Tributaria → Retenciones y Exenciones. Haga clic en 'Nuevo Certificado' e ingrese número, serie, NIT del retenedor, nombre, monto retenido, fecha y tipo (IVA o ISR). El sistema valida el NIT con Módulo 11 y permite conciliarlo posteriormente contra las facturas registradas.",
+  },
+  {
+    question: "¿Cómo funciona la conciliación de certificados de retención?",
+    answer: "En Retenciones y Exenciones, el panel de conciliación cruza automáticamente los certificados registrados contra las facturas de compras y ventas. Muestra: facturas que tienen certificado vinculado, facturas sin certificado, certificados sin factura asociada, y montos discrepantes. Use esto mensualmente para asegurar que todas las retenciones estén registradas antes de declarar.",
+  },
+  {
+    question: "¿Dónde encuentro Formularios de Impuestos y Generar Declaración?",
+    answer: "Estos módulos se trasladaron al grupo 'Gestión Tributaria' en el menú lateral, junto con Retenciones y Exenciones. Esto organiza mejor todas las funciones relacionadas con impuestos en un solo lugar.",
   },
 ];
 

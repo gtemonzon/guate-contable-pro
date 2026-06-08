@@ -1,4 +1,4 @@
-import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, LucideIcon } from "lucide-react";
+import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, ShieldCheck, LucideIcon } from "lucide-react";
 
 export interface Lesson {
   id: string;
@@ -123,14 +123,24 @@ export const TRAINING_PHASES: Phase[] = [
       {
         id: "2.2-libros-fiscales",
         title: "Libros de Compras y Ventas",
-        description: "Importa y gestiona facturas fiscales.",
+        description: "Registre e importe facturas fiscales adaptados al régimen de la empresa.",
         icon: ShoppingCart,
         route: "/libros-fiscales",
         content: [
+          "El sistema adapta automáticamente los libros al régimen fiscal de la empresa: Contribuyente General, Pequeño Contribuyente, Profesional Liberal u ONG Exenta.",
+          "Contribuyente General: libros de Compras y Ventas por separado, con columnas completas de IVA.",
+          "Pequeño Contribuyente: libro combinado con Compras a la izquierda y Ventas a la derecha, en formato SAT específico.",
+          "ONG Exenta y Profesional Liberal: libros simplificados sin columna de IVA (exentos).",
           "Importa ventas desde el archivo SAT (CSV/Excel). El sistema detecta duplicados con clave compuesta: tipo FEL + serie + número + NIT emisor.",
           "Importa compras desde PDF (FEL Recibidos/Emitidos) usando edge functions de IA.",
           "Cada factura genera automáticamente la partida contable usando las cuentas configuradas y el tipo de operación (Bienes, Servicios, Activos Fijos, Combustible, etc.).",
           "Las facturas anuladas se manejan con un toggle manual; las anuladas no afectan el libro fiscal.",
+          "Si un período no tiene transacciones, el reporte muestra explícitamente 'SIN MOVIMIENTOS' en lugar de una hoja en blanco, cumpliendo requisitos de auditoría.",
+        ],
+        tips: [
+          "Verifique que el régimen fiscal esté correcto en Empresas → editar empresa → Impuestos.",
+          "Los libros de Pequeño Contribuyente se exportan a Excel en una sola hoja con ambos lados.",
+          "El mensaje 'SIN MOVIMIENTOS' también se incluye en las exportaciones a PDF y Excel.",
         ],
       },
       {
@@ -186,6 +196,24 @@ export const TRAINING_PHASES: Phase[] = [
           "Al activar un activo, el sistema genera el cronograma de depreciación según la política configurada.",
           "Contabilización mensual: ejecuta la depreciación del período. El sistema marca cada activo como Pendiente o Ya Contabilizado.",
           "Disposición: usa el asistente para baja de activos (venta, robo, descarte) que genera la partida con ganancia/pérdida automáticamente.",
+        ],
+      },
+      {
+        id: "2.7-retenciones",
+        title: "Retenciones y Exenciones",
+        description: "Gestione certificados de retención y exención de impuestos.",
+        icon: ShieldCheck,
+        route: "/retenciones-exenciones",
+        content: [
+          "Registre certificados de retención de IVA e ISR recibidos de sus clientes (retenciones sobre ventas) o emitidos a proveedores (retenciones sobre compras).",
+          "Para cada certificado capture: número, serie, NIT, nombre, monto retenido, fecha y tipo (IVA, ISR, etc.).",
+          "Conciliación automática: el sistema cruza certificados contra las facturas registradas en libros fiscales y muestra diferencias.",
+          "Panel de conciliación: visualice facturas con y sin certificado, certificados sin factura vinculada, y montos discrepantes.",
+          "Exporte certificados a Excel o PDF para presentación a la SAT o para auditoría interna.",
+        ],
+        tips: [
+          "Concilie certificados mensualmente para detectar retenciones faltantes antes de la declaración.",
+          "Los certificados de retención afectan el cálculo de IVA a pagar en la declaración mensual.",
         ],
       },
     ],
