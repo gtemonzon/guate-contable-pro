@@ -1,4 +1,4 @@
-import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, LucideIcon } from "lucide-react";
+import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, ShieldCheck, LucideIcon } from "lucide-react";
 
 export interface Lesson {
   id: string;
