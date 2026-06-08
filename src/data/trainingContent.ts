@@ -218,6 +218,7 @@ export const TRAINING_PHASES: Phase[] = [
       },
     ],
   },
+  {
     id: "phase-3",
     number: 3,
     title: "Reportes, Consultas y Análisis",
