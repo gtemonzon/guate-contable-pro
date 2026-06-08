@@ -36,6 +36,7 @@ import { Loader2, Building2, Shield } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleSelector, RoleBadge } from "./RoleSelector";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import UserTrainingProgress from "./UserTrainingProgress";
 
 const userFormSchema = z.object({
   email: z.string().email("Email inválido"),
