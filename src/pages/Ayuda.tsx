@@ -374,6 +374,24 @@ const helpSections: HelpSection[] = [
         tips: ["Configure las cuentas de nómina en Configuración > Cuentas Especiales antes de generar la primera póliza.", "En Guatemala las vacaciones suelen ser deducibles al pagarse, no al provisionarse: actívelas solo si su política contable lo justifica."],
       },
       {
+        id: "retenciones",
+        title: "Retenciones y Exenciones",
+        description: "Gestione certificados de retención de IVA e ISR y concílielos con las facturas registradas.",
+        route: "/retenciones-exenciones",
+        isNew: true,
+        steps: [
+          { title: "Registrar Certificado de Retención", description: "Haga clic en 'Nuevo Certificado'. Capture: número, serie, NIT, nombre del retenedor, monto retenido, fecha y tipo (IVA, ISR). El sistema valida el NIT con algoritmo Módulo 11." },
+          { title: "Ver Lista y Filtrar", description: "La lista muestra todos los certificados con indicadores de estado: conciliado, pendiente o discrepante. Filtre por tipo, fecha o estado." },
+          { title: "Conciliar con Facturas", description: "En el panel de conciliación, el sistema cruza automáticamente los certificados contra las facturas registradas en libros fiscales. Muestra: facturas con certificado, facturas sin certificado, certificados sin factura vinculada, y montos discrepantes." },
+          { title: "Exportar Certificados", description: "Exporte el listado completo a Excel o PDF para presentación a la SAT o para auditoría interna." },
+        ],
+        tips: [
+          "Concilie certificados mensualmente para detectar retenciones faltantes antes de generar la declaración.",
+          "Los certificados de retención afectan el cálculo de IVA a pagar: se restan del débito fiscal en la declaración mensual.",
+          "Un certificado 'discrepante' indica que el monto retenido no coincide con el calculado desde la factura: revise NIT o monto.",
+        ],
+      },
+      {
         id: "formularios",
         title: "Formularios de Impuestos",
         description: "Registre los formularios SAT pagados.",
