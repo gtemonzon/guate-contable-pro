@@ -63,6 +63,9 @@ const helpSections: HelpSection[] = [
       { title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
     ],
     tips: [
+      "Verifique que el régimen fiscal esté correcto en Empresas → editar empresa → Impuestos antes de generar libros SAT.",
+      "Si un período no tiene transacciones, el reporte muestra 'SIN MOVIMIENTOS' en lugar de una hoja en blanco.",
+      "Concilie certificados de retención mensualmente en Gestión Tributaria → Retenciones y Exenciones antes de declarar.",
       "El cambio de 'Capital' a 'Patrimonio' en /cuentas es solo de etiqueta: no requiere migrar datos ni reconfigurar nada.",
       "Si tras el cierre ve cuentas de gasto/ingreso (cuenta 5, 6 o 7) sin detalle en el Estado de Resultados, era por partidas de cierre mal clasificadas; ya están corregidas.",
       "El libro diario carga por año por defecto: cambie de tab para que descargue el detalle del año seleccionado sin tope.",
