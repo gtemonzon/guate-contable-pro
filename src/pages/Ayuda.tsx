@@ -603,6 +603,26 @@ const faqItems = [
     question: "¿Qué formato tienen las reversiones?",
     answer: "Las reversiones usan el formato REV-YYYY-MM-#### donde el año y mes corresponden a la fecha de la partida original. El número secuencial es independiente por mes, asegurando un correlativo limpio y organizado.",
   },
+  {
+    question: "¿Cómo se adaptan los libros de Compras y Ventas al régimen fiscal?",
+    answer: "El sistema lee el régimen fiscal configurado en la empresa (Empresas → editar → Impuestos) y ajusta automáticamente el formato: Contribuyente General usa libros separados con IVA; Pequeño Contribuyente usa libro combinado (Compras izquierda, Ventas derecha); ONG Exenta y Profesional Liberal usan formatos simplificados sin columna de IVA. No requiere configuración adicional.",
+  },
+  {
+    question: "¿Qué pasa si un período no tiene compras o ventas?",
+    answer: "El reporte muestra explícitamente 'SIN MOVIMIENTOS' en la vista y en las exportaciones a PDF/Excel. Esto demuestra ante auditoría que el período fue evaluado y no contiene transacciones. Nunca se generará un reporte completamente en blanco.",
+  },
+  {
+    question: "¿Cómo registro un certificado de retención?",
+    answer: "Vaya a Gestión Tributaria → Retenciones y Exenciones. Haga clic en 'Nuevo Certificado' e ingrese número, serie, NIT del retenedor, nombre, monto retenido, fecha y tipo (IVA o ISR). El sistema valida el NIT con Módulo 11 y permite conciliarlo posteriormente contra las facturas registradas.",
+  },
+  {
+    question: "¿Cómo funciona la conciliación de certificados de retención?",
+    answer: "En Retenciones y Exenciones, el panel de conciliación cruza automáticamente los certificados registrados contra las facturas de compras y ventas. Muestra: facturas que tienen certificado vinculado, facturas sin certificado, certificados sin factura asociada, y montos discrepantes. Use esto mensualmente para asegurar que todas las retenciones estén registradas antes de declarar.",
+  },
+  {
+    question: "¿Dónde encuentro Formularios de Impuestos y Generar Declaración?",
+    answer: "Estos módulos se trasladaron al grupo 'Gestión Tributaria' en el menú lateral, junto con Retenciones y Exenciones. Esto organiza mejor todas las funciones relacionadas con impuestos en un solo lugar.",
+  },
 ];
 
 const Ayuda = () => {
