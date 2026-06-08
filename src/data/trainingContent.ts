@@ -216,8 +216,8 @@ export const TRAINING_PHASES: Phase[] = [
           "Los certificados de retención afectan el cálculo de IVA a pagar en la declaración mensual.",
         ],
       },
+    ],
   },
-  {
     id: "phase-3",
     number: 3,
     title: "Reportes, Consultas y Análisis",
