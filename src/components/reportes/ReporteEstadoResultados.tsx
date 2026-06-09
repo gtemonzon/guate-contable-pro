@@ -14,6 +14,8 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useFinancialStatementFormat, Section } from "@/hooks/useFinancialStatementFormat";
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
+import { useEstimatedCogs } from "@/hooks/useEstimatedCogs";
+import { EstimatedCogsBlock } from "./EstimatedCogsBlock";
 import ReportLayoutToggle, { type ReportLayout } from "./ReportLayoutToggle";
 
 import SteppedReportView, { toSteppedExcelData } from "./SteppedReportView";
@@ -58,6 +60,13 @@ export default function ReporteEstadoResultados() {
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
   const { consumePages } = useBookAuthorizations(currentEnterpriseId);
+  const estimatedCogs = useEstimatedCogs({
+    enterpriseId: currentEnterpriseId,
+    config,
+    dateFrom,
+    dateTo,
+    skip: !!cdvBreakdown || reportLines.length === 0, // only compute when report is rendered and official CoS is absent
+  });
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
     currentEnterpriseId,
@@ -725,12 +734,16 @@ export default function ReporteEstadoResultados() {
             </div>
           )}
 
-          {/* Warning when method is coeficiente but no posted closing exists */}
-          {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && filteredReportLines.length > 0 && (
+          {/* Estimated CoS block — only shown when no official CDV breakdown is present.
+              This is presentation-only and does NOT post any accounting entry. */}
+          {!cdvBreakdown && <EstimatedCogsBlock data={estimatedCogs} />}
+
+          {/* Warning when method is coeficiente but no posted closing exists AND no estimate is enabled */}
+          {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && !estimatedCogs.enabled && filteredReportLines.length > 0 && (
             <Alert className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                ⚠️ Costo de ventas no calculado por coeficiente para este período. 
+                ⚠️ Costo de ventas no calculado por coeficiente para este período.
                 Realice el cierre del período para incluir el desglose del costo de ventas.
               </AlertDescription>
             </Alert>

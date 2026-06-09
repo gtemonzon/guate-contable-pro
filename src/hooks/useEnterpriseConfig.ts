@@ -45,6 +45,9 @@ export interface EnterpriseConfig {
   account_vat_exemption_control_id: number | null;
   account_isr_retained_receivable_id: number | null;
   account_isr_retained_payable_id: number | null;
+  // Estimated Cost of Sales for reports (Income Statement only)
+  estimated_cogs_method: 'disabled' | 'last_period' | 'average_n';
+  estimated_cogs_periods: number;
 }
 
 const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
@@ -85,6 +88,8 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   account_vat_exemption_control_id: null,
   account_isr_retained_receivable_id: null,
   account_isr_retained_payable_id: null,
+  estimated_cogs_method: 'disabled',
+  estimated_cogs_periods: 3,
 });
 
 export function useEnterpriseConfig(enterpriseId: number | null) {
@@ -160,6 +165,8 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         account_vat_exemption_control_id: newConfig.account_vat_exemption_control_id,
         account_isr_retained_receivable_id: newConfig.account_isr_retained_receivable_id,
         account_isr_retained_payable_id: newConfig.account_isr_retained_payable_id,
+        estimated_cogs_method: newConfig.estimated_cogs_method,
+        estimated_cogs_periods: newConfig.estimated_cogs_periods,
       };
 
       const { data: existing } = await supabase
