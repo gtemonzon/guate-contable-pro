@@ -140,7 +140,7 @@ export default function TaxFormDialog({
         setPeriodType(editingForm.period_type || "");
         setPeriodMonth(editingForm.period_month?.toString() || "");
         setPeriodYear(editingForm.period_year?.toString() || currentYear.toString());
-        setPaymentDate(new Date(editingForm.payment_date));
+        setPaymentDate(new Date(editingForm.payment_date + "T00:00:00"));
         setAmountPaid(editingForm.amount_paid.toString());
         setNotes(editingForm.notes || "");
         setExistingFileName(editingForm.file_name);
