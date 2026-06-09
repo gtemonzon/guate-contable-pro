@@ -76,11 +76,19 @@ function applyProjectionTransform(lines: ReportLine[], estimatedCos: number): Re
     endIdx++;
   }
 
-  // Decide replacement sign: keep the sign currently used by the format (positive or negative).
-  // If original sum is exactly 0, default to negative (cost shown as deduction).
+  // Decide replacement display sign: keep the sign currently used by the format
+  // (positive or negative). If original sum is exactly 0, default to negative.
   const sign = originalSum === 0 ? -1 : Math.sign(originalSum);
-  const newAmount = Math.round(sign * Math.abs(estimatedCos) * 100) / 100;
-  const delta = newAmount - originalSum;
+  const oldCostAbs = Math.abs(originalSum);
+  const newCostAbs = Math.abs(estimatedCos);
+  const newAmount = Math.round(sign * newCostAbs * 100) / 100;
+
+  // Profit delta: more cost → less profit. This must be applied to downstream
+  // subtotals/totals/calculated regardless of how the format displays cost
+  // (positive or negative). The format's own subtraction logic (Margen Bruto =
+  // Ingresos − Costos) is already baked into the previously computed subtotals;
+  // we just shift them by the change in cost magnitude.
+  const profitDelta = Math.round(-(newCostAbs - oldCostAbs) * 100) / 100;
 
   // Build replacement line
   const replacement: ReportLine = {
@@ -101,11 +109,10 @@ function applyProjectionTransform(lines: ReportLine[], estimatedCos: number): Re
   // Splice: replace [sectionIdx+1 .. endIdx-1] with the single replacement line
   out.splice(sectionIdx + 1, endIdx - (sectionIdx + 1), replacement);
 
-  // Shift every downstream subtotal/total/calculated by delta so gross profit,
-  // operating income and net income reflect the projection.
+  // Shift every downstream subtotal/total/calculated by profitDelta.
   for (let i = sectionIdx + 2; i < out.length; i++) {
     if (out[i].type === 'subtotal' || out[i].type === 'total' || out[i].type === 'calculated') {
-      out[i] = { ...out[i], amount: Math.round((out[i].amount + delta) * 100) / 100 };
+      out[i] = { ...out[i], amount: Math.round((out[i].amount + profitDelta) * 100) / 100 };
     }
   }
 
