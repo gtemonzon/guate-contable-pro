@@ -323,13 +323,26 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
         lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        // Resultado del Período debe reflejar únicamente la utilidad/pérdida del
-        // rango reportado. No debe mezclar saldos acumulados en cuentas como 3.2,
-        // porque esos pueden incluir resultados de ejercicios anteriores aún no
-        // reclasificados a utilidades retenidas.
-        const calcAmount = periodResult;
-        sectionTotals.set(section.section_name, calcAmount);
-        lines.push({ type: "calculated", label: section.section_name, amount: calcAmount, isBold: true });
+        // En el Balance, la línea visible "Resultado del Período" debe mostrar
+        // SOLO el resultado oficial del rango consultado, para reconciliar con
+        // el Estado de Resultados. Pero los totales patrimoniales sí deben
+        // conservar cualquier saldo histórico pendiente en la cuenta asignada
+        // (p.ej. 3.2 RESULTADOS) para que el balance cuadre correctamente.
+        let assignedBalance = 0;
+        for (const sa of section.accounts || []) {
+          const acc = accountBalances.find(a => a.id === sa.account_id);
+          if (!acc) continue;
+          const bal = sa.include_children
+            ? getAggregatedBalance(acc.id)
+            : acc.balance;
+          assignedBalance += bal * sa.sign_multiplier;
+        }
+
+        const displayAmount = periodResult;
+        const totalAmount = assignedBalance + periodResult;
+
+        sectionTotals.set(section.section_name, totalAmount);
+        lines.push({ type: "calculated", label: section.section_name, amount: displayAmount, isBold: true });
       } else if (section.section_type === "grand_total") {
         let grandTotal = 0;
 
