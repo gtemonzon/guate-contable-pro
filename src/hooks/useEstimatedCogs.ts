@@ -17,7 +17,7 @@ export interface EstimatedCogsResult {
   purchasesInPeriod: number;
   availableInventory: number;
   estimatedEndingInventory: number | null;
-  reason?: string; // why we cannot compute (no closed periods, no sales account, etc.)
+  reason?: string;
 }
 
 interface Args {
@@ -28,6 +28,21 @@ interface Args {
   /** If true (official CoS already shown), skip computing. */
   skip?: boolean;
 }
+
+const EMPTY: EstimatedCogsResult = {
+  enabled: false,
+  loading: false,
+  currentSales: 0,
+  historicalPercentage: null,
+  estimatedCostOfSales: null,
+  estimatedGrossProfit: null,
+  basisPeriodsUsed: 0,
+  method: 'disabled',
+  beginningInventory: 0,
+  purchasesInPeriod: 0,
+  availableInventory: 0,
+  estimatedEndingInventory: null,
+};
 
 const sumDetails = async (
   accountId: number,
@@ -92,42 +107,66 @@ const getEntryIdsByDateRange = async (
 };
 
 export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip }: Args) {
-  const [state, setState] = useState<EstimatedCogsResult>({
-    enabled: false,
-    loading: false,
-    currentSales: 0,
-    historicalPercentage: null,
-    estimatedCostOfSales: null,
-    estimatedGrossProfit: null,
-    basisPeriodsUsed: 0,
-    method: 'disabled',
-  });
+  const [state, setState] = useState<EstimatedCogsResult>(EMPTY);
 
   const compute = useCallback(async () => {
     if (!enterpriseId || !config || !dateFrom || !dateTo) return;
 
     const method = config.estimated_cogs_method || 'disabled';
     if (method === 'disabled' || skip) {
-      setState((s) => ({ ...s, enabled: false, method }));
+      setState({ ...EMPTY, method });
       return;
     }
     if (!config.sales_account_id) {
-      setState((s) => ({ ...s, enabled: false, method, reason: 'Cuenta de Ventas no configurada' }));
+      setState({ ...EMPTY, method, reason: 'Cuenta de Ventas no configurada' });
       return;
     }
 
     setState((s) => ({ ...s, loading: true, enabled: true, method }));
 
     try {
-      // 1) Current period net sales (over the report date range)
+      // 1) Current period entries + net sales + purchases
       const currentEntryIds = await getEntryIdsByDateRange(enterpriseId, dateFrom, dateTo);
       const currentSales = await sumDetails(
         config.sales_account_id,
         currentEntryIds,
         'credit_minus_debit'
       );
+      const purchasesInPeriod = config.purchases_account_id
+        ? await sumDetails(config.purchases_account_id, currentEntryIds, 'debit_minus_credit')
+        : 0;
 
-      // 2) Fetch closed periods (most recent first)
+      // 2) Beginning inventory — from most recent contabilizado closing before dateFrom
+      let beginningInventory = 0;
+      const { data: lastClosing } = await supabase
+        .from('tab_period_inventory_closing')
+        .select('final_inventory_amount, accounting_period_id, tab_accounting_periods!inner(end_date)')
+        .eq('enterprise_id', enterpriseId)
+        .eq('status', 'contabilizado')
+        .lt('tab_accounting_periods.end_date', dateFrom)
+        .order('accounting_period_id', { ascending: false })
+        .limit(1);
+      if (lastClosing && lastClosing.length > 0 && lastClosing[0].final_inventory_amount != null) {
+        beginningInventory = Number(lastClosing[0].final_inventory_amount) || 0;
+      } else if (config.inventory_account_id || config.initial_inventory_account_id) {
+        // Fallback: opening balance of inventory account up to (dateFrom - 1)
+        const invAccId = (config.inventory_account_id ?? config.initial_inventory_account_id) as number;
+        const priorIds = await fetchAllRecords(
+          supabase
+            .from('tab_journal_entries')
+            .select('id')
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .is('reversal_entry_id', null)
+            .is('reversed_by_entry_id', null)
+            .lt('entry_date', dateFrom)
+            .in('entry_type', ['diario', 'ajuste', 'apertura'])
+        );
+        beginningInventory = await sumDetails(invAccId, (priorIds || []).map((e: { id: number }) => e.id), 'debit_minus_credit');
+      }
+
+      // 3) Fetch closed periods (most recent first)
       const limit = method === 'last_period' ? 1 : Math.max(1, Math.min(24, config.estimated_cogs_periods || 3));
       const { data: closedPeriods } = await supabase
         .from('tab_accounting_periods')
@@ -139,20 +178,19 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
 
       if (!closedPeriods || closedPeriods.length === 0) {
         setState({
+          ...EMPTY,
           enabled: true,
-          loading: false,
-          currentSales,
-          historicalPercentage: null,
-          estimatedCostOfSales: null,
-          estimatedGrossProfit: null,
-          basisPeriodsUsed: 0,
           method,
+          currentSales,
+          purchasesInPeriod,
+          beginningInventory,
+          availableInventory: beginningInventory + purchasesInPeriod,
           reason: 'No hay períodos cerrados para calcular el porcentaje histórico',
         });
         return;
       }
 
-      // 3) For each closed period compute CoS% = actual CoS / net sales
+      // 4) For each closed period compute CoS% = actual CoS / net sales
       const percentages: number[] = [];
       for (const p of closedPeriods) {
         const periodEntryIds = await getPeriodEntryIds(enterpriseId, p.id);
@@ -174,7 +212,6 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
             actualCos = await sumDetails(config.cost_of_sales_account_id, periodEntryIds, 'debit_minus_credit');
           }
         } else {
-          // manual: use the configured cost of sales account if any, otherwise purchases account as fallback
           if (config.cost_of_sales_account_id) {
             actualCos = await sumDetails(config.cost_of_sales_account_id, periodEntryIds, 'debit_minus_credit');
           } else if (config.purchases_account_id) {
@@ -189,14 +226,13 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
 
       if (percentages.length === 0) {
         setState({
+          ...EMPTY,
           enabled: true,
-          loading: false,
-          currentSales,
-          historicalPercentage: null,
-          estimatedCostOfSales: null,
-          estimatedGrossProfit: null,
-          basisPeriodsUsed: 0,
           method,
+          currentSales,
+          purchasesInPeriod,
+          beginningInventory,
+          availableInventory: beginningInventory + purchasesInPeriod,
           reason: 'No fue posible derivar un porcentaje histórico de costo de ventas',
         });
         return;
@@ -209,6 +245,8 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
 
       const estCos = Math.round(currentSales * percentage * 100) / 100;
       const estGross = Math.round((currentSales - estCos) * 100) / 100;
+      const available = Math.round((beginningInventory + purchasesInPeriod) * 100) / 100;
+      const estEnding = Math.round((available - estCos) * 100) / 100;
 
       setState({
         enabled: true,
@@ -219,6 +257,10 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
         estimatedGrossProfit: estGross,
         basisPeriodsUsed: percentages.length,
         method,
+        beginningInventory,
+        purchasesInPeriod,
+        availableInventory: available,
+        estimatedEndingInventory: estEnding,
       });
     } catch (err) {
       console.error('Error computing estimated CoS:', err);
