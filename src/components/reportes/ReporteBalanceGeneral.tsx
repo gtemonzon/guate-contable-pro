@@ -105,7 +105,7 @@ export default function ReporteBalanceGeneral() {
       const year = new Date(reportDate + 'T00:00:00').getFullYear();
       const periodStart = `${year}-01-01`;
 
-      const [balanceRes, pnlRes, periodRes] = await Promise.all([
+      const [balanceRes, pnlRes] = await Promise.all([
         supabase.rpc('get_balance_sheet', {
           p_enterprise_id: currentEnterpriseId,
           p_as_of_date: reportDate,
@@ -115,20 +115,9 @@ export default function ReporteBalanceGeneral() {
           p_start_date: periodStart,
           p_end_date: reportDate,
         }),
-        supabase
-          .from('tab_accounting_periods')
-          .select('status')
-          .eq('enterprise_id', currentEnterpriseId)
-          .lte('start_date', reportDate)
-          .gte('end_date', reportDate)
-          .maybeSingle(),
       ]);
 
       if (balanceRes.error) throw balanceRes.error;
-
-      // Si el período del año del reporte está cerrado, los asientos de cierre
-      // ya capitalizaron el resultado en el patrimonio. No debe sumarse otra vez.
-      const periodIsClosed = periodRes.data?.status === 'cerrado';
 
       const accountBalances: AccountBalance[] = (balanceRes.data || []).map((row: any) => ({
         id: Number(row.account_id),
@@ -152,7 +141,7 @@ export default function ReporteBalanceGeneral() {
       }));
 
       if (format && format.sections.length > 0) {
-        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts, periodIsClosed);
+        const lines = generateFormattedReport(format.sections, accountBalances, pnlAccounts);
         setReportLines(lines);
       } else {
         const simpleLines: ReportLine[] = accountBalances
@@ -178,7 +167,7 @@ export default function ReporteBalanceGeneral() {
     }
   };
 
-  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[], periodIsClosed: boolean = false): ReportLine[] => {
+  const generateFormattedReport = (sections: Section[], accountBalances: AccountBalance[], pnlAccounts: { id: number; account_type: string; parent_account_id: number | null; balance: number }[]): ReportLine[] => {
     const lines: ReportLine[] = [];
     const sectionTotals: Map<string, number> = new Map();
 
@@ -334,22 +323,11 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
         lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        // Resultado del Período = saldo de las cuentas asignadas (p.ej. 3.2
-        // RESULTADOS, que recibe resultados acumulados vía la partida de
-        // apertura del año) + resultado operativo del P&L del período.
-        // `get_balance_sheet` excluye los asientos de cierre/traslado, así que
-        // no hay doble suma: la APER capitaliza pérdidas/utilidades anteriores
-        // en 3.2; el P&L aporta el resultado en curso del propio año.
-        let assignedBalance = 0;
-        for (const sa of section.accounts || []) {
-          const acc = accountBalances.find(a => a.id === sa.account_id);
-          if (!acc) continue;
-          const bal = sa.include_children
-            ? getAggregatedBalance(acc.id)
-            : acc.balance;
-          assignedBalance += bal * sa.sign_multiplier;
-        }
-        const calcAmount = assignedBalance + periodResult;
+        // Resultado del Período debe reflejar únicamente la utilidad/pérdida del
+        // rango reportado. No debe mezclar saldos acumulados en cuentas como 3.2,
+        // porque esos pueden incluir resultados de ejercicios anteriores aún no
+        // reclasificados a utilidades retenidas.
+        const calcAmount = periodResult;
         sectionTotals.set(section.section_name, calcAmount);
         lines.push({ type: "calculated", label: section.section_name, amount: calcAmount, isBold: true });
       } else if (section.section_type === "grand_total") {
