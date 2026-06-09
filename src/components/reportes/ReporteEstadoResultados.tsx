@@ -597,13 +597,26 @@ export default function ReporteEstadoResultados() {
   };
 
   // Filter lines based on display level + hide zero-balance accounts
-  const filteredReportLines = reportLines
+  const baseFilteredLines = reportLines
     .filter((line) => line.type !== "account" || Math.abs(line.amount) > 0.00001)
     .filter((line) =>
       displayLevel === 0
         ? true
         : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
     );
+
+  // PROJECTION MODE: only when period is OPEN, method is coeficiente, estimation is enabled,
+  // we have a computed estimate and there is NO official CDV breakdown.
+  const projectionMode =
+    periodIsOpen &&
+    config?.cost_of_sales_method === 'coeficiente' &&
+    estimatedCogs.enabled &&
+    estimatedCogs.estimatedCostOfSales !== null &&
+    !cdvBreakdown;
+
+  const filteredReportLines = projectionMode
+    ? applyProjectionTransform(baseFilteredLines, estimatedCogs.estimatedCostOfSales as number)
+    : baseFilteredLines;
 
   const { expanded, toggleExpand, visibleLines } = useReportTreeState(filteredReportLines);
 
