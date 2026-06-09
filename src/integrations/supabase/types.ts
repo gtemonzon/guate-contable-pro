@@ -1582,6 +1582,8 @@ export type Database = {
           default_auditor_colegiado: string | null
           default_auditor_name: string | null
           enterprise_id: number
+          estimated_cogs_method: string
+          estimated_cogs_periods: number
           final_inventory_account_id: number | null
           id: number
           initial_inventory_account_id: number | null
@@ -1626,6 +1628,8 @@ export type Database = {
           default_auditor_colegiado?: string | null
           default_auditor_name?: string | null
           enterprise_id: number
+          estimated_cogs_method?: string
+          estimated_cogs_periods?: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
@@ -1670,6 +1674,8 @@ export type Database = {
           default_auditor_colegiado?: string | null
           default_auditor_name?: string | null
           enterprise_id?: number
+          estimated_cogs_method?: string
+          estimated_cogs_periods?: number
           final_inventory_account_id?: number | null
           id?: never
           initial_inventory_account_id?: number | null
