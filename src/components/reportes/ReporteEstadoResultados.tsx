@@ -57,6 +57,7 @@ export default function ReporteEstadoResultados() {
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [periodIsOpen, setPeriodIsOpen] = useState<boolean>(false);
   const { toast } = useToast();
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
