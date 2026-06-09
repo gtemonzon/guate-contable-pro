@@ -65,7 +65,7 @@ export default function ReporteEstadoResultados() {
     config,
     dateFrom,
     dateTo,
-    skip: !!cdvBreakdown, // skip whenever an official CoS breakdown is shown
+    skip: !!cdvBreakdown || reportLines.length === 0, // only compute when report is rendered and official CoS is absent
   });
 
   const { format, loading: formatLoading } = useFinancialStatementFormat(
