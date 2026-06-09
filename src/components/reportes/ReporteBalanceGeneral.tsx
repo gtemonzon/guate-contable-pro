@@ -268,9 +268,12 @@ export default function ReporteBalanceGeneral() {
     const rootExpenseAccounts = pnlAccounts.filter(a => (a.account_type === "gasto" || a.account_type === "costo") && a.parent_account_id === null);
     const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
     const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
-    // Si el período está cerrado, el cierre contable ya capitalizó el resultado
-    // en el patrimonio. Mostrarlo de nuevo causaría doble suma.
-    const periodResult = periodIsClosed ? 0 : (totalIngresos - totalGastos);
+    // `get_balance_sheet` excluye los asientos de cierre/traslado, por lo que
+    // las cuentas patrimoniales NUNCA reciben el efecto del cierre dentro del
+    // propio año. Por tanto el resultado del período siempre se toma del P&L
+    // (que también excluye cierres), sin importar si el período está abierto
+    // o cerrado — no hay doble suma.
+    const periodResult = totalIngresos - totalGastos;
 
     for (const section of sections) {
       if (!section.show_in_report) continue;
