@@ -776,20 +776,40 @@ export default function ReporteEstadoResultados() {
       )}
 
       {filteredReportLines.length > 0 && (
-        <div className="rounded-lg border p-4 bg-card">
+        <div className={`rounded-lg border p-4 ${projectionMode ? 'bg-sky-50/30 dark:bg-sky-950/10 border-sky-300 dark:border-sky-800' : 'bg-card'}`}>
           <div className="text-center mb-4">
             <h3 className="font-bold text-lg">{enterpriseName}</h3>
             <p className="text-sm text-muted-foreground">
               Estado de Resultados del {new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al {new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
+            {projectionMode && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <Badge variant="outline" className="bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700">
+                  <Calculator className="h-3 w-3 mr-1" />
+                  Modo Gerencial Proyectado
+                </Badge>
+              </div>
+            )}
           </div>
+
+          {projectionMode && (
+            <Alert className="mb-4 border-sky-300 bg-sky-50 dark:bg-sky-950/30 dark:border-sky-800">
+              <Info className="h-4 w-4 text-sky-600" />
+              <AlertDescription className="text-sm">
+                Este reporte contiene <strong>cálculos estimados de Costo de Ventas</strong> basados en porcentajes
+                históricos. Es exclusivamente para análisis gerencial y <strong>no reemplaza</strong> el costo de ventas
+                oficial generado durante el cierre del período. No afecta el Balance General, el Mayor ni los saldos contables.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {layout === 'stepped' ? (
             <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
             <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           )}
 
-          {/* CDV Breakdown Section */}
+          {/* CDV Breakdown Section — official, posted closing */}
           {cdvBreakdown && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-bold text-sm mb-2">COSTO DE VENTAS (Método de Coeficiente):</h4>
@@ -821,9 +841,55 @@ export default function ReporteEstadoResultados() {
             </div>
           )}
 
-          {/* Estimated CoS block — only shown when no official CDV breakdown is present.
-              This is presentation-only and does NOT post any accounting entry. */}
-          {!cdvBreakdown && <EstimatedCogsBlock data={estimatedCogs} />}
+          {/* Inventory Analysis Panel — only in projection mode */}
+          {projectionMode && estimatedCogs.estimatedCostOfSales !== null && (
+            <div className="mt-6 pt-4 border-t border-dashed border-sky-300 dark:border-sky-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-sky-500" />
+                <h4 className="font-bold text-sm">ANÁLISIS DE INVENTARIO (ESTIMADO)</h4>
+                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800">
+                  Estimado
+                </Badge>
+              </div>
+
+              <div className="space-y-1 font-mono text-sm bg-sky-50/50 dark:bg-sky-950/20 rounded-md p-3 border border-sky-200/60 dark:border-sky-900/60">
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2">
+                  <div>Inventario Inicial</div>
+                  <div className="text-right">{formatQ(estimatedCogs.beginningInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2">
+                  <div>(+) Compras del Período</div>
+                  <div className="text-right">{formatQ(estimatedCogs.purchasesInPeriod)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 bg-sky-100/50 dark:bg-sky-900/30 font-semibold">
+                  <div>(=) Mercadería Disponible</div>
+                  <div className="text-right">{formatQ(estimatedCogs.availableInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 text-sky-700 dark:text-sky-300">
+                  <div>(-) Costo de Ventas Estimado</div>
+                  <div className="text-right">({formatQ(estimatedCogs.estimatedCostOfSales)})</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 border-t-2 border-sky-300 dark:border-sky-700 font-bold text-sky-700 dark:text-sky-300">
+                  <div>(=) Inventario Final Estimado</div>
+                  <div className="text-right">{formatQ(estimatedCogs.estimatedEndingInventory ?? 0)}</div>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-2 italic flex items-start gap-1.5">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-sky-500" />
+                <span>
+                  Costo de Ventas estimado con <strong>{((estimatedCogs.historicalPercentage ?? 0) * 100).toFixed(2)}%</strong>
+                  {' '}({estimatedCogs.method === 'last_period' ? 'último período cerrado' : `promedio de ${estimatedCogs.basisPeriodsUsed} período${estimatedCogs.basisPeriodsUsed === 1 ? '' : 's'} cerrado${estimatedCogs.basisPeriodsUsed === 1 ? '' : 's'}`}).
+                  Valores únicamente para análisis gerencial; no afectan el Balance General, Mayor, ni el cierre del período.
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* Estimated CoS hint block — only when estimation is enabled but projection cannot run
+              (e.g., closed period, no historical %). Never shown together with projection mode. */}
+          {!cdvBreakdown && !projectionMode && estimatedCogs.enabled && <EstimatedCogsBlock data={estimatedCogs} />}
+
 
           {/* Warning when method is coeficiente but no posted closing exists AND no estimate is enabled */}
           {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && !estimatedCogs.enabled && filteredReportLines.length > 0 && (
