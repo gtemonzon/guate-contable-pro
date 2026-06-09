@@ -156,18 +156,22 @@ export default function ReporteEstadoResultados() {
         balance: Number(row.balance),
       }));
 
-      // Load CDV breakdown if method is coeficiente
+      // Load CDV breakdown if method is coeficiente; also detect if the date range covers any OPEN period
       let loadedCdv: CdvBreakdown | null = null;
-      if (config?.cost_of_sales_method === 'coeficiente') {
-        // Find accounting periods that overlap with the date range
+      let anyOpenPeriod = false;
+      {
+        // Find accounting periods that overlap with the date range (regardless of method,
+        // so we can decide projection mode)
         const { data: periods } = await supabase
           .from('tab_accounting_periods')
-          .select('id')
+          .select('id, status')
           .eq('enterprise_id', currentEnterpriseId)
           .lte('start_date', dateTo)
           .gte('end_date', dateFrom);
 
-        if (periods && periods.length > 0) {
+        anyOpenPeriod = !!(periods && periods.some(p => p.status !== 'cerrado'));
+
+        if (config?.cost_of_sales_method === 'coeficiente' && periods && periods.length > 0) {
           const periodIds = periods.map(p => p.id);
           const { data: closings } = await supabase
             .from('tab_period_inventory_closing')
@@ -177,7 +181,6 @@ export default function ReporteEstadoResultados() {
             .in('accounting_period_id', periodIds);
 
           if (closings && closings.length > 0) {
-            // Aggregate across all matching periods
             const totals = closings.reduce((acc, c) => ({
               initialInventory: acc.initialInventory + Number(c.initial_inventory_amount || 0),
               purchases: acc.purchases + Number(c.purchases_amount || 0),
@@ -192,6 +195,7 @@ export default function ReporteEstadoResultados() {
           }
         }
       }
+      setPeriodIsOpen(anyOpenPeriod);
       setCdvBreakdown(loadedCdv);
 
       // If we have a configured format, use it
