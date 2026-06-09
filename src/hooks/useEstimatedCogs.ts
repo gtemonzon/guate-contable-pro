@@ -12,6 +12,11 @@ export interface EstimatedCogsResult {
   estimatedGrossProfit: number | null;
   basisPeriodsUsed: number;
   method: 'disabled' | 'last_period' | 'average_n';
+  // Inventory analysis (projection) — reporting only
+  beginningInventory: number;
+  purchasesInPeriod: number;
+  availableInventory: number;
+  estimatedEndingInventory: number | null;
   reason?: string; // why we cannot compute (no closed periods, no sales account, etc.)
 }
 
