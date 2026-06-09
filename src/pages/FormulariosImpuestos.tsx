@@ -362,7 +362,7 @@ export default function FormulariosImpuestos() {
                         <p>Código de acceso: {form.access_code}</p>
                         <p>
                           Fecha de pago:{" "}
-                          {format(new Date(form.payment_date), "dd 'de' MMMM 'de' yyyy", {
+                          {format(new Date(form.payment_date + "T00:00:00"), "dd 'de' MMMM 'de' yyyy", {
                             locale: es,
                           })}
                         </p>
