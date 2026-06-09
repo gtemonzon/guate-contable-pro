@@ -53,6 +53,8 @@ export function EnterpriseAccountsManager() {
     account_vat_exemption_control_id: null as number | null,
     account_isr_retained_receivable_id: null as number | null,
     account_isr_retained_payable_id: null as number | null,
+    estimated_cogs_method: 'disabled' as 'disabled' | 'last_period' | 'average_n',
+    estimated_cogs_periods: 3 as number,
   });
 
   useEffect(() => {
@@ -99,6 +101,8 @@ export function EnterpriseAccountsManager() {
         account_vat_exemption_control_id: config.account_vat_exemption_control_id ?? null,
         account_isr_retained_receivable_id: config.account_isr_retained_receivable_id ?? null,
         account_isr_retained_payable_id: config.account_isr_retained_payable_id ?? null,
+        estimated_cogs_method: (config.estimated_cogs_method as 'disabled' | 'last_period' | 'average_n') ?? 'disabled',
+        estimated_cogs_periods: config.estimated_cogs_periods ?? 3,
       });
     }
   }, [config]);
@@ -169,6 +173,8 @@ export function EnterpriseAccountsManager() {
       account_vat_exemption_control_id: formData.account_vat_exemption_control_id,
       account_isr_retained_receivable_id: formData.account_isr_retained_receivable_id,
       account_isr_retained_payable_id: formData.account_isr_retained_payable_id,
+      estimated_cogs_method: formData.estimated_cogs_method,
+      estimated_cogs_periods: formData.estimated_cogs_periods,
     });
   };
 
@@ -285,6 +291,62 @@ export function EnterpriseAccountsManager() {
                   </AlertDescription>
                 </Alert>
               )}
+            </div>
+
+            {/* Estimated Cost of Sales for Reports (reporting-only, no journal impact) */}
+            <div className="space-y-4 rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50/40 dark:bg-sky-950/10 p-4">
+              <div>
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  Costo de Ventas Estimado para Reportes
+                  <span className="text-[10px] uppercase tracking-wide bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 px-1.5 py-0.5 rounded">Solo reportes</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Para empresas con inventario periódico que aún no conocen el costo real del período abierto. El sistema mostrará en el <strong>Estado de Resultados</strong> una <em>proyección</em> del costo de ventas usando un porcentaje histórico sobre las ventas netas. <strong>No genera partidas, no afecta saldos ni cierres.</strong> Cuando exista el costo de ventas oficial del período, siempre prevalece el oficial.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Método de Estimación</Label>
+                  <Select
+                    value={formData.estimated_cogs_method}
+                    onValueChange={(value: 'disabled' | 'last_period' | 'average_n') =>
+                      setFormData(prev => ({ ...prev, estimated_cogs_method: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="disabled">Desactivado (sin proyección)</SelectItem>
+                      <SelectItem value="last_period">Usar % del último período cerrado</SelectItem>
+                      <SelectItem value="average_n">Usar promedio de los últimos N períodos cerrados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {formData.estimated_cogs_method === 'average_n' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="estimated_cogs_periods">Períodos a promediar</Label>
+                    <Input
+                      id="estimated_cogs_periods"
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={formData.estimated_cogs_periods}
+                      onChange={(e) =>
+                        setFormData(prev => ({
+                          ...prev,
+                          estimated_cogs_periods: Math.max(1, Math.min(24, parseInt(e.target.value || '3', 10))),
+                        }))
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Cantidad de períodos cerrados más recientes utilizados para calcular el porcentaje promedio.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             <Separator />
