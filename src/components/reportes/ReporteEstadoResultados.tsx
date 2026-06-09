@@ -45,6 +45,74 @@ interface AccountBalance {
   balance: number;
 }
 
+/**
+ * Transform a P&L line array into a "projected" version:
+ *  - Locate the first section header whose label looks like a Cost/Purchases group
+ *  - Replace all account lines under it with a single "Estimated Cost of Sales" line
+ *  - Shift every downstream subtotal/total/calculated by the delta so the report stays coherent
+ *
+ * IMPORTANT: This is a presentation-only transform. It does NOT touch any database row,
+ * journal entry or balance. The official report (closed periods / posted CoS) is never affected.
+ */
+function applyProjectionTransform(lines: ReportLine[], estimatedCos: number): ReportLine[] {
+  const out: ReportLine[] = lines.map(l => ({ ...l }));
+
+  // Find cost/purchases section header
+  const isCostSection = (label: string) => {
+    const u = label.toUpperCase();
+    return /\b(COSTO|COSTOS|COMPRA|COMPRAS)\b/.test(u);
+  };
+
+  const sectionIdx = out.findIndex(l => l.type === 'section' && isCostSection(l.label));
+  if (sectionIdx === -1) return out; // nothing to replace; return as-is
+
+  // Collect account lines that belong to this section (consecutive accounts)
+  let endIdx = sectionIdx + 1;
+  let originalSum = 0;
+  while (endIdx < out.length && out[endIdx].type === 'account') {
+    // Only count top-level accounts of this section to avoid double counting children.
+    // Children carry the same aggregated amount as their parent's roll-up; we sum only depth=1.
+    if ((out[endIdx].level ?? 1) === 1) originalSum += out[endIdx].amount;
+    endIdx++;
+  }
+
+  // Decide replacement sign: keep the sign currently used by the format (positive or negative).
+  // If original sum is exactly 0, default to negative (cost shown as deduction).
+  const sign = originalSum === 0 ? -1 : Math.sign(originalSum);
+  const newAmount = Math.round(sign * Math.abs(estimatedCos) * 100) / 100;
+  const delta = newAmount - originalSum;
+
+  // Build replacement line
+  const replacement: ReportLine = {
+    type: 'account',
+    label: 'Costo de Ventas Estimado',
+    amount: newAmount,
+    level: 1,
+    accountLevel: 1,
+    isBold: false,
+  };
+
+  // Rename the section header to make it explicit
+  out[sectionIdx] = {
+    ...out[sectionIdx],
+    label: 'COSTO DE VENTAS (ESTIMADO)',
+  };
+
+  // Splice: replace [sectionIdx+1 .. endIdx-1] with the single replacement line
+  out.splice(sectionIdx + 1, endIdx - (sectionIdx + 1), replacement);
+
+  // Shift every downstream subtotal/total/calculated by delta so gross profit,
+  // operating income and net income reflect the projection.
+  for (let i = sectionIdx + 2; i < out.length; i++) {
+    if (out[i].type === 'subtotal' || out[i].type === 'total' || out[i].type === 'calculated') {
+      out[i] = { ...out[i], amount: Math.round((out[i].amount + delta) * 100) / 100 };
+    }
+  }
+
+  return out;
+}
+
+
 export default function ReporteEstadoResultados() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
