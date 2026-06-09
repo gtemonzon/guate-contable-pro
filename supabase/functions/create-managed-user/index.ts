@@ -111,6 +111,18 @@ Deno.serve(async (req) => {
     }
 
     const validEnterpriseIds = new Set((tenantEnterprises || []).map((item) => item.id));
+
+    // Role allowlist: only super admins can assign elevated roles via this endpoint.
+    const BASE_ALLOWED_ROLES = new Set(["contador_senior", "auxiliar_contable", "cliente"]);
+    const SUPER_ADMIN_ONLY_ROLES = new Set(["enterprise_admin", "super_admin"]);
+    const callerIsSuperAdmin = !!currentUser.is_super_admin;
+
+    const isRoleAllowed = (role: string) => {
+      if (BASE_ALLOWED_ROLES.has(role)) return true;
+      if (callerIsSuperAdmin && SUPER_ADMIN_ONLY_ROLES.has(role)) return true;
+      return false;
+    };
+
     const enterpriseRoles = isTenantAdmin
       ? Array.from(validEnterpriseIds).map((enterpriseId) => ({
           enterprise_id: enterpriseId,
@@ -118,8 +130,18 @@ Deno.serve(async (req) => {
         }))
       : requestedEnterpriseRoles.filter((item, index, array) => {
           if (!item?.enterprise_id || !item.role) return false;
+          if (!isRoleAllowed(item.role)) return false;
           return array.findIndex((candidate) => candidate.enterprise_id === item.enterprise_id) === index;
         });
+
+    // If the caller is not a super admin, they cannot create tenant admins (which auto-assigns enterprise_admin).
+    if (isTenantAdmin && !callerIsSuperAdmin) {
+      return jsonResponse({ error: "Solo un super administrador puede crear administradores de oficina contable" }, 403);
+    }
+
+    if (!isTenantAdmin && requestedEnterpriseRoles.length > 0 && enterpriseRoles.length !== requestedEnterpriseRoles.length) {
+      return jsonResponse({ error: "Se solicitó un rol no permitido para este usuario" }, 400);
+    }
 
     if (enterpriseRoles.length > 0) {
       const invalidAssignment = enterpriseRoles.find((item) => !validEnterpriseIds.has(item.enterprise_id));

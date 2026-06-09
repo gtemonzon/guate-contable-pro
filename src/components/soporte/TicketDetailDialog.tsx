@@ -67,11 +67,11 @@ export default function TicketDetailDialog({ ticketId, open, onOpenChange }: Pro
         setCurrentUserId(user.id);
         supabase
           .from("tab_users")
-          .select("is_super_admin, is_tenant_admin")
+          .select("is_super_admin")
           .eq("id", user.id)
           .single()
           .then(({ data }) => {
-            setIsAgent(!!data?.is_super_admin || !!data?.is_tenant_admin);
+            setIsAgent(!!data?.is_super_admin);
           });
       }
     });

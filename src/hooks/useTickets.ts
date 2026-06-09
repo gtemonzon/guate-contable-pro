@@ -301,11 +301,11 @@ export function useSendMessage() {
       // Auto-update ticket status
       const { data: userData } = await supabase
         .from("tab_users")
-        .select("is_super_admin, is_tenant_admin")
+        .select("is_super_admin")
         .eq("id", user.id)
         .single();
 
-      const isAgent = userData?.is_super_admin || userData?.is_tenant_admin;
+      const isAgent = !!userData?.is_super_admin;
 
       await supabase
         .from("tickets")
