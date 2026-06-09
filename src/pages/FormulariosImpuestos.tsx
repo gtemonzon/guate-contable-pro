@@ -231,7 +231,7 @@ export default function FormulariosImpuestos() {
     return (
       form.form_number.toLowerCase().includes(query) ||
       form.payment_date.includes(query) ||
-      format(new Date(form.payment_date), "dd/MM/yyyy").includes(query) ||
+      format(new Date(form.payment_date + "T00:00:00"), "dd/MM/yyyy").includes(query) ||
       (form.tax_type && form.tax_type.toLowerCase().includes(query)) ||
       periodText.includes(query)
     );
