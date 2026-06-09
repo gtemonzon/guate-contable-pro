@@ -268,9 +268,12 @@ export default function ReporteBalanceGeneral() {
     const rootExpenseAccounts = pnlAccounts.filter(a => (a.account_type === "gasto" || a.account_type === "costo") && a.parent_account_id === null);
     const totalIngresos = rootIncomeAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
     const totalGastos = rootExpenseAccounts.reduce((sum, acc) => sum + getPnlAggBalance(acc.id), 0);
-    // Si el período está cerrado, el cierre contable ya capitalizó el resultado
-    // en el patrimonio. Mostrarlo de nuevo causaría doble suma.
-    const periodResult = periodIsClosed ? 0 : (totalIngresos - totalGastos);
+    // `get_balance_sheet` excluye los asientos de cierre/traslado, por lo que
+    // las cuentas patrimoniales NUNCA reciben el efecto del cierre dentro del
+    // propio año. Por tanto el resultado del período siempre se toma del P&L
+    // (que también excluye cierres), sin importar si el período está abierto
+    // o cerrado — no hay doble suma.
+    const periodResult = totalIngresos - totalGastos;
 
     for (const section of sections) {
       if (!section.show_in_report) continue;
@@ -331,25 +334,8 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
         lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        // Si el período está cerrado, el resultado ya fue capitalizado mediante
-        // asientos de cierre en las cuentas patrimoniales asignadas (ej. 3.2
-        // RESULTADOS). En ese caso usamos el saldo real de esas cuentas, en
-        // lugar de 0, para que el balance cuadre. Si no hay cuentas asignadas,
-        // o el período sigue abierto, usamos el periodResult calculado del P&L.
-        let calcAmount = periodResult;
-        if (periodIsClosed && section.accounts && section.accounts.length > 0) {
-          calcAmount = 0;
-          for (const sa of section.accounts) {
-            const acc = accountBalances.find(a => a.id === sa.account_id);
-            if (!acc) continue;
-            const bal = sa.include_children
-              ? getAggregatedBalance(acc.id)
-              : acc.balance;
-            calcAmount += bal * sa.sign_multiplier;
-          }
-        }
-        sectionTotals.set(section.section_name, calcAmount);
-        lines.push({ type: "calculated", label: section.section_name, amount: calcAmount, isBold: true });
+        sectionTotals.set(section.section_name, periodResult);
+        lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
       } else if (section.section_type === "grand_total") {
         let grandTotal = 0;
 
