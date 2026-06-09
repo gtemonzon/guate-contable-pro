@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileSpreadsheet, Download, Loader2, AlertCircle } from "lucide-react";
+import { FileSpreadsheet, Download, Loader2, AlertCircle, Calculator, Sparkles, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -44,6 +45,74 @@ interface AccountBalance {
   balance: number;
 }
 
+/**
+ * Transform a P&L line array into a "projected" version:
+ *  - Locate the first section header whose label looks like a Cost/Purchases group
+ *  - Replace all account lines under it with a single "Estimated Cost of Sales" line
+ *  - Shift every downstream subtotal/total/calculated by the delta so the report stays coherent
+ *
+ * IMPORTANT: This is a presentation-only transform. It does NOT touch any database row,
+ * journal entry or balance. The official report (closed periods / posted CoS) is never affected.
+ */
+function applyProjectionTransform(lines: ReportLine[], estimatedCos: number): ReportLine[] {
+  const out: ReportLine[] = lines.map(l => ({ ...l }));
+
+  // Find cost/purchases section header
+  const isCostSection = (label: string) => {
+    const u = label.toUpperCase();
+    return /\b(COSTO|COSTOS|COMPRA|COMPRAS)\b/.test(u);
+  };
+
+  const sectionIdx = out.findIndex(l => l.type === 'section' && isCostSection(l.label));
+  if (sectionIdx === -1) return out; // nothing to replace; return as-is
+
+  // Collect account lines that belong to this section (consecutive accounts)
+  let endIdx = sectionIdx + 1;
+  let originalSum = 0;
+  while (endIdx < out.length && out[endIdx].type === 'account') {
+    // Only count top-level accounts of this section to avoid double counting children.
+    // Children carry the same aggregated amount as their parent's roll-up; we sum only depth=1.
+    if ((out[endIdx].level ?? 1) === 1) originalSum += out[endIdx].amount;
+    endIdx++;
+  }
+
+  // Decide replacement sign: keep the sign currently used by the format (positive or negative).
+  // If original sum is exactly 0, default to negative (cost shown as deduction).
+  const sign = originalSum === 0 ? -1 : Math.sign(originalSum);
+  const newAmount = Math.round(sign * Math.abs(estimatedCos) * 100) / 100;
+  const delta = newAmount - originalSum;
+
+  // Build replacement line
+  const replacement: ReportLine = {
+    type: 'account',
+    label: 'Costo de Ventas Estimado',
+    amount: newAmount,
+    level: 1,
+    accountLevel: 1,
+    isBold: false,
+  };
+
+  // Rename the section header to make it explicit
+  out[sectionIdx] = {
+    ...out[sectionIdx],
+    label: 'COSTO DE VENTAS (ESTIMADO)',
+  };
+
+  // Splice: replace [sectionIdx+1 .. endIdx-1] with the single replacement line
+  out.splice(sectionIdx + 1, endIdx - (sectionIdx + 1), replacement);
+
+  // Shift every downstream subtotal/total/calculated by delta so gross profit,
+  // operating income and net income reflect the projection.
+  for (let i = sectionIdx + 2; i < out.length; i++) {
+    if (out[i].type === 'subtotal' || out[i].type === 'total' || out[i].type === 'calculated') {
+      out[i] = { ...out[i], amount: Math.round((out[i].amount + delta) * 100) / 100 };
+    }
+  }
+
+  return out;
+}
+
+
 export default function ReporteEstadoResultados() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
   const [enterpriseName, setEnterpriseName] = useState<string>("");
@@ -56,6 +125,7 @@ export default function ReporteEstadoResultados() {
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [periodIsOpen, setPeriodIsOpen] = useState<boolean>(false);
   const { toast } = useToast();
 
   const { config } = useEnterpriseConfig(currentEnterpriseId);
@@ -154,18 +224,22 @@ export default function ReporteEstadoResultados() {
         balance: Number(row.balance),
       }));
 
-      // Load CDV breakdown if method is coeficiente
+      // Load CDV breakdown if method is coeficiente; also detect if the date range covers any OPEN period
       let loadedCdv: CdvBreakdown | null = null;
-      if (config?.cost_of_sales_method === 'coeficiente') {
-        // Find accounting periods that overlap with the date range
+      let anyOpenPeriod = false;
+      {
+        // Find accounting periods that overlap with the date range (regardless of method,
+        // so we can decide projection mode)
         const { data: periods } = await supabase
           .from('tab_accounting_periods')
-          .select('id')
+          .select('id, status')
           .eq('enterprise_id', currentEnterpriseId)
           .lte('start_date', dateTo)
           .gte('end_date', dateFrom);
 
-        if (periods && periods.length > 0) {
+        anyOpenPeriod = !!(periods && periods.some(p => p.status !== 'cerrado'));
+
+        if (config?.cost_of_sales_method === 'coeficiente' && periods && periods.length > 0) {
           const periodIds = periods.map(p => p.id);
           const { data: closings } = await supabase
             .from('tab_period_inventory_closing')
@@ -175,7 +249,6 @@ export default function ReporteEstadoResultados() {
             .in('accounting_period_id', periodIds);
 
           if (closings && closings.length > 0) {
-            // Aggregate across all matching periods
             const totals = closings.reduce((acc, c) => ({
               initialInventory: acc.initialInventory + Number(c.initial_inventory_amount || 0),
               purchases: acc.purchases + Number(c.purchases_amount || 0),
@@ -190,6 +263,7 @@ export default function ReporteEstadoResultados() {
           }
         }
       }
+      setPeriodIsOpen(anyOpenPeriod);
       setCdvBreakdown(loadedCdv);
 
       // If we have a configured format, use it
@@ -591,13 +665,26 @@ export default function ReporteEstadoResultados() {
   };
 
   // Filter lines based on display level + hide zero-balance accounts
-  const filteredReportLines = reportLines
+  const baseFilteredLines = reportLines
     .filter((line) => line.type !== "account" || Math.abs(line.amount) > 0.00001)
     .filter((line) =>
       displayLevel === 0
         ? true
         : line.type !== "account" || (line.accountLevel !== undefined && line.accountLevel <= displayLevel)
     );
+
+  // PROJECTION MODE: only when period is OPEN, method is coeficiente, estimation is enabled,
+  // we have a computed estimate and there is NO official CDV breakdown.
+  const projectionMode =
+    periodIsOpen &&
+    config?.cost_of_sales_method === 'coeficiente' &&
+    estimatedCogs.enabled &&
+    estimatedCogs.estimatedCostOfSales !== null &&
+    !cdvBreakdown;
+
+  const filteredReportLines = projectionMode
+    ? applyProjectionTransform(baseFilteredLines, estimatedCogs.estimatedCostOfSales as number)
+    : baseFilteredLines;
 
   const { expanded, toggleExpand, visibleLines } = useReportTreeState(filteredReportLines);
 
@@ -689,20 +776,40 @@ export default function ReporteEstadoResultados() {
       )}
 
       {filteredReportLines.length > 0 && (
-        <div className="rounded-lg border p-4 bg-card">
+        <div className={`rounded-lg border p-4 ${projectionMode ? 'bg-sky-50/30 dark:bg-sky-950/10 border-sky-300 dark:border-sky-800' : 'bg-card'}`}>
           <div className="text-center mb-4">
             <h3 className="font-bold text-lg">{enterpriseName}</h3>
             <p className="text-sm text-muted-foreground">
               Estado de Resultados del {new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-GT')} al {new Date(dateTo + 'T00:00:00').toLocaleDateString('es-GT')}
             </p>
+            {projectionMode && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                <Badge variant="outline" className="bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/40 dark:text-sky-200 dark:border-sky-700">
+                  <Calculator className="h-3 w-3 mr-1" />
+                  Modo Gerencial Proyectado
+                </Badge>
+              </div>
+            )}
           </div>
+
+          {projectionMode && (
+            <Alert className="mb-4 border-sky-300 bg-sky-50 dark:bg-sky-950/30 dark:border-sky-800">
+              <Info className="h-4 w-4 text-sky-600" />
+              <AlertDescription className="text-sm">
+                Este reporte contiene <strong>cálculos estimados de Costo de Ventas</strong> basados en porcentajes
+                históricos. Es exclusivamente para análisis gerencial y <strong>no reemplaza</strong> el costo de ventas
+                oficial generado durante el cierre del período. No afecta el Balance General, el Mayor ni los saldos contables.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {layout === 'stepped' ? (
             <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           ) : (
             <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
           )}
 
-          {/* CDV Breakdown Section */}
+          {/* CDV Breakdown Section — official, posted closing */}
           {cdvBreakdown && (
             <div className="mt-6 pt-4 border-t border-border">
               <h4 className="font-bold text-sm mb-2">COSTO DE VENTAS (Método de Coeficiente):</h4>
@@ -734,9 +841,55 @@ export default function ReporteEstadoResultados() {
             </div>
           )}
 
-          {/* Estimated CoS block — only shown when no official CDV breakdown is present.
-              This is presentation-only and does NOT post any accounting entry. */}
-          {!cdvBreakdown && <EstimatedCogsBlock data={estimatedCogs} />}
+          {/* Inventory Analysis Panel — only in projection mode */}
+          {projectionMode && estimatedCogs.estimatedCostOfSales !== null && (
+            <div className="mt-6 pt-4 border-t border-dashed border-sky-300 dark:border-sky-800">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-sky-500" />
+                <h4 className="font-bold text-sm">ANÁLISIS DE INVENTARIO (ESTIMADO)</h4>
+                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800">
+                  Estimado
+                </Badge>
+              </div>
+
+              <div className="space-y-1 font-mono text-sm bg-sky-50/50 dark:bg-sky-950/20 rounded-md p-3 border border-sky-200/60 dark:border-sky-900/60">
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2">
+                  <div>Inventario Inicial</div>
+                  <div className="text-right">{formatQ(estimatedCogs.beginningInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2">
+                  <div>(+) Compras del Período</div>
+                  <div className="text-right">{formatQ(estimatedCogs.purchasesInPeriod)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 bg-sky-100/50 dark:bg-sky-900/30 font-semibold">
+                  <div>(=) Mercadería Disponible</div>
+                  <div className="text-right">{formatQ(estimatedCogs.availableInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 text-sky-700 dark:text-sky-300">
+                  <div>(-) Costo de Ventas Estimado</div>
+                  <div className="text-right">({formatQ(estimatedCogs.estimatedCostOfSales)})</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-2 border-t-2 border-sky-300 dark:border-sky-700 font-bold text-sky-700 dark:text-sky-300">
+                  <div>(=) Inventario Final Estimado</div>
+                  <div className="text-right">{formatQ(estimatedCogs.estimatedEndingInventory ?? 0)}</div>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mt-2 italic flex items-start gap-1.5">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-sky-500" />
+                <span>
+                  Costo de Ventas estimado con <strong>{((estimatedCogs.historicalPercentage ?? 0) * 100).toFixed(2)}%</strong>
+                  {' '}({estimatedCogs.method === 'last_period' ? 'último período cerrado' : `promedio de ${estimatedCogs.basisPeriodsUsed} período${estimatedCogs.basisPeriodsUsed === 1 ? '' : 's'} cerrado${estimatedCogs.basisPeriodsUsed === 1 ? '' : 's'}`}).
+                  Valores únicamente para análisis gerencial; no afectan el Balance General, Mayor, ni el cierre del período.
+                </span>
+              </p>
+            </div>
+          )}
+
+          {/* Estimated CoS hint block — only when estimation is enabled but projection cannot run
+              (e.g., closed period, no historical %). Never shown together with projection mode. */}
+          {!cdvBreakdown && !projectionMode && estimatedCogs.enabled && <EstimatedCogsBlock data={estimatedCogs} />}
+
 
           {/* Warning when method is coeficiente but no posted closing exists AND no estimate is enabled */}
           {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && !estimatedCogs.enabled && filteredReportLines.length > 0 && (
