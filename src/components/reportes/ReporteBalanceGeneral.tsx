@@ -334,8 +334,24 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
         lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        sectionTotals.set(section.section_name, periodResult);
-        lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
+        // Resultado del Período = saldo de las cuentas asignadas (p.ej. 3.2
+        // RESULTADOS, que recibe resultados acumulados vía la partida de
+        // apertura del año) + resultado operativo del P&L del período.
+        // `get_balance_sheet` excluye los asientos de cierre/traslado, así que
+        // no hay doble suma: la APER capitaliza pérdidas/utilidades anteriores
+        // en 3.2; el P&L aporta el resultado en curso del propio año.
+        let assignedBalance = 0;
+        for (const sa of section.accounts || []) {
+          const acc = accountBalances.find(a => a.id === sa.account_id);
+          if (!acc) continue;
+          const bal = sa.include_children
+            ? getAggregatedBalance(acc.id)
+            : acc.balance;
+          assignedBalance += bal * sa.sign_multiplier;
+        }
+        const calcAmount = assignedBalance + periodResult;
+        sectionTotals.set(section.section_name, calcAmount);
+        lines.push({ type: "calculated", label: section.section_name, amount: calcAmount, isBold: true });
       } else if (section.section_type === "grand_total") {
         let grandTotal = 0;
 
