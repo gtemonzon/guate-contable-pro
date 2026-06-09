@@ -128,9 +128,9 @@ export const TRAINING_PHASES: Phase[] = [
         route: "/libros-fiscales",
         content: [
           "El sistema adapta automáticamente los libros al régimen fiscal de la empresa: Contribuyente General, Pequeño Contribuyente, Profesional Liberal u ONG Exenta.",
-          "Contribuyente General: libros de Compras y Ventas por separado, con columnas completas de IVA.",
+          "Contribuyente General y Profesional Liberal: libros de Compras y Ventas por separado, con columnas completas de IVA. El Profesional Liberal tiene igual tratamiento de IVA que el General; la diferencia está en el régimen de ISR (simplificado vs. sobre utilidades).",
           "Pequeño Contribuyente: libro combinado con Compras a la izquierda y Ventas a la derecha, en formato SAT específico.",
-          "ONG Exenta y Profesional Liberal: libros simplificados sin columna de IVA (exentos).",
+          "ONG Exenta: libros simplificados sin columna de IVA (exentos).",
           "Importa ventas desde el archivo SAT (CSV/Excel). El sistema detecta duplicados con clave compuesta: tipo FEL + serie + número + NIT emisor.",
           "Importa compras desde PDF (FEL Recibidos/Emitidos) usando edge functions de IA.",
           "Cada factura genera automáticamente la partida contable usando las cuentas configuradas y el tipo de operación (Bienes, Servicios, Activos Fijos, Combustible, etc.).",
