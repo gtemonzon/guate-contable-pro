@@ -334,25 +334,8 @@ export default function ReporteBalanceGeneral() {
         sectionTotals.set(section.section_name, total);
         lines.push({ type: "total", label: section.section_name, amount: total, isBold: true, showLine: true });
       } else if (section.section_type === "calculated") {
-        // Si el período está cerrado, el resultado ya fue capitalizado mediante
-        // asientos de cierre en las cuentas patrimoniales asignadas (ej. 3.2
-        // RESULTADOS). En ese caso usamos el saldo real de esas cuentas, en
-        // lugar de 0, para que el balance cuadre. Si no hay cuentas asignadas,
-        // o el período sigue abierto, usamos el periodResult calculado del P&L.
-        let calcAmount = periodResult;
-        if (periodIsClosed && section.accounts && section.accounts.length > 0) {
-          calcAmount = 0;
-          for (const sa of section.accounts) {
-            const acc = accountBalances.find(a => a.id === sa.account_id);
-            if (!acc) continue;
-            const bal = sa.include_children
-              ? getAggregatedBalance(acc.id)
-              : acc.balance;
-            calcAmount += bal * sa.sign_multiplier;
-          }
-        }
-        sectionTotals.set(section.section_name, calcAmount);
-        lines.push({ type: "calculated", label: section.section_name, amount: calcAmount, isBold: true });
+        sectionTotals.set(section.section_name, periodResult);
+        lines.push({ type: "calculated", label: section.section_name, amount: periodResult, isBold: true });
       } else if (section.section_type === "grand_total") {
         let grandTotal = 0;
 
