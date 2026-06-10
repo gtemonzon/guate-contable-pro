@@ -124,6 +124,18 @@ export function TaxDueDateConfig() {
 
       if (error) throw error;
 
+      // Clean up stale unread notifications for the tax types being reconfigured,
+      // so the alert generator can recreate them with the new due dates.
+      const taxTypes = configs.map((c) => `vencimiento_${c.tax_type}`);
+      if (taxTypes.length > 0) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', parseInt(enterpriseId))
+          .eq('is_read', false)
+          .in('notification_type', taxTypes);
+      }
+
       toast({
         title: 'Configuración guardada',
         description: 'Las fechas de vencimiento se han actualizado.',
