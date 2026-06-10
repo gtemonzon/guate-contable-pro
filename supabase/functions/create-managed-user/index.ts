@@ -170,7 +170,23 @@ Deno.serve(async (req) => {
 
     if (createError || !createdUser.user) {
       console.error("Error creating auth user:", createError);
-      return jsonResponse({ error: createError?.message || "No se pudo crear el usuario" }, 400);
+      const code = (createError as { code?: string } | null)?.code;
+      const rawMessage = createError?.message || "";
+      let friendlyMessage = "No se pudo crear el usuario";
+      if (
+        code === "email_exists" ||
+        /already.*registered/i.test(rawMessage) ||
+        /already been registered/i.test(rawMessage)
+      ) {
+        friendlyMessage = `Ya existe un usuario registrado con el correo ${email}. Si deseas asignarle empresas o cambiar su rol, búscalo en la lista de usuarios y usa "Editar" en lugar de crear uno nuevo.`;
+      } else if (code === "weak_password" || /password/i.test(rawMessage)) {
+        friendlyMessage = "La contraseña no cumple con los requisitos mínimos de seguridad.";
+      } else if (/invalid.*email/i.test(rawMessage)) {
+        friendlyMessage = "El correo electrónico no es válido.";
+      } else if (rawMessage) {
+        friendlyMessage = `No se pudo crear el usuario: ${rawMessage}`;
+      }
+      return jsonResponse({ error: friendlyMessage }, 400);
     }
 
     const userId = createdUser.user.id;
