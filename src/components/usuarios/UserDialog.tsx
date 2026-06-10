@@ -172,12 +172,13 @@ const UserDialog = ({ open, onOpenChange, user, onClose }: UserDialogProps) => {
     setAutoAssignedTenantAdminRoles(false);
   }, [enterprisesTenantId, open]);
 
-  // Fetch tenants when tenant admin toggle is activated
+  // Fetch tenants for super admins as soon as the dialog opens so the selector
+  // is populated whether they're creating, editing, or toggling tenant admin.
   useEffect(() => {
-    if (isTenantAdmin && currentUserIsSuperAdmin && tenants.length === 0) {
+    if (open && currentUserIsSuperAdmin && tenants.length === 0) {
       fetchTenants();
     }
-  }, [isTenantAdmin, currentUserIsSuperAdmin]);
+  }, [open, currentUserIsSuperAdmin]);
 
   const fetchCurrentUserInfo = async () => {
     try {
