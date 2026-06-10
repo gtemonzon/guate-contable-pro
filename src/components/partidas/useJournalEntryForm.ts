@@ -778,6 +778,7 @@ export function useJournalEntryForm(
           {
             p_account_id: line.account_id,
             p_enterprise_id: parseInt(enterpriseId),
+            p_entry_date: entryDate,
             p_exclude_entry_id: currentEntryId ?? null,
           },
         );
