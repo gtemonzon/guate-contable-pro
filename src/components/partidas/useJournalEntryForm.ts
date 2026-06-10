@@ -17,8 +17,10 @@ export interface Account {
   account_name: string;
   requires_cost_center: boolean;
   balance_type: string;
+  account_type?: string;
   is_bank_account?: boolean;
 }
+
 
 export interface Period {
   id: number;
@@ -176,7 +178,7 @@ export function useJournalEntryForm(
     try {
       const [{ data: accountsData, error: aErr }, { data: periodsData, error: pErr }, { data: lastEntry }] =
         await Promise.all([
-          supabase.from("tab_accounts").select("id, account_code, account_name, requires_cost_center, balance_type, is_bank_account")
+          supabase.from("tab_accounts").select("id, account_code, account_name, requires_cost_center, balance_type, account_type, is_bank_account")
             .eq("enterprise_id", parseInt(enterpriseId)).eq("allows_movement", true).eq("is_active", true).order("account_code"),
           supabase.from("tab_accounting_periods").select("*").eq("enterprise_id", parseInt(enterpriseId))
             .eq("status", "abierto").order("year", { ascending: false }),
@@ -767,6 +769,9 @@ export function useJournalEntryForm(
       for (const line of validLines) {
         const account = accounts.find(a => a.id === line.account_id);
         if (!account || account.balance_type === 'indiferente') continue;
+        // Skip overdraft validation for income/expense accounts — they are not balance-based accounts
+        if (account.account_type === 'gasto' || account.account_type === 'ingreso') continue;
+
         const query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
         // Only consider posted entries for overdraft check
         const { data: postedEntryIds } = await supabase.from("tab_journal_entries")
