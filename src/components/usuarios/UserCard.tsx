@@ -67,6 +67,19 @@ const UserCard = ({ user, onEdit }: UserCardProps) => {
           </Badge>
         </div>
 
+        {user.tenant ? (
+          <div className="flex items-center gap-2 text-sm">
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Oficina:</span>
+            <span className="font-medium">{user.tenant.tenant_name}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="font-medium">Sin oficina contable asignada</span>
+          </div>
+        )}
+
         {user.enterprises && user.enterprises.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
