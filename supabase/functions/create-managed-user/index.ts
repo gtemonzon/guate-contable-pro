@@ -112,16 +112,22 @@ Deno.serve(async (req) => {
 
     const validEnterpriseIds = new Set((tenantEnterprises || []).map((item) => item.id));
 
-    // Role allowlist: only super admins can assign elevated roles via this endpoint.
+    // Role allowlist:
+    // - Tenant admins can assign enterprise_admin + base roles within their own tenant.
+    // - Only super admins can assign super_admin.
     const BASE_ALLOWED_ROLES = new Set(["contador_senior", "auxiliar_contable", "cliente"]);
-    const SUPER_ADMIN_ONLY_ROLES = new Set(["enterprise_admin", "super_admin"]);
+    const TENANT_ADMIN_ROLES = new Set(["enterprise_admin"]);
+    const SUPER_ADMIN_ONLY_ROLES = new Set(["super_admin"]);
     const callerIsSuperAdmin = !!currentUser.is_super_admin;
+    const callerIsTenantAdmin = !!currentUser.is_tenant_admin;
 
     const isRoleAllowed = (role: string) => {
       if (BASE_ALLOWED_ROLES.has(role)) return true;
+      if ((callerIsSuperAdmin || callerIsTenantAdmin) && TENANT_ADMIN_ROLES.has(role)) return true;
       if (callerIsSuperAdmin && SUPER_ADMIN_ONLY_ROLES.has(role)) return true;
       return false;
     };
+
 
     const enterpriseRoles = isTenantAdmin
       ? Array.from(validEnterpriseIds).map((enterpriseId) => ({
