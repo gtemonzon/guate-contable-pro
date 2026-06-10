@@ -4427,6 +4427,7 @@ export type Database = {
         Args: {
           p_account_id: number
           p_enterprise_id: number
+          p_entry_date: string
           p_exclude_entry_id?: number
         }
         Returns: number
