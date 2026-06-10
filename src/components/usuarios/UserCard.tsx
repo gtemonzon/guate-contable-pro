@@ -1,7 +1,7 @@
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Mail, Building2, Shield } from "lucide-react";
+import { Edit, Mail, Building2, Shield, Briefcase, AlertTriangle } from "lucide-react";
 import ActivityIndicator from "./ActivityIndicator";
 
 interface UserCardProps {
@@ -13,6 +13,12 @@ interface UserCardProps {
     is_active: boolean;
     last_activity_at?: string | null;
     current_enterprise_name?: string | null;
+    tenant_id?: number | null;
+    tenant?: {
+      id: number;
+      tenant_code: string;
+      tenant_name: string;
+    } | null;
     enterprises?: Array<{
       enterprise_id: number;
       role: string;
