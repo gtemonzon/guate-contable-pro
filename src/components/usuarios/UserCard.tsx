@@ -1,7 +1,7 @@
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Mail, Building2, Shield } from "lucide-react";
+import { Edit, Mail, Building2, Shield, Briefcase, AlertTriangle } from "lucide-react";
 import ActivityIndicator from "./ActivityIndicator";
 
 interface UserCardProps {
@@ -13,6 +13,12 @@ interface UserCardProps {
     is_active: boolean;
     last_activity_at?: string | null;
     current_enterprise_name?: string | null;
+    tenant_id?: number | null;
+    tenant?: {
+      id: number;
+      tenant_code: string;
+      tenant_name: string;
+    } | null;
     enterprises?: Array<{
       enterprise_id: number;
       role: string;
@@ -60,6 +66,19 @@ const UserCard = ({ user, onEdit }: UserCardProps) => {
             {user.is_active ? "Activo" : "Inactivo"}
           </Badge>
         </div>
+
+        {user.tenant ? (
+          <div className="flex items-center gap-2 text-sm">
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Oficina:</span>
+            <span className="font-medium">{user.tenant.tenant_name}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="font-medium">Sin oficina contable asignada</span>
+          </div>
+        )}
 
         {user.enterprises && user.enterprises.length > 0 && (
           <div className="space-y-2">

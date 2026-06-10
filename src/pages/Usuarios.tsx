@@ -105,6 +105,7 @@ const Usuarios = () => {
         .from("tab_users")
         .select(`
           *,
+          tenant:tab_tenants(id, tenant_code, tenant_name),
           enterprises:tab_user_enterprises(
             enterprise_id,
             role,

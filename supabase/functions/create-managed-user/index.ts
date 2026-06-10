@@ -68,7 +68,6 @@ Deno.serve(async (req) => {
     const email = body.email?.trim().toLowerCase();
     const password = body.password;
     const fullName = body.full_name?.trim();
-    const requestedTenantId = Number(body.tenant_id);
     const isTenantAdmin = Boolean(body.is_tenant_admin);
     const isActive = body.is_active ?? true;
     const requestedEnterpriseRoles = Array.isArray(body.enterprise_roles) ? body.enterprise_roles : [];
@@ -77,13 +76,27 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Email, nombre y contraseña son obligatorios" }, 400);
     }
 
-    if (!Number.isFinite(requestedTenantId)) {
-      return jsonResponse({ error: "La oficina contable es obligatoria" }, 400);
+    // Determinar el tenant del nuevo usuario.
+    // Para administradores de oficina contable (tenant admins), SIEMPRE se fuerza al
+    // tenant del usuario que invoca la función — nunca pueden crear usuarios fuera
+    // de su propia oficina, y el campo no puede quedar vacío bajo ninguna circunstancia.
+    // Solo el super admin puede elegir el tenant explícitamente.
+    let requestedTenantId: number;
+    if (currentUser.is_super_admin) {
+      const bodyTenantId = Number(body.tenant_id);
+      if (!Number.isFinite(bodyTenantId)) {
+        return jsonResponse({ error: "La oficina contable es obligatoria" }, 400);
+      }
+      requestedTenantId = bodyTenantId;
+    } else {
+      if (!currentUser.tenant_id) {
+        return jsonResponse({
+          error: "Tu usuario no tiene una oficina contable asignada. Contacta al super administrador.",
+        }, 400);
+      }
+      requestedTenantId = currentUser.tenant_id;
     }
 
-    if (!currentUser.is_super_admin && currentUser.tenant_id !== requestedTenantId) {
-      return jsonResponse({ error: "Solo puedes crear usuarios dentro de tu oficina contable" }, 403);
-    }
 
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
       auth: { persistSession: false },
