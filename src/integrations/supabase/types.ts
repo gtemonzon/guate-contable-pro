@@ -4423,6 +4423,14 @@ export type Database = {
         Args: { p_accounts: Json; p_enterprise_id: number }
         Returns: number
       }
+      calculate_account_balance_for_overdraft: {
+        Args: {
+          p_account_id: number
+          p_enterprise_id: number
+          p_exclude_entry_id?: number
+        }
+        Returns: number
+      }
       calculate_fx_settlement: {
         Args: {
           p_open_balance_id: number
