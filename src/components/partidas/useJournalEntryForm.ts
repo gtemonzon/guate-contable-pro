@@ -17,8 +17,10 @@ export interface Account {
   account_name: string;
   requires_cost_center: boolean;
   balance_type: string;
+  account_type?: string;
   is_bank_account?: boolean;
 }
+
 
 export interface Period {
   id: number;
