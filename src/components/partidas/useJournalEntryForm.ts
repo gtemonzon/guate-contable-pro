@@ -178,7 +178,7 @@ export function useJournalEntryForm(
     try {
       const [{ data: accountsData, error: aErr }, { data: periodsData, error: pErr }, { data: lastEntry }] =
         await Promise.all([
-          supabase.from("tab_accounts").select("id, account_code, account_name, requires_cost_center, balance_type, is_bank_account")
+          supabase.from("tab_accounts").select("id, account_code, account_name, requires_cost_center, balance_type, account_type, is_bank_account")
             .eq("enterprise_id", parseInt(enterpriseId)).eq("allows_movement", true).eq("is_active", true).order("account_code"),
           supabase.from("tab_accounting_periods").select("*").eq("enterprise_id", parseInt(enterpriseId))
             .eq("status", "abierto").order("year", { ascending: false }),
