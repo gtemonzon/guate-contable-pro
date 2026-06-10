@@ -766,31 +766,32 @@ export function useJournalEntryForm(
     // Overdraft check — only on posting
     if (post) {
       const validLines = detailLines.filter(l => l.account_id !== null);
+      const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
       for (const line of validLines) {
         const account = accounts.find(a => a.id === line.account_id);
         if (!account || account.balance_type === 'indiferente') continue;
-        // Skip overdraft validation for income/expense accounts — they are not balance-based accounts
-        if (account.account_type === 'gasto' || account.account_type === 'ingreso') continue;
-
-        const query = supabase.from("tab_journal_entry_details").select("debit_amount, credit_amount").eq("account_id", line.account_id);
-        // Only consider posted entries for overdraft check
-        const { data: postedEntryIds } = await supabase.from("tab_journal_entries")
-          .select("id").eq("enterprise_id", parseInt(enterpriseId)).eq("is_posted", true).is("deleted_at", null);
-        const postedIds = (postedEntryIds || []).map(e => e.id);
-        const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
-        if (currentEntryId) {
-          const idx = postedIds.indexOf(currentEntryId);
-          if (idx !== -1) postedIds.splice(idx, 1);
+        // Use RPC to get accumulated balance reliably (avoids the implicit 1000-row
+        // PostgREST limit that produced phantom negative balances on enterprises
+        // with many entries — e.g. account showing -212 when real balance was +382).
+        const { data: balData, error: balErr } = await supabase.rpc(
+          'calculate_account_balance_for_overdraft',
+          {
+            p_account_id: line.account_id,
+            p_enterprise_id: parseInt(enterpriseId),
+            p_exclude_entry_id: currentEntryId ?? null,
+          },
+        );
+        if (balErr) {
+          console.error('[overdraft] balance RPC error', balErr);
+          continue;
         }
-        if (postedIds.length === 0) continue;
-        const { data: movements } = await supabase.from("tab_journal_entry_details")
-          .select("debit_amount, credit_amount").eq("account_id", line.account_id).in("journal_entry_id", postedIds);
-        const currentBalance = (movements || []).reduce((acc, m) => acc + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0), 0);
+        const currentBalance = Number(balData) || 0;
         const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
-        if (account.balance_type === 'deudor' && newBalance < 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
-        if (account.balance_type === 'acreedor' && newBalance > 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldos suficientes. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
+        if (account.balance_type === 'deudor' && newBalance < 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
+        if (account.balance_type === 'acreedor' && newBalance > 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
       }
     }
+
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
