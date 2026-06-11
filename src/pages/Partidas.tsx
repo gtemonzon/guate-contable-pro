@@ -126,6 +126,13 @@ export default function Partidas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Delete-draft / Reopen state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; number: string } | null>(null);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [reopenTarget, setReopenTarget] = useState<{ id: number; number: string; inOpenPeriod: boolean } | null>(null);
+  const [allowReopenSetting, setAllowReopenSetting] = useState(false);
+
   const { toast } = useToast();
   const permissions = useUserPermissions();
   const [searchParams, setSearchParams] = useSearchParams();
