@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck, Boxes, Store } from "lucide-react";
 import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -24,11 +24,16 @@ interface MenuItem {
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   requiredPermission?: keyof ReturnType<typeof useUserPermissions>;
+  hideIfSuperAdmin?: boolean;
+  disabled?: boolean;
+  badge?: string;
+  description?: string;
   children?: MenuItem[];
 }
 
 interface MenuSection {
   title: string;
+  description?: string;
   items: MenuItem[];
 }
 
@@ -68,20 +73,31 @@ const allMenuItems: MenuItemOrSection[] = [
     ],
   },
   {
-    title: "Administración",
+    title: "Módulos ERP",
+    description: "Próximamente: extensiones del ERP",
     items: [
-      { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
-      {
-        title: "Organización",
-        url: "#organizacion",
-        icon: Network,
-        children: [
-          { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
-          { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers" },
-          { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
-          { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
-        ],
-      },
+      { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, disabled: true, badge: "Próximamente" },
+      { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, disabled: true, badge: "Próximamente" },
+      { title: "Inventario", url: "#inv", icon: Store, disabled: true, badge: "Próximamente" },
+      { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, disabled: true, badge: "Próximamente" },
+    ],
+  },
+  {
+    title: "Mi Organización",
+    description: "Datos maestros de tu oficina, usuarios y empresas",
+    items: [
+      { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true, description: "Identidad, contacto y marca de tu oficina contable" },
+      { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin", description: "Administración de todas las oficinas (solo plataforma)" },
+      { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises", description: "Datos maestros de las empresas clientes" },
+      { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers", description: "Usuarios y roles de tu oficina" },
+      { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
+    ],
+  },
+  {
+    title: "Configuración del Sistema",
+    description: "Catálogos contables, tributarios y comportamiento del ERP",
+    items: [
+      { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration", description: "Cuentas, impuestos, prefijos, alertas y más" },
     ],
   },
   {
