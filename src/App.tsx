@@ -50,6 +50,7 @@ const Ayuda = lazyRetry(() => import("./pages/Ayuda"));
 const Notificaciones = lazyRetry(() => import("./pages/Notificaciones"));
 const Propuesta = lazyRetry(() => import("./pages/Propuesta"));
 const Tenants = lazyRetry(() => import("./pages/Tenants"));
+const TenantSettings = lazyRetry(() => import("./pages/TenantSettings"));
 const Bitacora = lazyRetry(() => import("./pages/Bitacora"));
 const ActivosFijos = lazyRetry(() => import("./pages/ActivosFijos"));
 const Inbox = lazyRetry(() => import("./pages/Inbox"));
@@ -101,6 +102,7 @@ const App = () => (
               <Route path="/usuarios" element={<Suspense fallback={<PageLoader />}><Usuarios /></Suspense>} />
               <Route path="/empresas" element={<Suspense fallback={<PageLoader />}><Empresas /></Suspense>} />
               <Route path="/tenants" element={<Suspense fallback={<PageLoader />}><Tenants /></Suspense>} />
+              <Route path="/tenant-settings" element={<Suspense fallback={<PageLoader />}><TenantSettings /></Suspense>} />
               <Route path="/cuentas" element={<Suspense fallback={<PageLoader />}><Cuentas /></Suspense>} />
               <Route path="/periodos" element={<Suspense fallback={<PageLoader />}><PeriodosContables /></Suspense>} />
               <Route path="/partidas" element={<Suspense fallback={<PageLoader />}><Partidas /></Suspense>} />
