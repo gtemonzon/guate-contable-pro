@@ -819,6 +819,8 @@ export default function Partidas() {
                 }}
                 onEdit={handleEditFromPanel}
                 onVoid={handleVoidFromPanel}
+                onDeleteDraft={permissions.canCreateEntries ? handleDeleteDraftFromPanel : undefined}
+                onReopen={permissions.canPostEntries ? handleReopenFromPanel : undefined}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
