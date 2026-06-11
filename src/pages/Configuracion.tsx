@@ -17,6 +17,7 @@ import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityVa
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
 import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
+import { AccountingControlsConfig } from "@/components/configuracion/AccountingControlsConfig";
 import { useTenant } from "@/contexts/TenantContext";
 
 export default function Configuracion() {
