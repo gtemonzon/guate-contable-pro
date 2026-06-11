@@ -184,6 +184,7 @@ export default function Partidas() {
     if (enterpriseId) {
       initializeForEnterprise(enterpriseId);
       fetchOpenPeriods(enterpriseId);
+      fetchReopenSetting(enterpriseId);
       fetchedEnterpriseRef.current = enterpriseId;
     } else {
       setLoading(false);
@@ -203,6 +204,7 @@ export default function Partidas() {
         setFilterYear(null);
         initializeForEnterprise(newEnterpriseId);
         fetchOpenPeriods(newEnterpriseId);
+        fetchReopenSetting(newEnterpriseId);
         fetchedEnterpriseRef.current = newEnterpriseId;
       } else {
         setEntries([]);
@@ -331,6 +333,15 @@ export default function Partidas() {
       console.error("Error fetching open periods:", error);
       setOpenPeriods([]);
     }
+  };
+
+  const fetchReopenSetting = async (enterpriseId: string) => {
+    const { data } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: number) => { maybeSingle: () => Promise<{ data: { allow_reopen_posted_entries?: boolean } | null }> } } } })
+      .from("tab_enterprise_config")
+      .select("allow_reopen_posted_entries")
+      .eq("enterprise_id", parseInt(enterpriseId))
+      .maybeSingle();
+    setAllowReopenSetting(Boolean(data?.allow_reopen_posted_entries));
   };
 
   const isEntryInOpenPeriod = (entry: JournalEntry): boolean => {
