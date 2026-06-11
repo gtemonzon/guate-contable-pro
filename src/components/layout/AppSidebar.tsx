@@ -292,14 +292,42 @@ export function AppSidebar() {
     }
 
     const active = isRouteActive(item.url);
+
+    // Disabled placeholder (e.g. upcoming ERP modules)
+    if (item.disabled) {
+      return (
+        <SidebarMenuItem key={item.title}>
+          <SidebarMenuButton
+            disabled
+            tooltip={item.description || item.title}
+            className="cursor-not-allowed opacity-60"
+            title={item.description}
+          >
+            <item.icon className="h-4 w-4" />
+            {!isCollapsed && (
+              <>
+                <span className="truncate flex-1">{item.title}</span>
+                {item.badge && (
+                  <span className="ml-auto inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {item.badge}
+                  </span>
+                )}
+              </>
+            )}
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    }
+
     return (
       <SidebarMenuItem key={item.title}>
-        <SidebarMenuButton asChild isActive={active}>
+        <SidebarMenuButton asChild isActive={active} tooltip={item.description || item.title}>
           <NavLink
             to={item.url}
             end
             className={buildNavClass(active)}
             aria-current={active ? "page" : undefined}
+            title={item.description}
           >
             <item.icon className="h-4 w-4" />
             {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
