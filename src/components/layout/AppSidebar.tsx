@@ -126,6 +126,7 @@ export function AppSidebar() {
         filteredChildren = item.children.map(filterItem).filter(Boolean) as MenuItem[];
         if (filteredChildren.length === 0 && item.url.startsWith("#")) return null;
       }
+      if (item.hideIfSuperAdmin && permissions.isSuperAdmin) return null;
       if (item.requiredPermission && permissions[item.requiredPermission] !== true) return null;
       return filteredChildren ? { ...item, children: filteredChildren } : item;
     };
@@ -133,7 +134,11 @@ export function AppSidebar() {
     return allMenuItems
       .map((item) => {
         if ("items" in item) {
-          const filteredItems = item.items.map(filterItem).filter(Boolean) as MenuItem[];
+          // Módulos ERP section: keep visible even with only disabled placeholders
+          const isPlaceholderSection = item.items.every((i) => i.disabled);
+          const filteredItems = isPlaceholderSection
+            ? item.items
+            : (item.items.map(filterItem).filter(Boolean) as MenuItem[]);
           if (filteredItems.length === 0) return null;
           return { ...item, items: filteredItems };
         }
