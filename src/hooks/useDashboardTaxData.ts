@@ -105,11 +105,11 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       const startDate = `${refYear}-${String(refMonth).padStart(2, '0')}-01`;
       const endDate = new Date(refYear, refMonth, 0).toISOString().split('T')[0];
 
-      // Fetch sales & purchases for previous month
-      const [salesRes, purchasesRes] = await Promise.all([
+      // Fetch sales, purchases AND FEL document types (for sign multipliers like NCRE = -1)
+      const [salesRes, purchasesRes, felTypesRes] = await Promise.all([
         supabase
           .from("tab_sales_ledger")
-          .select("vat_amount, net_amount, total_amount")
+          .select("vat_amount, net_amount, total_amount, fel_document_type")
           .eq("enterprise_id", enterpriseId)
           .eq("is_annulled", false)
           .is("deleted_at", null)
@@ -117,20 +117,45 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           .lte("invoice_date", endDate),
         supabase
           .from("tab_purchase_ledger")
-          .select("vat_amount, net_amount, total_amount")
+          .select("vat_amount, net_amount, total_amount, fel_document_type")
           .eq("enterprise_id", enterpriseId)
           .is("deleted_at", null)
           .gte("invoice_date", startDate)
           .lte("invoice_date", endDate),
+        supabase
+          .from("tab_fel_document_types")
+          .select("code, affects_total")
+          .eq("is_active", true),
       ]);
 
       const salesData = salesRes.data || [];
       const purchasesData = purchasesRes.data || [];
+      const felTypes = (felTypesRes.data || []) as Array<{ code: string; affects_total: number }>;
+      const getSign = (code: string | null | undefined): number => {
+        const found = felTypes.find((t) => t.code === code);
+        return found?.affects_total ?? 1;
+      };
+      // Tipos exentos de IVA (alineado con generador de declaración)
+      const EXEMPT_DOC_TYPES = new Set(['FPEQ', 'FESP', 'NABN', 'RDON', 'RECI']);
 
-      const salesVat = salesData.reduce((s, r) => s + Number(r.vat_amount || 0), 0);
-      const purchasesVat = purchasesData.reduce((s, r) => s + Number(r.vat_amount || 0), 0);
-      const totalIngresos = salesData.reduce((s, r) => s + Number(r.total_amount || 0), 0);
-      const ingresosBrutosNet = salesData.reduce((s, r) => s + Number(r.net_amount || 0), 0);
+      // Apply document sign multipliers (e.g. NCRE = -1) so dashboard matches declaration
+      const salesVat = salesData.reduce((s, r) => {
+        if (EXEMPT_DOC_TYPES.has(r.fel_document_type)) return s;
+        return s + Number(r.vat_amount || 0) * getSign(r.fel_document_type);
+      }, 0);
+      const purchasesVat = purchasesData.reduce((s, r) => {
+        if (EXEMPT_DOC_TYPES.has(r.fel_document_type)) return s;
+        return s + Number(r.vat_amount || 0) * getSign(r.fel_document_type);
+      }, 0);
+      const totalIngresos = salesData.reduce(
+        (s, r) => s + Number(r.total_amount || 0) * getSign(r.fel_document_type),
+        0,
+      );
+      const ingresosBrutosNet = salesData.reduce((s, r) => {
+        if (EXEMPT_DOC_TYPES.has(r.fel_document_type)) return s;
+        return s + Number(r.net_amount || 0) * getSign(r.fel_document_type);
+      }, 0);
+
 
       // IVA Data
       let ivaData: IVAData | null = null;
