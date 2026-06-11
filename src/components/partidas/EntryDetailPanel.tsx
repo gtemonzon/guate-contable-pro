@@ -88,9 +88,11 @@ interface EntryDetailPanelProps {
   onClose: () => void;
   onEdit?: (entryId: number) => void;
   onVoid?: (entryId: number) => void;
+  onDeleteDraft?: (entryId: number, entryNumber: string) => void;
+  onReopen?: (entryId: number, entryNumber: string) => void;
 }
 
-export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid }: EntryDetailPanelProps) {
+export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onDeleteDraft, onReopen }: EntryDetailPanelProps) {
   const [loading, setLoading] = useState(false);
   const [entry, setEntry] = useState<EntryData | null>(null);
   const [linkedPurchases, setLinkedPurchases] = useState<LinkedPurchase[]>([]);
