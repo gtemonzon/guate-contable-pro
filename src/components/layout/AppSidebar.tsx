@@ -131,11 +131,7 @@ export function AppSidebar() {
     return allMenuItems
       .map((item) => {
         if ("items" in item) {
-          // Módulos ERP section: keep visible even with only disabled placeholders
-          const isPlaceholderSection = item.items.every((i) => i.disabled);
-          const filteredItems = isPlaceholderSection
-            ? item.items
-            : (item.items.map(filterItem).filter(Boolean) as MenuItem[]);
+          const filteredItems = item.items.map(filterItem).filter(Boolean) as MenuItem[];
           if (filteredItems.length === 0) return null;
           return { ...item, items: filteredItems };
         }
