@@ -74,30 +74,27 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Módulos ERP",
-    description: "Próximamente: extensiones del ERP",
     items: [
-      { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, disabled: true, badge: "Próximamente" },
-      { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, disabled: true, badge: "Próximamente" },
-      { title: "Inventario", url: "#inv", icon: Store, disabled: true, badge: "Próximamente" },
-      { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, disabled: true, badge: "Próximamente" },
+      { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Inventario", url: "#inv", icon: Store, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
     ],
   },
   {
     title: "Mi Organización",
-    description: "Datos maestros de tu oficina, usuarios y empresas",
     items: [
-      { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true, description: "Identidad, contacto y marca de tu oficina contable" },
-      { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin", description: "Administración de todas las oficinas (solo plataforma)" },
-      { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises", description: "Datos maestros de las empresas clientes" },
-      { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers", description: "Usuarios y roles de tu oficina" },
+      { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true },
+      { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
+      { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
+      { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers" },
       { title: "Bitácora", url: "/bitacora", icon: ClipboardList, requiredPermission: "isTenantAdmin" },
     ],
   },
   {
     title: "Configuración del Sistema",
-    description: "Catálogos contables, tributarios y comportamiento del ERP",
     items: [
-      { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration", description: "Cuentas, impuestos, prefijos, alertas y más" },
+      { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
     ],
   },
   {
