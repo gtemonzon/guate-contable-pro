@@ -1575,6 +1575,7 @@ export type Database = {
           account_vat_exemption_control_id: number | null
           account_vat_retained_payable_id: number | null
           account_vat_retained_receivable_id: number | null
+          allow_reopen_posted_entries: boolean
           cost_of_sales_account_id: number | null
           cost_of_sales_method: string | null
           created_at: string | null
@@ -1621,6 +1622,7 @@ export type Database = {
           account_vat_exemption_control_id?: number | null
           account_vat_retained_payable_id?: number | null
           account_vat_retained_receivable_id?: number | null
+          allow_reopen_posted_entries?: boolean
           cost_of_sales_account_id?: number | null
           cost_of_sales_method?: string | null
           created_at?: string | null
@@ -1667,6 +1669,7 @@ export type Database = {
           account_vat_exemption_control_id?: number | null
           account_vat_retained_payable_id?: number | null
           account_vat_retained_receivable_id?: number | null
+          allow_reopen_posted_entries?: boolean
           cost_of_sales_account_id?: number | null
           cost_of_sales_method?: string | null
           created_at?: string | null
@@ -4529,6 +4532,10 @@ export type Database = {
           }
       current_enterprise_id: { Args: never; Returns: number }
       current_tenant_id: { Args: never; Returns: number }
+      delete_draft_journal_entry: {
+        Args: { p_entry_id: number }
+        Returns: undefined
+      }
       fail_if_rls_gap: {
         Args: never
         Returns: {
@@ -4852,6 +4859,10 @@ export type Database = {
           p_payment_rate: number
         }
         Returns: number
+      }
+      reopen_journal_entry: {
+        Args: { p_entry_id: number; p_reason: string }
+        Returns: undefined
       }
       reset_legacy_import_data: {
         Args: { p_enterprise_id: number }
