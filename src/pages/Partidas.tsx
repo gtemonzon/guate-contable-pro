@@ -894,6 +894,35 @@ export default function Partidas() {
         />
       )}
 
+      <DeleteDraftDialog
+        open={showDeleteDialog}
+        onOpenChange={(o) => { setShowDeleteDialog(o); if (!o) setDeleteTarget(null); }}
+        entryId={deleteTarget?.id ?? null}
+        entryNumber={deleteTarget?.number ?? null}
+        onDeleted={() => {
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+          if (selectedEntryId === deleteTarget?.id) {
+            setSelectedEntryId(null);
+            setSplitViewOpen(false);
+          }
+          setDetailRefreshKey(k => k + 1);
+        }}
+      />
+
+      <ReopenEntryDialog
+        open={showReopenDialog}
+        onOpenChange={(o) => { setShowReopenDialog(o); if (!o) setReopenTarget(null); }}
+        entryId={reopenTarget?.id ?? null}
+        entryNumber={reopenTarget?.number ?? null}
+        reopenSettingEnabled={allowReopenSetting}
+        inOpenPeriod={reopenTarget?.inOpenPeriod ?? false}
+        onReopened={() => {
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+          setDetailRefreshKey(k => k + 1);
+        }}
+      />
+
+
       {currentEnterpriseId && (
         <FxRevaluationWizard
           open={showFxWizard}
