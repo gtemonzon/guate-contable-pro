@@ -12,7 +12,8 @@ interface DashboardTaxSummaryProps {
 }
 
 const formatNumber = (num: number): string =>
-  num.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Math.round(num).toLocaleString("es-GT", { maximumFractionDigits: 0 });
+
 
 export function DashboardTaxSummary({ taxSummary, totalTaxEstimate, loading }: DashboardTaxSummaryProps) {
   const navigate = useNavigate();

@@ -12,7 +12,8 @@ interface DashboardIVASummaryProps {
 }
 
 const formatNumber = (num: number): string =>
-  num.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Math.round(num).toLocaleString("es-GT", { maximumFractionDigits: 0 });
+
 
 export function DashboardIVASummary({ ivaData, loading, monthName, year }: DashboardIVASummaryProps) {
   const navigate = useNavigate();
@@ -53,12 +54,14 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
                 <span className="font-semibold text-destructive financial-number">Q {formatNumber(ivaData.purchasesVat)}</span>
               </div>
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-medium">IVA por Pagar</span>
+                <span className="font-medium">
+                  {ivaData.ivaBalance >= 0 ? "IVA por Pagar" : "Crédito Fiscal"}
+                </span>
                 <span className={`font-bold financial-number ${ivaData.ivaBalance >= 0 ? "text-destructive" : "text-success"}`}>
                   Q {formatNumber(Math.abs(ivaData.ivaBalance))}
-                  {ivaData.ivaBalance < 0 && <span className="text-xs ml-1">(crédito)</span>}
                 </span>
               </div>
+
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} ventas / {ivaData.purchasesCount} compras</span>
               </div>
