@@ -17,6 +17,8 @@ import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
 import { MetadataEditDialog } from "@/components/partidas/MetadataEditDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
+import { DeleteDraftDialog } from "@/components/partidas/DeleteDraftDialog";
+import { ReopenEntryDialog } from "@/components/partidas/ReopenEntryDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
@@ -124,6 +126,13 @@ export default function Partidas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Delete-draft / Reopen state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; number: string } | null>(null);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [reopenTarget, setReopenTarget] = useState<{ id: number; number: string; inOpenPeriod: boolean } | null>(null);
+  const [allowReopenSetting, setAllowReopenSetting] = useState(false);
+
   const { toast } = useToast();
   const permissions = useUserPermissions();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -175,6 +184,7 @@ export default function Partidas() {
     if (enterpriseId) {
       initializeForEnterprise(enterpriseId);
       fetchOpenPeriods(enterpriseId);
+      fetchReopenSetting(enterpriseId);
       fetchedEnterpriseRef.current = enterpriseId;
     } else {
       setLoading(false);
@@ -194,6 +204,7 @@ export default function Partidas() {
         setFilterYear(null);
         initializeForEnterprise(newEnterpriseId);
         fetchOpenPeriods(newEnterpriseId);
+        fetchReopenSetting(newEnterpriseId);
         fetchedEnterpriseRef.current = newEnterpriseId;
       } else {
         setEntries([]);
@@ -324,6 +335,15 @@ export default function Partidas() {
     }
   };
 
+  const fetchReopenSetting = async (enterpriseId: string) => {
+    const { data } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: number) => { maybeSingle: () => Promise<{ data: { allow_reopen_posted_entries?: boolean } | null }> } } } })
+      .from("tab_enterprise_config")
+      .select("allow_reopen_posted_entries")
+      .eq("enterprise_id", parseInt(enterpriseId))
+      .maybeSingle();
+    setAllowReopenSetting(Boolean(data?.allow_reopen_posted_entries));
+  };
+
   const isEntryInOpenPeriod = (entry: JournalEntry): boolean => {
     if (entry.accounting_period_id) {
       return openPeriods.some(p => p.id === entry.accounting_period_id);
@@ -438,6 +458,21 @@ export default function Partidas() {
       });
       setShowVoidDialog(true);
     }
+  };
+
+  const handleDeleteDraftFromPanel = (entryId: number, entryNumber: string) => {
+    setDeleteTarget({ id: entryId, number: entryNumber });
+    setShowDeleteDialog(true);
+  };
+
+  const handleReopenFromPanel = (entryId: number, entryNumber: string) => {
+    const entry = entries.find(e => e.id === entryId);
+    setReopenTarget({
+      id: entryId,
+      number: entryNumber,
+      inOpenPeriod: entry ? isEntryInOpenPeriod(entry) : false,
+    });
+    setShowReopenDialog(true);
   };
 
   if (!currentEnterpriseId) {
@@ -784,6 +819,8 @@ export default function Partidas() {
                 }}
                 onEdit={handleEditFromPanel}
                 onVoid={handleVoidFromPanel}
+                onDeleteDraft={permissions.canCreateEntries ? handleDeleteDraftFromPanel : undefined}
+                onReopen={permissions.canPostEntries ? handleReopenFromPanel : undefined}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -856,6 +893,35 @@ export default function Partidas() {
           }}
         />
       )}
+
+      <DeleteDraftDialog
+        open={showDeleteDialog}
+        onOpenChange={(o) => { setShowDeleteDialog(o); if (!o) setDeleteTarget(null); }}
+        entryId={deleteTarget?.id ?? null}
+        entryNumber={deleteTarget?.number ?? null}
+        onDeleted={() => {
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+          if (selectedEntryId === deleteTarget?.id) {
+            setSelectedEntryId(null);
+            setSplitViewOpen(false);
+          }
+          setDetailRefreshKey(k => k + 1);
+        }}
+      />
+
+      <ReopenEntryDialog
+        open={showReopenDialog}
+        onOpenChange={(o) => { setShowReopenDialog(o); if (!o) setReopenTarget(null); }}
+        entryId={reopenTarget?.id ?? null}
+        entryNumber={reopenTarget?.number ?? null}
+        reopenSettingEnabled={allowReopenSetting}
+        inOpenPeriod={reopenTarget?.inOpenPeriod ?? false}
+        onReopened={() => {
+          if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+          setDetailRefreshKey(k => k + 1);
+        }}
+      />
+
 
       {currentEnterpriseId && (
         <FxRevaluationWizard

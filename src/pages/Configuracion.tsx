@@ -17,6 +17,7 @@ import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityVa
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
 import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
+import { AccountingControlsConfig } from "@/components/configuracion/AccountingControlsConfig";
 import { useTenant } from "@/contexts/TenantContext";
 
 export default function Configuracion() {
@@ -42,6 +43,7 @@ export default function Configuracion() {
           <TabsTrigger value="fel-documents">Documentos FEL</TabsTrigger>
           <TabsTrigger value="journal-prefixes">Prefijos de Partidas</TabsTrigger>
           <TabsTrigger value="alerts">Alertas</TabsTrigger>
+          <TabsTrigger value="accounting-controls">Controles Contables</TabsTrigger>
           <TabsTrigger value="due-dates">Fechas Vencimiento</TabsTrigger>
           <TabsTrigger value="exchange-rates">Tipos de Cambio</TabsTrigger>
           <TabsTrigger value="pdf-typography">Tipografía PDFs</TabsTrigger>
@@ -108,6 +110,10 @@ export default function Configuracion() {
 
         <TabsContent value="alerts" className="mt-6">
           <AlertConfigManager />
+        </TabsContent>
+
+        <TabsContent value="accounting-controls" className="mt-6">
+          <AccountingControlsConfig />
         </TabsContent>
 
         <TabsContent value="due-dates" className="mt-6 space-y-6">
