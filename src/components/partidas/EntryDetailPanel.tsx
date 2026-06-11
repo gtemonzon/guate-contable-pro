@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle, Trash2, Unlock,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferencesFullList, ReferenceBadges } from "./ReferenceBadges";
@@ -305,6 +305,30 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 <p>Anular partida (genera reverso)</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {onDeleteDraft && entry.status === 'borrador' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => onDeleteDraft(entry.id, entry.entry_number)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Eliminar borrador</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {onReopen && entry.status === 'contabilizado' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-primary" onClick={() => onReopen(entry.id, entry.entry_number)}>
+                  <Unlock className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Reabrir para edición</p>
               </TooltipContent>
             </Tooltip>
           )}
