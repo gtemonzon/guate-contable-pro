@@ -17,6 +17,8 @@ import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
 import { MetadataEditDialog } from "@/components/partidas/MetadataEditDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
+import { DeleteDraftDialog } from "@/components/partidas/DeleteDraftDialog";
+import { ReopenEntryDialog } from "@/components/partidas/ReopenEntryDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { cn } from "@/lib/utils";
@@ -438,6 +440,21 @@ export default function Partidas() {
       });
       setShowVoidDialog(true);
     }
+  };
+
+  const handleDeleteDraftFromPanel = (entryId: number, entryNumber: string) => {
+    setDeleteTarget({ id: entryId, number: entryNumber });
+    setShowDeleteDialog(true);
+  };
+
+  const handleReopenFromPanel = (entryId: number, entryNumber: string) => {
+    const entry = entries.find(e => e.id === entryId);
+    setReopenTarget({
+      id: entryId,
+      number: entryNumber,
+      inOpenPeriod: entry ? isEntryInOpenPeriod(entry) : false,
+    });
+    setShowReopenDialog(true);
   };
 
   if (!currentEnterpriseId) {
