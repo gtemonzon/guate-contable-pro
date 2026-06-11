@@ -360,6 +360,7 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarGroupLabel
                         aria-expanded={open}
+                        title={section.description}
                         className={[
                           "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
                           isActiveSection
@@ -375,6 +376,11 @@ export function AppSidebar() {
                     </CollapsibleTrigger>
                   )}
                   <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
+                    {!isCollapsed && section.description && (
+                      <p className="px-3 pb-2 text-[10px] leading-tight text-sidebar-foreground/40 italic">
+                        {section.description}
+                      </p>
+                    )}
                     <SidebarGroupContent>
                       <SidebarMenu>{section.items.map(renderMenuItem)}</SidebarMenu>
                     </SidebarGroupContent>
