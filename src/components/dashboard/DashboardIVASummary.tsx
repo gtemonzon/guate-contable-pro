@@ -62,6 +62,10 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} ventas / {ivaData.purchasesCount} compras</span>
               </div>
+              <p className="text-[10px] text-muted-foreground leading-tight pt-1">
+                Estimación basada en libros. No incluye remanente ni ajustes manuales del Generador de Declaraciones.
+              </p>
+
             </div>
           ) : (
             // IVA Pequeño Contribuyente layout
