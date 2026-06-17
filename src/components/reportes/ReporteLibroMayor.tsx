@@ -790,6 +790,11 @@ export default function ReporteLibroMayor() {
                         <TableRow>
                           <TableHead className="w-[120px]">Fecha</TableHead>
                           <TableHead className="w-[150px]">No. Partida</TableHead>
+                          {ledger.isConsolidated && (
+                            <TableHead className="w-[140px]" title="Cuenta hija donde se originó el movimiento">
+                              Cuenta Origen
+                            </TableHead>
+                          )}
                           <TableHead className="min-w-[250px]">Descripción</TableHead>
                           {showForeign && (
                             <TableHead className="w-[160px] text-right" title="Monto en la moneda original de la transacción">
@@ -803,7 +808,7 @@ export default function ReporteLibroMayor() {
                       </TableHeader>
                       <TableBody>
                         {ledger.entries.map((entry) => (
-                          <TableRow key={entry.id} className="group">
+                          <TableRow key={`${entry.account_id}-${entry.id}`} className="group">
                             <TableCell>{entry.entry_date}</TableCell>
                             <TableCell className="text-sm">
                               <EntityLink
@@ -813,6 +818,11 @@ export default function ReporteLibroMayor() {
                                 secondaryLabel={entry.description}
                               />
                             </TableCell>
+                            {ledger.isConsolidated && (
+                              <TableCell className="text-xs font-mono" title={entry.source_account_name}>
+                                {entry.source_account_code}
+                              </TableCell>
+                            )}
                             <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                             {showForeign && (
                               <TableCell className="text-right font-mono text-xs text-muted-foreground">
