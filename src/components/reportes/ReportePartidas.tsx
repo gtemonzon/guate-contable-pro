@@ -331,22 +331,33 @@ export default function ReportePartidas() {
   };
 
   const buildJournalPdfPayload = () => {
-    const pdfEntries: JournalPdfEntry[] = entries.map((e) => ({
-      entry_number: e.entry_number,
-      entry_date: e.entry_date,
-      entry_type: e.entry_type,
-      description: e.description,
-      total_debit: e.total_debit,
-      total_credit: e.total_credit,
-      details: includeDetails
-        ? (entryDetails[e.id] || []).map((d) => ({
-            account_code: d.account_code,
-            account_name: d.account_name,
-            debit_amount: d.debit_amount,
-            credit_amount: d.credit_amount,
-          }))
-        : undefined,
-    }));
+    const pdfEntries: JournalPdfEntry[] = entries.map((e) => {
+      const refs = e.document_references && e.document_references.length > 0
+        ? e.document_references.join(', ')
+        : null;
+      const reference = e.document_reference?.trim()
+        || e.bank_reference?.trim()
+        || refs
+        || null;
+      return {
+        entry_number: e.entry_number,
+        entry_date: e.entry_date,
+        entry_type: e.entry_type,
+        description: e.description,
+        total_debit: e.total_debit,
+        total_credit: e.total_credit,
+        beneficiary_name: e.beneficiary_name ?? null,
+        reference,
+        details: includeDetails
+          ? (entryDetails[e.id] || []).map((d) => ({
+              account_code: d.account_code,
+              account_name: d.account_name,
+              debit_amount: d.debit_amount,
+              credit_amount: d.credit_amount,
+            }))
+          : undefined,
+      };
+    });
     return {
       filename: `Libro_Diario_${dateFrom}_${dateTo}`,
       enterpriseName,
