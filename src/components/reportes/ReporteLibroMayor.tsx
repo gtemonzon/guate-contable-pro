@@ -64,6 +64,8 @@ interface LedgerEntry {
   exchange_rate?: number | null;
   original_debit?: number | null;
   original_credit?: number | null;
+  reference?: string | null;
+  beneficiary_name?: string | null;
 }
 
 interface AccountLedger {
@@ -379,12 +381,21 @@ export default function ReporteLibroMayor() {
           const credit = Number(row.credit_amount) || 0;
           runningBalance += debit - credit;
           const srcAcc = accountById.get(Number(row.account_id));
+          const baseDescription = row.line_description || row.entry_description || "";
+          const beneficiary = (row.beneficiary_name ?? "").toString().trim();
+          const description = beneficiary
+            ? `${baseDescription} - ${beneficiary}`
+            : baseDescription;
+          const docRefs: string[] = Array.isArray(row.document_references) ? row.document_references : [];
+          const reference =
+            (row.bank_reference && String(row.bank_reference).trim()) ||
+            (docRefs.length > 0 ? docRefs.filter(Boolean).join(", ") : null);
           return {
             id: Number(row.detail_id),
             journal_entry_id: Number(row.journal_entry_id),
             entry_date: row.entry_date,
             entry_number: row.entry_number,
-            description: row.line_description || row.entry_description,
+            description,
             debit_amount: debit,
             credit_amount: credit,
             balance: runningBalance,
@@ -396,6 +407,8 @@ export default function ReporteLibroMayor() {
             exchange_rate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
             original_debit: row.original_debit != null ? Number(row.original_debit) : null,
             original_credit: row.original_credit != null ? Number(row.original_credit) : null,
+            reference: reference || null,
+            beneficiary_name: beneficiary || null,
           };
         });
 
@@ -539,6 +552,7 @@ export default function ReporteLibroMayor() {
         balance: e.balance,
         source_account_code: e.source_account_code,
         source_account_name: e.source_account_name,
+        reference: e.reference ?? null,
       })),
     })),
   });

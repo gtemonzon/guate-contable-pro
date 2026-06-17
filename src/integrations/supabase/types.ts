@@ -4698,10 +4698,13 @@ export type Database = {
         }
         Returns: {
           account_id: number
+          bank_reference: string
+          beneficiary_name: string
           credit_amount: number
           currency_code: string
           debit_amount: number
           detail_id: number
+          document_references: string[]
           entry_date: string
           entry_description: string
           entry_number: string
