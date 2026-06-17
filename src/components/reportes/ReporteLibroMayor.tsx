@@ -43,6 +43,7 @@ interface Account {
   id: number;
   account_code: string;
   account_name: string;
+  parent_account_id?: number | null;
   balance_type?: string;
 }
 
@@ -188,7 +189,7 @@ export default function ReporteLibroMayor() {
     try {
       const { data, error } = await supabase
         .from("tab_accounts")
-        .select("id, account_code, account_name, balance_type")
+        .select("id, account_code, account_name, parent_account_id, balance_type")
         .eq("enterprise_id", parseInt(enterpriseId))
         .eq("is_active", true)
         .order("account_code");
@@ -279,23 +280,31 @@ export default function ReporteLibroMayor() {
       setLoading(true);
       setReportGenerated(false);
 
-      // Expand each selected account to include all its descendants (by account_code prefix).
-      // This way, selecting a parent (e.g. 1101) automatically aggregates movements of all
-      // child accounts (1101.01, 1101.01.001, etc.), since postings normally live on leaves.
+      // Expand each selected account to include all descendants using the real parent_account_id
+      // hierarchy. Some legacy catalogs use codes like 1101 -> 110101 (without dots), so a
+      // dot-prefix comparison misses the children and incorrectly reports "Sin movimientos".
       const expandedIds = new Set<number>();
+      const accountsByParent = new Map<number, Account[]>();
+
+      for (const account of accounts) {
+        if (account.parent_account_id == null) continue;
+        if (!accountsByParent.has(account.parent_account_id)) {
+          accountsByParent.set(account.parent_account_id, []);
+        }
+        accountsByParent.get(account.parent_account_id)!.push(account);
+      }
+
+      const addAccountAndDescendants = (accountId: number) => {
+        if (expandedIds.has(accountId)) return;
+        expandedIds.add(accountId);
+
+        for (const child of accountsByParent.get(accountId) ?? []) {
+          addAccountAndDescendants(child.id);
+        }
+      };
+
       for (const accId of selectedAccounts) {
-        const acc = accounts.find(a => a.id === accId);
-        if (!acc) {
-          expandedIds.add(accId);
-          continue;
-        }
-        expandedIds.add(accId);
-        const prefix = `${acc.account_code}.`;
-        for (const other of accounts) {
-          if (other.id !== accId && other.account_code.startsWith(prefix)) {
-            expandedIds.add(other.id);
-          }
-        }
+        addAccountAndDescendants(accId);
       }
       const effectiveAccountIds = Array.from(expandedIds);
 
