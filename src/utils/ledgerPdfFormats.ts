@@ -26,6 +26,7 @@ export interface LedgerPdfEntry {
   balance: number;
   source_account_code?: string;
   source_account_name?: string;
+  reference?: string | null;
 }
 
 export interface LedgerPdfAccount {
