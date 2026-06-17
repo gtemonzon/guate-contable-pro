@@ -650,8 +650,29 @@ export default function ReporteLibroMayor() {
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0 bg-popover" align="start" side="bottom" sideOffset={4}>
-              <div className="p-2 border-b space-y-2">
+            {/*
+              Diagnóstico de fix:
+              - PopoverContent ya se renderiza vía Portal (PopoverPrimitive.Portal en ui/popover.tsx),
+                por lo que NO había clipping por overflow del padre.
+              - Causa raíz: el contenido (header + lista 300px) excedía el espacio disponible en
+                viewports cortos (~616px). Radix volteaba a "top" por colisión y el header se salía
+                por el borde superior del viewport.
+              - Fix: limitar maxHeight con la variable CSS de Radix
+                (--radix-popover-content-available-height) y usar flex-col para que el buscador
+                quede fijo arriba mientras solo la lista hace scroll interno.
+              - collisionPadding={8} evita que toque los bordes del viewport.
+            */}
+            <PopoverContent
+              className="w-[400px] p-0 bg-popover flex flex-col"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              collisionPadding={8}
+              style={{
+                maxHeight: "var(--radix-popover-content-available-height)",
+              }}
+            >
+              <div className="p-2 border-b space-y-2 shrink-0">
                 <Input
                   placeholder="Buscar cuenta (código o nombre)..."
                   value={accountSearch}
@@ -704,7 +725,7 @@ export default function ReporteLibroMayor() {
                   </label>
                 </div>
               </div>
-              <div className="max-h-[300px] overflow-y-auto p-2">
+              <div className="flex-1 min-h-0 overflow-y-auto p-2">
                 <div className="space-y-1">
                   {searchedAccounts.length === 0 && (
                     <div className="px-2 py-4 text-sm text-muted-foreground text-center">
@@ -732,6 +753,7 @@ export default function ReporteLibroMayor() {
                   ))}
                 </div>
               </div>
+
             </PopoverContent>
           </Popover>
         </div>
