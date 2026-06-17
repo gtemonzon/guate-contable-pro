@@ -58,6 +58,8 @@ interface LedgerEntry {
   balance: number;
   previous_balance?: number;
   account_id: number;
+  source_account_code?: string;
+  source_account_name?: string;
   currency_code?: string | null;
   exchange_rate?: number | null;
   original_debit?: number | null;
@@ -71,6 +73,8 @@ interface AccountLedger {
   totalDebit: number;
   totalCredit: number;
   finalBalance: number;
+  isConsolidated: boolean;
+  descendantCount: number;
 }
 
 export default function ReporteLibroMayor() {
