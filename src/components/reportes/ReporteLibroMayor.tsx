@@ -552,6 +552,7 @@ export default function ReporteLibroMayor() {
         balance: e.balance,
         source_account_code: e.source_account_code,
         source_account_name: e.source_account_name,
+        reference: e.reference ?? null,
       })),
     })),
   });
