@@ -209,17 +209,18 @@ const renderLegal: RenderFn = ({
     doc.setFont(font, 'bold');
     doc.setFontSize(9);
     doc.text(
-      `TOTAL DEBE:  ${formatCurrency(entry.total_debit)}`,
+      formatCurrency(entry.total_debit),
       COL_DEBIT_X + COL_DEBIT_W,
       cursorY,
       { align: 'right' },
     );
     doc.text(
-      `TOTAL HABER:  ${formatCurrency(entry.total_credit)}`,
+      formatCurrency(entry.total_credit),
       COL_CREDIT_X + COL_CREDIT_W,
       cursorY,
       { align: 'right' },
     );
+
     cursorY += 3;
     doc.setLineWidth(0.4);
     doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
