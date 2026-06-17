@@ -61,11 +61,13 @@ export function FolioExportDialog({
   bookType,
   enterpriseId,
   estimatePageCount,
+  showDescriptionMode = false,
 }: FolioExportDialogProps) {
   const [includeFolio, setIncludeFolio] = useState(false);
   const [startingFolio, setStartingFolio] = useState(1);
   const [estimatedPages, setEstimatedPages] = useState(1);
   const [estimating, setEstimating] = useState(false);
+  const [descriptionMode, setDescriptionMode] = useState<LedgerDescriptionMode>("full");
   const [activeAuth, setActiveAuth] = useState<{ auth: BookAuthorization; status: FolioStatus } | null>(null);
   const { getActiveAuthorizationForBook } = useBookAuthorizations(enterpriseId);
 
