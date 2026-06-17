@@ -95,6 +95,7 @@ export default function ReporteLibroMayor() {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
+  const [accountSearch, setAccountSearch] = useState("");
 
   const { toast } = useToast();
 
@@ -230,6 +231,15 @@ export default function ReporteLibroMayor() {
       return level === levelFilter;
     });
   }, [accounts, levelFilter]);
+
+  const searchedAccounts = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    if (!term) return filteredAccounts;
+    return filteredAccounts.filter(a =>
+      a.account_code.toLowerCase().includes(term) ||
+      a.account_name.toLowerCase().includes(term)
+    );
+  }, [filteredAccounts, accountSearch]);
 
   const toggleAccount = (accountId: number) => {
     setSelectedAccounts(prev =>
@@ -641,8 +651,14 @@ export default function ReporteLibroMayor() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
-              <div className="p-2 border-b">
-                <div className="flex flex-wrap gap-1 mb-2">
+              <div className="p-2 border-b space-y-2">
+                <Input
+                  placeholder="Buscar cuenta (código o nombre)..."
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <div className="flex flex-wrap gap-1">
                   <Button
                     variant={levelFilter === null ? "default" : "outline"}
                     size="sm"
@@ -666,20 +682,35 @@ export default function ReporteLibroMayor() {
                 <div className="flex items-center space-x-2 px-2 py-1">
                   <Checkbox
                     id="select-all"
-                    checked={filteredAccounts.length > 0 && filteredAccounts.every(a => selectedAccounts.includes(a.id))}
-                    onCheckedChange={toggleAllAccounts}
+                    checked={searchedAccounts.length > 0 && searchedAccounts.every(a => selectedAccounts.includes(a.id))}
+                    onCheckedChange={() => {
+                      const allSelected = searchedAccounts.every(a => selectedAccounts.includes(a.id));
+                      if (allSelected) {
+                        setSelectedAccounts(prev => prev.filter(id => !searchedAccounts.find(a => a.id === id)));
+                      } else {
+                        setSelectedAccounts(prev => {
+                          const newIds = searchedAccounts.map(a => a.id).filter(id => !prev.includes(id));
+                          return [...prev, ...newIds];
+                        });
+                      }
+                    }}
                   />
                   <label
                     htmlFor="select-all"
                     className="text-sm font-medium leading-none cursor-pointer"
                   >
-                    Seleccionar todas {levelFilter !== null ? `(Nivel ${levelFilter})` : ''}
+                    Seleccionar todas {levelFilter !== null ? `(Nivel ${levelFilter})` : accountSearch ? '(filtradas)' : ''}
                   </label>
                 </div>
               </div>
               <div className="max-h-[300px] overflow-y-auto p-2">
                 <div className="space-y-1">
-                  {filteredAccounts.map((account) => (
+                  {searchedAccounts.length === 0 && (
+                    <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                      No se encontraron cuentas
+                    </div>
+                  )}
+                  {searchedAccounts.map((account) => (
                     <div
                       key={account.id}
                       className="flex items-center space-x-2 px-2 py-1.5 hover:bg-accent rounded-sm cursor-pointer"
