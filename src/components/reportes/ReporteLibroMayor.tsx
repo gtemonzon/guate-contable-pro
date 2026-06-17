@@ -12,7 +12,7 @@ import { Download, Loader2, ChevronsUpDown, ChevronDown, ChevronRight } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
-import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
+import { exportToExcel } from "@/utils/reportExport";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
@@ -512,27 +512,57 @@ export default function ReporteLibroMayor() {
     };
   };
 
+  // Build the structured payload consumed by the new legal-format ledger PDF renderer.
+  const buildLedgerPdfInput = (descriptionMode: "full" | "short" | "none" = "full",
+                               folioOptions?: { includeFolio: boolean; startingFolio: number },
+                               authorizationLegend?: { number: string; date: string }) => ({
+    enterpriseName,
+    periodStart: startDate,
+    periodEnd: endDate,
+    descriptionMode,
+    folioOptions,
+    authorizationLegend,
+    ledgers: accountLedgers.map((l) => ({
+      account_code: l.account.account_code,
+      account_name: l.account.account_name,
+      previousBalance: l.previousBalance,
+      totalDebit: l.totalDebit,
+      totalCredit: l.totalCredit,
+      finalBalance: l.finalBalance,
+      isConsolidated: l.isConsolidated,
+      entries: l.entries.map((e) => ({
+        entry_date: e.entry_date,
+        entry_number: e.entry_number,
+        description: e.description,
+        debit_amount: e.debit_amount,
+        credit_amount: e.credit_amount,
+        balance: e.balance,
+        source_account_code: e.source_account_code,
+        source_account_name: e.source_account_name,
+      })),
+    })),
+  });
+
   const handleExport = async (options: FolioExportOptions) => {
     if (accountLedgers.length === 0) return;
 
-    const exportOptions = buildExportOptions();
-
     if (options.format === 'excel') {
-      exportToExcel(exportOptions);
+      exportToExcel(buildExportOptions());
     } else {
-      const result = exportToPDF({
-        ...exportOptions,
-        forcePortrait: true,
-        folioOptions: {
-          includeFolio: options.includeFolio,
-          startingFolio: options.startingFolio,
-        },
-        authorizationLegend: options.authorization
-          ? { number: options.authorization.number, date: options.authorization.date }
-          : undefined,
-      });
-      if (options.authorization && result?.pageCount) {
-        await consumePages(options.authorization.id, result.pageCount, {
+      const { renderLegalLedgerPdf } = await import("@/utils/ledgerPdfFormats");
+      const { doc, pageCount } = renderLegalLedgerPdf(
+        buildLedgerPdfInput(
+          options.descriptionMode ?? "full",
+          { includeFolio: options.includeFolio, startingFolio: options.startingFolio },
+          options.authorization
+            ? { number: options.authorization.number, date: options.authorization.date }
+            : undefined,
+        ),
+      );
+      doc.save(`Libro_Mayor_${startDate}_${endDate}.pdf`);
+
+      if (options.authorization && pageCount) {
+        await consumePages(options.authorization.id, pageCount, {
           enterpriseId: options.authorization.enterpriseId,
           bookType: options.authorization.bookType,
           reportPeriod: `Libro Mayor ${startDate} a ${endDate}`,
@@ -705,7 +735,12 @@ export default function ReporteLibroMayor() {
         title="Exportar Libro Mayor"
         bookType="libro_mayor"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
-        estimatePageCount={accountLedgers.length === 0 ? undefined : () => estimatePdfPageCount({ ...buildExportOptions(), forcePortrait: true })}
+        showDescriptionMode
+        estimatePageCount={accountLedgers.length === 0 ? undefined : async () => {
+          const { renderLegalLedgerPdf } = await import("@/utils/ledgerPdfFormats");
+          const { pageCount } = renderLegalLedgerPdf(buildLedgerPdfInput("full"));
+          return pageCount;
+        }}
       />
 
       {reportGenerated && accountLedgers.length > 0 && (

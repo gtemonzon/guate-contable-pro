@@ -21,11 +21,14 @@ import {
   BOOK_TYPE_LABELS,
 } from "@/hooks/useBookAuthorizations";
 
+export type LedgerDescriptionMode = "full" | "short" | "none";
+
 export interface FolioExportOptions {
   format: 'excel' | 'pdf';
   includeFolio: boolean;
   startingFolio: number;
   estimatedPages: number;
+  descriptionMode?: LedgerDescriptionMode;
   authorization?: {
     id: number;
     number: string;
@@ -45,6 +48,8 @@ interface FolioExportDialogProps {
   enterpriseId?: number;
   /** Callback opcional para estimar las páginas que generará el PDF. */
   estimatePageCount?: () => number | Promise<number>;
+  /** Si es true muestra el selector de "Modo de descripción" (Completa / Corta / Sin descripción) — sólo aplica a PDF. */
+  showDescriptionMode?: boolean;
 }
 
 export function FolioExportDialog({
@@ -56,11 +61,13 @@ export function FolioExportDialog({
   bookType,
   enterpriseId,
   estimatePageCount,
+  showDescriptionMode = false,
 }: FolioExportDialogProps) {
   const [includeFolio, setIncludeFolio] = useState(false);
   const [startingFolio, setStartingFolio] = useState(1);
   const [estimatedPages, setEstimatedPages] = useState(1);
   const [estimating, setEstimating] = useState(false);
+  const [descriptionMode, setDescriptionMode] = useState<LedgerDescriptionMode>("full");
   const [activeAuth, setActiveAuth] = useState<{ auth: BookAuthorization; status: FolioStatus } | null>(null);
   const { getActiveAuthorizationForBook } = useBookAuthorizations(enterpriseId);
 
@@ -104,6 +111,7 @@ export function FolioExportDialog({
       includeFolio: format === 'pdf' ? includeFolio : false,
       startingFolio: includeFolio ? startingFolio : 1,
       estimatedPages,
+      descriptionMode: format === 'pdf' ? descriptionMode : undefined,
       authorization: willConsumeFolios
         ? {
             id: activeAuth!.auth.id,
@@ -159,6 +167,25 @@ export function FolioExportDialog({
                 </Alert>
               )}
             </>
+          )}
+
+          {showDescriptionMode && (
+            <div className="space-y-2">
+              <Label htmlFor="description-mode">Modo de descripción (PDF)</Label>
+              <select
+                id="description-mode"
+                value={descriptionMode}
+                onChange={(e) => setDescriptionMode(e.target.value as LedgerDescriptionMode)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="full">Descripción completa</option>
+                <option value="short">Descripción corta (~90 caracteres)</option>
+                <option value="none">Sin descripción</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Sólo afecta al PDF generado. No modifica los datos contables.
+              </p>
+            </div>
           )}
 
           <div className="space-y-4">
