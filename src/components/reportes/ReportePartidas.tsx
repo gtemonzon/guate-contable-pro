@@ -11,6 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Download, Loader2, ChevronRight, ChevronDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
+import {
+  exportJournalEntriesToPDF,
+  estimateJournalPdfPageCount,
+  type JournalPdfEntry,
+} from "@/utils/journalPdfFormats";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
