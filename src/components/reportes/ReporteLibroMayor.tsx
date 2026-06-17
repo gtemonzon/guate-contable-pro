@@ -12,7 +12,7 @@ import { Download, Loader2, ChevronsUpDown, ChevronDown, ChevronRight } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
-import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
+import { exportToExcel } from "@/utils/reportExport";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import { useBookAuthorizations } from "@/hooks/useBookAuthorizations";
 import {
