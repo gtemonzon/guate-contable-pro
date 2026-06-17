@@ -284,12 +284,11 @@ export default function ReporteLibroMayor() {
       setLoading(true);
       setReportGenerated(false);
 
-      // Expand each selected account to include all descendants using the real parent_account_id
-      // hierarchy. Some legacy catalogs use codes like 1101 -> 110101 (without dots), so a
-      // dot-prefix comparison misses the children and incorrectly reports "Sin movimientos".
-      const expandedIds = new Set<number>();
+      // Build parent → children map from the real parent_account_id hierarchy
+      // (legacy catalogs may use code formats like 1101 -> 110101 without dots, so
+      // string-based prefix matching is unreliable). This map powers consolidation
+      // for parent accounts and stays format-agnostic.
       const accountsByParent = new Map<number, Account[]>();
-
       for (const account of accounts) {
         if (account.parent_account_id == null) continue;
         if (!accountsByParent.has(account.parent_account_id)) {
@@ -298,19 +297,25 @@ export default function ReporteLibroMayor() {
         accountsByParent.get(account.parent_account_id)!.push(account);
       }
 
-      const addAccountAndDescendants = (accountId: number) => {
-        if (expandedIds.has(accountId)) return;
-        expandedIds.add(accountId);
-
-        for (const child of accountsByParent.get(accountId) ?? []) {
-          addAccountAndDescendants(child.id);
-        }
+      const collectDescendants = (rootId: number): number[] => {
+        const result: number[] = [];
+        const visit = (id: number) => {
+          result.push(id);
+          for (const child of accountsByParent.get(id) ?? []) visit(child.id);
+        };
+        visit(rootId);
+        return result;
       };
 
-      for (const accId of selectedAccounts) {
-        addAccountAndDescendants(accId);
+      // Per selected root: list of descendant account IDs (root included)
+      const rootDescendants = new Map<number, number[]>();
+      const allEffectiveIds = new Set<number>();
+      for (const rootId of selectedAccounts) {
+        const descs = collectDescendants(rootId);
+        rootDescendants.set(rootId, descs);
+        for (const d of descs) allEffectiveIds.add(d);
       }
-      const effectiveAccountIds = Array.from(expandedIds);
+      const effectiveAccountIds = Array.from(allEffectiveIds);
 
       // Use server-side RPC — all aggregation and opening balance computed in Postgres
       const { data: rpcRows, error: rpcError } = await supabase.rpc('get_ledger_detail', {
@@ -322,37 +327,58 @@ export default function ReporteLibroMayor() {
 
       if (rpcError) throw rpcError;
 
-      if (!rpcRows || rpcRows.length === 0) {
-        setAccountLedgers([]);
-        toast({
-          title: "Sin movimientos",
-          description: "Las cuentas seleccionadas no tienen movimientos en el período",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Group rows by account_id and build running balances client-side (pure UI logic)
-      const rowsByAccount = new Map<number, typeof rpcRows>();
-      for (const row of rpcRows) {
+      // Index rows and opening balances by account_id (RPC returns same opening_balance
+      // on every row of an account; capture it once).
+      const rowsByAccount = new Map<number, any[]>();
+      const openingByAccount = new Map<number, number>();
+      for (const row of rpcRows ?? []) {
         const accId = Number(row.account_id);
         if (!rowsByAccount.has(accId)) rowsByAccount.set(accId, []);
         rowsByAccount.get(accId)!.push(row);
+        if (!openingByAccount.has(accId)) {
+          openingByAccount.set(accId, Number(row.opening_balance ?? 0));
+        }
       }
 
+      const accountById = new Map<number, Account>(accounts.map(a => [a.id, a]));
+
+      // Build ONE consolidated ledger per selected root (instead of one per descendant)
       const ledgers: AccountLedger[] = [];
+      for (const rootId of selectedAccounts) {
+        const rootAccount = accountById.get(rootId);
+        if (!rootAccount) continue;
 
-      for (const [accountId, rows] of rowsByAccount) {
-        const accountInfo = accounts.find(a => a.id === accountId);
-        if (!accountInfo) continue;
+        const descendantIds = rootDescendants.get(rootId) ?? [rootId];
+        const hasChildren = descendantIds.length > 1;
 
-        const previousBalance = Number(rows[0]?.opening_balance ?? 0);
+        // Consolidated opening balance = sum of every descendant's opening balance
+        // (only descendants with movements are returned by the RPC; absent ones
+        // contribute 0, matching prior behaviour).
+        let previousBalance = 0;
+        for (const did of descendantIds) {
+          previousBalance += openingByAccount.get(did) ?? 0;
+        }
+
+        // Merge movements from all descendants into a single chronological stream
+        const merged: any[] = [];
+        for (const did of descendantIds) {
+          const rows = rowsByAccount.get(did);
+          if (rows) merged.push(...rows);
+        }
+        merged.sort((a, b) => {
+          const da = String(a.entry_date), db = String(b.entry_date);
+          if (da !== db) return da < db ? -1 : 1;
+          const na = String(a.entry_number ?? ''), nb = String(b.entry_number ?? '');
+          if (na !== nb) return na < nb ? -1 : 1;
+          return Number(a.detail_id) - Number(b.detail_id);
+        });
+
         let runningBalance = previousBalance;
-
-        const entries: LedgerEntry[] = rows.map((row: any) => {
+        const entries: LedgerEntry[] = merged.map((row: any) => {
           const debit  = Number(row.debit_amount)  || 0;
           const credit = Number(row.credit_amount) || 0;
           runningBalance += debit - credit;
+          const srcAcc = accountById.get(Number(row.account_id));
           return {
             id: Number(row.detail_id),
             journal_entry_id: Number(row.journal_entry_id),
@@ -363,7 +389,9 @@ export default function ReporteLibroMayor() {
             credit_amount: credit,
             balance: runningBalance,
             previous_balance: previousBalance,
-            account_id: accountId,
+            account_id: Number(row.account_id),
+            source_account_code: srcAcc?.account_code,
+            source_account_name: srcAcc?.account_name,
             currency_code: row.currency_code ?? null,
             exchange_rate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
             original_debit: row.original_debit != null ? Number(row.original_debit) : null,
@@ -374,14 +402,29 @@ export default function ReporteLibroMayor() {
         const totalDebit  = entries.reduce((s, e) => s + e.debit_amount,  0);
         const totalCredit = entries.reduce((s, e) => s + e.credit_amount, 0);
 
+        // Only include ledgers that have either movement or opening balance
+        if (entries.length === 0 && Math.abs(previousBalance) < 0.005) continue;
+
         ledgers.push({
-          account: accountInfo,
+          account: rootAccount,
           entries,
           previousBalance,
           totalDebit,
           totalCredit,
-          finalBalance: entries[entries.length - 1]?.balance ?? previousBalance,
+          finalBalance: entries.length ? entries[entries.length - 1].balance : previousBalance,
+          isConsolidated: hasChildren,
+          descendantCount: descendantIds.length,
         });
+      }
+
+      if (ledgers.length === 0) {
+        setAccountLedgers([]);
+        toast({
+          title: "Sin movimientos",
+          description: "Las cuentas seleccionadas no tienen movimientos en el período",
+        });
+        setLoading(false);
+        return;
       }
 
       ledgers.sort((a, b) => a.account.account_code.localeCompare(b.account.account_code));
