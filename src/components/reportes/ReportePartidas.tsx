@@ -11,6 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Download, Loader2, ChevronRight, ChevronDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
+import {
+  exportJournalEntriesToPDF,
+  estimateJournalPdfPageCount,
+  type JournalPdfEntry,
+} from "@/utils/journalPdfFormats";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/lib/utils";
@@ -322,15 +327,42 @@ export default function ReportePartidas() {
     };
   };
 
-  const handleExport = async (options: FolioExportOptions) => {
-    const exportOptions = buildExportOptions(options.format);
+  const buildJournalPdfPayload = () => {
+    const pdfEntries: JournalPdfEntry[] = entries.map((e) => ({
+      entry_number: e.entry_number,
+      entry_date: e.entry_date,
+      entry_type: e.entry_type,
+      description: e.description,
+      total_debit: e.total_debit,
+      total_credit: e.total_credit,
+      details: includeDetails
+        ? (entryDetails[e.id] || []).map((d) => ({
+            account_code: d.account_code,
+            account_name: d.account_name,
+            debit_amount: d.debit_amount,
+            credit_amount: d.credit_amount,
+          }))
+        : undefined,
+    }));
+    return {
+      filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+      enterpriseName,
+      dateFrom,
+      dateTo,
+      entries: pdfEntries,
+      includeDetails,
+      format: 'legal' as const,
+    };
+  };
 
+  const handleExport = async (options: FolioExportOptions) => {
     if (options.format === 'excel') {
+      const exportOptions = buildExportOptions('excel');
       exportToExcel(exportOptions);
     } else {
-      const result = exportToPDF({
-        ...exportOptions,
-        forcePortrait: true,
+      const payload = buildJournalPdfPayload();
+      const result = exportJournalEntriesToPDF({
+        ...payload,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
@@ -433,7 +465,7 @@ export default function ReportePartidas() {
         bookType="libro_diario"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
         warningMessage={draftCount > 0 ? `El reporte se emitirá únicamente con partidas contabilizadas. En el período seleccionado hay ${draftCount} partida${draftCount > 1 ? 's' : ''} en estado borrador o pendiente${draftCount > 1 ? 's' : ''} de contabilizar.` : undefined}
-        estimatePageCount={() => estimatePdfPageCount({ ...buildExportOptions('pdf'), forcePortrait: true })}
+        estimatePageCount={() => estimateJournalPdfPageCount(buildJournalPdfPayload())}
       />
 
       {entries.length > 0 && (
