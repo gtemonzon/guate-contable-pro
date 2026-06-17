@@ -327,15 +327,42 @@ export default function ReportePartidas() {
     };
   };
 
-  const handleExport = async (options: FolioExportOptions) => {
-    const exportOptions = buildExportOptions(options.format);
+  const buildJournalPdfPayload = () => {
+    const pdfEntries: JournalPdfEntry[] = entries.map((e) => ({
+      entry_number: e.entry_number,
+      entry_date: e.entry_date,
+      entry_type: e.entry_type,
+      description: e.description,
+      total_debit: e.total_debit,
+      total_credit: e.total_credit,
+      details: includeDetails
+        ? (entryDetails[e.id] || []).map((d) => ({
+            account_code: d.account_code,
+            account_name: d.account_name,
+            debit_amount: d.debit_amount,
+            credit_amount: d.credit_amount,
+          }))
+        : undefined,
+    }));
+    return {
+      filename: `Libro_Diario_${dateFrom}_${dateTo}`,
+      enterpriseName,
+      dateFrom,
+      dateTo,
+      entries: pdfEntries,
+      includeDetails,
+      format: 'legal' as const,
+    };
+  };
 
+  const handleExport = async (options: FolioExportOptions) => {
     if (options.format === 'excel') {
+      const exportOptions = buildExportOptions('excel');
       exportToExcel(exportOptions);
     } else {
-      const result = exportToPDF({
-        ...exportOptions,
-        forcePortrait: true,
+      const payload = buildJournalPdfPayload();
+      const result = exportJournalEntriesToPDF({
+        ...payload,
         folioOptions: {
           includeFolio: options.includeFolio,
           startingFolio: options.startingFolio,
