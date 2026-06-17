@@ -227,7 +227,10 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
     head.push("Debe", "Haber", "Saldo");
 
     const body = acc.entries.map((e) => {
-      const { ref, description } = extractReference(e.description);
+      const explicitRef = (e.reference ?? "").toString().trim();
+      const parsed = explicitRef
+        ? { ref: explicitRef, description: e.description ?? "" }
+        : extractReference(e.description);
       const row: string[] = [
         formatIsoDate(e.entry_date),
         e.entry_number ?? "",
@@ -237,8 +240,8 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
         const name = e.source_account_name ?? "";
         row.push(name ? `${code}\n${name}` : code);
       }
-      row.push(ref);
-      if (showDescription) row.push(shorten(description, descriptionMode));
+      row.push(parsed.ref);
+      if (showDescription) row.push(shorten(parsed.description, descriptionMode));
       row.push(
         e.debit_amount > 0 ? formatCurrency(e.debit_amount) : "",
         e.credit_amount > 0 ? formatCurrency(e.credit_amount) : "",
