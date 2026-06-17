@@ -279,10 +279,30 @@ export default function ReporteLibroMayor() {
       setLoading(true);
       setReportGenerated(false);
 
+      // Expand each selected account to include all its descendants (by account_code prefix).
+      // This way, selecting a parent (e.g. 1101) automatically aggregates movements of all
+      // child accounts (1101.01, 1101.01.001, etc.), since postings normally live on leaves.
+      const expandedIds = new Set<number>();
+      for (const accId of selectedAccounts) {
+        const acc = accounts.find(a => a.id === accId);
+        if (!acc) {
+          expandedIds.add(accId);
+          continue;
+        }
+        expandedIds.add(accId);
+        const prefix = `${acc.account_code}.`;
+        for (const other of accounts) {
+          if (other.id !== accId && other.account_code.startsWith(prefix)) {
+            expandedIds.add(other.id);
+          }
+        }
+      }
+      const effectiveAccountIds = Array.from(expandedIds);
+
       // Use server-side RPC — all aggregation and opening balance computed in Postgres
       const { data: rpcRows, error: rpcError } = await supabase.rpc('get_ledger_detail', {
         p_enterprise_id: parseInt(currentEnterpriseId),
-        p_account_ids: selectedAccounts,
+        p_account_ids: effectiveAccountIds,
         p_start_date: startDate,
         p_end_date: endDate,
       });
