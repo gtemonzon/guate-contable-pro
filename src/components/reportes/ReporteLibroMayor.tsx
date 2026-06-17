@@ -735,7 +735,12 @@ export default function ReporteLibroMayor() {
         title="Exportar Libro Mayor"
         bookType="libro_mayor"
         enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : undefined}
-        estimatePageCount={accountLedgers.length === 0 ? undefined : () => estimatePdfPageCount({ ...buildExportOptions(), forcePortrait: true })}
+        showDescriptionMode
+        estimatePageCount={accountLedgers.length === 0 ? undefined : async () => {
+          const { renderLegalLedgerPdf } = await import("@/utils/ledgerPdfFormats");
+          const { pageCount } = renderLegalLedgerPdf(buildLedgerPdfInput("full"));
+          return pageCount;
+        }}
       />
 
       {reportGenerated && accountLedgers.length > 0 && (
