@@ -48,6 +48,9 @@ interface JournalEntryData {
   total_credit: number;
   is_posted: boolean;
   document_references?: string[] | null;
+  document_reference?: string | null;
+  bank_reference?: string | null;
+  beneficiary_name?: string | null;
 }
 
 interface JournalEntryDetail {
