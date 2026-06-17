@@ -10,6 +10,8 @@ export interface JournalPdfEntry {
   description: string;
   total_debit: number;
   total_credit: number;
+  beneficiary_name?: string | null;
+  reference?: string | null;
   details?: Array<{
     account_code: string;
     account_name: string;
