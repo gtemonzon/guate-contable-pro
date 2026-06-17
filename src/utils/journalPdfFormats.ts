@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { formatCurrency } from '@/lib/utils';
 import type { AuthorizationLegend } from './reportExport';
 
@@ -39,11 +38,9 @@ const formatGtDate = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('es-GT');
 
 /**
- * Legal Printing Format
- * - B&W, minimal ink usage
- * - Prominent journal entry header
- * - No line descriptions
- * - Page numbering only when folios are NOT used
+ * Legal Printing Format — manual row-by-row layout for full control over
+ * smart page breaks, "(continúa)" headers, repeated column headers, and
+ * keeping totals together with the last lines of a journal entry.
  */
 const renderLegal: RenderFn = ({
   enterpriseName,
@@ -58,11 +55,29 @@ const renderLegal: RenderFn = ({
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const marginX = 14;
+  const topY = 28;
+  const bottomLimit = pageHeight - 16;
   const includeFolio = folioOptions?.includeFolio ?? false;
   const startingFolio = folioOptions?.startingFolio ?? 1;
   const font = 'helvetica';
 
-  const drawHeader = () => {
+  // Column layout (mm)
+  const COL_CODE_W = 28;
+  const COL_DEBIT_W = 30;
+  const COL_CREDIT_W = 30;
+  const COL_NAME_X = marginX + COL_CODE_W;
+  const COL_NAME_W = pageWidth - marginX * 2 - COL_CODE_W - COL_DEBIT_W - COL_CREDIT_W;
+  const COL_DEBIT_X = COL_NAME_X + COL_NAME_W;
+  const COL_CREDIT_X = COL_DEBIT_X + COL_DEBIT_W;
+
+  const ROW_H = 5;
+  const HEADER_ROW_H = 5.5;
+  const TOTALS_BLOCK_H = 12;
+
+  let cursorY = topY;
+  let currentContinuation: { entryNumber: string } | null = null;
+
+  const drawPageHeader = () => {
     doc.setFont(font, 'bold');
     doc.setFontSize(12);
     doc.text(enterpriseName, marginX, 14);
@@ -73,54 +88,61 @@ const renderLegal: RenderFn = ({
       marginX,
       19,
     );
-    // Thin separator
     doc.setDrawColor(0);
     doc.setLineWidth(0.2);
     doc.line(marginX, 22, pageWidth - marginX, 22);
   };
 
-  const drawFooter = (pageNumber: number, totalPages: number) => {
+  const drawColumnHeaders = (y: number): number => {
+    doc.setFont(font, 'bold');
+    doc.setFontSize(9);
+    doc.text('Código', marginX, y);
+    doc.text('Cuenta', COL_NAME_X, y);
+    doc.text('Debe', COL_DEBIT_X + COL_DEBIT_W, y, { align: 'right' });
+    doc.text('Haber', COL_CREDIT_X + COL_CREDIT_W, y, { align: 'right' });
+    doc.setLineWidth(0.2);
+    doc.line(marginX, y + 1.2, pageWidth - marginX, y + 1.2);
     doc.setFont(font, 'normal');
-    doc.setFontSize(8);
-    if (includeFolio) {
-      const folio = startingFolio + pageNumber - 1;
-      doc.text(`Folio ${folio}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
-    } else {
-      doc.text(
-        `Página ${pageNumber} de ${totalPages}`,
-        pageWidth - marginX,
-        pageHeight - 8,
-        { align: 'right' },
-      );
-    }
-    if (authorizationLegend) {
-      doc.setFontSize(7);
-      doc.text(
-        `Autorización: ${authorizationLegend.number} — Fecha: ${authorizationLegend.date}`,
-        marginX,
-        pageHeight - 8,
-      );
-    }
+    return y + HEADER_ROW_H;
   };
 
-  drawHeader();
-  let cursorY = 28;
+  const newPage = () => {
+    doc.addPage();
+    drawPageHeader();
+    cursorY = topY;
+    if (currentContinuation) {
+      doc.setFont(font, 'bold');
+      doc.setFontSize(10);
+      doc.text(
+        `PARTIDA #${currentContinuation.entryNumber} (continúa)`,
+        marginX,
+        cursorY,
+      );
+      cursorY += 6;
+      cursorY = drawColumnHeaders(cursorY);
+    }
+  };
 
   const ensureSpace = (needed: number) => {
-    if (cursorY + needed > pageHeight - 16) {
-      doc.addPage();
-      drawHeader();
-      cursorY = 28;
-    }
+    if (cursorY + needed > bottomLimit) newPage();
   };
 
-  entries.forEach((entry, idx) => {
-    // Estimate height: header block (~22mm) + details rows (~5mm each) + totals (~10mm)
-    const detailRows = includeDetails && entry.details ? entry.details.length : 0;
-    const estHeight = 22 + detailRows * 5 + 12;
-    ensureSpace(Math.min(estHeight, 60)); // at least leave room for header + a few rows
+  drawPageHeader();
 
-    // Prominent entry number
+  entries.forEach((entry) => {
+    currentContinuation = null;
+
+    const descLines = doc.splitTextToSize(
+      `Concepto: ${entry.description || ''}`,
+      pageWidth - marginX * 2,
+    );
+    const headerBlockH = 6 + 5 + descLines.length * 4.2 + 2 + HEADER_ROW_H;
+
+    // Reserve enough room for header + at least 2 rows + totals
+    const minStartH = headerBlockH + ROW_H * 2 + TOTALS_BLOCK_H;
+    ensureSpace(Math.min(minStartH, bottomLimit - topY));
+
+    // PARTIDA header
     doc.setFont(font, 'bold');
     doc.setFontSize(12);
     doc.text(`PARTIDA #${entry.entry_number}`, marginX, cursorY);
@@ -132,82 +154,78 @@ const renderLegal: RenderFn = ({
     doc.text(`Tipo: ${entry.entry_type}`, marginX + 70, cursorY);
     cursorY += 5;
 
-    // Description (wrapped)
-    const descLines = doc.splitTextToSize(
-      `Concepto: ${entry.description || ''}`,
-      pageWidth - marginX * 2,
-    );
     doc.text(descLines, marginX, cursorY);
     cursorY += descLines.length * 4.2 + 2;
 
-    if (includeDetails && entry.details && entry.details.length > 0) {
-      autoTable(doc, {
-        startY: cursorY,
-        margin: { left: marginX, right: marginX, bottom: 16 },
-        head: [['Código', 'Cuenta', 'Debe', 'Haber']],
-        body: entry.details.map((d) => [
-          d.account_code,
-          d.account_name,
-          d.debit_amount > 0 ? formatCurrency(d.debit_amount) : '',
-          d.credit_amount > 0 ? formatCurrency(d.credit_amount) : '',
-        ]),
-        theme: 'plain',
-        styles: {
-          font,
-          fontSize: 9,
-          textColor: [0, 0, 0],
-          cellPadding: 1.2,
-          lineColor: [120, 120, 120],
-          lineWidth: 0.1,
-        },
-        headStyles: {
-          fontStyle: 'bold',
-          fillColor: false as any,
-          textColor: [0, 0, 0],
-          lineWidth: 0.2,
-          lineColor: [0, 0, 0],
-        },
-        columnStyles: {
-          0: { cellWidth: 28 },
-          1: { cellWidth: 'auto' },
-          2: { cellWidth: 30, halign: 'right' },
-          3: { cellWidth: 30, halign: 'right' },
-        },
-        didDrawPage: () => {
-          drawHeader();
-        },
-      });
-      cursorY = (doc as any).lastAutoTable.finalY + 2;
+    const details = includeDetails ? entry.details ?? [] : [];
+
+    if (details.length > 0) {
+      cursorY = drawColumnHeaders(cursorY);
+      currentContinuation = { entryNumber: entry.entry_number };
+
+      for (let i = 0; i < details.length; i++) {
+        const d = details[i];
+        const remaining = details.length - i;
+        const isLastFew = remaining <= 3;
+        // Keep last few rows together with totals
+        const needed = isLastFew ? ROW_H * remaining + TOTALS_BLOCK_H : ROW_H;
+
+        if (cursorY + needed > bottomLimit) {
+          newPage();
+        }
+
+        const nameLines = doc.splitTextToSize(d.account_name, COL_NAME_W - 2);
+        const rowH = Math.max(ROW_H, nameLines.length * 4.2 + 1);
+        doc.setFont(font, 'normal');
+        doc.setFontSize(9);
+        doc.text(d.account_code, marginX, cursorY);
+        doc.text(nameLines, COL_NAME_X, cursorY);
+        if (d.debit_amount > 0) {
+          doc.text(
+            formatCurrency(d.debit_amount),
+            COL_DEBIT_X + COL_DEBIT_W,
+            cursorY,
+            { align: 'right' },
+          );
+        }
+        if (d.credit_amount > 0) {
+          doc.text(
+            formatCurrency(d.credit_amount),
+            COL_CREDIT_X + COL_CREDIT_W,
+            cursorY,
+            { align: 'right' },
+          );
+        }
+        cursorY += rowH;
+      }
     }
 
-    // Totals
-    ensureSpace(12);
+    // Totals — guaranteed to fit with last few rows by logic above
+    ensureSpace(TOTALS_BLOCK_H);
     doc.setDrawColor(0);
     doc.setLineWidth(0.2);
     doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
     cursorY += 4;
     doc.setFont(font, 'bold');
     doc.setFontSize(9);
-    const totalsRightX = pageWidth - marginX;
     doc.text(
       `TOTAL DEBE:  ${formatCurrency(entry.total_debit)}`,
-      totalsRightX - 60,
-      cursorY,
-    );
-    doc.text(
-      `TOTAL HABER:  ${formatCurrency(entry.total_credit)}`,
-      totalsRightX,
+      COL_DEBIT_X + COL_DEBIT_W,
       cursorY,
       { align: 'right' },
     );
-    cursorY += 4;
+    doc.text(
+      `TOTAL HABER:  ${formatCurrency(entry.total_credit)}`,
+      COL_CREDIT_X + COL_CREDIT_W,
+      cursorY,
+      { align: 'right' },
+    );
+    cursorY += 3;
     doc.setLineWidth(0.4);
     doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
     cursorY += 8;
 
-    if (idx < entries.length - 1) {
-      ensureSpace(20);
-    }
+    currentContinuation = null;
   });
 
   // Grand totals
@@ -225,21 +243,41 @@ const renderLegal: RenderFn = ({
   cursorY += 4;
   doc.text(`Total Haber: ${formatCurrency(grandCredit)}`, marginX, cursorY);
 
-  // Footer with page numbers (rendered after total pages known)
+  // Footers
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    drawFooter(p, totalPages);
+    doc.setFont(font, 'normal');
+    doc.setFontSize(8);
+    if (includeFolio) {
+      const folio = startingFolio + p - 1;
+      doc.text(`Folio ${folio}`, pageWidth - marginX, pageHeight - 8, {
+        align: 'right',
+      });
+    } else {
+      doc.text(
+        `Página ${p} de ${totalPages}`,
+        pageWidth - marginX,
+        pageHeight - 8,
+        { align: 'right' },
+      );
+    }
+    if (authorizationLegend) {
+      doc.setFontSize(7);
+      doc.text(
+        `Autorización: ${authorizationLegend.number} — Fecha: ${authorizationLegend.date}`,
+        marginX,
+        pageHeight - 8,
+      );
+    }
   }
 
   return doc;
 };
 
-// Registry for future formats
+// Registry for future formats (audit/management currently alias to legal)
 const FORMAT_RENDERERS: Record<JournalPdfFormat, RenderFn> = {
   legal: renderLegal,
-  // audit: renderAudit, // future
-  // management: renderManagement, // future
   audit: renderLegal,
   management: renderLegal,
 };
