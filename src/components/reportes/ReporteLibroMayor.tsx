@@ -64,6 +64,8 @@ interface LedgerEntry {
   exchange_rate?: number | null;
   original_debit?: number | null;
   original_credit?: number | null;
+  reference?: string | null;
+  beneficiary_name?: string | null;
 }
 
 interface AccountLedger {
