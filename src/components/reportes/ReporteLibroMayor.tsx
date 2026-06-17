@@ -232,6 +232,15 @@ export default function ReporteLibroMayor() {
     });
   }, [accounts, levelFilter]);
 
+  const searchedAccounts = useMemo(() => {
+    const term = accountSearch.trim().toLowerCase();
+    if (!term) return filteredAccounts;
+    return filteredAccounts.filter(a =>
+      a.account_code.toLowerCase().includes(term) ||
+      a.account_name.toLowerCase().includes(term)
+    );
+  }, [filteredAccounts, accountSearch]);
+
   const toggleAccount = (accountId: number) => {
     setSelectedAccounts(prev =>
       prev.includes(accountId)
