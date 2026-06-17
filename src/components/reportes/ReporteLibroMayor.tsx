@@ -452,36 +452,54 @@ export default function ReporteLibroMayor() {
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
   const buildExportOptions = () => {
-    const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    // If any ledger is consolidated we add a "Cuenta Origen" column so the audit trail is preserved.
+    const anyConsolidated = accountLedgers.some(l => l.isConsolidated);
+    const headers = anyConsolidated
+      ? ["Fecha", "No. Partida", "Cuenta Origen", "Descripción", "Debe", "Haber", "Saldo"]
+      : ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    const colCount = headers.length;
+    const blankRow = Array(colCount).fill("");
     const data: any[][] = [];
     const boldRows: number[] = [];
 
     accountLedgers.forEach(ledger => {
       boldRows.push(data.length);
-      data.push([
-        `${ledger.account.account_code} - ${ledger.account.account_name}`,
-        "",
-        `Saldo Anterior: ${formatCurrency(Math.abs(ledger.previousBalance))}`,
-        "", "", ""
-      ]);
+      const headerRow = [...blankRow];
+      headerRow[0] = `CUENTA: ${ledger.account.account_code} - ${ledger.account.account_name}`;
+      headerRow[colCount - 1] = `Saldo Anterior: ${formatCurrency(ledger.previousBalance)}`;
+      data.push(headerRow);
+
       ledger.entries.forEach(entry => {
-        data.push([
-          entry.entry_date,
-          entry.entry_number,
-          entry.description,
-          entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
-          entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
-          formatCurrency(Math.abs(entry.balance)),
-        ]);
+        if (anyConsolidated) {
+          data.push([
+            entry.entry_date,
+            entry.entry_number,
+            entry.source_account_code ? `${entry.source_account_code}` : "",
+            entry.description,
+            entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
+            entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
+            formatCurrency(Math.abs(entry.balance)),
+          ]);
+        } else {
+          data.push([
+            entry.entry_date,
+            entry.entry_number,
+            entry.description,
+            entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
+            entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
+            formatCurrency(Math.abs(entry.balance)),
+          ]);
+        }
       });
+
       boldRows.push(data.length);
-      data.push([
-        "", "", "TOTALES:",
-        formatCurrency(ledger.totalDebit),
-        formatCurrency(ledger.totalCredit),
-        formatCurrency(Math.abs(ledger.finalBalance)),
-      ]);
-      data.push(["", "", "", "", "", ""]);
+      const totalsRow = [...blankRow];
+      totalsRow[colCount - 4] = "TOTALES:";
+      totalsRow[colCount - 3] = formatCurrency(ledger.totalDebit);
+      totalsRow[colCount - 2] = formatCurrency(ledger.totalCredit);
+      totalsRow[colCount - 1] = formatCurrency(Math.abs(ledger.finalBalance));
+      data.push(totalsRow);
+      data.push([...blankRow]);
     });
 
     return {
