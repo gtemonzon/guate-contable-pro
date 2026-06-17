@@ -111,6 +111,7 @@ export function FolioExportDialog({
       includeFolio: format === 'pdf' ? includeFolio : false,
       startingFolio: includeFolio ? startingFolio : 1,
       estimatedPages,
+      descriptionMode: format === 'pdf' ? descriptionMode : undefined,
       authorization: willConsumeFolios
         ? {
             id: activeAuth!.auth.id,
