@@ -164,7 +164,7 @@ const renderLegal: RenderFn = ({
           fontStyle: 'bold',
           fillColor: false as any,
           textColor: [0, 0, 0],
-          lineWidth: { top: 0.2, bottom: 0.2, left: 0, right: 0 },
+          lineWidth: 0.2,
           lineColor: [0, 0, 0],
         },
         columnStyles: {
