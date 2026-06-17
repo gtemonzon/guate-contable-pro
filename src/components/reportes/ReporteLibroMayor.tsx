@@ -744,10 +744,13 @@ export default function ReporteLibroMayor() {
                       )}
                       <div>
                         <h3 className="font-semibold">
-                          {ledger.account.account_code} - {ledger.account.account_name}
+                          CUENTA: {ledger.account.account_code} - {ledger.account.account_name}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          Del {startDate} al {endDate} • {ledger.entries.length} movimiento(s)
+                          Período: {startDate} a {endDate} • {ledger.entries.length} movimiento(s)
+                          {ledger.isConsolidated && (
+                            <> • Consolidado de {ledger.descendantCount} cuentas hijas</>
+                          )}
                         </p>
                       </div>
                     </div>
