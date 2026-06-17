@@ -2,18 +2,14 @@
 /**
  * Legal General Ledger (Libro Mayor) PDF renderer.
  *
- * Goals:
- *  - Monochrome, low-toner, audit-grade format.
- *  - One self-contained block per account: summary header → movements table → totals.
- *  - Smart continuation: "Continúa en la siguiente página…" / "Continuación de la
- *    cuenta:" are stamped only when an account ACTUALLY spans multiple pages
- *    (post-processed against real rendered page ranges; no row-height guessing).
- *  - Reference column extracted out of the description.
- *  - Optional description modes: full | short | none.
- *  - Page numbering "Página X de Y" or authorized folios — never both.
- *
- * Future-friendly: this file is the "Legal Ledger Format". Add new formats
- * (audit / management) as sibling exports without touching this one.
+ * Presentation goals:
+ *  - Traditional accounting ledger look (no full grid / no boxed cells).
+ *  - Monochrome, low-toner; horizontal rules only.
+ *  - Smart continuation: "Continúa en la siguiente página…" appears ONLY when
+ *    the account truly continues; never on the final page of an account.
+ *  - Reference column extracted from description.
+ *  - Description modes: full | short | none.
+ *  - Folios OR "Página X de Y" — never both.
  */
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -66,14 +62,12 @@ export interface LegalLedgerPdfInput {
 const SHORT_DESC_LEN = 90;
 const REF_REGEX = /(?:^|[\s|;,(\[])\s*(?:Ref(?:erencia)?\.?|REF)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_./]*)/i;
 
-/** Pull "Ref: 1234" (and variants) out of the description, return { ref, cleaned }. */
 function extractReference(raw: string | null | undefined): { ref: string; description: string } {
   const text = (raw ?? "").trim();
   if (!text) return { ref: "", description: "" };
   const m = text.match(REF_REGEX);
   if (!m) return { ref: "", description: text };
   const ref = m[1];
-  // Remove the whole "Ref: xxxxx" fragment from the description.
   const cleaned = text
     .replace(m[0], " ")
     .replace(/\s{2,}/g, " ")
@@ -98,10 +92,6 @@ function formatIsoDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-/**
- * Render the legal-format Libro Mayor PDF and return jsPDF + page count.
- * Caller is responsible for `.save()` (so caller can also inspect/decorate).
- */
 export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; pageCount: number } {
   const {
     enterpriseName,
@@ -125,10 +115,7 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
 
   const FONT = "helvetica";
   const BLACK: [number, number, number] = [0, 0, 0];
-  const GRAY_LINE: [number, number, number] = [120, 120, 120];
 
-  // Per-account continuation ranges, filled while rendering. We post-process at
-  // the end to stamp "Continúa..." / "Continuación de la cuenta..." messages.
   const accountPageRanges: Array<{
     code: string;
     name: string;
@@ -136,33 +123,33 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
     lastPage: number;
   }> = [];
 
-  // -- Global report header (printed once at top of page 1) --------------------
+  // -- Global report header (page 1 only) -------------------------------------
   doc.setTextColor(...BLACK);
   doc.setFont(FONT, "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.text(enterpriseName || "", marginX, 14);
   doc.setFont(FONT, "normal");
   doc.setFontSize(10);
-  doc.text("Libro Mayor (Formato Legal)", marginX, 20);
+  doc.text("Libro Mayor", marginX, 19);
   doc.setFontSize(9);
   doc.text(
     `Período: ${formatIsoDate(periodStart)} a ${formatIsoDate(periodEnd)}`,
     marginX,
-    25,
+    24,
   );
 
-  let cursorY = 32;
+  let cursorY = 30;
 
-  // Draw the per-account summary block. Returns the Y where the table can start.
+  // Per-account summary header — prominent but plain.
   const drawAccountSummary = (acc: LedgerPdfAccount, startY: number): number => {
     let y = startY;
 
     // Top double rule
     doc.setDrawColor(...BLACK);
-    doc.setLineWidth(0.6);
+    doc.setLineWidth(0.5);
     doc.line(marginX, y, contentRight, y);
-    doc.setLineWidth(0.2);
-    doc.line(marginX, y + 0.8, contentRight, y + 0.8);
+    doc.setLineWidth(0.15);
+    doc.line(marginX, y + 0.7, contentRight, y + 0.7);
     y += 5;
 
     doc.setFont(FONT, "bold");
@@ -173,86 +160,55 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
     doc.setFont(FONT, "normal");
     doc.setFontSize(9);
     doc.text(`Período: ${formatIsoDate(periodStart)} a ${formatIsoDate(periodEnd)}`, marginX, y);
-    if (acc.isConsolidated) {
-      doc.text(
-        "Saldo consolidado de todas las cuentas hijas",
-        contentRight,
-        y,
-        { align: "right" },
-      );
-    }
     y += 6;
 
-    // 2-column summary table
-    const labelX = marginX + 2;
-    const valueX = marginX + 70;
+    // Two columns of labeled amounts (no grid, no boxes)
+    const labelX1 = marginX + 2;
+    const valueX1 = marginX + 60;
     const labelX2 = pageWidth / 2 + 10;
     const valueX2 = contentRight;
     doc.setFontSize(9);
 
-    doc.setFont(FONT, "normal");
-    doc.text("Saldo inicial:", labelX, y);
-    doc.text("Total débitos:", labelX2, y);
-    doc.setFont(FONT, "bold");
-    doc.text(formatCurrency(acc.previousBalance), valueX, y, { align: "right" });
+    doc.text("Saldo Inicial:", labelX1, y);
+    doc.text(formatCurrency(acc.previousBalance), valueX1, y, { align: "right" });
+    doc.text("Total Débitos:", labelX2, y);
     doc.text(formatCurrency(acc.totalDebit), valueX2, y, { align: "right" });
     y += 5;
 
-    doc.setFont(FONT, "normal");
-    doc.text("Total créditos:", labelX, y);
-    doc.text("Saldo final:", labelX2, y);
-    doc.setFont(FONT, "bold");
-    doc.text(formatCurrency(acc.totalCredit), valueX, y, { align: "right" });
+    doc.text("Total Créditos:", labelX1, y);
+    doc.text(formatCurrency(acc.totalCredit), valueX1, y, { align: "right" });
+    doc.text("Saldo Final:", labelX2, y);
     doc.text(formatCurrency(acc.finalBalance), valueX2, y, { align: "right" });
-    y += 5;
-
-    // Bottom rule
-    doc.setFont(FONT, "normal");
-    doc.setLineWidth(0.2);
-    doc.line(marginX, y, contentRight, y);
-    y += 3;
+    y += 6;
 
     return y;
   };
 
-  // Draw the totals block at the end of an account
+  // Totals block: horizontal rules only, no boxes.
   const drawAccountTotals = (acc: LedgerPdfAccount, startY: number): number => {
-    let y = startY + 2;
+    let y = startY + 1;
     doc.setDrawColor(...BLACK);
     doc.setLineWidth(0.2);
-    doc.line(pageWidth / 2, y, contentRight, y);
+    doc.line(marginX, y, contentRight, y);
     y += 4;
+    doc.setFont(FONT, "normal");
     doc.setFontSize(9);
-    doc.setFont(FONT, "normal");
-    doc.text("TOTAL DÉBITOS:", pageWidth / 2 + 5, y);
-    doc.setFont(FONT, "bold");
-    doc.text(formatCurrency(acc.totalDebit), contentRight, y, { align: "right" });
+    doc.text("Sumas:", marginX, y);
+    doc.text(formatCurrency(acc.totalDebit), contentRight - 44, y, { align: "right" });
+    doc.text(formatCurrency(acc.totalCredit), contentRight - 22, y, { align: "right" });
     y += 5;
-    doc.setFont(FONT, "normal");
-    doc.text("TOTAL CRÉDITOS:", pageWidth / 2 + 5, y);
-    doc.setFont(FONT, "bold");
-    doc.text(formatCurrency(acc.totalCredit), contentRight, y, { align: "right" });
-    y += 2;
-    doc.setLineWidth(0.2);
-    doc.line(pageWidth / 2, y, contentRight, y);
-    doc.line(pageWidth / 2, y + 0.6, contentRight, y + 0.6);
-    y += 5;
-    doc.setFont(FONT, "bold");
-    doc.setFontSize(10);
-    doc.text("SALDO FINAL:", pageWidth / 2 + 5, y);
+    doc.text("Saldo Final:", marginX, y);
     doc.text(formatCurrency(acc.finalBalance), contentRight, y, { align: "right" });
-    y += 2;
-    doc.setLineWidth(0.6);
-    doc.line(pageWidth / 2, y, contentRight, y);
-    doc.setLineWidth(0.2);
-    doc.line(pageWidth / 2, y + 0.8, contentRight, y + 0.8);
-    return y + 4;
+    y += 1.5;
+    doc.setLineWidth(0.5);
+    doc.line(marginX, y, contentRight, y);
+    doc.setLineWidth(0.15);
+    doc.line(marginX, y + 0.7, contentRight, y + 0.7);
+    return y + 5;
   };
 
   // -- Iterate accounts --------------------------------------------------------
   ledgers.forEach((acc, idx) => {
-    // Need at least ~50mm for the summary block + first rows. If not enough,
-    // page-break before rendering.
     if (cursorY > pageHeight - 60) {
       doc.addPage();
       cursorY = 18;
@@ -290,14 +246,14 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
       return row;
     });
 
-    // Column widths (in mm). Total content width ≈ 188mm on Letter portrait.
+    // Column widths (Letter portrait ≈ 188mm content).
     const widths: number[] = [];
     widths.push(18); // Fecha
     widths.push(20); // Partida
     if (acc.isConsolidated) widths.push(26); // Cuenta Origen
     widths.push(18); // Ref
     const fixed = widths.reduce((s, w) => s + w, 0);
-    const tailWidth = 22 * 3; // Debe + Haber + Saldo
+    const tailWidth = 22 * 3;
     const remaining = pageWidth - marginX * 2 - fixed - tailWidth;
     if (showDescription) widths.push(Math.max(remaining, 40));
     widths.push(22, 22, 22);
@@ -322,9 +278,8 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
         font: FONT,
         fontSize: 8,
         textColor: BLACK,
-        lineColor: GRAY_LINE,
-        lineWidth: 0.1,
-        cellPadding: 1.4,
+        lineWidth: 0,
+        cellPadding: { top: 1.2, right: 2, bottom: 1.2, left: 0 },
         valign: "top",
         overflow: "linebreak",
       },
@@ -333,18 +288,14 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
         textColor: BLACK,
         fontStyle: "bold",
         lineColor: BLACK,
-        lineWidth: 0.3,
+        // Only a bottom rule under the header — no boxes, no verticals.
+        lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 } as any,
         halign: "left",
       },
-      bodyStyles: {
-        fillColor: [255, 255, 255],
-      },
-      alternateRowStyles: {
-        fillColor: [255, 255, 255],
-      },
+      bodyStyles: { fillColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [255, 255, 255] },
       columnStyles,
       margin: { left: marginX, right: marginX, top: 18, bottom: 18 },
-      // Repeat the table header on continuation pages (default).
     });
 
     const lastPage = doc.getNumberOfPages();
@@ -357,12 +308,9 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
       lastPage,
     });
 
-    // Totals: keep them attached to the table. If they don't fit on the last
-    // page, push them to a new page (still tied to this account visually).
-    const neededForTotals = 28;
+    const neededForTotals = 22;
     if (finalY + neededForTotals > pageHeight - 18) {
       doc.addPage();
-      // The freshly added page belongs to this account's continuation range.
       accountPageRanges[accountPageRanges.length - 1].lastPage = doc.getNumberOfPages();
       cursorY = drawAccountTotals(acc, 18);
     } else {
@@ -370,10 +318,9 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
     }
   });
 
-  // -- Post-process: stamp page decorations -----------------------------------
+  // -- Post-process: page decorations -----------------------------------------
   const totalPages = doc.getNumberOfPages();
 
-  // Index pages → owning account (the last account whose range includes the page)
   const pageOwner = new Map<number, { code: string; name: string; firstPage: number; lastPage: number }>();
   for (const range of accountPageRanges) {
     for (let p = range.firstPage; p <= range.lastPage; p++) {
@@ -385,8 +332,8 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
     doc.setPage(p);
     doc.setTextColor(...BLACK);
 
-    // Continuation header (top): only when this page is NOT the account's first page.
     const owner = pageOwner.get(p);
+    // Continuation header (only on pages AFTER the account's first page).
     if (owner && p > owner.firstPage) {
       doc.setFont(FONT, "italic");
       doc.setFontSize(8);
@@ -395,12 +342,9 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
         marginX,
         12,
       );
-      doc.setDrawColor(...GRAY_LINE);
-      doc.setLineWidth(0.1);
-      doc.line(marginX, 13.5, contentRight, 13.5);
     }
 
-    // Continuation footer (bottom): only when this account truly spills to next page.
+    // Continuation footer — NEVER on the last page of the account.
     if (owner && p < owner.lastPage) {
       doc.setFont(FONT, "italic");
       doc.setFontSize(8);
@@ -409,7 +353,6 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
       });
     }
 
-    // Authorization legend (bottom-left)
     if (authorizationLegend) {
       doc.setFont(FONT, "normal");
       doc.setFontSize(7);
@@ -420,7 +363,6 @@ export function renderLegalLedgerPdf(input: LegalLedgerPdfInput): { doc: jsPDF; 
       );
     }
 
-    // Folios vs page numbers — never both.
     if (includeFolio) {
       const folio = startingFolio + p - 1;
       doc.setFont(FONT, "bold");
