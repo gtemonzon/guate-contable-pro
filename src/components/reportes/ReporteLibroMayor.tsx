@@ -58,6 +58,8 @@ interface LedgerEntry {
   balance: number;
   previous_balance?: number;
   account_id: number;
+  source_account_code?: string;
+  source_account_name?: string;
   currency_code?: string | null;
   exchange_rate?: number | null;
   original_debit?: number | null;
@@ -71,6 +73,8 @@ interface AccountLedger {
   totalDebit: number;
   totalCredit: number;
   finalBalance: number;
+  isConsolidated: boolean;
+  descendantCount: number;
 }
 
 export default function ReporteLibroMayor() {
@@ -280,12 +284,11 @@ export default function ReporteLibroMayor() {
       setLoading(true);
       setReportGenerated(false);
 
-      // Expand each selected account to include all descendants using the real parent_account_id
-      // hierarchy. Some legacy catalogs use codes like 1101 -> 110101 (without dots), so a
-      // dot-prefix comparison misses the children and incorrectly reports "Sin movimientos".
-      const expandedIds = new Set<number>();
+      // Build parent → children map from the real parent_account_id hierarchy
+      // (legacy catalogs may use code formats like 1101 -> 110101 without dots, so
+      // string-based prefix matching is unreliable). This map powers consolidation
+      // for parent accounts and stays format-agnostic.
       const accountsByParent = new Map<number, Account[]>();
-
       for (const account of accounts) {
         if (account.parent_account_id == null) continue;
         if (!accountsByParent.has(account.parent_account_id)) {
@@ -294,19 +297,25 @@ export default function ReporteLibroMayor() {
         accountsByParent.get(account.parent_account_id)!.push(account);
       }
 
-      const addAccountAndDescendants = (accountId: number) => {
-        if (expandedIds.has(accountId)) return;
-        expandedIds.add(accountId);
-
-        for (const child of accountsByParent.get(accountId) ?? []) {
-          addAccountAndDescendants(child.id);
-        }
+      const collectDescendants = (rootId: number): number[] => {
+        const result: number[] = [];
+        const visit = (id: number) => {
+          result.push(id);
+          for (const child of accountsByParent.get(id) ?? []) visit(child.id);
+        };
+        visit(rootId);
+        return result;
       };
 
-      for (const accId of selectedAccounts) {
-        addAccountAndDescendants(accId);
+      // Per selected root: list of descendant account IDs (root included)
+      const rootDescendants = new Map<number, number[]>();
+      const allEffectiveIds = new Set<number>();
+      for (const rootId of selectedAccounts) {
+        const descs = collectDescendants(rootId);
+        rootDescendants.set(rootId, descs);
+        for (const d of descs) allEffectiveIds.add(d);
       }
-      const effectiveAccountIds = Array.from(expandedIds);
+      const effectiveAccountIds = Array.from(allEffectiveIds);
 
       // Use server-side RPC — all aggregation and opening balance computed in Postgres
       const { data: rpcRows, error: rpcError } = await supabase.rpc('get_ledger_detail', {
@@ -318,37 +327,58 @@ export default function ReporteLibroMayor() {
 
       if (rpcError) throw rpcError;
 
-      if (!rpcRows || rpcRows.length === 0) {
-        setAccountLedgers([]);
-        toast({
-          title: "Sin movimientos",
-          description: "Las cuentas seleccionadas no tienen movimientos en el período",
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Group rows by account_id and build running balances client-side (pure UI logic)
-      const rowsByAccount = new Map<number, typeof rpcRows>();
-      for (const row of rpcRows) {
+      // Index rows and opening balances by account_id (RPC returns same opening_balance
+      // on every row of an account; capture it once).
+      const rowsByAccount = new Map<number, any[]>();
+      const openingByAccount = new Map<number, number>();
+      for (const row of rpcRows ?? []) {
         const accId = Number(row.account_id);
         if (!rowsByAccount.has(accId)) rowsByAccount.set(accId, []);
         rowsByAccount.get(accId)!.push(row);
+        if (!openingByAccount.has(accId)) {
+          openingByAccount.set(accId, Number(row.opening_balance ?? 0));
+        }
       }
 
+      const accountById = new Map<number, Account>(accounts.map(a => [a.id, a]));
+
+      // Build ONE consolidated ledger per selected root (instead of one per descendant)
       const ledgers: AccountLedger[] = [];
+      for (const rootId of selectedAccounts) {
+        const rootAccount = accountById.get(rootId);
+        if (!rootAccount) continue;
 
-      for (const [accountId, rows] of rowsByAccount) {
-        const accountInfo = accounts.find(a => a.id === accountId);
-        if (!accountInfo) continue;
+        const descendantIds = rootDescendants.get(rootId) ?? [rootId];
+        const hasChildren = descendantIds.length > 1;
 
-        const previousBalance = Number(rows[0]?.opening_balance ?? 0);
+        // Consolidated opening balance = sum of every descendant's opening balance
+        // (only descendants with movements are returned by the RPC; absent ones
+        // contribute 0, matching prior behaviour).
+        let previousBalance = 0;
+        for (const did of descendantIds) {
+          previousBalance += openingByAccount.get(did) ?? 0;
+        }
+
+        // Merge movements from all descendants into a single chronological stream
+        const merged: any[] = [];
+        for (const did of descendantIds) {
+          const rows = rowsByAccount.get(did);
+          if (rows) merged.push(...rows);
+        }
+        merged.sort((a, b) => {
+          const da = String(a.entry_date), db = String(b.entry_date);
+          if (da !== db) return da < db ? -1 : 1;
+          const na = String(a.entry_number ?? ''), nb = String(b.entry_number ?? '');
+          if (na !== nb) return na < nb ? -1 : 1;
+          return Number(a.detail_id) - Number(b.detail_id);
+        });
+
         let runningBalance = previousBalance;
-
-        const entries: LedgerEntry[] = rows.map((row: any) => {
+        const entries: LedgerEntry[] = merged.map((row: any) => {
           const debit  = Number(row.debit_amount)  || 0;
           const credit = Number(row.credit_amount) || 0;
           runningBalance += debit - credit;
+          const srcAcc = accountById.get(Number(row.account_id));
           return {
             id: Number(row.detail_id),
             journal_entry_id: Number(row.journal_entry_id),
@@ -359,7 +389,9 @@ export default function ReporteLibroMayor() {
             credit_amount: credit,
             balance: runningBalance,
             previous_balance: previousBalance,
-            account_id: accountId,
+            account_id: Number(row.account_id),
+            source_account_code: srcAcc?.account_code,
+            source_account_name: srcAcc?.account_name,
             currency_code: row.currency_code ?? null,
             exchange_rate: row.exchange_rate != null ? Number(row.exchange_rate) : null,
             original_debit: row.original_debit != null ? Number(row.original_debit) : null,
@@ -370,14 +402,29 @@ export default function ReporteLibroMayor() {
         const totalDebit  = entries.reduce((s, e) => s + e.debit_amount,  0);
         const totalCredit = entries.reduce((s, e) => s + e.credit_amount, 0);
 
+        // Only include ledgers that have either movement or opening balance
+        if (entries.length === 0 && Math.abs(previousBalance) < 0.005) continue;
+
         ledgers.push({
-          account: accountInfo,
+          account: rootAccount,
           entries,
           previousBalance,
           totalDebit,
           totalCredit,
-          finalBalance: entries[entries.length - 1]?.balance ?? previousBalance,
+          finalBalance: entries.length ? entries[entries.length - 1].balance : previousBalance,
+          isConsolidated: hasChildren,
+          descendantCount: descendantIds.length,
         });
+      }
+
+      if (ledgers.length === 0) {
+        setAccountLedgers([]);
+        toast({
+          title: "Sin movimientos",
+          description: "Las cuentas seleccionadas no tienen movimientos en el período",
+        });
+        setLoading(false);
+        return;
       }
 
       ledgers.sort((a, b) => a.account.account_code.localeCompare(b.account.account_code));
@@ -405,36 +452,54 @@ export default function ReporteLibroMayor() {
   const { consumePages } = useBookAuthorizations(currentEnterpriseId ? parseInt(currentEnterpriseId) : null);
 
   const buildExportOptions = () => {
-    const headers = ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    // If any ledger is consolidated we add a "Cuenta Origen" column so the audit trail is preserved.
+    const anyConsolidated = accountLedgers.some(l => l.isConsolidated);
+    const headers = anyConsolidated
+      ? ["Fecha", "No. Partida", "Cuenta Origen", "Descripción", "Debe", "Haber", "Saldo"]
+      : ["Fecha", "No. Partida", "Descripción", "Debe", "Haber", "Saldo"];
+    const colCount = headers.length;
+    const blankRow = Array(colCount).fill("");
     const data: any[][] = [];
     const boldRows: number[] = [];
 
     accountLedgers.forEach(ledger => {
       boldRows.push(data.length);
-      data.push([
-        `${ledger.account.account_code} - ${ledger.account.account_name}`,
-        "",
-        `Saldo Anterior: ${formatCurrency(Math.abs(ledger.previousBalance))}`,
-        "", "", ""
-      ]);
+      const headerRow = [...blankRow];
+      headerRow[0] = `CUENTA: ${ledger.account.account_code} - ${ledger.account.account_name}`;
+      headerRow[colCount - 1] = `Saldo Anterior: ${formatCurrency(ledger.previousBalance)}`;
+      data.push(headerRow);
+
       ledger.entries.forEach(entry => {
-        data.push([
-          entry.entry_date,
-          entry.entry_number,
-          entry.description,
-          entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
-          entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
-          formatCurrency(Math.abs(entry.balance)),
-        ]);
+        if (anyConsolidated) {
+          data.push([
+            entry.entry_date,
+            entry.entry_number,
+            entry.source_account_code ? `${entry.source_account_code}` : "",
+            entry.description,
+            entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
+            entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
+            formatCurrency(Math.abs(entry.balance)),
+          ]);
+        } else {
+          data.push([
+            entry.entry_date,
+            entry.entry_number,
+            entry.description,
+            entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : "-",
+            entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : "-",
+            formatCurrency(Math.abs(entry.balance)),
+          ]);
+        }
       });
+
       boldRows.push(data.length);
-      data.push([
-        "", "", "TOTALES:",
-        formatCurrency(ledger.totalDebit),
-        formatCurrency(ledger.totalCredit),
-        formatCurrency(Math.abs(ledger.finalBalance)),
-      ]);
-      data.push(["", "", "", "", "", ""]);
+      const totalsRow = [...blankRow];
+      totalsRow[colCount - 4] = "TOTALES:";
+      totalsRow[colCount - 3] = formatCurrency(ledger.totalDebit);
+      totalsRow[colCount - 2] = formatCurrency(ledger.totalCredit);
+      totalsRow[colCount - 1] = formatCurrency(Math.abs(ledger.finalBalance));
+      data.push(totalsRow);
+      data.push([...blankRow]);
     });
 
     return {
@@ -679,10 +744,13 @@ export default function ReporteLibroMayor() {
                       )}
                       <div>
                         <h3 className="font-semibold">
-                          {ledger.account.account_code} - {ledger.account.account_name}
+                          CUENTA: {ledger.account.account_code} - {ledger.account.account_name}
                         </h3>
                         <p className="text-sm text-muted-foreground">
-                          Del {startDate} al {endDate} • {ledger.entries.length} movimiento(s)
+                          Período: {startDate} a {endDate} • {ledger.entries.length} movimiento(s)
+                          {ledger.isConsolidated && (
+                            <> • Consolidado de {ledger.descendantCount} cuentas hijas</>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -722,6 +790,11 @@ export default function ReporteLibroMayor() {
                         <TableRow>
                           <TableHead className="w-[120px]">Fecha</TableHead>
                           <TableHead className="w-[150px]">No. Partida</TableHead>
+                          {ledger.isConsolidated && (
+                            <TableHead className="w-[140px]" title="Cuenta hija donde se originó el movimiento">
+                              Cuenta Origen
+                            </TableHead>
+                          )}
                           <TableHead className="min-w-[250px]">Descripción</TableHead>
                           {showForeign && (
                             <TableHead className="w-[160px] text-right" title="Monto en la moneda original de la transacción">
@@ -735,7 +808,7 @@ export default function ReporteLibroMayor() {
                       </TableHeader>
                       <TableBody>
                         {ledger.entries.map((entry) => (
-                          <TableRow key={entry.id} className="group">
+                          <TableRow key={`${entry.account_id}-${entry.id}`} className="group">
                             <TableCell>{entry.entry_date}</TableCell>
                             <TableCell className="text-sm">
                               <EntityLink
@@ -745,6 +818,11 @@ export default function ReporteLibroMayor() {
                                 secondaryLabel={entry.description}
                               />
                             </TableCell>
+                            {ledger.isConsolidated && (
+                              <TableCell className="text-xs font-mono" title={entry.source_account_name}>
+                                {entry.source_account_code}
+                              </TableCell>
+                            )}
                             <TableCell><TruncatedText text={entry.description} inline /></TableCell>
                             {showForeign && (
                               <TableCell className="text-right font-mono text-xs text-muted-foreground">
