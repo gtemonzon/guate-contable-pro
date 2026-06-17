@@ -95,6 +95,7 @@ export default function ReporteLibroMayor() {
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
+  const [accountSearch, setAccountSearch] = useState("");
 
   const { toast } = useToast();
 
