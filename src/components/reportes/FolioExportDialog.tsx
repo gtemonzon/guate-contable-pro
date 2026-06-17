@@ -21,11 +21,14 @@ import {
   BOOK_TYPE_LABELS,
 } from "@/hooks/useBookAuthorizations";
 
+export type LedgerDescriptionMode = "full" | "short" | "none";
+
 export interface FolioExportOptions {
   format: 'excel' | 'pdf';
   includeFolio: boolean;
   startingFolio: number;
   estimatedPages: number;
+  descriptionMode?: LedgerDescriptionMode;
   authorization?: {
     id: number;
     number: string;
@@ -45,6 +48,8 @@ interface FolioExportDialogProps {
   enterpriseId?: number;
   /** Callback opcional para estimar las páginas que generará el PDF. */
   estimatePageCount?: () => number | Promise<number>;
+  /** Si es true muestra el selector de "Modo de descripción" (Completa / Corta / Sin descripción) — sólo aplica a PDF. */
+  showDescriptionMode?: boolean;
 }
 
 export function FolioExportDialog({
