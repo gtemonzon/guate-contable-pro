@@ -169,6 +169,25 @@ export function FolioExportDialog({
             </>
           )}
 
+          {showDescriptionMode && (
+            <div className="space-y-2">
+              <Label htmlFor="description-mode">Modo de descripción (PDF)</Label>
+              <select
+                id="description-mode"
+                value={descriptionMode}
+                onChange={(e) => setDescriptionMode(e.target.value as LedgerDescriptionMode)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="full">Descripción completa</option>
+                <option value="short">Descripción corta (~90 caracteres)</option>
+                <option value="none">Sin descripción</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Sólo afecta al PDF generado. No modifica los datos contables.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5 pr-4">
