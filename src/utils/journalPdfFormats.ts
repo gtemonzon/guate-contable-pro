@@ -138,7 +138,10 @@ const renderLegal: RenderFn = ({
       `Concepto: ${entry.description || ''}`,
       pageWidth - marginX * 2,
     );
-    const headerBlockH = 6 + 5 + descLines.length * 4.2 + 2 + HEADER_ROW_H;
+    const beneficiary = entry.beneficiary_name?.trim();
+    const reference = entry.reference?.trim();
+    const extraLines = (beneficiary ? 1 : 0) + (reference ? 1 : 0);
+    const headerBlockH = 6 + 5 + extraLines * 5 + descLines.length * 4.2 + 2 + HEADER_ROW_H;
 
     // Reserve enough room for header + at least 2 rows + totals
     const minStartH = headerBlockH + ROW_H * 2 + TOTALS_BLOCK_H;
@@ -155,6 +158,15 @@ const renderLegal: RenderFn = ({
     doc.text(`Fecha: ${formatGtDate(entry.entry_date)}`, marginX, cursorY);
     doc.text(`Tipo: ${entry.entry_type}`, marginX + 70, cursorY);
     cursorY += 5;
+
+    if (beneficiary) {
+      doc.text(`Beneficiario: ${beneficiary}`, marginX, cursorY);
+      cursorY += 5;
+    }
+    if (reference) {
+      doc.text(`Referencia: ${reference}`, marginX, cursorY);
+      cursorY += 5;
+    }
 
     doc.text(descLines, marginX, cursorY);
     cursorY += descLines.length * 4.2 + 2;
