@@ -34,6 +34,7 @@ interface MenuItem {
 interface MenuSection {
   title: string;
   description?: string;
+  icon: React.ComponentType<{ className?: string }>;
   items: MenuItem[];
 }
 
@@ -47,6 +48,7 @@ const allMenuItems: MenuItemOrSection[] = [
   { title: "Bandeja", url: "/inbox", icon: Inbox },
   {
     title: "Contabilidad",
+    icon: BookOpen,
     items: [
       { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen, requiredPermission: "canViewAccounts" },
       { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText, requiredPermission: "canViewAccounts" },
@@ -58,6 +60,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Gestión Tributaria",
+    icon: Receipt,
     items: [
       { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
       { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
@@ -66,6 +69,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Consultas",
+    icon: FileBarChart,
     items: [
       { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
       { title: "Mayor General", url: "/mayor", icon: BookOpen, requiredPermission: "canViewReports" },
@@ -74,6 +78,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Módulos ERP",
+    icon: Boxes,
     items: [
       { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
       { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
@@ -83,6 +88,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Mi Organización",
+    icon: Network,
     items: [
       { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true },
       { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
@@ -93,12 +99,14 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Configuración del Sistema",
+    icon: Settings,
     items: [
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
     ],
   },
   {
     title: "Recursos",
+    icon: LifeBuoy,
     items: [
       { title: "Soporte", url: "/soporte", icon: LifeBuoy },
       { title: "Capacitación", url: "/capacitacion", icon: GraduationCap },
@@ -108,7 +116,7 @@ const allMenuItems: MenuItemOrSection[] = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
   const { data: openTicketsCount } = useOpenTicketsCount();
@@ -341,33 +349,60 @@ export function AppSidebar() {
         {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
             const isActiveSection = section.title === activeGroupTitle;
-            const open = isCollapsed ? true : openGroup === section.title;
+
+            // Collapsed: render a single group icon button (navigation dock)
+            if (isCollapsed) {
+              const SectionIcon = section.icon;
+              return (
+                <SidebarGroup key={`${section.title}-${idx}`} className="py-1">
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          tooltip={section.title}
+                          isActive={isActiveSection}
+                          onClick={() => {
+                            setOpen(true);
+                            setOpenGroup(section.title);
+                            try { localStorage.setItem(STORAGE_KEY, section.title); } catch {}
+                          }}
+                          className={buildNavClass(isActiveSection)}
+                          aria-label={section.title}
+                        >
+                          <SectionIcon className="h-4 w-4" />
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              );
+            }
+
+            const open = openGroup === section.title;
             return (
               <Collapsible
                 key={`${section.title}-${idx}`}
                 open={open}
-                onOpenChange={() => !isCollapsed && toggleGroup(section.title)}
+                onOpenChange={() => toggleGroup(section.title)}
               >
                 <SidebarGroup className="py-1">
-                  {!isCollapsed && (
-                    <CollapsibleTrigger asChild>
-                      <SidebarGroupLabel
-                        aria-expanded={open}
-                        title={section.description}
-                        className={[
-                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
-                          isActiveSection
-                            ? "text-sidebar-primary"
-                            : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
-                        ].join(" ")}
-                      >
-                        <span>{section.title}</span>
-                        <ChevronDown
-                          className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                        />
-                      </SidebarGroupLabel>
-                    </CollapsibleTrigger>
-                  )}
+                  <CollapsibleTrigger asChild>
+                    <SidebarGroupLabel
+                      aria-expanded={open}
+                      title={section.description}
+                      className={[
+                        "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
+                        isActiveSection
+                          ? "text-sidebar-primary"
+                          : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
+                      ].join(" ")}
+                    >
+                      <span>{section.title}</span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                      />
+                    </SidebarGroupLabel>
+                  </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
                     <SidebarGroupContent>
                       <SidebarMenu>{section.items.map(renderMenuItem)}</SidebarMenu>
