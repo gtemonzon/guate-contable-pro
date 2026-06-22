@@ -116,7 +116,7 @@ const allMenuItems: MenuItemOrSection[] = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
   const { data: openTicketsCount } = useOpenTicketsCount();
