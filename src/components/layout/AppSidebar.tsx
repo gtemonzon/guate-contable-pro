@@ -15,7 +15,6 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { NavLink as RouterNavLink } from "react-router-dom";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCallback, useEffect, useMemo, useState } from "react";
