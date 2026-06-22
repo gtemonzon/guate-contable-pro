@@ -48,6 +48,7 @@ const allMenuItems: MenuItemOrSection[] = [
   { title: "Bandeja", url: "/inbox", icon: Inbox },
   {
     title: "Contabilidad",
+    icon: BookOpen,
     items: [
       { title: "Catálogo de Cuentas", url: "/cuentas", icon: BookOpen, requiredPermission: "canViewAccounts" },
       { title: "Partidas (Libro Diario)", url: "/partidas", icon: FileText, requiredPermission: "canViewAccounts" },
@@ -59,6 +60,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Gestión Tributaria",
+    icon: Receipt,
     items: [
       { title: "Formularios de Impuestos", url: "/formularios-impuestos", icon: Receipt, requiredPermission: "canManageTaxForms" },
       { title: "Generar Declaración", url: "/generar-declaracion", icon: Calculator, requiredPermission: "canGenerateDeclarations" },
@@ -67,6 +69,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Consultas",
+    icon: FileBarChart,
     items: [
       { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
       { title: "Mayor General", url: "/mayor", icon: BookOpen, requiredPermission: "canViewReports" },
@@ -75,6 +78,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Módulos ERP",
+    icon: Boxes,
     items: [
       { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
       { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
@@ -84,6 +88,7 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Mi Organización",
+    icon: Network,
     items: [
       { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true },
       { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
@@ -94,12 +99,14 @@ const allMenuItems: MenuItemOrSection[] = [
   },
   {
     title: "Configuración del Sistema",
+    icon: Settings,
     items: [
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
     ],
   },
   {
     title: "Recursos",
+    icon: LifeBuoy,
     items: [
       { title: "Soporte", url: "/soporte", icon: LifeBuoy },
       { title: "Capacitación", url: "/capacitacion", icon: GraduationCap },
