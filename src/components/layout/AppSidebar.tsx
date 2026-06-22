@@ -349,33 +349,60 @@ export function AppSidebar() {
         {filteredMenuItems.map((section, idx) => {
           if ("items" in section) {
             const isActiveSection = section.title === activeGroupTitle;
-            const open = isCollapsed ? true : openGroup === section.title;
+
+            // Collapsed: render a single group icon button (navigation dock)
+            if (isCollapsed) {
+              const SectionIcon = section.icon;
+              return (
+                <SidebarGroup key={`${section.title}-${idx}`} className="py-1">
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          tooltip={section.title}
+                          isActive={isActiveSection}
+                          onClick={() => {
+                            setOpen(true);
+                            setOpenGroup(section.title);
+                            try { localStorage.setItem(STORAGE_KEY, section.title); } catch {}
+                          }}
+                          className={buildNavClass(isActiveSection)}
+                          aria-label={section.title}
+                        >
+                          <SectionIcon className="h-4 w-4" />
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              );
+            }
+
+            const open = openGroup === section.title;
             return (
               <Collapsible
                 key={`${section.title}-${idx}`}
                 open={open}
-                onOpenChange={() => !isCollapsed && toggleGroup(section.title)}
+                onOpenChange={() => toggleGroup(section.title)}
               >
                 <SidebarGroup className="py-1">
-                  {!isCollapsed && (
-                    <CollapsibleTrigger asChild>
-                      <SidebarGroupLabel
-                        aria-expanded={open}
-                        title={section.description}
-                        className={[
-                          "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
-                          isActiveSection
-                            ? "text-sidebar-primary"
-                            : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
-                        ].join(" ")}
-                      >
-                        <span>{section.title}</span>
-                        <ChevronDown
-                          className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                        />
-                      </SidebarGroupLabel>
-                    </CollapsibleTrigger>
-                  )}
+                  <CollapsibleTrigger asChild>
+                    <SidebarGroupLabel
+                      aria-expanded={open}
+                      title={section.description}
+                      className={[
+                        "font-semibold cursor-pointer flex items-center justify-between group transition-colors uppercase tracking-wider text-xs",
+                        isActiveSection
+                          ? "text-sidebar-primary"
+                          : "text-sidebar-foreground/55 hover:text-sidebar-foreground",
+                      ].join(" ")}
+                    >
+                      <span>{section.title}</span>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                      />
+                    </SidebarGroupLabel>
+                  </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
                     <SidebarGroupContent>
                       <SidebarMenu>{section.items.map(renderMenuItem)}</SidebarMenu>
