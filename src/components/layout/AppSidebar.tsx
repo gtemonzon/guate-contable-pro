@@ -34,6 +34,7 @@ interface MenuItem {
 interface MenuSection {
   title: string;
   description?: string;
+  icon: React.ComponentType<{ className?: string }>;
   items: MenuItem[];
 }
 
