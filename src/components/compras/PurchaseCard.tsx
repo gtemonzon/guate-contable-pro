@@ -63,6 +63,8 @@ export interface PurchaseCardProps {
   duplicateWarning?: string | null;
   /** Called on invoice_number blur for external duplicate checking */
   onCheckDuplicate?: (index: number) => void;
+  /** Phase 2: when false, hide VAT/Base/Exento fields and relabel Total. */
+  appliesVat?: boolean;
 }
 
 export interface PurchaseCardRef {
