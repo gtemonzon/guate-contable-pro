@@ -135,7 +135,7 @@ export default function LibroCompras() {
       byDocType,
       byOperation,
     };
-  }, [purchases, operationTypes]);
+  }, [purchases, operationTypes, appliesVat]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
