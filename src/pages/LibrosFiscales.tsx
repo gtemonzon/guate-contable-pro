@@ -670,7 +670,7 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row)) as PurchaseEntry[];
+      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
     } catch (error: unknown) {
