@@ -22,6 +22,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
+import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 
 
 interface FELDocumentType {
@@ -44,6 +45,8 @@ interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   idp_amount: number;
+  exempt_amount?: number;
+  tax_category?: string | null;
   batch_reference: string;
   operation_type_id: number | null;
   expense_account_id: number | null;
@@ -485,7 +488,11 @@ export default function LibrosFiscales() {
             .eq("purchase_book_id", book.id)
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
-          if (freshPurchases) setPurchases(freshPurchases);
+          if (freshPurchases) {
+            const normalized = freshPurchases.map((row: any) => applyMixedTaxToRow(row)) as PurchaseEntry[];
+            purchasesRef.current = normalized;
+            setPurchases(normalized);
+          }
         }
       } catch (_) { /* silent */ }
 
@@ -658,7 +665,9 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      setPurchases(data || []);
+      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row)) as PurchaseEntry[];
+      purchasesRef.current = normalized;
+      setPurchases(normalized);
     } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas de compra",
@@ -860,6 +869,8 @@ export default function LibrosFiscales() {
       base_amount: 0,
       vat_amount: 0,
       idp_amount: 0,
+      exempt_amount: 0,
+      tax_category: null,
       batch_reference: "",
       operation_type_id: lastPurchaseOperationTypeId,
       expense_account_id: lastExpenseAccountId,
@@ -979,16 +990,24 @@ export default function LibrosFiscales() {
       if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
 
-      if (field === "total_amount" || field === "fel_document_type" || field === "idp_amount") {
-        const currentTotal = Number(updated[index].total_amount) || 0;
-        const nextTotal = field === "total_amount" ? parseFloat(value) || 0 : currentTotal;
-        const nextDoc = field === "fel_document_type" ? value : updated[index].fel_document_type;
-        const idp = field === "idp_amount" ? (parseFloat(value) || 0) : (updated[index].idp_amount || 0);
-        // For fuel: subtract IDP before VAT calculation
-        const taxableTotal = nextTotal - idp;
-        const { base, vat } = calculateVAT(taxableTotal, nextDoc);
-        updated[index].base_amount = base;
-        updated[index].vat_amount = vat;
+      if (
+        field === "total_amount" ||
+        field === "fel_document_type" ||
+        field === "idp_amount" ||
+        field === "exempt_amount"
+      ) {
+        const current = updated[index];
+        const result = calculateMixedTax({
+          totalAmount: field === "total_amount" ? parseFloat(value) || 0 : Number(current.total_amount) || 0,
+          exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
+          idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : Number(current.idp_amount) || 0,
+          documentType: field === "fel_document_type" ? value : current.fel_document_type,
+        });
+        updated[index].total_amount = result.total;
+        updated[index].exempt_amount = result.exempt;
+        updated[index].idp_amount = result.idp;
+        updated[index].base_amount = result.base;
+        updated[index].vat_amount = result.vat;
       }
 
       // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
@@ -1019,9 +1038,11 @@ export default function LibrosFiscales() {
   };
 
   const savePurchaseRow = async (index: number) => {
-    const entry = purchasesRef.current[index];
+    const rawEntry = purchasesRef.current[index];
     if (!currentBookId || !currentEnterpriseId) return;
-    if (!entry) return;
+    if (!rawEntry) return;
+
+    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
@@ -1054,6 +1075,8 @@ export default function LibrosFiscales() {
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
         idp_amount: entry.idp_amount || 0,
+        exempt_amount: entry.exempt_amount || 0,
+        tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
