@@ -2271,20 +2271,25 @@ export default function LibrosFiscales() {
                           const multiplier = docType?.affects_total ?? 1;
                           
                           if (p.expense_account_id) {
-                            // Respetar IVA real: si vat_amount es 0, la base es el total
-                            // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
-                            const idpAmount = Number((p as any).idp_amount) || 0;
-                            const baseAmount = p.vat_amount > 0
-                              ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
-                              : (Number(p.total_amount) - idpAmount);
-                            const expenseAmount = Number(baseAmount) + idpAmount;
+                            let expenseAmount: number;
+                            if (!appliesVat) {
+                              expenseAmount = Number(p.total_amount) || 0;
+                            } else {
+                              // Respetar IVA real: si vat_amount es 0, la base es el total
+                              // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
+                              const idpAmount = Number((p as any).idp_amount) || 0;
+                              const baseAmount = p.vat_amount > 0
+                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
+                                : (Number(p.total_amount) - idpAmount);
+                              expenseAmount = Number(baseAmount) + idpAmount;
+                            }
                             expenseByAccount.set(
                               p.expense_account_id,
                               (expenseByAccount.get(p.expense_account_id) || 0) + (expenseAmount * multiplier)
                             );
                           }
                           // Usar IVA real con multiplicador, no recalcular
-                          totalVAT += (p.vat_amount || 0) * multiplier;
+                          totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
                           totalAmount += p.total_amount * multiplier;
                         }
 
