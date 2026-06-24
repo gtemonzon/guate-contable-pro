@@ -158,6 +158,7 @@ export default function LibrosFiscales() {
   
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
+  const appliesVat = strategy.appliesVat;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read URL params from global search navigation
