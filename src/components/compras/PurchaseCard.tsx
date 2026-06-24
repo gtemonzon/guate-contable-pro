@@ -914,6 +914,36 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
           )}
 
+          {/* Row 4 conditional: tax category for the exempt portion */}
+          {(purchase.exempt_amount || 0) > 0 && (
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-6">
+                <label className="text-xs text-muted-foreground">Categoría del monto exento</label>
+                <Select
+                  value={purchase.tax_category || ""}
+                  onValueChange={(v) => handleFieldChange("tax_category", v || null)}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="Seleccionar categoría..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TAX_CATEGORIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-3">
+                <label className="text-xs text-muted-foreground">Base gravable</label>
+                <Input
+                  value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
+                  readOnly
+                  className="h-8 bg-muted"
+                />
+              </div>
+            </div>
+          )}
+
           {purchase.journal_entry_id && (
             <div className="pt-2 border-t">
               <Badge variant="secondary">Póliza generada</Badge>
