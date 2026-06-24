@@ -93,8 +93,10 @@ export default function LibroCompras() {
 
   const totals = useMemo(() => {
     const totalWithVAT = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    const totalVAT = purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0);
-    const totalBase = purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0);
+    const totalVAT = appliesVat ? purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0) : 0;
+    const totalBase = appliesVat
+      ? purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0)
+      : totalWithVAT;
     const documentCount = purchases.length;
 
     // Calcular totales por tipo de documento
