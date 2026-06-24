@@ -3393,6 +3393,7 @@ export type Database = {
           deleted_by: string | null
           enterprise_id: number | null
           exchange_rate: number | null
+          exempt_amount: number
           expense_account_id: number | null
           fel_document_type: string | null
           id: number
@@ -3411,6 +3412,7 @@ export type Database = {
           purchase_type: string | null
           supplier_name: string
           supplier_nit: string
+          tax_category: string | null
           total_amount: number
           vat_amount: number
         }
@@ -3426,6 +3428,7 @@ export type Database = {
           deleted_by?: string | null
           enterprise_id?: number | null
           exchange_rate?: number | null
+          exempt_amount?: number
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
@@ -3444,6 +3447,7 @@ export type Database = {
           purchase_type?: string | null
           supplier_name: string
           supplier_nit: string
+          tax_category?: string | null
           total_amount: number
           vat_amount: number
         }
@@ -3459,6 +3463,7 @@ export type Database = {
           deleted_by?: string | null
           enterprise_id?: number | null
           exchange_rate?: number | null
+          exempt_amount?: number
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
@@ -3477,6 +3482,7 @@ export type Database = {
           purchase_type?: string | null
           supplier_name?: string
           supplier_nit?: string
+          tax_category?: string | null
           total_amount?: number
           vat_amount?: number
         }
