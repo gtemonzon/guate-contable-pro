@@ -1245,6 +1245,7 @@ export default function LibroCompras() {
               purchases={purchases}
               enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
               variant="full"
+              appliesVat={appliesVat}
               felDocTypes={felDocTypes}
               operationTypes={operationTypes}
               expenseAccounts={expenseAccounts}
