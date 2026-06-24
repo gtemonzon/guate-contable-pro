@@ -785,18 +785,24 @@ export default function LibroCompras() {
 
         for (const p of purchaseItems) {
           if (p.expense_account_id) {
-            // For fuel invoices with IDP: expense = base_amount + idp_amount
-            // For regular invoices: expense = base_amount (total - vat)
-            const idpAmount = (p as any).idp_amount || 0;
-            const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
-            const expenseAmount = baseAmount + idpAmount;
+            let expenseAmount: number;
+            if (!appliesVat) {
+              // VAT-exempt enterprise: full total goes to expense (no VAT credit)
+              expenseAmount = p.total_amount;
+            } else {
+              // For fuel invoices with IDP: expense = base_amount + idp_amount
+              // For regular invoices: expense = base_amount (total - vat)
+              const idpAmount = (p as any).idp_amount || 0;
+              const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
+              expenseAmount = baseAmount + idpAmount;
+            }
             expenseByAccount.set(
               p.expense_account_id,
               (expenseByAccount.get(p.expense_account_id) || 0) + expenseAmount
             );
           }
           // Usar el IVA real de la factura, no recalcular
-          totalVAT += p.vat_amount || 0;
+          totalVAT += appliesVat ? (p.vat_amount || 0) : 0;
           totalAmount += p.total_amount;
         }
 
@@ -812,8 +818,8 @@ export default function LibroCompras() {
           });
         }
 
-        // Débito: IVA Crédito Fiscal
-        if (vatCreditAccountId && totalVAT > 0) {
+        // Débito: IVA Crédito Fiscal (skip for VAT-exempt enterprises)
+        if (appliesVat && vatCreditAccountId && totalVAT > 0) {
           detailLines.push({
             journal_entry_id: journalEntryId,
             line_number: lineNumber++,
