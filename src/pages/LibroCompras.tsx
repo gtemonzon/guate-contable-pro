@@ -351,7 +351,9 @@ export default function LibroCompras() {
           .order("invoice_date", { ascending: true })
           .order("invoice_number", { ascending: true })
       );
-      setPurchases(data || []);
+      // Normalize through the mixed-tax engine on load so historical rows with
+      // stale base/vat get displayed (and re-saved on next edit) with correct values.
+      setPurchases((data || []).map((r) => applyMixedTaxToRow(r)) as PurchaseEntry[]);
       
       // Verificar si ya existe póliza consolidada para este mes
       if (currentEnterpriseId) {
