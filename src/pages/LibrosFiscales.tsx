@@ -1940,17 +1940,22 @@ export default function LibrosFiscales() {
                         const multiplier = docType?.affects_total ?? 1;
                         
                         if (p.expense_account_id) {
-                          // Respetar IVA real: si vat_amount es 0, la base es el total
-                          const baseAmount = p.vat_amount > 0
-                            ? (p.base_amount || p.total_amount - p.vat_amount)
-                            : p.total_amount;
+                          let baseAmount: number;
+                          if (!appliesVat) {
+                            baseAmount = p.total_amount;
+                          } else {
+                            // Respetar IVA real: si vat_amount es 0, la base es el total
+                            baseAmount = p.vat_amount > 0
+                              ? (p.base_amount || p.total_amount - p.vat_amount)
+                              : p.total_amount;
+                          }
                           expenseByAccount.set(
                             p.expense_account_id,
                             (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
                           );
                         }
                         // Usar IVA real con multiplicador, no recalcular
-                        totalVAT += (p.vat_amount || 0) * multiplier;
+                        totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
                         totalAmount += p.total_amount * multiplier;
                       }
 
