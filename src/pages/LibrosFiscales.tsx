@@ -1007,6 +1007,7 @@ export default function LibrosFiscales() {
           exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
           idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : Number(current.idp_amount) || 0,
           documentType: field === "fel_document_type" ? value : current.fel_document_type,
+          appliesVat,
         });
         updated[index].total_amount = result.total;
         updated[index].exempt_amount = result.exempt;
