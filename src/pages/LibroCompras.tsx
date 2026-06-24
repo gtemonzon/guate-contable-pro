@@ -86,6 +86,9 @@ export default function LibroCompras() {
   
   const newCardRef = useRef<PurchaseCardRef>(null);
 
+  const { strategy } = useEnterpriseTaxRegime(currentEnterpriseId);
+  const appliesVat = strategy.appliesVat;
+
   const { toast } = useToast();
 
   const totals = useMemo(() => {
