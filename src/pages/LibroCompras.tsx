@@ -528,7 +528,7 @@ export default function LibroCompras() {
     if (!currentBookId || !currentEnterpriseId || !rawEntry) return;
     // Consistency guard: always recompute base/vat from canonical inputs
     // before persistence. Component state may be stale or partially typed.
-    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
+    const entry = applyMixedTaxToRow(rawEntry, { appliesVat }) as PurchaseEntry;
 
     // Mostrar indicador de guardando
     setSaveStatus("saving");
