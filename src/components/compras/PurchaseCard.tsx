@@ -93,6 +93,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   variant = 'full',
   duplicateWarning: externalDuplicateWarning,
   onCheckDuplicate,
+  appliesVat = true,
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
