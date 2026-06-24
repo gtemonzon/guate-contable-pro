@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
-import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
