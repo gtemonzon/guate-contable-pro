@@ -389,8 +389,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               {formatCurrency(purchase.total_amount)}
             </div>
             <div className="col-span-1 text-right font-mono text-muted-foreground">
-              {formatCurrency(purchase.vat_amount)}
-              {purchase.idp_amount > 0 && (
+              {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
+              {appliesVat && purchase.idp_amount > 0 && (
                 <span className="block text-[10px] text-muted-foreground/70">IDP: {formatCurrency(purchase.idp_amount)}</span>
               )}
             </div>
