@@ -33,6 +33,8 @@ interface PurchaseInvoiceListProps {
   onFocusLastCardDone?: () => void;
   /** Recommended fields for new records */
   getRecommendedFields?: (index: number) => string[];
+  /** Phase 2: VAT-exempt enterprises hide VAT-related fields. */
+  appliesVat?: boolean;
 }
 
 export function PurchaseInvoiceList({
