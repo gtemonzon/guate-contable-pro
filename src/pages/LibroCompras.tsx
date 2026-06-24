@@ -511,6 +511,7 @@ export default function LibroCompras() {
         idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : row.idp_amount || 0,
         exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : row.exempt_amount || 0,
         documentType: field === "fel_document_type" ? value : row.fel_document_type,
+        appliesVat,
       });
       updated[index].total_amount = result.total;
       updated[index].exempt_amount = result.exempt;
