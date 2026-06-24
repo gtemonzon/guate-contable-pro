@@ -125,6 +125,7 @@ export function PurchaseInvoiceList({
           onCancelEdit={() => onEditingIndexChange(null)}
           duplicateWarning={duplicateWarnings?.[index] ?? null}
           onCheckDuplicate={onCheckDuplicate}
+          appliesVat={appliesVat}
         />
       ))}
     </div>
