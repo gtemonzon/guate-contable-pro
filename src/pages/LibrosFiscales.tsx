@@ -2306,7 +2306,7 @@ export default function LibrosFiscales() {
                         }
 
                         // Débito: IVA Crédito Fiscal
-                        if (vatCreditAccountId && totalVAT > 0) {
+                        if (appliesVat && vatCreditAccountId && totalVAT > 0) {
                           detailLines.push({
                             journal_entry_id: journalEntryId,
                             line_number: lineNumber++,
