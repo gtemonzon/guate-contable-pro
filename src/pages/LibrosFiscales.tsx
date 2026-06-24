@@ -214,25 +214,29 @@ export default function LibrosFiscales() {
       return sum + ((Number(p.total_amount) || 0) * multiplier);
     }, 0);
     
-    const totalVAT = purchases.reduce((sum, p) => {
-      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-      const multiplier = docType?.affects_total ?? 1;
-      return sum + ((Number(p.vat_amount) || 0) * multiplier);
-    }, 0);
-    
-    const totalBase = purchases.reduce((sum, p) => {
-      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-      const multiplier = docType?.affects_total ?? 1;
-      return sum + ((Number(p.base_amount) || 0) * multiplier);
-    }, 0);
-    
+    const totalVAT = appliesVat
+      ? purchases.reduce((sum, p) => {
+          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          return sum + ((Number(p.vat_amount) || 0) * multiplier);
+        }, 0)
+      : 0;
+
+    const totalBase = appliesVat
+      ? purchases.reduce((sum, p) => {
+          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          return sum + ((Number(p.base_amount) || 0) * multiplier);
+        }, 0)
+      : totalWithVAT;
+
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalBase: formatCurrency(totalBase),
       documentCount: purchases.length,
     };
-  }, [purchases, felDocTypes]);
+  }, [purchases, felDocTypes, appliesVat]);
 
   const salesTotals = useMemo(() => {
     const activeSales = sales.filter(s => !s.is_annulled);
