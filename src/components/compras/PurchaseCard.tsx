@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { TAX_CATEGORIES } from "@/utils/purchaseTaxCalculation";
 
 export interface PurchaseEntry {
   id?: number;
@@ -25,6 +26,10 @@ export interface PurchaseEntry {
   base_amount: number;
   vat_amount: number;
   idp_amount: number;
+  /** Phase 1: portion of invoice total NOT subject to VAT (tourism tax, fiscal stamps, electricity, other). */
+  exempt_amount?: number;
+  /** Phase 1: categorization of the exempt portion (TOURISM_TAX, IDP, ELECTRICITY_TAX, FISCAL_STAMP, OTHER). */
+  tax_category?: string | null;
   batch_reference: string;
   operation_type_id: number | null;
   expense_account_id: number | null;
@@ -501,7 +506,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
             </div>
 
-            {/* Row 2: Total, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
+            {/* Row 2: Total, Exento, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
             <div className="grid grid-cols-12 gap-2 items-end">
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Total c/IVA</label>
@@ -512,6 +517,31 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   value={purchase.total_amount || ""}
                   onChange={(e) => handleFieldChange("total_amount", e.target.value)}
                   className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-1">
+                <label
+                  className="text-xs text-muted-foreground"
+                  title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+                >
+                  Exento
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={purchase.exempt_amount || ""}
+                  onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Base</label>
+                <Input
+                  value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
+                  readOnly
+                  className="h-8 text-xs bg-muted"
                 />
               </div>
               <div className="col-span-1">
@@ -535,7 +565,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   />
                 </div>
               )}
-              <div className="col-span-2 min-w-0">
+              <div className={cn(isFuelOperation ? "col-span-2" : "col-span-2", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">
                   Tipo Op.
                   {isRecommended("operation_type_id") && (
@@ -558,7 +588,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   </SelectContent>
                 </Select>
               </div>
-              <div className={cn(isFuelOperation ? "col-span-3" : "col-span-5", "min-w-0")}>
+              <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
                   accounts={expenseAccounts}
@@ -597,6 +627,28 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </div>
               </div>
             </div>
+
+            {/* Row 3 conditional: tax category for the exempt portion */}
+            {(purchase.exempt_amount || 0) > 0 && (
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-5">
+                  <label className="text-xs text-muted-foreground">Categoría del monto exento</label>
+                  <Select
+                    value={purchase.tax_category || ""}
+                    onValueChange={(v) => handleFieldChange("tax_category", v || null)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Seleccionar categoría..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TAX_CATEGORIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -727,6 +779,23 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               />
             </div>
             <div className="col-span-1">
+              <label
+                className="text-xs text-muted-foreground"
+                title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+              >
+                Exento
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={purchase.exempt_amount || ""}
+                onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                placeholder="0.00"
+                className="h-8"
+              />
+            </div>
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -772,7 +841,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </SelectContent>
               </Select>
             </div>
-            <div className={cn(isFuelOperation ? "col-span-3" : "col-span-4", "min-w-0")}>
+            <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
               <label className="text-xs text-muted-foreground">
                 Cuenta
                 {isRecommended("expense_account_id") && (
@@ -840,6 +909,36 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   onValueChange={(val) => handleFieldChange("bank_account_id", val)}
                   placeholder="Seleccionar cuenta bancaria..."
                   className="w-full"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Row 4 conditional: tax category for the exempt portion */}
+          {(purchase.exempt_amount || 0) > 0 && (
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-6">
+                <label className="text-xs text-muted-foreground">Categoría del monto exento</label>
+                <Select
+                  value={purchase.tax_category || ""}
+                  onValueChange={(v) => handleFieldChange("tax_category", v || null)}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="Seleccionar categoría..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TAX_CATEGORIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-3">
+                <label className="text-xs text-muted-foreground">Base gravable</label>
+                <Input
+                  value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
+                  readOnly
+                  className="h-8 bg-muted"
                 />
               </div>
             </div>
