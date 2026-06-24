@@ -95,3 +95,56 @@ export function getTaxCategoryLabel(code: string | null | undefined): string {
   if (!code) return "—";
   return TAX_CATEGORIES.find((c) => c.code === code)?.label ?? code;
 }
+
+/**
+ * Recompute base_amount / vat_amount / exempt_amount / idp_amount on a purchase-like row.
+ * Returns a NEW object with the canonical engine result merged in.
+ * Use this on load AND right before persistence so the UI and DB always agree
+ * with the mixed-tax engine.
+ */
+export function applyMixedTaxToRow<T extends {
+  total_amount?: number | string | null;
+  exempt_amount?: number | string | null;
+  idp_amount?: number | string | null;
+  fel_document_type?: string | null;
+  base_amount?: number | string | null;
+  vat_amount?: number | string | null;
+}>(row: T): T {
+  const total = Number(row.total_amount) || 0;
+  const exempt = Number(row.exempt_amount) || 0;
+  const idp = Number(row.idp_amount) || 0;
+  const r = calculateMixedTax({
+    totalAmount: total,
+    exemptAmount: exempt,
+    idpAmount: idp,
+    documentType: row.fel_document_type ?? undefined,
+  });
+  return {
+    ...row,
+    total_amount: r.total,
+    exempt_amount: r.exempt,
+    idp_amount: r.idp,
+    base_amount: r.base,
+    vat_amount: r.vat,
+  };
+}
+
+/** True when stored base/vat differ from the engine result by more than 1 cent. */
+export function rowNeedsRecalc(row: {
+  total_amount?: number | string | null;
+  exempt_amount?: number | string | null;
+  idp_amount?: number | string | null;
+  fel_document_type?: string | null;
+  base_amount?: number | string | null;
+  vat_amount?: number | string | null;
+}): boolean {
+  const r = calculateMixedTax({
+    totalAmount: Number(row.total_amount) || 0,
+    exemptAmount: Number(row.exempt_amount) || 0,
+    idpAmount: Number(row.idp_amount) || 0,
+    documentType: row.fel_document_type ?? undefined,
+  });
+  const dBase = Math.abs((Number(row.base_amount) || 0) - r.base);
+  const dVat = Math.abs((Number(row.vat_amount) || 0) - r.vat);
+  return dBase > 0.005 || dVat > 0.005;
+}
