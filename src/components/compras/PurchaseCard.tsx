@@ -506,7 +506,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
             </div>
 
-            {/* Row 2: Total, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
+            {/* Row 2: Total, Exento, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
             <div className="grid grid-cols-12 gap-2 items-end">
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Total c/IVA</label>
@@ -517,6 +517,31 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   value={purchase.total_amount || ""}
                   onChange={(e) => handleFieldChange("total_amount", e.target.value)}
                   className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-1">
+                <label
+                  className="text-xs text-muted-foreground"
+                  title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+                >
+                  Exento
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={purchase.exempt_amount || ""}
+                  onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="col-span-1">
+                <label className="text-xs text-muted-foreground">Base</label>
+                <Input
+                  value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
+                  readOnly
+                  className="h-8 text-xs bg-muted"
                 />
               </div>
               <div className="col-span-1">
@@ -540,7 +565,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   />
                 </div>
               )}
-              <div className="col-span-2 min-w-0">
+              <div className={cn(isFuelOperation ? "col-span-2" : "col-span-2", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">
                   Tipo Op.
                   {isRecommended("operation_type_id") && (
@@ -563,7 +588,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   </SelectContent>
                 </Select>
               </div>
-              <div className={cn(isFuelOperation ? "col-span-3" : "col-span-5", "min-w-0")}>
+              <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
                   accounts={expenseAccounts}
@@ -602,6 +627,28 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </div>
               </div>
             </div>
+
+            {/* Row 3 conditional: tax category for the exempt portion */}
+            {(purchase.exempt_amount || 0) > 0 && (
+              <div className="grid grid-cols-12 gap-2">
+                <div className="col-span-5">
+                  <label className="text-xs text-muted-foreground">Categoría del monto exento</label>
+                  <Select
+                    value={purchase.tax_category || ""}
+                    onValueChange={(v) => handleFieldChange("tax_category", v || null)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Seleccionar categoría..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TAX_CATEGORIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
