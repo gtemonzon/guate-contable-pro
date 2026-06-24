@@ -195,20 +195,28 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     });
   };
 
+  // Keep refs to the latest callbacks so debounced timers never fire a stale
+  // closure (which previously saved an earlier snapshot of the row).
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+
   // Auto-save with debounce when there are changes
   useEffect(() => {
     if (hasChanges && inEditMode) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-      
+
       saveTimeoutRef.current = setTimeout(() => {
         const activeEl = document.activeElement as HTMLElement | null;
         const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-        
-        onSave(index);
+
+        // Always invoke the LATEST onSave so it reads the latest parent state.
+        onSaveRef.current(index);
         setHasChanges(false);
-        
+
         if (activeId) {
           window.requestAnimationFrame(() => {
             window.setTimeout(() => {
@@ -227,13 +235,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, inEditMode]);
+  }, [hasChanges, inEditMode, index]);
 
   // Save on unmount if there are pending changes
   useEffect(() => {
     return () => {
       if (hasChanges) {
-        onSave(index);
+        onSaveRef.current(index);
       }
     };
   }, []);

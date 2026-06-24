@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
-import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
@@ -351,7 +351,9 @@ export default function LibroCompras() {
           .order("invoice_date", { ascending: true })
           .order("invoice_number", { ascending: true })
       );
-      setPurchases(data || []);
+      // Normalize through the mixed-tax engine on load so historical rows with
+      // stale base/vat get displayed (and re-saved on next edit) with correct values.
+      setPurchases((data || []).map((r) => applyMixedTaxToRow(r)) as PurchaseEntry[]);
       
       // Verificar si ya existe póliza consolidada para este mes
       if (currentEnterpriseId) {
@@ -515,8 +517,11 @@ export default function LibroCompras() {
   };
 
   const saveRow = async (index: number) => {
-    const entry = purchases[index];
-    if (!currentBookId || !currentEnterpriseId) return;
+    const rawEntry = purchases[index];
+    if (!currentBookId || !currentEnterpriseId || !rawEntry) return;
+    // Consistency guard: always recompute base/vat from canonical inputs
+    // before persistence. Component state may be stale or partially typed.
+    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
 
     // Mostrar indicador de guardando
     setSaveStatus("saving");
