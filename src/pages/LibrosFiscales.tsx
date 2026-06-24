@@ -158,6 +158,7 @@ export default function LibrosFiscales() {
   
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
+  const appliesVat = strategy.appliesVat;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read URL params from global search navigation
@@ -213,25 +214,29 @@ export default function LibrosFiscales() {
       return sum + ((Number(p.total_amount) || 0) * multiplier);
     }, 0);
     
-    const totalVAT = purchases.reduce((sum, p) => {
-      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-      const multiplier = docType?.affects_total ?? 1;
-      return sum + ((Number(p.vat_amount) || 0) * multiplier);
-    }, 0);
-    
-    const totalBase = purchases.reduce((sum, p) => {
-      const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-      const multiplier = docType?.affects_total ?? 1;
-      return sum + ((Number(p.base_amount) || 0) * multiplier);
-    }, 0);
-    
+    const totalVAT = appliesVat
+      ? purchases.reduce((sum, p) => {
+          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          return sum + ((Number(p.vat_amount) || 0) * multiplier);
+        }, 0)
+      : 0;
+
+    const totalBase = appliesVat
+      ? purchases.reduce((sum, p) => {
+          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          return sum + ((Number(p.base_amount) || 0) * multiplier);
+        }, 0)
+      : totalWithVAT;
+
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalBase: formatCurrency(totalBase),
       documentCount: purchases.length,
     };
-  }, [purchases, felDocTypes]);
+  }, [purchases, felDocTypes, appliesVat]);
 
   const salesTotals = useMemo(() => {
     const activeSales = sales.filter(s => !s.is_annulled);
@@ -489,7 +494,7 @@ export default function LibrosFiscales() {
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
           if (freshPurchases) {
-            const normalized = freshPurchases.map((row: any) => applyMixedTaxToRow(row)) as PurchaseEntry[];
+            const normalized = freshPurchases.map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
             purchasesRef.current = normalized;
             setPurchases(normalized);
           }
@@ -665,7 +670,7 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row)) as PurchaseEntry[];
+      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
     } catch (error: unknown) {
@@ -1002,6 +1007,7 @@ export default function LibrosFiscales() {
           exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
           idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : Number(current.idp_amount) || 0,
           documentType: field === "fel_document_type" ? value : current.fel_document_type,
+          appliesVat,
         });
         updated[index].total_amount = result.total;
         updated[index].exempt_amount = result.exempt;
@@ -1042,7 +1048,7 @@ export default function LibrosFiscales() {
     if (!currentBookId || !currentEnterpriseId) return;
     if (!rawEntry) return;
 
-    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
+    const entry = applyMixedTaxToRow(rawEntry, { appliesVat }) as PurchaseEntry;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
@@ -1506,16 +1512,20 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
                   </div>
+                  {appliesVat && (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">Base: </span>
+                        <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">IVA: </span>
+                        <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <span className="text-muted-foreground">Base: </span>
-                    <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">IVA: </span>
-                    <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total c/IVA: </span>
+                    <span className="text-muted-foreground">{appliesVat ? "Total c/IVA: " : "Total Compras: "}</span>
                     <span className="font-semibold">Q {purchaseTotals.totalWithVAT}</span>
                   </div>
                 </div>
@@ -1702,6 +1712,7 @@ export default function LibrosFiscales() {
                       operationTypes={operationTypes}
                       expenseAccounts={expenseAccounts}
                       bankAccounts={bankAccounts}
+                      appliesVat={appliesVat}
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
@@ -1790,8 +1801,8 @@ export default function LibrosFiscales() {
               {activeTab === "compras" ? (
                 <>
                   <p><strong>Documentos:</strong> {purchaseTotals.documentCount}</p>
-                  <p><strong>Base:</strong> Q {purchaseTotals.totalBase}</p>
-                  <p><strong>IVA:</strong> Q {purchaseTotals.totalVAT}</p>
+                  {appliesVat && <p><strong>Base:</strong> Q {purchaseTotals.totalBase}</p>}
+                  {appliesVat && <p><strong>IVA:</strong> Q {purchaseTotals.totalVAT}</p>}
                   <p><strong>Total:</strong> Q {purchaseTotals.totalWithVAT}</p>
                 </>
               ) : (
@@ -1929,17 +1940,22 @@ export default function LibrosFiscales() {
                         const multiplier = docType?.affects_total ?? 1;
                         
                         if (p.expense_account_id) {
-                          // Respetar IVA real: si vat_amount es 0, la base es el total
-                          const baseAmount = p.vat_amount > 0
-                            ? (p.base_amount || p.total_amount - p.vat_amount)
-                            : p.total_amount;
+                          let baseAmount: number;
+                          if (!appliesVat) {
+                            baseAmount = p.total_amount;
+                          } else {
+                            // Respetar IVA real: si vat_amount es 0, la base es el total
+                            baseAmount = p.vat_amount > 0
+                              ? (p.base_amount || p.total_amount - p.vat_amount)
+                              : p.total_amount;
+                          }
                           expenseByAccount.set(
                             p.expense_account_id,
                             (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
                           );
                         }
                         // Usar IVA real con multiplicador, no recalcular
-                        totalVAT += (p.vat_amount || 0) * multiplier;
+                        totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
                         totalAmount += p.total_amount * multiplier;
                       }
 
@@ -1954,7 +1970,7 @@ export default function LibrosFiscales() {
                         });
                       }
 
-                      if (vatCreditAccountId && totalVAT > 0) {
+                      if (appliesVat && vatCreditAccountId && totalVAT > 0) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
@@ -2255,20 +2271,25 @@ export default function LibrosFiscales() {
                           const multiplier = docType?.affects_total ?? 1;
                           
                           if (p.expense_account_id) {
-                            // Respetar IVA real: si vat_amount es 0, la base es el total
-                            // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
-                            const idpAmount = Number((p as any).idp_amount) || 0;
-                            const baseAmount = p.vat_amount > 0
-                              ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
-                              : (Number(p.total_amount) - idpAmount);
-                            const expenseAmount = Number(baseAmount) + idpAmount;
+                            let expenseAmount: number;
+                            if (!appliesVat) {
+                              expenseAmount = Number(p.total_amount) || 0;
+                            } else {
+                              // Respetar IVA real: si vat_amount es 0, la base es el total
+                              // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
+                              const idpAmount = Number((p as any).idp_amount) || 0;
+                              const baseAmount = p.vat_amount > 0
+                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
+                                : (Number(p.total_amount) - idpAmount);
+                              expenseAmount = Number(baseAmount) + idpAmount;
+                            }
                             expenseByAccount.set(
                               p.expense_account_id,
                               (expenseByAccount.get(p.expense_account_id) || 0) + (expenseAmount * multiplier)
                             );
                           }
                           // Usar IVA real con multiplicador, no recalcular
-                          totalVAT += (p.vat_amount || 0) * multiplier;
+                          totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
                           totalAmount += p.total_amount * multiplier;
                         }
 
@@ -2285,7 +2306,7 @@ export default function LibrosFiscales() {
                         }
 
                         // Débito: IVA Crédito Fiscal
-                        if (vatCreditAccountId && totalVAT > 0) {
+                        if (appliesVat && vatCreditAccountId && totalVAT > 0) {
                           detailLines.push({
                             journal_entry_id: journalEntryId,
                             line_number: lineNumber++,

@@ -34,6 +34,11 @@ export interface MixedTaxInput {
   idpAmount?: number;
   documentType?: string;
   vatRate?: number; // default 0.12
+  /**
+   * Phase 2: when false (VAT-exempt enterprise, e.g. Exenta ONG), the engine
+   * skips VAT entirely: base = total, vat = 0, exempt/mixed-tax inputs are ignored.
+   */
+  appliesVat?: boolean;
 }
 
 export interface MixedTaxResult {
@@ -62,6 +67,19 @@ export function calculateMixedTax(input: MixedTaxInput): MixedTaxResult {
   const idp = Math.max(0, Number(input.idpAmount) || 0);
   const vatRate = input.vatRate ?? 0.12;
   const docType = (input.documentType || "FACT").toUpperCase().trim();
+  const appliesVat = input.appliesVat !== false; // default true (backward compat)
+
+  // VAT-exempt enterprise: full total becomes base, no VAT, exempt ignored
+  if (!appliesVat) {
+    return {
+      total: round2(total),
+      exempt: 0,
+      idp: round2(idp),
+      taxableWithVat: round2(total),
+      base: round2(total),
+      vat: 0,
+    };
+  }
 
   // Cap non-VAT portions to total to avoid negative bases
   const nonVatPortion = Math.min(exempt + idp, total);
@@ -109,7 +127,7 @@ export function applyMixedTaxToRow<T extends {
   fel_document_type?: string | null;
   base_amount?: number | string | null;
   vat_amount?: number | string | null;
-}>(row: T): T {
+}>(row: T, opts?: { appliesVat?: boolean }): T {
   const total = Number(row.total_amount) || 0;
   const exempt = Number(row.exempt_amount) || 0;
   const idp = Number(row.idp_amount) || 0;
@@ -118,6 +136,7 @@ export function applyMixedTaxToRow<T extends {
     exemptAmount: exempt,
     idpAmount: idp,
     documentType: row.fel_document_type ?? undefined,
+    appliesVat: opts?.appliesVat,
   });
   return {
     ...row,

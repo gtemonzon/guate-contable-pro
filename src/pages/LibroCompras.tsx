@@ -11,6 +11,7 @@ import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } fr
 import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
 import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
@@ -85,12 +86,17 @@ export default function LibroCompras() {
   
   const newCardRef = useRef<PurchaseCardRef>(null);
 
+  const { strategy } = useEnterpriseTaxRegime(currentEnterpriseId);
+  const appliesVat = strategy.appliesVat;
+
   const { toast } = useToast();
 
   const totals = useMemo(() => {
     const totalWithVAT = purchases.reduce((sum, p) => sum + (p.total_amount || 0), 0);
-    const totalVAT = purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0);
-    const totalBase = purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0);
+    const totalVAT = appliesVat ? purchases.reduce((sum, p) => sum + (p.vat_amount || 0), 0) : 0;
+    const totalBase = appliesVat
+      ? purchases.reduce((sum, p) => sum + (p.base_amount || 0), 0)
+      : totalWithVAT;
     const documentCount = purchases.length;
 
     // Calcular totales por tipo de documento
@@ -129,7 +135,7 @@ export default function LibroCompras() {
       byDocType,
       byOperation,
     };
-  }, [purchases, operationTypes]);
+  }, [purchases, operationTypes, appliesVat]);
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -353,7 +359,7 @@ export default function LibroCompras() {
       );
       // Normalize through the mixed-tax engine on load so historical rows with
       // stale base/vat get displayed (and re-saved on next edit) with correct values.
-      setPurchases((data || []).map((r) => applyMixedTaxToRow(r)) as PurchaseEntry[]);
+      setPurchases((data || []).map((r) => applyMixedTaxToRow(r, { appliesVat })) as PurchaseEntry[]);
       
       // Verificar si ya existe póliza consolidada para este mes
       if (currentEnterpriseId) {
@@ -505,6 +511,7 @@ export default function LibroCompras() {
         idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : row.idp_amount || 0,
         exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : row.exempt_amount || 0,
         documentType: field === "fel_document_type" ? value : row.fel_document_type,
+        appliesVat,
       });
       updated[index].total_amount = result.total;
       updated[index].exempt_amount = result.exempt;
@@ -521,7 +528,7 @@ export default function LibroCompras() {
     if (!currentBookId || !currentEnterpriseId || !rawEntry) return;
     // Consistency guard: always recompute base/vat from canonical inputs
     // before persistence. Component state may be stale or partially typed.
-    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
+    const entry = applyMixedTaxToRow(rawEntry, { appliesVat }) as PurchaseEntry;
 
     // Mostrar indicador de guardando
     setSaveStatus("saving");
@@ -778,18 +785,24 @@ export default function LibroCompras() {
 
         for (const p of purchaseItems) {
           if (p.expense_account_id) {
-            // For fuel invoices with IDP: expense = base_amount + idp_amount
-            // For regular invoices: expense = base_amount (total - vat)
-            const idpAmount = (p as any).idp_amount || 0;
-            const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
-            const expenseAmount = baseAmount + idpAmount;
+            let expenseAmount: number;
+            if (!appliesVat) {
+              // VAT-exempt enterprise: full total goes to expense (no VAT credit)
+              expenseAmount = p.total_amount;
+            } else {
+              // For fuel invoices with IDP: expense = base_amount + idp_amount
+              // For regular invoices: expense = base_amount (total - vat)
+              const idpAmount = (p as any).idp_amount || 0;
+              const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
+              expenseAmount = baseAmount + idpAmount;
+            }
             expenseByAccount.set(
               p.expense_account_id,
               (expenseByAccount.get(p.expense_account_id) || 0) + expenseAmount
             );
           }
           // Usar el IVA real de la factura, no recalcular
-          totalVAT += p.vat_amount || 0;
+          totalVAT += appliesVat ? (p.vat_amount || 0) : 0;
           totalAmount += p.total_amount;
         }
 
@@ -805,8 +818,8 @@ export default function LibroCompras() {
           });
         }
 
-        // Débito: IVA Crédito Fiscal
-        if (vatCreditAccountId && totalVAT > 0) {
+        // Débito: IVA Crédito Fiscal (skip for VAT-exempt enterprises)
+        if (appliesVat && vatCreditAccountId && totalVAT > 0) {
           detailLines.push({
             journal_entry_id: journalEntryId,
             line_number: lineNumber++,
@@ -1030,16 +1043,20 @@ export default function LibroCompras() {
                 <span className="text-muted-foreground">Documentos: </span>
                 <Badge variant="secondary">{totals.documentCount}</Badge>
               </div>
+              {appliesVat && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground">Base: </span>
+                    <span className="font-semibold">Q {totals.totalBase}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IVA: </span>
+                    <span className="font-semibold">Q {totals.totalVAT}</span>
+                  </div>
+                </>
+              )}
               <div>
-                <span className="text-muted-foreground">Base: </span>
-                <span className="font-semibold">Q {totals.totalBase}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">IVA: </span>
-                <span className="font-semibold">Q {totals.totalVAT}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total c/IVA: </span>
+                <span className="text-muted-foreground">{appliesVat ? "Total c/IVA: " : "Total Compras: "}</span>
                 <span className="font-semibold">Q {totals.totalWithVAT}</span>
               </div>
             </div>
@@ -1162,8 +1179,8 @@ export default function LibroCompras() {
                     </div>
                     <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
                       <p><strong>Documentos:</strong> {totals.documentCount}</p>
-                      <p><strong>Base:</strong> {totals.totalBase}</p>
-                      <p><strong>IVA:</strong> {totals.totalVAT}</p>
+                      {appliesVat && <p><strong>Base:</strong> {totals.totalBase}</p>}
+                      {appliesVat && <p><strong>IVA:</strong> {totals.totalVAT}</p>}
                       <p><strong>Total:</strong> {totals.totalWithVAT}</p>
                     </div>
                     
@@ -1228,6 +1245,7 @@ export default function LibroCompras() {
               purchases={purchases}
               enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
               variant="full"
+              appliesVat={appliesVat}
               felDocTypes={felDocTypes}
               operationTypes={operationTypes}
               expenseAccounts={expenseAccounts}

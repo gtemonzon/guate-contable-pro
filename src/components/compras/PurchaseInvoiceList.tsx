@@ -33,6 +33,8 @@ interface PurchaseInvoiceListProps {
   onFocusLastCardDone?: () => void;
   /** Recommended fields for new records */
   getRecommendedFields?: (index: number) => string[];
+  /** Phase 2: VAT-exempt enterprises hide VAT-related fields. */
+  appliesVat?: boolean;
 }
 
 export function PurchaseInvoiceList({
@@ -58,6 +60,7 @@ export function PurchaseInvoiceList({
   focusLastCard = false,
   onFocusLastCardDone,
   getRecommendedFields,
+  appliesVat = true,
 }: PurchaseInvoiceListProps) {
   const lastCardRef = useRef<PurchaseCardRef>(null);
 
@@ -122,6 +125,7 @@ export function PurchaseInvoiceList({
           onCancelEdit={() => onEditingIndexChange(null)}
           duplicateWarning={duplicateWarnings?.[index] ?? null}
           onCheckDuplicate={onCheckDuplicate}
+          appliesVat={appliesVat}
         />
       ))}
     </div>
