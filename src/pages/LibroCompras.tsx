@@ -560,6 +560,8 @@ export default function LibroCompras() {
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
         idp_amount: entry.idp_amount || 0,
+        exempt_amount: entry.exempt_amount || 0,
+        tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,
