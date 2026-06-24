@@ -517,8 +517,11 @@ export default function LibroCompras() {
   };
 
   const saveRow = async (index: number) => {
-    const entry = purchases[index];
-    if (!currentBookId || !currentEnterpriseId) return;
+    const rawEntry = purchases[index];
+    if (!currentBookId || !currentEnterpriseId || !rawEntry) return;
+    // Consistency guard: always recompute base/vat from canonical inputs
+    // before persistence. Component state may be stale or partially typed.
+    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
 
     // Mostrar indicador de guardando
     setSaveStatus("saving");
