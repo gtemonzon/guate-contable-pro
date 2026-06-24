@@ -11,6 +11,7 @@ import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } fr
 import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
 import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
