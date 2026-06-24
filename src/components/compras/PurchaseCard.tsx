@@ -520,7 +520,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             {/* Row 2: Total, Exento, IVA, IDP (if fuel), Tipo Op, Cuenta Gasto */}
             <div className="grid grid-cols-12 gap-2 items-end">
               <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">Total c/IVA</label>
+                <label className="text-xs text-muted-foreground">{appliesVat ? "Total c/IVA" : "Total"}</label>
                 <Input
                   type="number"
                   step="0.01"
@@ -530,39 +530,43 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   className="h-8 text-xs"
                 />
               </div>
-              <div className="col-span-1">
-                <label
-                  className="text-xs text-muted-foreground"
-                  title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
-                >
-                  Exento
-                </label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={purchase.exempt_amount || ""}
-                  onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
-                  placeholder="0.00"
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">Base</label>
-                <Input
-                  value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
-                  readOnly
-                  className="h-8 text-xs bg-muted"
-                />
-              </div>
-              <div className="col-span-1">
-                <label className="text-xs text-muted-foreground">IVA</label>
-                <Input
-                  value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
-                  readOnly
-                  className="h-8 text-xs bg-muted"
-                />
-              </div>
+              {appliesVat && (
+                <>
+                  <div className="col-span-1">
+                    <label
+                      className="text-xs text-muted-foreground"
+                      title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+                    >
+                      Exento
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={purchase.exempt_amount || ""}
+                      onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                      placeholder="0.00"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="text-xs text-muted-foreground">Base</label>
+                    <Input
+                      value={purchase.base_amount ? formatCurrency(purchase.base_amount) : "Q 0.00"}
+                      readOnly
+                      className="h-8 text-xs bg-muted"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="text-xs text-muted-foreground">IVA</label>
+                    <Input
+                      value={purchase.vat_amount ? formatCurrency(purchase.vat_amount) : "Q 0.00"}
+                      readOnly
+                      className="h-8 text-xs bg-muted"
+                    />
+                  </div>
+                </>
+              )}
               {isFuelOperation && (
                 <div className="col-span-1">
                   <label className="text-xs text-muted-foreground">IDP</label>
