@@ -1712,6 +1712,7 @@ export default function LibrosFiscales() {
                       operationTypes={operationTypes}
                       expenseAccounts={expenseAccounts}
                       bankAccounts={bankAccounts}
+                      appliesVat={appliesVat}
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
