@@ -1512,16 +1512,20 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
                   </div>
+                  {appliesVat && (
+                    <>
+                      <div>
+                        <span className="text-muted-foreground">Base: </span>
+                        <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">IVA: </span>
+                        <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <span className="text-muted-foreground">Base: </span>
-                    <span className="font-semibold">Q {purchaseTotals.totalBase}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">IVA: </span>
-                    <span className="font-semibold">Q {purchaseTotals.totalVAT}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total c/IVA: </span>
+                    <span className="text-muted-foreground">{appliesVat ? "Total c/IVA: " : "Total Compras: "}</span>
                     <span className="font-semibold">Q {purchaseTotals.totalWithVAT}</span>
                   </div>
                 </div>
