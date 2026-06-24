@@ -127,7 +127,7 @@ export function applyMixedTaxToRow<T extends {
   fel_document_type?: string | null;
   base_amount?: number | string | null;
   vat_amount?: number | string | null;
-}>(row: T): T {
+}>(row: T, opts?: { appliesVat?: boolean }): T {
   const total = Number(row.total_amount) || 0;
   const exempt = Number(row.exempt_amount) || 0;
   const idp = Number(row.idp_amount) || 0;
@@ -136,6 +136,7 @@ export function applyMixedTaxToRow<T extends {
     exemptAmount: exempt,
     idpAmount: idp,
     documentType: row.fel_document_type ?? undefined,
+    appliesVat: opts?.appliesVat,
   });
   return {
     ...row,
