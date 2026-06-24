@@ -1179,8 +1179,8 @@ export default function LibroCompras() {
                     </div>
                     <div className="bg-muted p-4 rounded-lg space-y-1 text-sm">
                       <p><strong>Documentos:</strong> {totals.documentCount}</p>
-                      <p><strong>Base:</strong> {totals.totalBase}</p>
-                      <p><strong>IVA:</strong> {totals.totalVAT}</p>
+                      {appliesVat && <p><strong>Base:</strong> {totals.totalBase}</p>}
+                      {appliesVat && <p><strong>IVA:</strong> {totals.totalVAT}</p>}
                       <p><strong>Total:</strong> {totals.totalWithVAT}</p>
                     </div>
                     
