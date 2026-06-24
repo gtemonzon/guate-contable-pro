@@ -241,13 +241,24 @@ export default function Partidas() {
     try {
       setLoading(true);
       setEntries([]);
-      const allDates = await fetchAllRecords<{ entry_date: string }>(
-        supabase
+      // Sequential paginated fetch with a fresh query per page to avoid
+      // shared-builder issues in the parallel helper that previously capped
+      // results at 1000 rows (hiding recent years from the period filter).
+      const allDates: { entry_date: string }[] = [];
+      const PAGE = 1000;
+      for (let start = 0; ; start += PAGE) {
+        const { data, error } = await supabase
           .from("tab_journal_entries")
           .select("entry_date")
           .eq("enterprise_id", parseInt(enterpriseId))
           .is("deleted_at", null)
-      );
+          .order("entry_date", { ascending: false })
+          .range(start, start + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allDates.push(...data);
+        if (data.length < PAGE) break;
+      }
 
       const counts: Record<string, number> = { all: allDates.length };
       allDates.forEach((row) => {
