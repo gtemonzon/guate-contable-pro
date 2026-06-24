@@ -1970,7 +1970,7 @@ export default function LibrosFiscales() {
                         });
                       }
 
-                      if (vatCreditAccountId && totalVAT > 0) {
+                      if (appliesVat && vatCreditAccountId && totalVAT > 0) {
                         detailLines.push({
                           journal_entry_id: journalEntry.id,
                           line_number: lineNumber++,
