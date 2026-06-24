@@ -1037,16 +1037,20 @@ export default function LibroCompras() {
                 <span className="text-muted-foreground">Documentos: </span>
                 <Badge variant="secondary">{totals.documentCount}</Badge>
               </div>
+              {appliesVat && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground">Base: </span>
+                    <span className="font-semibold">Q {totals.totalBase}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">IVA: </span>
+                    <span className="font-semibold">Q {totals.totalVAT}</span>
+                  </div>
+                </>
+              )}
               <div>
-                <span className="text-muted-foreground">Base: </span>
-                <span className="font-semibold">Q {totals.totalBase}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">IVA: </span>
-                <span className="font-semibold">Q {totals.totalVAT}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Total c/IVA: </span>
+                <span className="text-muted-foreground">{appliesVat ? "Total c/IVA: " : "Total Compras: "}</span>
                 <span className="font-semibold">Q {totals.totalWithVAT}</span>
               </div>
             </div>
