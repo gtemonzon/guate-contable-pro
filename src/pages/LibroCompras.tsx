@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
+import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
@@ -431,6 +432,8 @@ export default function LibroCompras() {
       base_amount: 0,
       vat_amount: 0,
       idp_amount: 0,
+      exempt_amount: 0,
+      tax_category: null,
       batch_reference: "",
       operation_type_id: lastOperationTypeId,
       expense_account_id: lastExpenseAccountId,
@@ -486,22 +489,26 @@ export default function LibroCompras() {
     
     updated[index] = { ...updated[index], [field]: value };
 
-    // Auto-calcular IVA cuando cambia total_amount o idp_amount
-    if (field === "total_amount" || field === "idp_amount") {
-      const total = field === "total_amount" ? (parseFloat(value) || 0) : (updated[index].total_amount || 0);
-      const idp = field === "idp_amount" ? (parseFloat(value) || 0) : (updated[index].idp_amount || 0);
-      // For fuel: IVA = (Total - IDP) / 1.12 * 12%
-      const taxable = total - idp;
-      const base = taxable / 1.12;
-      const vat = taxable - base;
-      updated[index].base_amount = parseFloat(base.toFixed(2));
-      updated[index].vat_amount = parseFloat(vat.toFixed(2));
-      if (field === "total_amount") {
-        updated[index].total_amount = total;
-      }
-      if (field === "idp_amount") {
-        updated[index].idp_amount = idp;
-      }
+    // Phase 1: Auto-calc base/VAT via mixed-tax engine.
+    // Recompute whenever total, exempt, IDP, or document type changes.
+    if (
+      field === "total_amount" ||
+      field === "idp_amount" ||
+      field === "exempt_amount" ||
+      field === "fel_document_type"
+    ) {
+      const row = updated[index];
+      const result = calculateMixedTax({
+        totalAmount: field === "total_amount" ? parseFloat(value) || 0 : row.total_amount || 0,
+        idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : row.idp_amount || 0,
+        exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : row.exempt_amount || 0,
+        documentType: field === "fel_document_type" ? value : row.fel_document_type,
+      });
+      updated[index].total_amount = result.total;
+      updated[index].exempt_amount = result.exempt;
+      updated[index].idp_amount = result.idp;
+      updated[index].base_amount = result.base;
+      updated[index].vat_amount = result.vat;
     }
 
     setPurchases(updated);
