@@ -779,6 +779,23 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               />
             </div>
             <div className="col-span-1">
+              <label
+                className="text-xs text-muted-foreground"
+                title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+              >
+                Exento
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={purchase.exempt_amount || ""}
+                onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                placeholder="0.00"
+                className="h-8"
+              />
+            </div>
+            <div className="col-span-1">
               <label className="text-xs text-muted-foreground">IVA</label>
               <Input
                 type="number"
@@ -824,7 +841,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </SelectContent>
               </Select>
             </div>
-            <div className={cn(isFuelOperation ? "col-span-3" : "col-span-4", "min-w-0")}>
+            <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
               <label className="text-xs text-muted-foreground">
                 Cuenta
                 {isRecommended("expense_account_id") && (
