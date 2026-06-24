@@ -1048,7 +1048,7 @@ export default function LibrosFiscales() {
     if (!currentBookId || !currentEnterpriseId) return;
     if (!rawEntry) return;
 
-    const entry = applyMixedTaxToRow(rawEntry) as PurchaseEntry;
+    const entry = applyMixedTaxToRow(rawEntry, { appliesVat }) as PurchaseEntry;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
