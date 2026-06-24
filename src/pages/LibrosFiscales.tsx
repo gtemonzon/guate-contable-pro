@@ -1801,8 +1801,8 @@ export default function LibrosFiscales() {
               {activeTab === "compras" ? (
                 <>
                   <p><strong>Documentos:</strong> {purchaseTotals.documentCount}</p>
-                  <p><strong>Base:</strong> Q {purchaseTotals.totalBase}</p>
-                  <p><strong>IVA:</strong> Q {purchaseTotals.totalVAT}</p>
+                  {appliesVat && <p><strong>Base:</strong> Q {purchaseTotals.totalBase}</p>}
+                  {appliesVat && <p><strong>IVA:</strong> Q {purchaseTotals.totalVAT}</p>}
                   <p><strong>Total:</strong> Q {purchaseTotals.totalWithVAT}</p>
                 </>
               ) : (
