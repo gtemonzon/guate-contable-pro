@@ -1572,6 +1572,11 @@ export type Database = {
         Row: {
           account_isr_retained_payable_id: number | null
           account_isr_retained_receivable_id: number | null
+          account_non_vat_electricity_id: number | null
+          account_non_vat_fiscal_stamp_id: number | null
+          account_non_vat_idp_id: number | null
+          account_non_vat_other_id: number | null
+          account_non_vat_tourism_id: number | null
           account_vat_exemption_control_id: number | null
           account_vat_retained_payable_id: number | null
           account_vat_retained_receivable_id: number | null
@@ -1619,6 +1624,11 @@ export type Database = {
         Insert: {
           account_isr_retained_payable_id?: number | null
           account_isr_retained_receivable_id?: number | null
+          account_non_vat_electricity_id?: number | null
+          account_non_vat_fiscal_stamp_id?: number | null
+          account_non_vat_idp_id?: number | null
+          account_non_vat_other_id?: number | null
+          account_non_vat_tourism_id?: number | null
           account_vat_exemption_control_id?: number | null
           account_vat_retained_payable_id?: number | null
           account_vat_retained_receivable_id?: number | null
@@ -1666,6 +1676,11 @@ export type Database = {
         Update: {
           account_isr_retained_payable_id?: number | null
           account_isr_retained_receivable_id?: number | null
+          account_non_vat_electricity_id?: number | null
+          account_non_vat_fiscal_stamp_id?: number | null
+          account_non_vat_idp_id?: number | null
+          account_non_vat_other_id?: number | null
+          account_non_vat_tourism_id?: number | null
           account_vat_exemption_control_id?: number | null
           account_vat_retained_payable_id?: number | null
           account_vat_retained_receivable_id?: number | null
@@ -1721,6 +1736,41 @@ export type Database = {
           {
             foreignKeyName: "tab_enterprise_config_account_isr_retained_receivable_id_fkey"
             columns: ["account_isr_retained_receivable_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_non_vat_electricity_id_fkey"
+            columns: ["account_non_vat_electricity_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_non_vat_fiscal_stamp_id_fkey"
+            columns: ["account_non_vat_fiscal_stamp_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_non_vat_idp_id_fkey"
+            columns: ["account_non_vat_idp_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_non_vat_other_id_fkey"
+            columns: ["account_non_vat_other_id"]
+            isOneToOne: false
+            referencedRelation: "tab_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_enterprise_config_account_non_vat_tourism_id_fkey"
+            columns: ["account_non_vat_tourism_id"]
             isOneToOne: false
             referencedRelation: "tab_accounts"
             referencedColumns: ["id"]
