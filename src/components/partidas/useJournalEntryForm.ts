@@ -574,68 +574,78 @@ export function useJournalEntryForm(
       .maybeSingle();
 
     const generatedLines: DetailLine[] = [];
-    const expensesByAccount: Record<number, { total: number; descriptions: string[]; refs: string[] }> = {};
-    let totalVat = 0;
+    // Aggregations across all purchase rows in the entry.
+    const lineAggByAccount: Record<number, { signed: number; descriptions: string[]; refs: string[]; role: 'EXPENSE' | 'NON_VAT' | 'VAT_CREDIT' }> = {};
     let totalAmount = 0;
+    const vatRefs: string[] = [];
 
     for (const p of purchases) {
       const docType = p.fel_document_type || 'FACT';
       const { multiplier, appliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
-      const isExempt = exemptDocTypes.includes(docType) || !appliesVat;
       const ref = `${docType} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`;
-
-      // Apply multiplier (e.g. NCRE has multiplier -1)
-      const effectiveVat = isExempt ? 0 : (p.vat_amount || 0) * multiplier;
-      const effectiveTotal = (p.total_amount || 0) * multiplier;
-
-      totalVat += effectiveVat;
+      const effectiveTotal = (Number(p.total_amount) || 0) * multiplier;
       totalAmount += effectiveTotal;
 
-      if (p.expense_account_id) {
-        if (!expensesByAccount[p.expense_account_id]) {
-          expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
+      // Centralized engine + journal-lines builder (Category → Mapping → Account)
+      const builtLines = buildPurchaseLines(
+        {
+          total_amount: Number(p.total_amount) || 0,
+          exempt_amount: Number(p.exempt_amount) || 0,
+          base_amount: Number(p.base_amount) || 0,
+          vat_amount: Number(p.vat_amount) || 0,
+          tax_category: (p as any).tax_category ?? null,
+          fel_document_type: docType,
+          expense_account_id: p.expense_account_id,
+          multiplier,
+          appliesVat,
+        },
+        configData ?? null
+      );
+
+      for (const bl of builtLines) {
+        const slot = (lineAggByAccount[bl.account_id] ||= {
+          signed: 0,
+          descriptions: [],
+          refs: [],
+          role: bl.role,
+        });
+        slot.signed += bl.amount;
+        if (bl.role === 'EXPENSE') {
+          slot.descriptions.push(`${p.supplier_name} - Fact. ${ref}`);
+          slot.refs.push(ref);
+        } else if (bl.role === 'VAT_CREDIT') {
+          vatRefs.push(ref);
+        } else if (bl.role === 'NON_VAT') {
+          slot.refs.push(ref);
         }
-        const baseAmount = p.base_amount || p.net_amount || (p.total_amount - (p.vat_amount || 0));
-        const idpAmount = p.idp_amount || 0;
-        // For exempt docs, the full amount goes to expense (no VAT separation)
-        const expenseAmount = isExempt
-          ? (p.total_amount || 0) * multiplier
-          : (baseAmount + idpAmount) * multiplier;
-        expensesByAccount[p.expense_account_id].total += expenseAmount;
-        expensesByAccount[p.expense_account_id].descriptions.push(`${p.supplier_name} - Fact. ${ref}`);
-        expensesByAccount[p.expense_account_id].refs.push(ref);
       }
     }
 
-    // Expense lines — split into debit and credit based on sign
-    for (const [accountId, data] of Object.entries(expensesByAccount)) {
-      const amount = Number(data.total.toFixed(2));
+    // Emit aggregated lines (expense, non-VAT mapped, VAT credit)
+    for (const [accountId, data] of Object.entries(lineAggByAccount)) {
+      const amount = Number(data.signed.toFixed(2));
+      if (amount === 0) continue;
+      let description: string;
+      let sourceRef: string;
+      if (data.role === 'VAT_CREDIT') {
+        description = `IVA Crédito Fiscal - ${vatRefs.length} factura(s)`;
+        sourceRef = vatRefs.join(', ');
+      } else if (data.role === 'NON_VAT') {
+        description = `Impuestos no acreditables - ${data.refs.length} factura(s)`;
+        sourceRef = data.refs.join(', ');
+      } else {
+        description = data.descriptions.join('; ');
+        sourceRef = data.refs.join(', ');
+      }
       generatedLines.push({
         id: crypto.randomUUID(),
         account_id: Number(accountId),
-        description: data.descriptions.join('; '),
+        description,
         cost_center: "",
         debit_amount: amount >= 0 ? amount : 0,
         credit_amount: amount < 0 ? Math.abs(amount) : 0,
         source_type: 'PURCHASE',
-        source_ref: data.refs.join(', '),
-      });
-    }
-
-    // IVA line (debit) — only for non-exempt purchases
-    if (totalVat > 0 && configData?.vat_credit_account_id) {
-      const vatPurchaseRefs = purchases
-        .filter(p => !exemptDocTypes.includes(p.fel_document_type || 'FACT'))
-        .map(p => `${p.fel_document_type} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`);
-      generatedLines.push({
-        id: crypto.randomUUID(),
-        account_id: configData.vat_credit_account_id,
-        description: `IVA Crédito Fiscal - ${vatPurchaseRefs.length} factura(s)`,
-        cost_center: "",
-        debit_amount: Number(totalVat.toFixed(2)),
-        credit_amount: 0,
-        source_type: 'PURCHASE',
-        source_ref: vatPurchaseRefs.join(', '),
+        source_ref: sourceRef,
       });
     }
 
