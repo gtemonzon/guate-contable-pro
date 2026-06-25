@@ -1701,7 +1701,8 @@ async function runImport(jobId: string) {
         currency_code: "GTQ",
         exchange_rate: 1,
         imported_from_fel: false,
-        idp_amount: p.idpAmount,
+        exempt_amount: (Number((p as any).exemptAmount) || 0) + (Number((p as any).idpAmount) || 0),
+        tax_category: (p as any).taxCategory ?? (Number((p as any).idpAmount) > 0 ? "IDP" : null),
         operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
         expense_account_id: expenseAccountId,
       };
