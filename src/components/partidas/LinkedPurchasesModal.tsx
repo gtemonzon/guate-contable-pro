@@ -447,8 +447,8 @@ export default function LinkedPurchasesModal({
         if (!expensesByAccount[p.expense_account_id]) {
           expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
         }
-        // Expense = base_amount + IDP (fuel tax is part of the cost, not recoverable)
-        expensesByAccount[p.expense_account_id].total += p.base_amount + (p.idp_amount || 0);
+        // Expense = base_amount + Non-VAT (No afecto: IDP, tourism, electricity, stamps, etc.)
+        expensesByAccount[p.expense_account_id].total += p.base_amount + (p.exempt_amount || 0);
         expensesByAccount[p.expense_account_id].descriptions.push(
           `${p.supplier_name} - Fact. ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
         );
