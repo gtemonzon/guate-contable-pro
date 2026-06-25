@@ -27,6 +27,7 @@ export interface ParsedPurchase {
   operationTypeCode: OperationTypeCode;
   authorizationNumber?: string;
   legacyAccountId?: string | number; // idCuenta de la cuenta de gasto/compra
+  excelRow?: number; // fila original en el Excel (1-based, incluyendo encabezado)
 }
 
 export interface ParsedSale {
@@ -43,6 +44,7 @@ export interface ParsedSale {
   legacyAccountId?: string | number;
   authorizationNumber?: string;
   branchCode?: string; // IdSucursal (0 = sin sucursal)
+  excelRow?: number;
 }
 
 export interface ParsedJournalLine {
