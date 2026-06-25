@@ -126,7 +126,8 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
       // Excel legado YA INCLUYEN el IVA. No hay que sumarlo otra vez al total.
       let operationTypeCode: ParsedPurchase["operationTypeCode"] = "BIENES";
       let columnWithVat = 0;
-      let idpAmount = 0;
+      let exemptAmount = 0;
+      let taxCategory: string | null = null;
       if (activos > 0) { operationTypeCode = "ACTIVOS_FIJOS"; columnWithVat = activos; }
       else if (importaciones > 0) { operationTypeCode = "IMPORTACIONES"; columnWithVat = importaciones; }
       else if (servicios > 0) { operationTypeCode = "SERVICIOS"; columnWithVat = servicios; }
@@ -134,13 +135,18 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
         // Combustible: bienes (c/IVA) + IDP en exentas
         operationTypeCode = "OTRAS";
         columnWithVat = bienes;
-        idpAmount = exentas;
+        exemptAmount = exentas;
+        taxCategory = "IDP";
       }
       else if (bienes > 0) { operationTypeCode = "BIENES"; columnWithVat = bienes; }
-      else if (exentas > 0) { operationTypeCode = "OTRAS"; columnWithVat = exentas; }
+      else if (exentas > 0) {
+        operationTypeCode = "OTRAS";
+        columnWithVat = exentas;
+        // Pure exempt invoice (no VAT, no IDP) — leave taxCategory null.
+      }
 
       const netAmount = Math.max(0, columnWithVat - ivaRaw);
-      const total = columnWithVat + idpAmount;
+      const total = columnWithVat + exemptAmount;
 
       const excelRow = typeof (r as any).__rowNum__ === "number" ? (r as any).__rowNum__ + 1 : idx + 2;
 
@@ -154,7 +160,8 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
         netAmount,
         vatAmount: ivaRaw,
         totalAmount: total,
-        idpAmount,
+        exemptAmount,
+        taxCategory,
         operationTypeCode,
         authorizationNumber:
           String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
