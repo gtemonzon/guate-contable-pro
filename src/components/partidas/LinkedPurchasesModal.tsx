@@ -700,7 +700,7 @@ export default function LinkedPurchasesModal({
                 <h5 className="font-medium text-sm">Vista previa de contabilización:</h5>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">
-                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base + totals.idp)}) + IVA Crédito ({formatCurrency(totals.vat)})
+                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base + totals.nonVat)}) + IVA Crédito ({formatCurrency(totals.vat)})
                   </p>
                   <p className="text-muted-foreground">
                     <span className="font-medium">HABER:</span> {creditPreviewLabel} ({formatCurrency(totals.total)})
