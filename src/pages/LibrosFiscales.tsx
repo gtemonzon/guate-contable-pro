@@ -2273,12 +2273,12 @@ export default function LibrosFiscales() {
                               expenseAmount = Number(p.total_amount) || 0;
                             } else {
                               // Respetar IVA real: si vat_amount es 0, la base es el total
-                              // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
-                              const idpAmount = Number((p as any).idp_amount) || 0;
+                              // Para impuestos no acreditables (IDP, turismo, etc.): gasto = base + No afecto
+                              const nonVat = Number((p as any).exempt_amount) || 0;
                               const baseAmount = p.vat_amount > 0
-                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
-                                : (Number(p.total_amount) - idpAmount);
-                              expenseAmount = Number(baseAmount) + idpAmount;
+                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - nonVat))
+                                : (Number(p.total_amount) - nonVat);
+                              expenseAmount = Number(baseAmount) + nonVat;
                             }
                             expenseByAccount.set(
                               p.expense_account_id,
