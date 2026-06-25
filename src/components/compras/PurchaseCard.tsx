@@ -389,8 +389,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-1 text-right font-mono text-muted-foreground">
               {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
-              {appliesVat && purchase.idp_amount > 0 && (
-                <span className="block text-[10px] text-muted-foreground/70">IDP: {formatCurrency(purchase.idp_amount)}</span>
+              {appliesVat && (purchase.exempt_amount || 0) > 0 && (
+                <span className="block text-[10px] text-muted-foreground/70">No afecto: {formatCurrency(purchase.exempt_amount || 0)}</span>
               )}
             </div>
             <div className="col-span-1 text-center">
