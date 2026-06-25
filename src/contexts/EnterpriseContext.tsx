@@ -158,6 +158,8 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
   }, [persist, isSuperAdmin, currentTenant?.id]);
 
   const switchEnterprise = useCallback(async (enterpriseId: number) => {
+    if (enterpriseId === selectedEnterpriseId) return;
+
     setSelectedEnterpriseId(enterpriseId);
     persist(enterpriseId);
 
@@ -172,7 +174,14 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
 
     // Invalidate all enterprise-scoped React Query caches
     queryClient.invalidateQueries();
-  }, [persist, queryClient]);
+
+    // Many pages initialize state from localStorage on mount and don't react
+    // to the `enterpriseChanged` event. Force a full reload so every view
+    // reflects the newly selected enterprise without requiring manual F5.
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  }, [persist, queryClient, selectedEnterpriseId]);
 
   const refreshEnterprises = useCallback(async () => {
     await loadEnterprises();
