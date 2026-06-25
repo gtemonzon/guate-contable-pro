@@ -8,6 +8,7 @@ import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
+import { buildPurchaseLines } from "@/utils/purchaseJournalLinesBuilder";
 
 export type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
