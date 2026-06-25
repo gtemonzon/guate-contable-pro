@@ -32,7 +32,12 @@ interface ParsedPurchase {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
-  idpAmount: number;
+  /** Non-VAT (No afecto) portion. Unified field replacing legacy idpAmount. */
+  exemptAmount?: number;
+  /** Classification of the Non-VAT portion: IDP, TOURISM_TAX, etc. */
+  taxCategory?: string | null;
+  /** @deprecated Legacy payloads still send idpAmount; folded into exemptAmount on write. */
+  idpAmount?: number;
   operationTypeCode: string;
   authorizationNumber?: string;
   legacyAccountId?: string | number;
