@@ -998,20 +998,17 @@ export default function LibrosFiscales() {
       if (
         field === "total_amount" ||
         field === "fel_document_type" ||
-        field === "idp_amount" ||
         field === "exempt_amount"
       ) {
         const current = updated[index];
         const result = calculateMixedTax({
           totalAmount: field === "total_amount" ? parseFloat(value) || 0 : Number(current.total_amount) || 0,
           exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
-          idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : Number(current.idp_amount) || 0,
           documentType: field === "fel_document_type" ? value : current.fel_document_type,
           appliesVat,
         });
         updated[index].total_amount = result.total;
         updated[index].exempt_amount = result.exempt;
-        updated[index].idp_amount = result.idp;
         updated[index].base_amount = result.base;
         updated[index].vat_amount = result.vat;
       }
