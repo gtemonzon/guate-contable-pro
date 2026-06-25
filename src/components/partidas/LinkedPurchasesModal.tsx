@@ -379,8 +379,8 @@ export default function LinkedPurchasesModal({
       total: acc.total + (p.total_amount || 0),
       base: acc.base + (p.base_amount || 0),
       vat: acc.vat + (p.vat_amount || 0),
-      idp: acc.idp + (p.idp_amount || 0),
-    }), { total: 0, base: 0, vat: 0, idp: 0 });
+      nonVat: acc.nonVat + (p.exempt_amount || 0),
+    }), { total: 0, base: 0, vat: 0, nonVat: 0 });
   }, [purchases]);
 
   const validatePurchases = (): boolean => {
