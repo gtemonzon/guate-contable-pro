@@ -588,8 +588,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   <Input
                     type="number"
                     step="0.01"
-                    value={purchase.idp_amount || 0}
-                    onChange={(e) => handleFieldChange("idp_amount", e.target.value)}
+                    value={idpDisplayValue}
+                    onChange={(e) => handleIdpChange(e.target.value)}
                     className="h-8 text-xs"
                     title="Impuesto a Distribución de Petróleo"
                   />
