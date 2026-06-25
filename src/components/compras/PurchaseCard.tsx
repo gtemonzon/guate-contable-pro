@@ -25,10 +25,9 @@ export interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
-  idp_amount: number;
-  /** Phase 1: portion of invoice total NOT subject to VAT (tourism tax, fiscal stamps, electricity, other). */
+  /** Portion of invoice total NOT subject to VAT (No afecto): tourism, IDP, electricity, fiscal stamps, other. */
   exempt_amount?: number;
-  /** Phase 1: categorization of the exempt portion (TOURISM_TAX, IDP, ELECTRICITY_TAX, FISCAL_STAMP, OTHER). */
+  /** Classification of the Non-VAT portion (TOURISM_TAX, IDP, ELECTRICITY_TAX, FISCAL_STAMP, OTHER). */
   tax_category?: string | null;
   batch_reference: string;
   operation_type_id: number | null;
