@@ -171,7 +171,7 @@ export default function ReporteFacturasPorCuenta() {
         .select(`
           id, invoice_date, invoice_series, invoice_number,
           supplier_nit, supplier_name,
-          total_amount, vat_amount, base_amount, idp_amount,
+          total_amount, vat_amount, base_amount, exempt_amount,
           expense_account_id, journal_entry_id,
           journal_entry:tab_journal_entries(id, entry_number, entry_date, description)
         `)
