@@ -873,7 +873,7 @@ export default function LibrosFiscales() {
       total_amount: 0,
       base_amount: 0,
       vat_amount: 0,
-      idp_amount: 0,
+      
       exempt_amount: 0,
       tax_category: null,
       batch_reference: "",
