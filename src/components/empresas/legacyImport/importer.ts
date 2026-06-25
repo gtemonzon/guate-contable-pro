@@ -212,10 +212,45 @@ export async function importLegacyData(
     };
   });
 
-  for (const part of chunk(purchaseRows, CHUNK)) {
-    const { error } = await supabase.from("tab_purchase_ledger").insert(part);
-    if (error) result.errors.push(`Compras: ${error.message}`);
-    else result.purchasesCreated += part.length;
+  for (const part of chunk(purchaseRows.map((row, i) => ({ row, src: ds.purchases[i] })), CHUNK)) {
+    const rows = part.map((p) => p.row);
+    const { error } = await supabase.from("tab_purchase_ledger").insert(rows);
+    if (!error) {
+      result.purchasesCreated += rows.length;
+    } else {
+      // Bulk insert failed: retry one-by-one to attribute each failure
+      for (const { row, src } of part) {
+        const { error: rowErr } = await supabase.from("tab_purchase_ledger").insert(row);
+        if (!rowErr) {
+          result.purchasesCreated += 1;
+          continue;
+        }
+        const isDup =
+          (rowErr as any).code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
+        if (isDup) {
+          // Look up the existing record for context
+          const { data: existing } = await supabase
+            .from("tab_purchase_ledger")
+            .select("id, invoice_date")
+            .eq("enterprise_id", enterpriseId)
+            .eq("supplier_nit", src.supplierNit)
+            .eq("invoice_series", src.series || "")
+            .eq("invoice_number", src.number || "0")
+            .eq("fel_document_type", src.felDocType)
+            .maybeSingle();
+          const existingInfo = existing
+            ? ` Ya existe en BD (id ${existing.id}, fecha ${existing.invoice_date}).`
+            : "";
+          result.errors.push(
+            `Compra duplicada — Fila Excel ${src.excelRow ?? "?"} | ${src.felDocType} | Serie "${src.series || "-"}" | Factura ${src.number || "-"} | NIT ${src.supplierNit} | Proveedor ${src.supplierName || "-"} | Fecha ${src.date}.${existingInfo}`
+          );
+        } else {
+          result.errors.push(
+            `Compra Fila Excel ${src.excelRow ?? "?"} (NIT ${src.supplierNit}, ${src.felDocType} ${src.series || "-"}/${src.number || "-"}): ${rowErr.message}`
+          );
+        }
+      }
+    }
     onProgress({ step: "Importando compras...", current: result.purchasesCreated, total: purchaseRows.length });
   }
 
