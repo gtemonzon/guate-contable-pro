@@ -295,8 +295,8 @@ export default function LinkedPurchasesModal({
 
   const recalcVat = (p: PurchaseEntry): PurchaseEntry => {
     const total = p.total_amount || 0;
-    const idp = p.idp_amount || 0;
-    const taxable = total - idp;
+    const nonVat = p.exempt_amount || 0;
+    const taxable = total - nonVat;
     const base = Number((taxable / (1 + VAT_RATE)).toFixed(2));
     const vat = Number((taxable - base).toFixed(2));
     return { ...p, base_amount: base, vat_amount: vat };
@@ -307,9 +307,9 @@ export default function LinkedPurchasesModal({
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
       const updated = { ...p, [field]: value };
-      if (field === 'total_amount' || field === 'idp_amount') {
+      if (field === 'total_amount' || field === 'exempt_amount') {
         if (field === 'total_amount') updated.total_amount = Number(value) || 0;
-        if (field === 'idp_amount') updated.idp_amount = Number(value) || 0;
+        if (field === 'exempt_amount') updated.exempt_amount = Number(value) || 0;
         return recalcVat(updated);
       }
       return updated;
