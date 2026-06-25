@@ -497,25 +497,22 @@ export default function LibroCompras() {
     
     updated[index] = { ...updated[index], [field]: value };
 
-    // Phase 1: Auto-calc base/VAT via mixed-tax engine.
-    // Recompute whenever total, exempt, IDP, or document type changes.
+    // Auto-recalculate base/VAT via mixed-tax engine.
+    // Recompute whenever total, exempt, or document type changes.
     if (
       field === "total_amount" ||
-      field === "idp_amount" ||
       field === "exempt_amount" ||
       field === "fel_document_type"
     ) {
       const row = updated[index];
       const result = calculateMixedTax({
         totalAmount: field === "total_amount" ? parseFloat(value) || 0 : row.total_amount || 0,
-        idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : row.idp_amount || 0,
         exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : row.exempt_amount || 0,
         documentType: field === "fel_document_type" ? value : row.fel_document_type,
         appliesVat,
       });
       updated[index].total_amount = result.total;
       updated[index].exempt_amount = result.exempt;
-      updated[index].idp_amount = result.idp;
       updated[index].base_amount = result.base;
       updated[index].vat_amount = result.vat;
     }
