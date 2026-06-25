@@ -660,7 +660,7 @@ export default function LinkedPurchasesModal({
           <div className="flex items-center gap-4">
             <div className="text-right text-sm">
               <p className="text-muted-foreground">Total: <span className="font-semibold text-foreground">{formatCurrency(totals.total)}</span></p>
-              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.idp > 0 ? ` | IDP: ${formatCurrency(totals.idp)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
+              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.nonVat > 0 ? ` | No afecto: ${formatCurrency(totals.nonVat)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
             </div>
             <Button onClick={handleContabilizar} disabled={loading || purchases.length === 0} className="gap-2">
               <Save className="h-4 w-4" />
