@@ -44,7 +44,7 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
-  idp_amount: number;
+  
   exempt_amount?: number;
   tax_category?: string | null;
   batch_reference: string;
