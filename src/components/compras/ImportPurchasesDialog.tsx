@@ -613,7 +613,8 @@ export function ImportPurchasesDialog({
           vat_amount: vatAmount,
           net_amount: baseAmount,
           total_amount: total,
-          idp_amount: idpAmount > 0 ? idpAmount : 0,
+          exempt_amount: idpAmount > 0 ? idpAmount : 0,
+          tax_category: idpAmount > 0 ? 'IDP' : null,
         });
       }
 
