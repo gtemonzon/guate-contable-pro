@@ -456,9 +456,9 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
                 <p className="font-medium">{entry.description}</p>
               </div>
 
-              {entry.document_references && entry.document_references.length > 0 && (
-                <ReferencesFullList references={entry.document_references} />
-              )}
+              {/* Document references removed from Detalle tab — they are shown in the Compras tab with full invoice info */}
+
+
 
               {entry.beneficiary_name && (
                 <div className="text-xs">
