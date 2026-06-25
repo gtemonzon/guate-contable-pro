@@ -1,19 +1,21 @@
 /**
- * Mixed-tax purchase calculation engine (Phase 1).
+ * Mixed-tax purchase calculation engine (unified "No afecto" model).
  *
- * Guatemalan invoices may mix three components in a single total:
- *   1. A taxable portion that generates VAT credit
- *   2. A non-VAT portion (tourism tax, fiscal stamps, electricity tax, other)
- *   3. IDP — fuel distribution tax (kept in its own field for backward compatibility
- *      with existing SAT import logic and the fuel operation flow)
+ * After Batch 2 (2026-06), IDP is no longer a separate field. It lives inside
+ * `exempt_amount` with `tax_category = 'IDP'`. The engine accepts a single
+ * `exemptAmount` parameter representing the Non-VAT portion of the total.
  *
  * Formula:
- *   TaxableWithVAT = Total - ExemptAmount - IdpAmount
+ *   TaxableWithVAT = Total - ExemptAmount
  *   TaxableBase    = TaxableWithVAT / (1 + VATRate)
  *   VATCredit      = TaxableWithVAT - TaxableBase
  *
  * Document types in NO_VAT_DOCUMENT_TYPES never generate VAT credit; their full
- * (total - exempt - idp) becomes base, vat = 0.
+ * (total - exempt) becomes base, vat = 0.
+ *
+ * The `idpAmount` input is kept for backward compatibility ONLY: callers that
+ * still pass it will have it folded into `exemptAmount` internally. The output
+ * `idp` field is deprecated and always 0.
  */
 
 export const NO_VAT_DOCUMENT_TYPES = ["FPEQ", "FESP", "NABN", "RDON", "RECI"] as const;
@@ -30,25 +32,26 @@ export type TaxCategoryCode = (typeof TAX_CATEGORIES)[number]["code"];
 
 export interface MixedTaxInput {
   totalAmount: number;
+  /** Non-VAT portion (No afecto): tourism tax, IDP, electricity, fiscal stamps, other. */
   exemptAmount?: number;
+  /** @deprecated Pass via exemptAmount with tax_category='IDP'. Folded into exemptAmount when provided. */
   idpAmount?: number;
   documentType?: string;
   vatRate?: number; // default 0.12
   /**
-   * Phase 2: when false (VAT-exempt enterprise, e.g. Exenta ONG), the engine
-   * skips VAT entirely: base = total, vat = 0, exempt/mixed-tax inputs are ignored.
+   * When false (VAT-exempt enterprise, e.g. Exenta ONG), the engine skips VAT
+   * entirely: base = total, vat = 0, exempt input ignored.
    */
   appliesVat?: boolean;
 }
 
 export interface MixedTaxResult {
-  /** Final invoice total (unchanged) */
   total: number;
-  /** Non-VAT portion (tourism tax, fiscal stamps, electricity tax, other) */
+  /** Non-VAT portion (unified No afecto). */
   exempt: number;
-  /** IDP portion (fuel) */
+  /** @deprecated Always 0. Kept in shape for callers still destructuring it. */
   idp: number;
-  /** Portion of total still subject to VAT (Total − Exempt − IDP) */
+  /** Portion of total still subject to VAT (Total − ExemptAmount) */
   taxableWithVat: number;
   /** Net base before VAT */
   base: number;
@@ -56,40 +59,38 @@ export interface MixedTaxResult {
   vat: number;
 }
 
-/**
- * Round to 2 decimals using bankers rounding-friendly half-up.
- */
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export function calculateMixedTax(input: MixedTaxInput): MixedTaxResult {
   const total = Number(input.totalAmount) || 0;
-  const exempt = Math.max(0, Number(input.exemptAmount) || 0);
-  const idp = Math.max(0, Number(input.idpAmount) || 0);
+  // Back-compat: if a legacy caller passes idpAmount, fold it into exemptAmount.
+  const exempt = Math.max(
+    0,
+    (Number(input.exemptAmount) || 0) + (Number(input.idpAmount) || 0)
+  );
   const vatRate = input.vatRate ?? 0.12;
   const docType = (input.documentType || "FACT").toUpperCase().trim();
-  const appliesVat = input.appliesVat !== false; // default true (backward compat)
+  const appliesVat = input.appliesVat !== false;
 
-  // VAT-exempt enterprise: full total becomes base, no VAT, exempt ignored
   if (!appliesVat) {
     return {
       total: round2(total),
       exempt: 0,
-      idp: round2(idp),
+      idp: 0,
       taxableWithVat: round2(total),
       base: round2(total),
       vat: 0,
     };
   }
 
-  // Cap non-VAT portions to total to avoid negative bases
-  const nonVatPortion = Math.min(exempt + idp, total);
+  const nonVatPortion = Math.min(exempt, total);
   const taxableWithVat = round2(total - nonVatPortion);
 
   if ((NO_VAT_DOCUMENT_TYPES as readonly string[]).includes(docType)) {
     return {
       total: round2(total),
       exempt: round2(exempt),
-      idp: round2(idp),
+      idp: 0,
       taxableWithVat,
       base: taxableWithVat,
       vat: 0,
@@ -102,7 +103,7 @@ export function calculateMixedTax(input: MixedTaxInput): MixedTaxResult {
   return {
     total: round2(total),
     exempt: round2(exempt),
-    idp: round2(idp),
+    idp: 0,
     taxableWithVat,
     base,
     vat,
@@ -115,14 +116,14 @@ export function getTaxCategoryLabel(code: string | null | undefined): string {
 }
 
 /**
- * Recompute base_amount / vat_amount / exempt_amount / idp_amount on a purchase-like row.
- * Returns a NEW object with the canonical engine result merged in.
- * Use this on load AND right before persistence so the UI and DB always agree
- * with the mixed-tax engine.
+ * Recompute base_amount / vat_amount / exempt_amount on a purchase-like row.
+ * The legacy `idp_amount` column is no longer written by this function; callers
+ * must persist via `exempt_amount` + `tax_category`.
  */
 export function applyMixedTaxToRow<T extends {
   total_amount?: number | string | null;
   exempt_amount?: number | string | null;
+  /** @deprecated read-only legacy column. */
   idp_amount?: number | string | null;
   fel_document_type?: string | null;
   base_amount?: number | string | null;
@@ -130,11 +131,9 @@ export function applyMixedTaxToRow<T extends {
 }>(row: T, opts?: { appliesVat?: boolean }): T {
   const total = Number(row.total_amount) || 0;
   const exempt = Number(row.exempt_amount) || 0;
-  const idp = Number(row.idp_amount) || 0;
   const r = calculateMixedTax({
     totalAmount: total,
     exemptAmount: exempt,
-    idpAmount: idp,
     documentType: row.fel_document_type ?? undefined,
     appliesVat: opts?.appliesVat,
   });
@@ -142,17 +141,14 @@ export function applyMixedTaxToRow<T extends {
     ...row,
     total_amount: r.total,
     exempt_amount: r.exempt,
-    idp_amount: r.idp,
     base_amount: r.base,
     vat_amount: r.vat,
   };
 }
 
-/** True when stored base/vat differ from the engine result by more than 1 cent. */
 export function rowNeedsRecalc(row: {
   total_amount?: number | string | null;
   exempt_amount?: number | string | null;
-  idp_amount?: number | string | null;
   fel_document_type?: string | null;
   base_amount?: number | string | null;
   vat_amount?: number | string | null;
@@ -160,7 +156,6 @@ export function rowNeedsRecalc(row: {
   const r = calculateMixedTax({
     totalAmount: Number(row.total_amount) || 0,
     exemptAmount: Number(row.exempt_amount) || 0,
-    idpAmount: Number(row.idp_amount) || 0,
     documentType: row.fel_document_type ?? undefined,
   });
   const dBase = Math.abs((Number(row.base_amount) || 0) - r.base);
