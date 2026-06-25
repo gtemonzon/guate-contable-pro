@@ -114,7 +114,7 @@ function parseAccounts(rows: any[]): ParsedAccount[] {
 
 function parsePurchases(rows: any[]): ParsedPurchase[] {
   return rows
-    .map((r) => {
+    .map((r, idx) => {
       const bienes = num(pickKey(r, ["precio", "bienes"]));
       const servicios = num(pickKey(r, ["servicios"]));
       const activos = num(pickKey(r, ["activos", "activosfijos", "activos_fijos"]));
@@ -142,6 +142,8 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
       const netAmount = Math.max(0, columnWithVat - ivaRaw);
       const total = columnWithVat + idpAmount;
 
+      const excelRow = typeof (r as any).__rowNum__ === "number" ? (r as any).__rowNum__ + 1 : idx + 2;
+
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
         series: String(pickKey(r, ["serie", "series"]) ?? "").trim(),
@@ -157,6 +159,7 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
         authorizationNumber:
           String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
         legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
+        excelRow,
       };
     })
     .filter((p) => p.date && p.totalAmount > 0);
