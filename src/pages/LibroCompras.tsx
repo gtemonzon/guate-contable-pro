@@ -787,11 +787,11 @@ export default function LibroCompras() {
               // VAT-exempt enterprise: full total goes to expense (no VAT credit)
               expenseAmount = p.total_amount;
             } else {
-              // For fuel invoices with IDP: expense = base_amount + idp_amount
+              // For invoices with Non-VAT amount (IDP, tourism, etc.): expense = base_amount + exempt_amount
               // For regular invoices: expense = base_amount (total - vat)
-              const idpAmount = (p as any).idp_amount || 0;
+              const nonVat = (p as any).exempt_amount || 0;
               const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
-              expenseAmount = baseAmount + idpAmount;
+              expenseAmount = baseAmount + nonVat;
             }
             expenseByAccount.set(
               p.expense_account_id,
