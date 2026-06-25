@@ -1077,7 +1077,7 @@ export default function LibrosFiscales() {
         total_amount: entry.total_amount,
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
-        idp_amount: entry.idp_amount || 0,
+        
         exempt_amount: entry.exempt_amount || 0,
         tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
