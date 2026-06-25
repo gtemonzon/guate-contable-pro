@@ -186,6 +186,22 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     onUpdate(index, field, value);
   };
 
+  /**
+   * IDP UI shortcut: writes to the unified `exempt_amount` field and
+   * auto-classifies as IDP. The Category → Account mapping is resolved
+   * downstream by the Journal Entry Generator using enterprise config.
+   */
+  const handleIdpChange = (rawValue: string) => {
+    const numeric = parseFloat(rawValue) || 0;
+    setHasChanges(true);
+    setTouchedFields(prev => new Set(prev).add("exempt_amount").add("tax_category"));
+    onUpdate(index, "exempt_amount", numeric);
+    onUpdate(index, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
+  };
+  const idpDisplayValue = ((purchase.tax_category ?? null) === "IDP")
+    ? (purchase.exempt_amount || 0)
+    : 0;
+
   // Clear untouched recommended optional fields before saving
   const clearUntouchedRecommendedFields = () => {
     if (!isNewRecord) return;
