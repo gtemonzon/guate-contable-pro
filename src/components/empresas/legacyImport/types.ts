@@ -23,7 +23,10 @@ export interface ParsedPurchase {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
-  idpAmount: number;
+  /** Non-VAT (No afecto) portion. Unified field replacing the legacy idpAmount. */
+  exemptAmount: number;
+  /** Classification of the Non-VAT portion: IDP, TOURISM_TAX, ELECTRICITY_TAX, FISCAL_STAMP, OTHER. */
+  taxCategory?: string | null;
   operationTypeCode: OperationTypeCode;
   authorizationNumber?: string;
   legacyAccountId?: string | number; // idCuenta de la cuenta de gasto/compra

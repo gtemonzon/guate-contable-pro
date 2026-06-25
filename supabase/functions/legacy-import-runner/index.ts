@@ -32,7 +32,12 @@ interface ParsedPurchase {
   netAmount: number;
   vatAmount: number;
   totalAmount: number;
-  idpAmount: number;
+  /** Non-VAT (No afecto) portion. Unified field replacing legacy idpAmount. */
+  exemptAmount?: number;
+  /** Classification of the Non-VAT portion: IDP, TOURISM_TAX, etc. */
+  taxCategory?: string | null;
+  /** @deprecated Legacy payloads still send idpAmount; folded into exemptAmount on write. */
+  idpAmount?: number;
   operationTypeCode: string;
   authorizationNumber?: string;
   legacyAccountId?: string | number;
@@ -1696,7 +1701,8 @@ async function runImport(jobId: string) {
         currency_code: "GTQ",
         exchange_rate: 1,
         imported_from_fel: false,
-        idp_amount: p.idpAmount,
+        exempt_amount: (Number((p as any).exemptAmount) || 0) + (Number((p as any).idpAmount) || 0),
+        tax_category: (p as any).taxCategory ?? (Number((p as any).idpAmount) > 0 ? "IDP" : null),
         operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
         expense_account_id: expenseAccountId,
       };

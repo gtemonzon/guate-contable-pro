@@ -76,7 +76,8 @@ interface ValidPurchase {
   vat_amount: number;
   net_amount: number;
   total_amount: number;
-  idp_amount?: number;
+  exempt_amount?: number;
+  tax_category?: string | null;
   expense_account_id?: number | null;
   operation_type_id?: number | null;
 }
@@ -613,7 +614,8 @@ export function ImportPurchasesDialog({
           vat_amount: vatAmount,
           net_amount: baseAmount,
           total_amount: total,
-          idp_amount: idpAmount > 0 ? idpAmount : 0,
+          exempt_amount: idpAmount > 0 ? idpAmount : 0,
+          tax_category: idpAmount > 0 ? 'IDP' : null,
         });
       }
 

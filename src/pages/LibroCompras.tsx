@@ -439,7 +439,7 @@ export default function LibroCompras() {
       total_amount: 0,
       base_amount: 0,
       vat_amount: 0,
-      idp_amount: 0,
+      
       exempt_amount: 0,
       tax_category: null,
       batch_reference: "",
@@ -497,25 +497,22 @@ export default function LibroCompras() {
     
     updated[index] = { ...updated[index], [field]: value };
 
-    // Phase 1: Auto-calc base/VAT via mixed-tax engine.
-    // Recompute whenever total, exempt, IDP, or document type changes.
+    // Auto-recalculate base/VAT via mixed-tax engine.
+    // Recompute whenever total, exempt, or document type changes.
     if (
       field === "total_amount" ||
-      field === "idp_amount" ||
       field === "exempt_amount" ||
       field === "fel_document_type"
     ) {
       const row = updated[index];
       const result = calculateMixedTax({
         totalAmount: field === "total_amount" ? parseFloat(value) || 0 : row.total_amount || 0,
-        idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : row.idp_amount || 0,
         exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : row.exempt_amount || 0,
         documentType: field === "fel_document_type" ? value : row.fel_document_type,
         appliesVat,
       });
       updated[index].total_amount = result.total;
       updated[index].exempt_amount = result.exempt;
-      updated[index].idp_amount = result.idp;
       updated[index].base_amount = result.base;
       updated[index].vat_amount = result.vat;
     }
@@ -571,7 +568,7 @@ export default function LibroCompras() {
         total_amount: entry.total_amount,
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
-        idp_amount: entry.idp_amount || 0,
+        
         exempt_amount: entry.exempt_amount || 0,
         tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
@@ -790,11 +787,11 @@ export default function LibroCompras() {
               // VAT-exempt enterprise: full total goes to expense (no VAT credit)
               expenseAmount = p.total_amount;
             } else {
-              // For fuel invoices with IDP: expense = base_amount + idp_amount
+              // For invoices with Non-VAT amount (IDP, tourism, etc.): expense = base_amount + exempt_amount
               // For regular invoices: expense = base_amount (total - vat)
-              const idpAmount = (p as any).idp_amount || 0;
+              const nonVat = (p as any).exempt_amount || 0;
               const baseAmount = p.vat_amount > 0 ? (p.base_amount || p.total_amount - p.vat_amount) : p.total_amount;
-              expenseAmount = baseAmount + idpAmount;
+              expenseAmount = baseAmount + nonVat;
             }
             expenseByAccount.set(
               p.expense_account_id,

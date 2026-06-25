@@ -206,7 +206,8 @@ export async function importLegacyData(
       currency_code: "GTQ",
       exchange_rate: 1,
       imported_from_fel: false,
-      idp_amount: p.idpAmount,
+      exempt_amount: p.exemptAmount,
+      tax_category: p.taxCategory ?? null,
       operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
       expense_account_id: expenseAccountId,
     };

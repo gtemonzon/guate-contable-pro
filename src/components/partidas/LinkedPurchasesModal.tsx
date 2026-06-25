@@ -235,7 +235,8 @@ export default function LinkedPurchasesModal({
           total_amount: d.total_amount,
           base_amount: d.base_amount || Number((d.total_amount / (1 + VAT_RATE)).toFixed(2)),
           vat_amount: d.vat_amount,
-          idp_amount: d.idp_amount || 0,
+          exempt_amount: d.exempt_amount || 0,
+          tax_category: d.tax_category || null,
           batch_reference: d.batch_reference || "",
           operation_type_id: d.operation_type_id,
           expense_account_id: d.expense_account_id,
@@ -262,7 +263,8 @@ export default function LinkedPurchasesModal({
     total_amount: 0,
     base_amount: 0,
     vat_amount: 0,
-    idp_amount: 0,
+    exempt_amount: 0,
+    tax_category: null,
     batch_reference: "",
     operation_type_id: null,
     expense_account_id: null,
@@ -293,8 +295,8 @@ export default function LinkedPurchasesModal({
 
   const recalcVat = (p: PurchaseEntry): PurchaseEntry => {
     const total = p.total_amount || 0;
-    const idp = p.idp_amount || 0;
-    const taxable = total - idp;
+    const nonVat = p.exempt_amount || 0;
+    const taxable = total - nonVat;
     const base = Number((taxable / (1 + VAT_RATE)).toFixed(2));
     const vat = Number((taxable - base).toFixed(2));
     return { ...p, base_amount: base, vat_amount: vat };
@@ -305,9 +307,9 @@ export default function LinkedPurchasesModal({
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
       const updated = { ...p, [field]: value };
-      if (field === 'total_amount' || field === 'idp_amount') {
+      if (field === 'total_amount' || field === 'exempt_amount') {
         if (field === 'total_amount') updated.total_amount = Number(value) || 0;
-        if (field === 'idp_amount') updated.idp_amount = Number(value) || 0;
+        if (field === 'exempt_amount') updated.exempt_amount = Number(value) || 0;
         return recalcVat(updated);
       }
       return updated;
@@ -377,8 +379,8 @@ export default function LinkedPurchasesModal({
       total: acc.total + (p.total_amount || 0),
       base: acc.base + (p.base_amount || 0),
       vat: acc.vat + (p.vat_amount || 0),
-      idp: acc.idp + (p.idp_amount || 0),
-    }), { total: 0, base: 0, vat: 0, idp: 0 });
+      nonVat: acc.nonVat + (p.exempt_amount || 0),
+    }), { total: 0, base: 0, vat: 0, nonVat: 0 });
   }, [purchases]);
 
   const validatePurchases = (): boolean => {
@@ -445,8 +447,8 @@ export default function LinkedPurchasesModal({
         if (!expensesByAccount[p.expense_account_id]) {
           expensesByAccount[p.expense_account_id] = { total: 0, descriptions: [], refs: [] };
         }
-        // Expense = base_amount + IDP (fuel tax is part of the cost, not recoverable)
-        expensesByAccount[p.expense_account_id].total += p.base_amount + (p.idp_amount || 0);
+        // Expense = base_amount + Non-VAT (No afecto: IDP, tourism, electricity, stamps, etc.)
+        expensesByAccount[p.expense_account_id].total += p.base_amount + (p.exempt_amount || 0);
         expensesByAccount[p.expense_account_id].descriptions.push(
           `${p.supplier_name} - Fact. ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`
         );
@@ -658,7 +660,7 @@ export default function LinkedPurchasesModal({
           <div className="flex items-center gap-4">
             <div className="text-right text-sm">
               <p className="text-muted-foreground">Total: <span className="font-semibold text-foreground">{formatCurrency(totals.total)}</span></p>
-              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.idp > 0 ? ` | IDP: ${formatCurrency(totals.idp)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
+              <p className="text-xs text-muted-foreground">Base: {formatCurrency(totals.base)}{totals.nonVat > 0 ? ` | No afecto: ${formatCurrency(totals.nonVat)}` : ''} | IVA: {formatCurrency(totals.vat)}</p>
             </div>
             <Button onClick={handleContabilizar} disabled={loading || purchases.length === 0} className="gap-2">
               <Save className="h-4 w-4" />
@@ -698,7 +700,7 @@ export default function LinkedPurchasesModal({
                 <h5 className="font-medium text-sm">Vista previa de contabilización:</h5>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">
-                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base + totals.idp)}) + IVA Crédito ({formatCurrency(totals.vat)})
+                    <span className="font-medium">DEBE:</span> Gastos ({formatCurrency(totals.base + totals.nonVat)}) + IVA Crédito ({formatCurrency(totals.vat)})
                   </p>
                   <p className="text-muted-foreground">
                     <span className="font-medium">HABER:</span> {creditPreviewLabel} ({formatCurrency(totals.total)})

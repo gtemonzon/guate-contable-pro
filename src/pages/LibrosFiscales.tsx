@@ -44,7 +44,7 @@ interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
-  idp_amount: number;
+  
   exempt_amount?: number;
   tax_category?: string | null;
   batch_reference: string;
@@ -873,7 +873,7 @@ export default function LibrosFiscales() {
       total_amount: 0,
       base_amount: 0,
       vat_amount: 0,
-      idp_amount: 0,
+      
       exempt_amount: 0,
       tax_category: null,
       batch_reference: "",
@@ -998,20 +998,17 @@ export default function LibrosFiscales() {
       if (
         field === "total_amount" ||
         field === "fel_document_type" ||
-        field === "idp_amount" ||
         field === "exempt_amount"
       ) {
         const current = updated[index];
         const result = calculateMixedTax({
           totalAmount: field === "total_amount" ? parseFloat(value) || 0 : Number(current.total_amount) || 0,
           exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
-          idpAmount: field === "idp_amount" ? parseFloat(value) || 0 : Number(current.idp_amount) || 0,
           documentType: field === "fel_document_type" ? value : current.fel_document_type,
           appliesVat,
         });
         updated[index].total_amount = result.total;
         updated[index].exempt_amount = result.exempt;
-        updated[index].idp_amount = result.idp;
         updated[index].base_amount = result.base;
         updated[index].vat_amount = result.vat;
       }
@@ -1080,7 +1077,7 @@ export default function LibrosFiscales() {
         total_amount: entry.total_amount,
         base_amount: entry.base_amount,
         vat_amount: entry.vat_amount,
-        idp_amount: entry.idp_amount || 0,
+        
         exempt_amount: entry.exempt_amount || 0,
         tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
@@ -2276,12 +2273,12 @@ export default function LibrosFiscales() {
                               expenseAmount = Number(p.total_amount) || 0;
                             } else {
                               // Respetar IVA real: si vat_amount es 0, la base es el total
-                              // Para combustibles: gasto = base + IDP (el IDP no es recuperable como crédito fiscal)
-                              const idpAmount = Number((p as any).idp_amount) || 0;
+                              // Para impuestos no acreditables (IDP, turismo, etc.): gasto = base + No afecto
+                              const nonVat = Number((p as any).exempt_amount) || 0;
                               const baseAmount = p.vat_amount > 0
-                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - idpAmount))
-                                : (Number(p.total_amount) - idpAmount);
-                              expenseAmount = Number(baseAmount) + idpAmount;
+                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - nonVat))
+                                : (Number(p.total_amount) - nonVat);
+                              expenseAmount = Number(baseAmount) + nonVat;
                             }
                             expenseByAccount.set(
                               p.expense_account_id,

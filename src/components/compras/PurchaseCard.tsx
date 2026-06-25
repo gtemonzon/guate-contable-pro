@@ -25,10 +25,9 @@ export interface PurchaseEntry {
   total_amount: number;
   base_amount: number;
   vat_amount: number;
-  idp_amount: number;
-  /** Phase 1: portion of invoice total NOT subject to VAT (tourism tax, fiscal stamps, electricity, other). */
+  /** Portion of invoice total NOT subject to VAT (No afecto): tourism, IDP, electricity, fiscal stamps, other. */
   exempt_amount?: number;
-  /** Phase 1: categorization of the exempt portion (TOURISM_TAX, IDP, ELECTRICITY_TAX, FISCAL_STAMP, OTHER). */
+  /** Classification of the Non-VAT portion (TOURISM_TAX, IDP, ELECTRICITY_TAX, FISCAL_STAMP, OTHER). */
   tax_category?: string | null;
   batch_reference: string;
   operation_type_id: number | null;
@@ -186,6 +185,22 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
+
+  /**
+   * IDP UI shortcut: writes to the unified `exempt_amount` field and
+   * auto-classifies as IDP. The Category → Account mapping is resolved
+   * downstream by the Journal Entry Generator using enterprise config.
+   */
+  const handleIdpChange = (rawValue: string) => {
+    const numeric = parseFloat(rawValue) || 0;
+    setHasChanges(true);
+    setTouchedFields(prev => new Set(prev).add("exempt_amount").add("tax_category"));
+    onUpdate(index, "exempt_amount", numeric);
+    onUpdate(index, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
+  };
+  const idpDisplayValue = ((purchase.tax_category ?? null) === "IDP")
+    ? (purchase.exempt_amount || 0)
+    : 0;
 
   // Clear untouched recommended optional fields before saving
   const clearUntouchedRecommendedFields = () => {
@@ -390,8 +405,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-1 text-right font-mono text-muted-foreground">
               {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
-              {appliesVat && purchase.idp_amount > 0 && (
-                <span className="block text-[10px] text-muted-foreground/70">IDP: {formatCurrency(purchase.idp_amount)}</span>
+              {appliesVat && (purchase.exempt_amount || 0) > 0 && (
+                <span className="block text-[10px] text-muted-foreground/70">No afecto: {formatCurrency(purchase.exempt_amount || 0)}</span>
               )}
             </div>
             <div className="col-span-1 text-center">
@@ -573,8 +588,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   <Input
                     type="number"
                     step="0.01"
-                    value={purchase.idp_amount || 0}
-                    onChange={(e) => handleFieldChange("idp_amount", e.target.value)}
+                    value={idpDisplayValue}
+                    onChange={(e) => handleIdpChange(e.target.value)}
                     className="h-8 text-xs"
                     title="Impuesto a Distribución de Petróleo"
                   />
@@ -830,8 +845,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 <Input
                   type="number"
                   step="0.01"
-                  value={purchase.idp_amount || 0}
-                  onChange={(e) => handleFieldChange("idp_amount", e.target.value)}
+                  value={idpDisplayValue}
+                  onChange={(e) => handleIdpChange(e.target.value)}
                   className="h-8"
                   title="Impuesto a Distribución de Petróleo"
                 />
