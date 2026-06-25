@@ -288,10 +288,43 @@ export async function importLegacyData(
     };
   });
 
-  for (const part of chunk(salesRows, CHUNK)) {
-    const { error } = await supabase.from("tab_sales_ledger").insert(part);
-    if (error) result.errors.push(`Ventas: ${error.message}`);
-    else result.salesCreated += part.length;
+  for (const part of chunk(salesRows.map((row, i) => ({ row, src: ds.sales[i] })), CHUNK)) {
+    const rows = part.map((p) => p.row);
+    const { error } = await supabase.from("tab_sales_ledger").insert(rows);
+    if (!error) {
+      result.salesCreated += rows.length;
+    } else {
+      for (const { row, src } of part) {
+        const { error: rowErr } = await supabase.from("tab_sales_ledger").insert(row);
+        if (!rowErr) {
+          result.salesCreated += 1;
+          continue;
+        }
+        const isDup =
+          (rowErr as any).code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
+        if (isDup) {
+          const { data: existing } = await supabase
+            .from("tab_sales_ledger")
+            .select("id, invoice_date")
+            .eq("enterprise_id", enterpriseId)
+            .eq("customer_nit", src.customerNit)
+            .eq("invoice_series", src.series || "")
+            .eq("invoice_number", src.number || "0")
+            .eq("fel_document_type", src.felDocType)
+            .maybeSingle();
+          const existingInfo = existing
+            ? ` Ya existe en BD (id ${existing.id}, fecha ${existing.invoice_date}).`
+            : "";
+          result.errors.push(
+            `Venta duplicada — Fila Excel ${src.excelRow ?? "?"} | ${src.felDocType} | Serie "${src.series || "-"}" | Factura ${src.number || "-"} | NIT ${src.customerNit} | Cliente ${src.customerName || "-"} | Fecha ${src.date}.${existingInfo}`
+          );
+        } else {
+          result.errors.push(
+            `Venta Fila Excel ${src.excelRow ?? "?"} (NIT ${src.customerNit}, ${src.felDocType} ${src.series || "-"}/${src.number || "-"}): ${rowErr.message}`
+          );
+        }
+      }
+    }
     onProgress({ step: "Importando ventas...", current: result.salesCreated, total: salesRows.length });
   }
 
