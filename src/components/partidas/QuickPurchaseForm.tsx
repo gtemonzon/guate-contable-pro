@@ -61,7 +61,8 @@ export function QuickPurchaseForm({
   const [nitValid, setNitValid] = useState<boolean | null>(null);
   const [supplier, setSupplier] = useState("");
   const [total, setTotal] = useState<number>(0);
-  const [idpAmount, setIdpAmount] = useState<number>(0);
+  const [exemptAmount, setExemptAmount] = useState<number>(0);
+  const [taxCategory, setTaxCategory] = useState<string | null>(null);
   const [currencyCode, setCurrencyCode] = useState<string>(baseCurrency);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [expenseAccountId, setExpenseAccountId] = useState<number | null>(null);
