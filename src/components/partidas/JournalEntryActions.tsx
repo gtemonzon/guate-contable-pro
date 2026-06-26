@@ -75,17 +75,6 @@ export function JournalEntryActions({
           </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Shortcut hints */}
-          {!isReadOnly && (
-            <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground mr-1">
-              {canCreateEntries && entryStatus !== 'contabilizado' && (
-                <><kbd className="px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd> Borrador</>
-              )}
-              {canPostEntries && entryStatus !== 'contabilizado' && (
-                <><span className="mx-1">·</span><kbd className="px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd> Contabilizar</>
-              )}
-            </span>
-          )}
 
           {onLinkPurchases && (
             <Button variant="outline" onClick={onLinkPurchases} disabled={loading} size="sm" className="text-primary" title="Vincular Facturas (Alt+V)">
@@ -121,14 +110,17 @@ export function JournalEntryActions({
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
               <Save className="mr-2 h-4 w-4" />
-              Guardar borrador
+              Borrador
+              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd>
             </Button>
           )}
+
 
           {entryStatus !== 'contabilizado' && canPostEntries && !isReadOnly && (
             <Button onClick={onPost} disabled={loading || !isBalanced}>
               <CheckCircle className="mr-2 h-4 w-4" />
               Contabilizar
+              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd>
             </Button>
           )}
 
