@@ -442,7 +442,8 @@ export function QuickPurchaseForm({
       setNitValid(null);
       setSupplier("");
       setTotal(0);
-      setIdpAmount(0);
+      setExemptAmount(0);
+      setTaxCategory(null);
       setSeries("");
       setOperationTypeId(null);
       setExpenseAccountId(null);
