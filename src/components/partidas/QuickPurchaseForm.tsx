@@ -329,25 +329,16 @@ export function QuickPurchaseForm({
     touchedFields.current.delete("expenseAccountId");
   };
 
-  // Calculate base/VAT with fuel (IDP) logic
-  const calculateAmounts = () => {
-    if (total <= 0) return { base: 0, vat: 0 };
-    // Exempt operations: no VAT
-    if (isExemptOperation) {
-      return { base: total, vat: 0 };
-    }
-    if (isFuelOperation && idpAmount > 0) {
-      const netAfterIdp = total - idpAmount;
-      const base = Number((netAfterIdp / (1 + VAT_RATE)).toFixed(2));
-      const vat = Number((netAfterIdp - base).toFixed(2));
-      return { base, vat };
-    }
-    const base = Number((total / (1 + VAT_RATE)).toFixed(2));
-    const vat = Number((total - base).toFixed(2));
-    return { base, vat };
-  };
-
-  const { base, vat } = calculateAmounts();
+  // Calculate base/VAT/non-VAT using the unified purchase accounting engine
+  const accounting = calculatePurchaseAccounting({
+    totalAmount: total,
+    nonVatAmount: exemptAmount,
+    taxCategory,
+    documentType: docType,
+    appliesVat: !isExemptOperation,
+  });
+  const base = accounting.base;
+  const vat = accounting.vat;
 
   const canSubmit = nitValid === true && number.trim() && total > 0 && operationTypeId && expenseAccountId && !duplicate;
 
