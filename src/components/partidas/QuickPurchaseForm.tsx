@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
