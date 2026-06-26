@@ -398,8 +398,8 @@ export function QuickPurchaseForm({
           base_amount: baseFunctional,
           net_amount: baseFunctional,
           vat_amount: vatFunctional,
-          exempt_amount: isFuelOperation ? Math.round(idpAmount * r * 100) / 100 : 0,
-          tax_category: isFuelOperation && idpAmount > 0 ? 'IDP' : null,
+          exempt_amount: Math.round((exemptAmount || 0) * r * 100) / 100,
+          tax_category: (exemptAmount || 0) > 0 ? (taxCategory ?? (isFuelOperation ? 'IDP' : 'OTHER')) : null,
           // Multi-moneda: moneda original + tasa + montos originales
           currency_code: currencyCode,
           exchange_rate: r,
