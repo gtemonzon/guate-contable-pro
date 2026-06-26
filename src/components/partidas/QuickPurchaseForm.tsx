@@ -460,7 +460,7 @@ export function QuickPurchaseForm({
     } finally {
       setLoading(false);
     }
-  }, [canSubmit, nit, number, docType, series, date, supplier, total, base, vat, idpAmount, isFuelOperation, expenseAccountId, operationTypeId, enterpriseId, journalEntryId, entryMonth, entryYear, duplicate, checkDuplicate, toast, onCreated]);
+  }, [canSubmit, nit, number, docType, series, date, supplier, total, base, vat, exemptAmount, taxCategory, isFuelOperation, expenseAccountId, operationTypeId, enterpriseId, journalEntryId, entryMonth, entryYear, duplicate, checkDuplicate, toast, onCreated, exchangeRate, currencyCode]);
 
   // ─── Alt+N shortcut ───
   useEffect(() => {
