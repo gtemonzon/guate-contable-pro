@@ -707,6 +707,11 @@ export default function Partidas() {
                         })()}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
+                      {entry.bank_reference && (
+                        <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
+                          Ref. Bancaria: {entry.bank_reference}
+                        </p>
+                      )}
                       {entry.document_references && entry.document_references.length > 0 && (
                         <ReferenceBadges references={entry.document_references} maxVisible={1} compact className="mt-0.5" />
                       )}
