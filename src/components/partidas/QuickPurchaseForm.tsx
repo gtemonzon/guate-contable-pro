@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
@@ -68,6 +69,7 @@ export function QuickPurchaseForm({
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+  const { lookupNit } = useNitLookup();
 
   // Sync default currency once base loads
   useEffect(() => {
@@ -245,7 +247,16 @@ export function QuickPurchaseForm({
 
     setSuggestLoading(true);
     try {
-      // Name autofill is handled by NitAutocomplete onSelectTaxpayer
+      // Auto-fill supplier name if empty (handles tab-out without selecting suggestion)
+      if (!supplier.trim()) {
+        try {
+          const result = await lookupNit(cleaned);
+          if (result?.found && result.name) {
+            setSupplier(result.name);
+          }
+        } catch { /* ignore */ }
+      }
+
       // Auto-suggest operation type + expense account from last purchase
       let sugOpType: number | null = null;
       let sugAccount: number | null = null;
