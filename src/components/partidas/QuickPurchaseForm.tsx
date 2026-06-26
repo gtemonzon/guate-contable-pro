@@ -659,8 +659,8 @@ export function QuickPurchaseForm({
         </div>
       )}
 
-      {/* Row 5: Total + IDP (if fuel) */}
-      <div className={`grid gap-2 ${isFuelOperation ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {/* Row 5: Total + No afecto (siempre disponible) */}
+      <div className="grid gap-2 grid-cols-2">
         <div>
           <label className="text-xs font-medium text-muted-foreground">
             Total {currencyCode === baseCurrency ? `(${baseCurrency})` : currencyCode}
@@ -673,27 +673,50 @@ export function QuickPurchaseForm({
             placeholder="0.00"
           />
         </div>
-        {isFuelOperation && (
-          <div>
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Fuel className="h-3 w-3" /> IDP
-            </label>
-            <Input
-              type="number" step="0.01" min="0"
-              value={idpAmount || ""}
-              onChange={e => setIdpAmount(Number(e.target.value) || 0)}
-              className="h-8 text-xs font-mono mt-1"
-              placeholder="0.00"
-              title="Impuesto a Distribución de Petróleo"
-            />
-          </div>
-        )}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            {isFuelOperation ? <><Fuel className="h-3 w-3" /> IDP</> : <>No afecto</>}
+          </label>
+          <Input
+            type="number" step="0.01" min="0"
+            value={exemptAmount || ""}
+            onChange={e => {
+              const v = Number(e.target.value) || 0;
+              setExemptAmount(v);
+              if (v > 0 && !taxCategory) {
+                setTaxCategory(isFuelOperation ? "IDP" : "TOURISM_TAX");
+              }
+            }}
+            className="h-8 text-xs font-mono mt-1"
+            placeholder="0.00"
+            title={isFuelOperation ? "Impuesto a Distribución de Petróleo" : "Porción no afecta a IVA (turismo, timbres, electricidad, etc.)"}
+          />
+        </div>
       </div>
+
+      {/* Categoría del monto no afecto (cuando aplica y no es combustible) */}
+      {exemptAmount > 0 && !isFuelOperation && (
+        <div>
+          <label className="text-xs font-medium text-muted-foreground">
+            Tipo de impuesto no afecto
+          </label>
+          <Select value={taxCategory ?? ""} onValueChange={(v) => setTaxCategory(v || null)}>
+            <SelectTrigger className="h-8 text-xs mt-1">
+              <SelectValue placeholder="Seleccionar..." />
+            </SelectTrigger>
+            <SelectContent>
+              {TAX_CATEGORIES.map((c) => (
+                <SelectItem key={c.code} value={c.code} className="text-xs">{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {total > 0 && (
         <p className="text-[10px] text-muted-foreground">
           Base: {formatCurrency(base)} · IVA: {formatCurrency(vat)}
-          {isFuelOperation && idpAmount > 0 && ` · IDP: ${formatCurrency(idpAmount)}`}
+          {exemptAmount > 0 && ` · No afecto: ${formatCurrency(exemptAmount)}`}
         </p>
       )}
 
