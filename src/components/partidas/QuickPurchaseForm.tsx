@@ -69,6 +69,7 @@ export function QuickPurchaseForm({
   const [loading, setLoading] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const { toast } = useToast();
+  const { lookupNit } = useNitLookup();
 
   // Sync default currency once base loads
   useEffect(() => {
