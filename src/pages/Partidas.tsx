@@ -293,21 +293,34 @@ export default function Partidas() {
   const fetchEntries = async (enterpriseId: string, year: string | null) => {
     try {
       setLoading(true);
-      let query = supabase
-        .from("tab_journal_entries")
-        .select("*")
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .is("deleted_at", null)
-        .order("entry_date", { ascending: false })
-        .order("entry_number", { ascending: false });
+      // Sequential paginated fetch with a fresh query per page to avoid
+      // shared-builder issues that previously capped results at 1000 rows
+      // (same root cause already documented in initializeForEnterprise).
+      const PAGE = 1000;
+      const all: JournalEntry[] = [];
+      for (let start = 0; ; start += PAGE) {
+        let query = supabase
+          .from("tab_journal_entries")
+          .select("*")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .is("deleted_at", null)
+          .order("entry_date", { ascending: false })
+          .order("entry_number", { ascending: false });
 
-      if (year) {
-        query = query.gte("entry_date", `${year}-01-01`).lte("entry_date", `${year}-12-31`);
+        if (year) {
+          query = query
+            .gte("entry_date", `${year}-01-01`)
+            .lte("entry_date", `${year}-12-31`);
+        }
+
+        const { data, error } = await query.range(start, start + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...(data as JournalEntry[]));
+        if (data.length < PAGE) break;
       }
 
-      const data = await fetchAllRecords<JournalEntry>(query);
-
-      const mappedData = (data || []).map(entry => ({
+      const mappedData = all.map(entry => ({
         ...entry,
         status: (entry.status || (entry.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus,
       }));
