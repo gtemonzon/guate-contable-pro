@@ -409,13 +409,31 @@ export default function Partidas() {
       });
     }
 
+    // Parse entry_number to sort by year/month/correlativo regardless of prefix
+    // Supports: PREF-YYYY-MM-#### (new), PREF-YYYY-#### (legacy), PREF-YYYYMM##### (old)
+    const parseNum = (n: string): { y: number; m: number; s: number; prefix: string } => {
+      let match = n.match(/^([A-Z]+)-(\d{4})-(\d{2})-(\d+)$/);
+      if (match) return { prefix: match[1], y: +match[2], m: +match[3], s: +match[4] };
+      match = n.match(/^([A-Z]+)-(\d{4})-(\d+)$/);
+      if (match) return { prefix: match[1], y: +match[2], m: 0, s: +match[3] };
+      match = n.match(/^([A-Z]*)-?(\d{4})(\d{2})(\d+)$/);
+      if (match) return { prefix: match[1] || '', y: +match[2], m: +match[3], s: +match[4] };
+      return { prefix: n, y: 0, m: 0, s: 0 };
+    };
+
     filtered.sort((a, b) => {
       let cmp: number;
       if (sortField === 'date') {
         cmp = a.entry_date.localeCompare(b.entry_date);
-        if (cmp === 0) cmp = a.entry_number.localeCompare(b.entry_number);
+        if (cmp === 0) {
+          const pa = parseNum(a.entry_number);
+          const pb = parseNum(b.entry_number);
+          cmp = pa.y - pb.y || pa.m - pb.m || pa.s - pb.s || pa.prefix.localeCompare(pb.prefix);
+        }
       } else {
-        cmp = a.entry_number.localeCompare(b.entry_number);
+        const pa = parseNum(a.entry_number);
+        const pb = parseNum(b.entry_number);
+        cmp = pa.y - pb.y || pa.m - pb.m || pa.s - pb.s || pa.prefix.localeCompare(pb.prefix);
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
