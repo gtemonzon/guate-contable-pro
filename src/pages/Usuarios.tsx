@@ -267,6 +267,8 @@ const Usuarios = () => {
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === "table" ? (
+        <UserTable users={filteredUsers} onEdit={handleEdit} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredUsers.map((user) => (
