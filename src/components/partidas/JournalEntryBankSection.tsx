@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, AlertTriangle, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import type { Account } from "./useJournalEntryForm";
 
 export type BankDirection = 'OUT' | 'IN';
@@ -21,13 +23,52 @@ interface JournalEntryBankSectionProps {
   bankRefDuplicate?: { entryNumber: string; entryId: number } | null;
   bankRefChecking?: boolean;
   onBankRefBlur?: () => void;
+  enterpriseId?: number | null;
 }
+
+// In-memory cache: enterpriseId -> distinct beneficiary names
+const beneficiaryCache = new Map<number, string[]>();
 
 export function JournalEntryBankSection({
   accounts, bankAccountId, setBankAccountId, bankReference, setBankReference,
   beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, isReadOnly,
-  bankRefDuplicate, bankRefChecking, onBankRefBlur,
+  bankRefDuplicate, bankRefChecking, onBankRefBlur, enterpriseId,
 }: JournalEntryBankSectionProps) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!enterpriseId) return;
+    if (beneficiaryCache.has(enterpriseId)) {
+      setSuggestions(beneficiaryCache.get(enterpriseId)!);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("tab_journal_entries")
+        .select("beneficiary_name")
+        .eq("enterprise_id", enterpriseId)
+        .not("beneficiary_name", "is", null)
+        .order("entry_date", { ascending: false })
+        .limit(2000);
+      if (cancelled || !data) return;
+      const seen = new Set<string>();
+      const unique: string[] = [];
+      for (const row of data) {
+        const name = (row as any).beneficiary_name?.trim();
+        if (!name) continue;
+        const key = name.toUpperCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(name);
+      }
+      unique.sort((a, b) => a.localeCompare(b, 'es'));
+      beneficiaryCache.set(enterpriseId, unique);
+      setSuggestions(unique);
+    })();
+    return () => { cancelled = true; };
+  }, [enterpriseId]);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border border-dashed">
       <div>
@@ -108,8 +149,22 @@ export function JournalEntryBankSection({
 
           <div className="md:col-span-2">
             <Label htmlFor="beneficiary">Beneficiario</Label>
-            <Input id="beneficiary" placeholder="Nombre del beneficiario" value={beneficiaryName} onChange={(e) => setBeneficiaryName(e.target.value)} disabled={isReadOnly} />
+            <Input
+              id="beneficiary"
+              placeholder="Nombre del beneficiario"
+              value={beneficiaryName}
+              onChange={(e) => setBeneficiaryName(e.target.value)}
+              disabled={isReadOnly}
+              list="beneficiary-suggestions"
+              autoComplete="off"
+            />
+            <datalist id="beneficiary-suggestions">
+              {suggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
           </div>
+
         </>
       )}
     </div>

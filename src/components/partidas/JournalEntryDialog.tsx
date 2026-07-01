@@ -292,6 +292,8 @@ export default function JournalEntryDialog({
                 bankRefDuplicate={form.bankRefDuplicate}
                 bankRefChecking={form.bankRefChecking}
                 onBankRefBlur={form.checkDuplicateBankRef}
+                enterpriseId={parseInt(localStorage.getItem("currentEnterpriseId") || "0") || null}
+
               />
 
               {/* Descripción General */}
