@@ -197,6 +197,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
+    setChangeTick((t) => t + 1);
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
@@ -209,6 +210,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const handleIdpChange = (rawValue: string) => {
     const numeric = parseFloat(rawValue) || 0;
     setHasChanges(true);
+    setChangeTick((t) => t + 1);
     setTouchedFields(prev => new Set(prev).add("exempt_amount").add("tax_category"));
     onUpdate(index, "exempt_amount", numeric);
     onUpdate(index, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
