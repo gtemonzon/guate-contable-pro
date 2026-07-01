@@ -13,6 +13,7 @@ import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
 import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
+import { LedgerSortControls, LedgerSortField, LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
