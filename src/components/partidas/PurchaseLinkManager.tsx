@@ -124,7 +124,10 @@ export function PurchaseLinkManager({
         .order("invoice_date");
 
       if (entryMonth && entryYear) {
-        const startDate = `${entryYear}-${String(entryMonth).padStart(2, '0')}-01`;
+        // SAT permite registrar facturas de hasta 2 meses anteriores en el libro de compras del mes actual.
+        // Ampliamos el rango hacia atrás 2 meses para poder vincular esas facturas.
+        const startMonthDate = new Date(entryYear, entryMonth - 1 - 2, 1);
+        const startDate = `${startMonthDate.getFullYear()}-${String(startMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
         const lastDay = new Date(entryYear, entryMonth, 0).getDate();
         const endDate = `${entryYear}-${String(entryMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         query = query.gte("invoice_date", startDate).lte("invoice_date", endDate);
@@ -519,7 +522,12 @@ export function PurchaseLinkManager({
                   </div>
                   {entryMonth && entryYear && (
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      {new Date(entryYear, entryMonth - 1).toLocaleString('es-GT', { month: 'long', year: 'numeric' })}
+                      {(() => {
+                        const start = new Date(entryYear, entryMonth - 1 - 2);
+                        const end = new Date(entryYear, entryMonth - 1);
+                        const fmt = (d: Date) => d.toLocaleString('es-GT', { month: 'long', year: 'numeric' });
+                        return `${fmt(start)} – ${fmt(end)} (incluye 2 meses anteriores)`;
+                      })()}
                     </p>
                   )}
                 </div>
