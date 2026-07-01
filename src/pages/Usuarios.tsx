@@ -222,6 +222,19 @@ const Usuarios = () => {
               </SelectContent>
             </Select>
           )}
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as "cards" | "table")}
+            variant="outline"
+          >
+            <ToggleGroupItem value="table" aria-label="Vista tabla">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="cards" aria-label="Vista tarjetas">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button onClick={handleCreate}>
             <UserPlus className="mr-2 h-4 w-4" />
             Nuevo Usuario
