@@ -693,6 +693,29 @@ export default function LibroCompras() {
     }
   };
 
+  const handleSort = (field: LedgerSortField) => {
+    const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
+    setSortField(field);
+    setSortDir(nextDir);
+    setPurchases((prev) => {
+      const copy = [...prev];
+      const mult = nextDir === "asc" ? 1 : -1;
+      copy.sort((a, b) => {
+        let cmp = 0;
+        if (field === "date") {
+          cmp = (a.invoice_date || "").localeCompare(b.invoice_date || "");
+        } else if (field === "party") {
+          cmp = (a.supplier_name || "").localeCompare(b.supplier_name || "", "es", { sensitivity: "base" });
+        } else {
+          cmp = (a.total_amount || 0) - (b.total_amount || 0);
+        }
+        return cmp * mult;
+      });
+      return copy;
+    });
+  };
+
+
   const generatePurchaseJournalEntry = async (replaceExisting: boolean = false) => {
     setIsGeneratingJournal(true);
     try {
