@@ -41,8 +41,13 @@ const Usuarios = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tenantFilter, setTenantFilter] = useState<string>("current");
+  const [viewMode, setViewMode] = useState<"cards" | "table">(
+    () => (localStorage.getItem("usuarios-view-mode") as "cards" | "table") || "table",
+  );
 
   useEffect(() => {
+    localStorage.setItem("usuarios-view-mode", viewMode);
+  }, [viewMode]);
     fetchCurrentUser();
   }, []);
 
