@@ -165,23 +165,56 @@ export default function ReporteFacturasPorCuenta() {
     setReportGenerated(false);
     try {
       // Query purchase ledger filtered by expense_account_id (the account where the
-      // invoice's base+IDP got posted). Falls back to invoice_date for the range.
-      const { data: purchases, error: pErr } = await supabase
+      // invoice's base+IDP got posted). Uses the fiscal purchase book month/year as
+      // the primary filter (matches the Libro de Compras), so invoices with an
+      // invoice_date in a prior month but assigned to a later book (valid per SAT
+      // up to 2 months) are still included. Falls back to invoice_date for rows
+      // without an assigned book.
+      const sDate = new Date(startDate + "T00:00:00");
+      const eDate = new Date(endDate + "T00:00:00");
+      const startYm = sDate.getFullYear() * 12 + sDate.getMonth();
+      const endYm = eDate.getFullYear() * 12 + eDate.getMonth();
+
+      const { data: booksData, error: bErr } = await supabase
+        .from("tab_purchase_books")
+        .select("id, year, month")
+        .eq("enterprise_id", parseInt(enterpriseId));
+      if (bErr) throw bErr;
+      const bookIds = (booksData || [])
+        .filter((b: { year: number; month: number }) => {
+          const bYm = b.year * 12 + (b.month - 1);
+          return bYm >= startYm && bYm <= endYm;
+        })
+        .map((b: { id: number }) => b.id);
+
+      let query = supabase
         .from("tab_purchase_ledger")
         .select(`
           id, invoice_date, invoice_series, invoice_number,
           supplier_nit, supplier_name,
           total_amount, vat_amount, base_amount, exempt_amount,
-          expense_account_id, journal_entry_id,
+          expense_account_id, journal_entry_id, purchase_book_id,
           journal_entry:tab_journal_entries(id, entry_number, entry_date, description)
         `)
         .eq("enterprise_id", parseInt(enterpriseId))
         .in("expense_account_id", selectedAccounts)
-        .gte("invoice_date", startDate)
-        .lte("invoice_date", endDate)
         .is("deleted_at", null)
         .order("invoice_date", { ascending: true });
 
+      if (bookIds.length > 0) {
+        // Include invoices assigned to any book within the range OR unassigned
+        // invoices whose invoice_date falls in the range.
+        query = query.or(
+          `purchase_book_id.in.(${bookIds.join(",")}),and(purchase_book_id.is.null,invoice_date.gte.${startDate},invoice_date.lte.${endDate})`
+        );
+      } else {
+        query = query
+          .is("purchase_book_id", null)
+          .gte("invoice_date", startDate)
+          .lte("invoice_date", endDate);
+      }
+
+      const { data: purchases, error: pErr } = await query;
       if (pErr) throw pErr;
 
       const accountById = new Map(accounts.map(a => [a.id, a]));
