@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Search, UserPlus } from "lucide-react";
+import { Loader2, Search, UserPlus, LayoutGrid, List } from "lucide-react";
 import UserCard from "@/components/usuarios/UserCard";
+import UserTable from "@/components/usuarios/UserTable";
 import UserDialog from "@/components/usuarios/UserDialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useTenant } from "@/contexts/TenantContext";
 
 interface User {
@@ -39,6 +41,13 @@ const Usuarios = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tenantFilter, setTenantFilter] = useState<string>("current");
+  const [viewMode, setViewMode] = useState<"cards" | "table">(
+    () => (localStorage.getItem("usuarios-view-mode") as "cards" | "table") || "table",
+  );
+
+  useEffect(() => {
+    localStorage.setItem("usuarios-view-mode", viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -213,6 +222,19 @@ const Usuarios = () => {
               </SelectContent>
             </Select>
           )}
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as "cards" | "table")}
+            variant="outline"
+          >
+            <ToggleGroupItem value="table" aria-label="Vista tabla">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="cards" aria-label="Vista tarjetas">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
           <Button onClick={handleCreate}>
             <UserPlus className="mr-2 h-4 w-4" />
             Nuevo Usuario
@@ -245,6 +267,8 @@ const Usuarios = () => {
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === "table" ? (
+        <UserTable users={filteredUsers} onEdit={handleEdit} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredUsers.map((user) => (
