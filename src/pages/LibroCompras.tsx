@@ -13,6 +13,7 @@ import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
 import { calculateMixedTax, applyMixedTaxToRow } from "@/utils/purchaseTaxCalculation";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
+import { LedgerSortControls, LedgerSortField, LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { useToast } from "@/hooks/use-toast";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -40,6 +41,8 @@ interface FELDocumentType {
 
 export default function LibroCompras() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
+  const [sortField, setSortField] = useState<LedgerSortField | null>(null);
+  const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
@@ -430,6 +433,7 @@ export default function LibroCompras() {
     if (lastOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: PurchaseEntry = {
+      _uid: crypto.randomUUID(),
       invoice_series: "",
       invoice_number: "",
       invoice_date: defaultDate,
@@ -604,9 +608,18 @@ export default function LibroCompras() {
           throw error;
         }
 
-        const updated = [...purchases];
-        updated[index] = { ...data, isNew: false };
-        setPurchases(updated);
+        // Merge (do NOT replace) — preserve any characters the user has
+        // typed BETWEEN the moment the insert started and its response.
+        // Overwriting with `data` was wiping those keystrokes and causing
+        // the "series/number desaparece" bug reported by the user.
+        const uid = entry._uid;
+        setPurchases((prev) => {
+          const copy = [...prev];
+          const idx = uid ? copy.findIndex((p) => p._uid === uid) : index;
+          if (idx < 0) return prev;
+          copy[idx] = { ...copy[idx], id: data.id, isNew: false };
+          return copy;
+        });
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_purchase_ledger")
@@ -679,6 +692,29 @@ export default function LibroCompras() {
       });
     }
   };
+
+  const handleSort = (field: LedgerSortField) => {
+    const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
+    setSortField(field);
+    setSortDir(nextDir);
+    setPurchases((prev) => {
+      const copy = [...prev];
+      const mult = nextDir === "asc" ? 1 : -1;
+      copy.sort((a, b) => {
+        let cmp = 0;
+        if (field === "date") {
+          cmp = (a.invoice_date || "").localeCompare(b.invoice_date || "");
+        } else if (field === "party") {
+          cmp = (a.supplier_name || "").localeCompare(b.supplier_name || "", "es", { sensitivity: "base" });
+        } else {
+          cmp = (a.total_amount || 0) - (b.total_amount || 0);
+        }
+        return cmp * mult;
+      });
+      return copy;
+    });
+  };
+
 
   const generatePurchaseJournalEntry = async (replaceExisting: boolean = false) => {
     setIsGeneratingJournal(true);
@@ -1238,6 +1274,16 @@ export default function LibroCompras() {
           </div>
         </CardHeader>
         <CardContent>
+          {purchases.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <LedgerSortControls
+                field={sortField}
+                dir={sortDir}
+                onSort={handleSort}
+                partyLabel="Proveedor"
+              />
+            </div>
+          )}
           <PurchaseInvoiceList
               purchases={purchases}
               enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
@@ -1251,12 +1297,9 @@ export default function LibroCompras() {
               onEditingIndexChange={setEditingIndex}
               onUpdate={updateRow}
               onSave={(idx) => {
+                // saveRow handles the isNew → id transition internally
+                // (merging preserves any characters still being typed).
                 saveRow(idx);
-                if (purchases[idx]?.isNew) {
-                  const updated = [...purchases];
-                  updated[idx] = { ...updated[idx], isNew: false };
-                  setPurchases(updated);
-                }
               }}
               onDelete={deleteRow}
               onAdd={addNewRow}

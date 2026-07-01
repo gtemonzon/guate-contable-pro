@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
+import { LedgerSortControls, LedgerSortField, LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -57,6 +58,8 @@ interface SaleEntry {
 
 export default function LibroVentas() {
   const [sales, setSales] = useState<SaleEntry[]>([]);
+  const [sortField, setSortField] = useState<LedgerSortField | null>(null);
+  const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
@@ -605,11 +608,14 @@ export default function LibroVentas() {
           throw error;
         }
 
+        // Merge — do NOT replace with `data`. Preserves any characters
+        // the user has typed BETWEEN the insert firing and its response,
+        // avoiding the "series/number desaparece" bug.
         setSales((prev) => {
           const next = [...prev];
           const idx = next.findIndex((s) => s.client_id === rowId);
           if (idx < 0) return prev;
-          next[idx] = { ...data, client_id: rowId, isNew: false };
+          next[idx] = { ...next[idx], id: data.id, isNew: false };
           return next;
         });
       } else if (entry.id) {
@@ -686,6 +692,28 @@ export default function LibroVentas() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSort = (field: LedgerSortField) => {
+    const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
+    setSortField(field);
+    setSortDir(nextDir);
+    setSales((prev) => {
+      const copy = [...prev];
+      const mult = nextDir === "asc" ? 1 : -1;
+      copy.sort((a, b) => {
+        let cmp = 0;
+        if (field === "date") {
+          cmp = (a.invoice_date || "").localeCompare(b.invoice_date || "");
+        } else if (field === "party") {
+          cmp = (a.customer_name || "").localeCompare(b.customer_name || "", "es", { sensitivity: "base" });
+        } else {
+          cmp = (a.total_amount || 0) - (b.total_amount || 0);
+        }
+        return cmp * mult;
+      });
+      return copy;
+    });
   };
 
   const deleteRow = async (index: number) => {
@@ -1267,6 +1295,16 @@ export default function LibroVentas() {
           </div>
         </CardHeader>
         <CardContent>
+          {sales.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <LedgerSortControls
+                field={sortField}
+                dir={sortDir}
+                onSort={handleSort}
+                partyLabel="Cliente"
+              />
+            </div>
+          )}
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando...</p>
           ) : filteredSales.length === 0 ? (

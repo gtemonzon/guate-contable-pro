@@ -38,6 +38,8 @@ export interface PurchaseEntry {
   purchase_book_id?: number;
   isNew?: boolean;
   _recommendedFields?: string[];
+  /** Stable client-side UID for React key; survives insert (id assignment) so the input keeps focus. */
+  _uid?: string;
 }
 
 export interface PurchaseCardProps {
@@ -96,6 +98,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   appliesVat = true,
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
+  const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -196,6 +199,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
+    setChangeTick((t) => t + 1);
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
@@ -208,6 +212,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const handleIdpChange = (rawValue: string) => {
     const numeric = parseFloat(rawValue) || 0;
     setHasChanges(true);
+    setChangeTick((t) => t + 1);
     setTouchedFields(prev => new Set(prev).add("exempt_amount").add("tax_category"));
     onUpdate(index, "exempt_amount", numeric);
     onUpdate(index, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
@@ -234,40 +239,41 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
-  // Auto-save with debounce when there are changes
+  // Auto-save with debounce: timer RESETS on every keystroke (via changeTick),
+  // so the save only fires once the user actually pauses typing. This prevents
+  // mid-typing saves that were wiping subsequent characters.
   useEffect(() => {
-    if (hasChanges && inEditMode) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      saveTimeoutRef.current = setTimeout(() => {
-        const activeEl = document.activeElement as HTMLElement | null;
-        const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-
-        // Always invoke the LATEST onSave so it reads the latest parent state.
-        onSaveRef.current(index);
-        setHasChanges(false);
-
-        if (activeId) {
-          window.requestAnimationFrame(() => {
-            window.setTimeout(() => {
-              const el = document.getElementById(activeId);
-              if (el && document.contains(el)) {
-                el.focus();
-              }
-            }, 50);
-          });
-        }
-      }, 2000);
+    if (!hasChanges || !inEditMode) return;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
+
+      // Always invoke the LATEST onSave so it reads the latest parent state.
+      onSaveRef.current(index);
+      setHasChanges(false);
+
+      if (activeId) {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            const el = document.getElementById(activeId);
+            if (el && document.contains(el)) {
+              el.focus();
+            }
+          }, 50);
+        });
+      }
+    }, 2500);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, inEditMode, index]);
+  }, [changeTick, hasChanges, inEditMode, index]);
 
   // Save on unmount if there are pending changes
   useEffect(() => {
