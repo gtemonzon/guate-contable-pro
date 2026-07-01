@@ -237,40 +237,41 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
-  // Auto-save with debounce when there are changes
+  // Auto-save with debounce: timer RESETS on every keystroke (via changeTick),
+  // so the save only fires once the user actually pauses typing. This prevents
+  // mid-typing saves that were wiping subsequent characters.
   useEffect(() => {
-    if (hasChanges && inEditMode) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      saveTimeoutRef.current = setTimeout(() => {
-        const activeEl = document.activeElement as HTMLElement | null;
-        const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-
-        // Always invoke the LATEST onSave so it reads the latest parent state.
-        onSaveRef.current(index);
-        setHasChanges(false);
-
-        if (activeId) {
-          window.requestAnimationFrame(() => {
-            window.setTimeout(() => {
-              const el = document.getElementById(activeId);
-              if (el && document.contains(el)) {
-                el.focus();
-              }
-            }, 50);
-          });
-        }
-      }, 2000);
+    if (!hasChanges || !inEditMode) return;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
+
+      // Always invoke the LATEST onSave so it reads the latest parent state.
+      onSaveRef.current(index);
+      setHasChanges(false);
+
+      if (activeId) {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            const el = document.getElementById(activeId);
+            if (el && document.contains(el)) {
+              el.focus();
+            }
+          }, 50);
+        });
+      }
+    }, 2500);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, inEditMode, index]);
+  }, [changeTick, hasChanges, inEditMode, index]);
 
   // Save on unmount if there are pending changes
   useEffect(() => {
