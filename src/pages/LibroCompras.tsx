@@ -605,9 +605,18 @@ export default function LibroCompras() {
           throw error;
         }
 
-        const updated = [...purchases];
-        updated[index] = { ...data, isNew: false };
-        setPurchases(updated);
+        // Merge (do NOT replace) — preserve any characters the user has
+        // typed BETWEEN the moment the insert started and its response.
+        // Overwriting with `data` was wiping those keystrokes and causing
+        // the "series/number desaparece" bug reported by the user.
+        const uid = entry._uid;
+        setPurchases((prev) => {
+          const copy = [...prev];
+          const idx = uid ? copy.findIndex((p) => p._uid === uid) : index;
+          if (idx < 0) return prev;
+          copy[idx] = { ...copy[idx], id: data.id, isNew: false };
+          return copy;
+        });
       } else if (entry.id) {
         const { error } = await supabase
           .from("tab_purchase_ledger")
