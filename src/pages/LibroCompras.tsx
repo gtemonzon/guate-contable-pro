@@ -1261,12 +1261,9 @@ export default function LibroCompras() {
               onEditingIndexChange={setEditingIndex}
               onUpdate={updateRow}
               onSave={(idx) => {
+                // saveRow handles the isNew → id transition internally
+                // (merging preserves any characters still being typed).
                 saveRow(idx);
-                if (purchases[idx]?.isNew) {
-                  const updated = [...purchases];
-                  updated[idx] = { ...updated[idx], isNew: false };
-                  setPurchases(updated);
-                }
               }}
               onDelete={deleteRow}
               onAdd={addNewRow}
