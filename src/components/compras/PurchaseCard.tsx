@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { TAX_CATEGORIES } from "@/utils/purchaseTaxCalculation";
 
 export interface PurchaseEntry {
@@ -179,6 +180,19 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       // Non-critical, ignore
     }
   };
+
+  const { lookupNit } = useNitLookup();
+
+  /** On NIT blur: fill supplier_name from local taxpayer cache if empty/unchanged */
+  const fetchSupplierNameFromNit = async (nit: string) => {
+    const current = purchaseRef.current.supplier_name?.trim();
+    if (current) return; // don't overwrite user-provided name
+    const result = await lookupNit(nit);
+    if (result?.found && result.name) {
+      onUpdate(index, "supplier_name", result.name);
+    }
+  };
+
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
@@ -508,6 +522,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                       if (val && validateNIT(val)) {
                         const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
                         fetchSupplierMapping(cleaned);
+                        fetchSupplierNameFromNit(cleaned);
                       }
                     }
                   }}
@@ -772,6 +787,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     if (val && validateNIT(val)) {
                       const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
                       fetchSupplierMapping(cleaned);
+                      fetchSupplierNameFromNit(cleaned);
                     }
                   }
                 }}
