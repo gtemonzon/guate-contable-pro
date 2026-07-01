@@ -1274,6 +1274,16 @@ export default function LibroCompras() {
           </div>
         </CardHeader>
         <CardContent>
+          {purchases.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <LedgerSortControls
+                field={sortField}
+                dir={sortDir}
+                onSort={handleSort}
+                partyLabel="Proveedor"
+              />
+            </div>
+          )}
           <PurchaseInvoiceList
               purchases={purchases}
               enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
