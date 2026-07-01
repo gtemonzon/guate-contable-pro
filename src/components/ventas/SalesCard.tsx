@@ -147,39 +147,40 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     });
   };
 
-  // Auto-save with debounce when there are changes
+  // Auto-save with debounce: timer RESETS on every keystroke (via changeTick),
+  // so save only fires once the user pauses. Prevents mid-typing saves that
+  // were wiping subsequent characters.
   useEffect(() => {
-    if (hasChanges && inEditMode) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
-      saveTimeoutRef.current = setTimeout(() => {
-        const activeEl = document.activeElement as HTMLElement | null;
-        const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-        
-        onSave(rowId);
-        setHasChanges(false);
-        
-        if (activeId) {
-          window.requestAnimationFrame(() => {
-            window.setTimeout(() => {
-              const el = document.getElementById(activeId);
-              if (el && document.contains(el)) {
-                el.focus();
-              }
-            }, 50);
-          });
-        }
-      }, 2000);
+    if (!hasChanges || !inEditMode) return;
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
+
+      onSave(rowId);
+      setHasChanges(false);
+
+      if (activeId) {
+        window.requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            const el = document.getElementById(activeId);
+            if (el && document.contains(el)) {
+              el.focus();
+            }
+          }, 50);
+        });
+      }
+    }, 2500);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [hasChanges, inEditMode]);
+  }, [changeTick, hasChanges, inEditMode, rowId]);
 
   // Save on unmount if there are pending changes
   useEffect(() => {
