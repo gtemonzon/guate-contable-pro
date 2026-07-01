@@ -123,6 +123,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
   const handleFieldChange = (field: keyof SaleEntry, value: any) => {
     setHasChanges(true);
+    setChangeTick((t) => t + 1);
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(index, field, value);
   };
