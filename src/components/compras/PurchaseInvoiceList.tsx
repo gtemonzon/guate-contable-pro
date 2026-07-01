@@ -106,7 +106,7 @@ export function PurchaseInvoiceList({
       </div>
       {purchases.map((purchase, index) => (
         <PurchaseCard
-          key={purchase.id ?? `new-${index}`}
+          key={purchase._uid ?? (purchase.id ? `id-${purchase.id}` : `new-${index}`)}
           ref={index === purchases.length - 1 ? lastCardRef : undefined}
           purchase={purchase}
           index={index}
