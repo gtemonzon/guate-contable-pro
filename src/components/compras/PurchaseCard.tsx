@@ -38,6 +38,8 @@ export interface PurchaseEntry {
   purchase_book_id?: number;
   isNew?: boolean;
   _recommendedFields?: string[];
+  /** Stable client-side UID for React key; survives insert (id assignment) so the input keeps focus. */
+  _uid?: string;
 }
 
 export interface PurchaseCardProps {
