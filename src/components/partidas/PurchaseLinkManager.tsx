@@ -522,7 +522,12 @@ export function PurchaseLinkManager({
                   </div>
                   {entryMonth && entryYear && (
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      {new Date(entryYear, entryMonth - 1).toLocaleString('es-GT', { month: 'long', year: 'numeric' })}
+                      {(() => {
+                        const start = new Date(entryYear, entryMonth - 1 - 2);
+                        const end = new Date(entryYear, entryMonth - 1);
+                        const fmt = (d: Date) => d.toLocaleString('es-GT', { month: 'long', year: 'numeric' });
+                        return `${fmt(start)} – ${fmt(end)} (incluye 2 meses anteriores)`;
+                      })()}
                     </p>
                   )}
                 </div>
