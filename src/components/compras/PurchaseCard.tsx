@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { TAX_CATEGORIES } from "@/utils/purchaseTaxCalculation";
 
 export interface PurchaseEntry {
