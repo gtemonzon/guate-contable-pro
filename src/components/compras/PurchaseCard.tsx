@@ -181,6 +181,19 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   };
 
+  const { lookupNit } = useNitLookup();
+
+  /** On NIT blur: fill supplier_name from local taxpayer cache if empty/unchanged */
+  const fetchSupplierNameFromNit = async (nit: string) => {
+    const current = purchaseRef.current.supplier_name?.trim();
+    if (current) return; // don't overwrite user-provided name
+    const result = await lookupNit(nit);
+    if (result?.found && result.name) {
+      onUpdate(index, "supplier_name", result.name);
+    }
+  };
+
+
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
     setTouchedFields(prev => new Set(prev).add(field));
