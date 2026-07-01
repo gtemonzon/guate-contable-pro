@@ -562,23 +562,25 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               {appliesVat && (
                 <>
-                  <div className="col-span-1">
-                    <label
-                      className="text-xs text-muted-foreground"
-                      title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
-                    >
-                      Exento
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={purchase.exempt_amount || ""}
-                      onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
-                      placeholder="0.00"
-                      className="h-8 text-xs"
-                    />
-                  </div>
+                  {!isFuelOperation && (
+                    <div className="col-span-1">
+                      <label
+                        className="text-xs text-muted-foreground"
+                        title="Porción no afecta a IVA: turismo, timbres, electricidad, otros"
+                      >
+                        Exento
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={purchase.exempt_amount || ""}
+                        onChange={(e) => handleFieldChange("exempt_amount", e.target.value)}
+                        placeholder="0.00"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
                   <div className="col-span-1">
                     <label className="text-xs text-muted-foreground">Base</label>
                     <Input
