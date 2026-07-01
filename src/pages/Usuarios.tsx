@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Search, UserPlus } from "lucide-react";
+import { Loader2, Search, UserPlus, LayoutGrid, List } from "lucide-react";
 import UserCard from "@/components/usuarios/UserCard";
+import UserTable from "@/components/usuarios/UserTable";
 import UserDialog from "@/components/usuarios/UserDialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useTenant } from "@/contexts/TenantContext";
 
 interface User {
