@@ -1295,6 +1295,16 @@ export default function LibroVentas() {
           </div>
         </CardHeader>
         <CardContent>
+          {sales.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <LedgerSortControls
+                field={sortField}
+                dir={sortDir}
+                onSort={handleSort}
+                partyLabel="Cliente"
+              />
+            </div>
+          )}
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Cargando...</p>
           ) : filteredSales.length === 0 ? (
