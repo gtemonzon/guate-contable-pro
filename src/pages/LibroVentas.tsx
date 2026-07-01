@@ -605,11 +605,14 @@ export default function LibroVentas() {
           throw error;
         }
 
+        // Merge — do NOT replace with `data`. Preserves any characters
+        // the user has typed BETWEEN the insert firing and its response,
+        // avoiding the "series/number desaparece" bug.
         setSales((prev) => {
           const next = [...prev];
           const idx = next.findIndex((s) => s.client_id === rowId);
           if (idx < 0) return prev;
-          next[idx] = { ...data, client_id: rowId, isNew: false };
+          next[idx] = { ...next[idx], id: data.id, isNew: false };
           return next;
         });
       } else if (entry.id) {
