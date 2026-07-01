@@ -87,6 +87,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   onCancelEdit
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
+  const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
