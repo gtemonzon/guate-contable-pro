@@ -48,6 +48,8 @@ const Usuarios = () => {
   useEffect(() => {
     localStorage.setItem("usuarios-view-mode", viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
     fetchCurrentUser();
   }, []);
 
