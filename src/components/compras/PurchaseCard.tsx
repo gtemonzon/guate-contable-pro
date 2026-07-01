@@ -522,6 +522,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                       if (val && validateNIT(val)) {
                         const cleaned = val.replace(/[-\s]/g, "").toUpperCase();
                         fetchSupplierMapping(cleaned);
+                        fetchSupplierNameFromNit(cleaned);
                       }
                     }
                   }}
