@@ -41,6 +41,8 @@ interface FELDocumentType {
 
 export default function LibroCompras() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
+  const [sortField, setSortField] = useState<LedgerSortField | null>(null);
+  const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
   const [loading, setLoading] = useState(true);
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<string | null>(null);
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
