@@ -149,8 +149,22 @@ export function JournalEntryBankSection({
 
           <div className="md:col-span-2">
             <Label htmlFor="beneficiary">Beneficiario</Label>
-            <Input id="beneficiary" placeholder="Nombre del beneficiario" value={beneficiaryName} onChange={(e) => setBeneficiaryName(e.target.value)} disabled={isReadOnly} />
+            <Input
+              id="beneficiary"
+              placeholder="Nombre del beneficiario"
+              value={beneficiaryName}
+              onChange={(e) => setBeneficiaryName(e.target.value)}
+              disabled={isReadOnly}
+              list="beneficiary-suggestions"
+              autoComplete="off"
+            />
+            <datalist id="beneficiary-suggestions">
+              {suggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
           </div>
+
         </>
       )}
     </div>
