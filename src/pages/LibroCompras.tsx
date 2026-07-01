@@ -430,6 +430,7 @@ export default function LibroCompras() {
     if (lastOperationTypeId) recommendedList.push('operation_type_id');
 
     const newEntry: PurchaseEntry = {
+      _uid: crypto.randomUUID(),
       invoice_series: "",
       invoice_number: "",
       invoice_date: defaultDate,
