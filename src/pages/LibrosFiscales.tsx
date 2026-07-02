@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3 } from "lucide-react";
+import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import { SalesCard, type SalesCardRef } from "@/components/ventas/SalesCard";
@@ -105,6 +106,27 @@ export default function LibrosFiscales() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
+    try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("librosFiscales_showBreakdown", showBreakdown ? "1" : "0"); } catch {}
+  }, [showBreakdown]);
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        setIsHeaderCompact(window.scrollY > 40);
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
@@ -1438,28 +1460,57 @@ export default function LibrosFiscales() {
   return (
     <div className="p-8">
       {/* Header Sticky - contiene título, selectores, tabs, resúmenes y botones */}
-      <div className="sticky top-0 z-10 bg-background pb-4 space-y-4">
-        <div className="flex justify-between items-start">
-          <div>
+      <div className={`sticky top-0 z-10 bg-background transition-all duration-200 ${isHeaderCompact ? "pb-2 space-y-2 shadow-sm" : "pb-4 space-y-4"}`}>
+        <div className="flex justify-between items-start gap-4">
+          <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">{activeTab === "compras" ? "Compras" : "Ventas"}</h1>
+              <h1 className={`font-bold transition-all duration-200 ${isHeaderCompact ? "text-lg" : "text-3xl"}`}>
+                {activeTab === "compras" ? "Compras" : "Ventas"}
+              </h1>
               <SaveStatusIndicator status={saveStatus} />
+              {isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center text-primary cursor-help">
+                        <Info className="h-4 w-4" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p><strong>{strategy.label}.</strong>{" "}
+                        {strategy.combinedBook
+                          ? "Reporte oficial: Libro de Compras y Ventas combinado (formato SAT). Ver Reportes ▸ Compras y Ventas."
+                          : strategy.headerNote}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
-            <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
+            {!isHeaderCompact && (
+              <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
+            )}
           </div>
-          <div className="flex gap-4 items-end">
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => setShowSearchDialog(true)}
-              title="Buscar factura"
-            >
-              <Search className="h-4 w-4" />
-            </Button>
+          <div className={`flex gap-2 items-end ${isHeaderCompact ? "items-center" : ""}`}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={isHeaderCompact ? "h-8 w-8" : ""}
+                    onClick={() => setShowSearchDialog(true)}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Buscar factura</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <div>
-              <Label htmlFor="month-select">Mes</Label>
+              {!isHeaderCompact && <Label htmlFor="month-select">Mes</Label>}
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-                <SelectTrigger id="month-select" className="w-[150px]">
+                <SelectTrigger id="month-select" className={`transition-all ${isHeaderCompact ? "w-[110px] h-8 text-xs" : "w-[150px]"}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1472,11 +1523,11 @@ export default function LibrosFiscales() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="year-select">Año</Label>
+              {!isHeaderCompact && <Label htmlFor="year-select">Año</Label>}
               <Input
                 id="year-select"
                 type="number"
-                className="w-[100px]"
+                className={`transition-all ${isHeaderCompact ? "w-[80px] h-8 text-xs" : "w-[100px]"}`}
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 min="2020"
@@ -1491,21 +1542,20 @@ export default function LibrosFiscales() {
           onValueChange={(v) => {
             const tab = v as "compras" | "ventas";
             setActiveTab(tab);
-            // reset edit state when switching tabs
             setEditingPurchaseIndex(null);
             setEditingSaleIndex(null);
           }}
         >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="compras">
+          <TabsList className={`grid w-full grid-cols-2 transition-all ${isHeaderCompact ? "h-8" : ""}`}>
+            <TabsTrigger value="compras" className={isHeaderCompact ? "text-xs py-1" : ""}>
               {strategy.combinedBook ? "Compras (Libro Compras y Ventas)" : "Libro de Compras"}
             </TabsTrigger>
-            <TabsTrigger value="ventas">
+            <TabsTrigger value="ventas" className={isHeaderCompact ? "text-xs py-1" : ""}>
               {strategy.combinedBook ? "Ventas (Libro Compras y Ventas)" : "Libro de Ventas"}
             </TabsTrigger>
           </TabsList>
 
-          {(strategy.combinedBook || strategy.headerNote) && (
+          {!isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
             <div className="mt-3 rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm">
               <strong>{strategy.label}.</strong>{" "}
               {strategy.combinedBook
@@ -1514,11 +1564,11 @@ export default function LibrosFiscales() {
             </div>
           )}
 
-          <TabsContent value="compras" className="space-y-2 mt-4">
-            <div className="space-y-2">
+          <TabsContent value="compras" className={`space-y-2 ${isHeaderCompact ? "mt-2" : "mt-4"}`}>
+            <Collapsible open={showBreakdown} onOpenChange={setShowBreakdown} className="space-y-2">
               {/* Resumen principal */}
-              <div className="flex justify-between items-center">
-                <div className="flex gap-6 text-sm">
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex gap-4 md:gap-6 text-sm items-center flex-wrap">
                   <div>
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
@@ -1539,79 +1589,97 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">{appliesVat ? "Total c/IVA: " : "Total Compras: "}</span>
                     <span className="font-semibold">Q {purchaseTotals.totalWithVAT}</span>
                   </div>
-                </div>
-                <div className="flex gap-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-6 w-6">
+                            {showBreakdown ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </CollapsibleTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ver desglose</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isRefreshing}>
                           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Actualizar datos</p></TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
-                  <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Estadísticas
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generar Póliza
-                  </Button>
-                  <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="sm" onClick={addNewPurchase}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Nueva Factura
+                        <Button variant="outline" size="icon" onClick={() => setShowStatsModal(true)}>
+                          <BarChart3 className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Alt+N</p>
-                      </TooltipContent>
+                      <TooltipContent><p>Estadísticas</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={() => setShowImportDialog(true)}>
+                          <Upload className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Importar</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={() => setShowJournalDialog(true)}>
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Generar Póliza</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" onClick={addNewPurchase}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Nueva Factura (Alt+N)</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
               </div>
-              
-              {/* Resumen por Tipo de Operación */}
-              {purchasesByOperationType.length > 0 && (
-                <div className="flex gap-6 text-sm text-muted-foreground">
-                  <span className="font-medium">Por Operación:</span>
-                  {purchasesByOperationType.map(op => (
-                    <div key={op.name}>
-                      <span>{op.name}: </span>
-                      <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Resumen por Tipo de Documento */}
-              {purchasesByDocType.length > 0 && (
-                <div className="flex gap-6 text-sm text-muted-foreground">
-                  <span className="font-medium">Por Documento:</span>
-                  {purchasesByDocType.map(doc => (
-                    <div key={doc.type}>
-                      <span>{doc.type}: </span>
-                      <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+              <CollapsibleContent className="space-y-2">
+                {purchasesByOperationType.length > 0 && (
+                  <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
+                    <span className="font-medium">Por Operación:</span>
+                    {purchasesByOperationType.map(op => (
+                      <div key={op.name}>
+                        <span>{op.name}: </span>
+                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {purchasesByDocType.length > 0 && (
+                  <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
+                    <span className="font-medium">Por Documento:</span>
+                    {purchasesByDocType.map(doc => (
+                      <div key={doc.type}>
+                        <span>{doc.type}: </span>
+                        <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
           </TabsContent>
 
-          <TabsContent value="ventas" className="space-y-2 mt-4">
-            <div className="space-y-2">
+          <TabsContent value="ventas" className={`space-y-2 ${isHeaderCompact ? "mt-2" : "mt-4"}`}>
+            <Collapsible open={showBreakdown} onOpenChange={setShowBreakdown} className="space-y-2">
               {/* Resumen principal */}
-              <div className="flex justify-between items-center">
-                <div className="flex gap-6 text-sm">
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex gap-4 md:gap-6 text-sm items-center flex-wrap">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{salesTotals.activeCount} activos</Badge>
@@ -1631,75 +1699,94 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">Total c/IVA: </span>
                     <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
                   </div>
-                </div>
-                <div className="flex gap-2">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={handleManualRefresh} disabled={isRefreshing}>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-6 w-6">
+                            {showBreakdown ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </CollapsibleTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ver desglose</p></TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isRefreshing}>
                           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Actualizar datos</p></TooltipContent>
                     </Tooltip>
-                  </TooltipProvider>
-                  <Button variant="outline" size="sm" onClick={() => setShowStatsModal(true)}>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Estadísticas
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Importar
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowJournalDialog(true)}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generar Póliza
-                  </Button>
-                  <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="sm" onClick={addNewSale}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Nueva Factura
+                        <Button variant="outline" size="icon" onClick={() => setShowStatsModal(true)}>
+                          <BarChart3 className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Alt+N</p>
-                      </TooltipContent>
+                      <TooltipContent><p>Estadísticas</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={() => setShowImportDialog(true)}>
+                          <Upload className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Importar</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={() => setShowJournalDialog(true)}>
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Generar Póliza</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="icon" onClick={addNewSale}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Nueva Factura (Alt+N)</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
               </div>
-              
-              {/* Resumen por Tipo de Operación */}
-              {salesByOperationType.length > 0 && (
-                <div className="flex gap-6 text-sm text-muted-foreground">
-                  <span className="font-medium">Por Operación:</span>
-                  {salesByOperationType.map(op => (
-                    <div key={op.name}>
-                      <span>{op.name}: </span>
-                      <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Resumen por Tipo de Documento */}
-              {salesByDocType.length > 0 && (
-                <div className="flex gap-6 text-sm text-muted-foreground">
-                  <span className="font-medium">Por Documento:</span>
-                  {salesByDocType.map(doc => (
-                    <div key={doc.type}>
-                      <span>{doc.type}: </span>
-                      <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+              <CollapsibleContent className="space-y-2">
+                {salesByOperationType.length > 0 && (
+                  <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
+                    <span className="font-medium">Por Operación:</span>
+                    {salesByOperationType.map(op => (
+                      <div key={op.name}>
+                        <span>{op.name}: </span>
+                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {salesByDocType.length > 0 && (
+                  <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
+                    <span className="font-medium">Por Documento:</span>
+                    {salesByDocType.map(doc => (
+                      <div key={doc.type}>
+                        <span>{doc.type}: </span>
+                        <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
           </TabsContent>
         </Tabs>
       </div>
+
 
       {/* Área scrollable con las facturas */}
       <div className="mt-4">
