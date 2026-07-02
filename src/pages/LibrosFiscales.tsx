@@ -1104,9 +1104,12 @@ export default function LibrosFiscales() {
         setPurchases((prev) => {
           const updated = [...prev];
           if (!updated[index]) return prev;
-          updated[index] = { ...data, isNew: false };
+          // Merge server response into current state to preserve any characters
+          // the user typed while the insert request was in flight.
+          updated[index] = { ...updated[index], id: data.id, isNew: false };
           return updated;
         });
+
 
         // Guardar última cuenta usada
         if (entry.expense_account_id) {
