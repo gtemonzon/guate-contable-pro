@@ -891,8 +891,10 @@ export default function LibrosFiscales() {
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
+      _uid: `tmp-${crypto.randomUUID()}`,
       _recommendedFields: recommendedList,
     };
+
     setPurchases((prev) => {
       const updated = [newEntry, ...prev];
       purchasesRef.current = updated;
