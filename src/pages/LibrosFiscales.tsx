@@ -84,6 +84,9 @@ interface SaleEntry {
 export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
+  const [sortField, setSortField] = useState<LedgerSortField | null>(null);
+  const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
+
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasDataRef = useRef(false);
