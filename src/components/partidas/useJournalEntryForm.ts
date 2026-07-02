@@ -841,6 +841,28 @@ export function useJournalEntryForm(
         toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${dupRow.entry_number} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
         return;
       }
+
+      // Also block if number exists as a void cheque in tab_bank_documents
+      const { data: bankAcctDup } = await supabase
+        .from("tab_bank_accounts")
+        .select("id")
+        .eq("account_id", bankAccountId)
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .maybeSingle();
+      if (bankAcctDup?.id) {
+        const { data: voidDoc } = await supabase
+          .from("tab_bank_documents")
+          .select("id, document_number, status")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .eq("bank_account_id", bankAcctDup.id)
+          .eq("document_number", bankReference.trim())
+          .maybeSingle();
+        if (voidDoc && voidDoc.status === "VOID") {
+          setBankRefDuplicate({ entryNumber: `Cheque ${voidDoc.document_number} (ANULADO)`, entryId: voidDoc.id });
+          toast({ title: "Referencia duplicada", description: `El cheque ${voidDoc.document_number} ya está registrado como ANULADO para esta cuenta bancaria.`, variant: "destructive" });
+          return;
+        }
+      }
       setBankRefDuplicate(null);
     }
 
