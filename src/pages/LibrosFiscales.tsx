@@ -678,9 +678,10 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
+      const normalized = (data || []).map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
+
     } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas de compra",
