@@ -1751,7 +1751,7 @@ export default function LibrosFiscales() {
                 <div className="space-y-2">
                   {purchases.map((purchase, index) => (
                     <PurchaseCard
-                      key={purchase.id || `new-${index}`}
+                      key={purchase._uid || purchase.id || `new-${index}`}
                       ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
                       purchase={purchase}
                       index={index}
