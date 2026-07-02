@@ -106,6 +106,27 @@ export default function LibrosFiscales() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
+    try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("librosFiscales_showBreakdown", showBreakdown ? "1" : "0"); } catch {}
+  }, [showBreakdown]);
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        setIsHeaderCompact(window.scrollY > 40);
+        ticking = false;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
