@@ -23,6 +23,8 @@ import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
+
 
 
 interface FELDocumentType {
