@@ -1682,6 +1682,7 @@ export default function LibrosFiscales() {
                       <TooltipContent><p>Nueva Factura (Alt+N)</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  </div>
                 </div>
               </div>
 
