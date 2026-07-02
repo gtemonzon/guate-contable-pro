@@ -23,6 +23,8 @@ import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
+
 
 
 interface FELDocumentType {
@@ -54,8 +56,10 @@ interface PurchaseEntry {
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;
+  _uid?: string;
   _recommendedFields?: string[];
 }
+
 
 interface SaleEntry {
   id?: number;
@@ -82,6 +86,9 @@ interface SaleEntry {
 export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
+  const [sortField, setSortField] = useState<LedgerSortField | null>(null);
+  const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
+
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasDataRef = useRef(false);
@@ -494,10 +501,11 @@ export default function LibrosFiscales() {
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
           if (freshPurchases) {
-            const normalized = freshPurchases.map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
+            const normalized = freshPurchases.map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
             purchasesRef.current = normalized;
             setPurchases(normalized);
           }
+
         }
       } catch (_) { /* silent */ }
 
@@ -670,9 +678,10 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
+      const normalized = (data || []).map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
+
     } catch (error: unknown) {
       toast({
         title: "Error al cargar facturas de compra",
@@ -882,8 +891,10 @@ export default function LibrosFiscales() {
       bank_account_id: lastBankAccountId,
       journal_entry_id: null,
       isNew: true,
+      _uid: `tmp-${crypto.randomUUID()}`,
       _recommendedFields: recommendedList,
     };
+
     setPurchases((prev) => {
       const updated = [newEntry, ...prev];
       purchasesRef.current = updated;
@@ -1099,9 +1110,12 @@ export default function LibrosFiscales() {
         setPurchases((prev) => {
           const updated = [...prev];
           if (!updated[index]) return prev;
-          updated[index] = { ...data, isNew: false };
+          // Merge server response into current state to preserve any characters
+          // the user typed while the insert request was in flight.
+          updated[index] = { ...updated[index], id: data.id, isNew: false };
           return updated;
         });
+
 
         // Guardar última cuenta usada
         if (entry.expense_account_id) {
@@ -1691,6 +1705,43 @@ export default function LibrosFiscales() {
       <div className="mt-4">
         <Card>
           <CardContent className="pt-6">
+            <div className="flex justify-end mb-3">
+              <LedgerSortControls
+                field={sortField}
+                dir={sortDir}
+                partyLabel={activeTab === "compras" ? "Proveedor" : "Cliente"}
+                onSort={(field) => {
+                  const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
+                  setSortField(field);
+                  setSortDir(nextDir);
+                  const mult = nextDir === "asc" ? 1 : -1;
+                  if (activeTab === "compras") {
+                    setPurchases((prev) => {
+                      const copy = [...prev];
+                      copy.sort((a, b) => {
+                        if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
+                        if (field === "party") return mult * ((a.supplier_name || "").localeCompare(b.supplier_name || "", "es"));
+                        if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+                        return 0;
+                      });
+                      return copy;
+                    });
+                  } else {
+                    setSales((prev) => {
+                      const copy = [...prev];
+                      copy.sort((a, b) => {
+                        if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
+                        if (field === "party") return mult * ((a.customer_name || "").localeCompare(b.customer_name || "", "es"));
+                        if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+                        return 0;
+                      });
+                      return copy;
+                    });
+                  }
+                }}
+              />
+            </div>
+
             {activeTab === "compras" ? (
               loading && purchases.length === 0 ? (
                 <p className="text-center text-muted-foreground">Cargando...</p>
@@ -1700,7 +1751,7 @@ export default function LibrosFiscales() {
                 <div className="space-y-2">
                   {purchases.map((purchase, index) => (
                     <PurchaseCard
-                      key={purchase.id || `new-${index}`}
+                      key={purchase._uid || purchase.id || `new-${index}`}
                       ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
                       purchase={purchase}
                       index={index}
