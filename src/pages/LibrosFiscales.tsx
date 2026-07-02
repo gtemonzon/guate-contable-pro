@@ -501,10 +501,11 @@ export default function LibrosFiscales() {
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
           if (freshPurchases) {
-            const normalized = freshPurchases.map((row: any) => applyMixedTaxToRow(row, { appliesVat })) as PurchaseEntry[];
+            const normalized = freshPurchases.map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
             purchasesRef.current = normalized;
             setPurchases(normalized);
           }
+
         }
       } catch (_) { /* silent */ }
 
