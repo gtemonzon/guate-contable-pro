@@ -56,8 +56,10 @@ interface PurchaseEntry {
   journal_entry_id: number | null;
   purchase_book_id?: number;
   isNew?: boolean;
+  _uid?: string;
   _recommendedFields?: string[];
 }
+
 
 interface SaleEntry {
   id?: number;
