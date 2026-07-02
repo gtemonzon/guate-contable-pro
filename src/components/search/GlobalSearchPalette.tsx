@@ -289,11 +289,16 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
 
         // Map journal entries
         journals.data?.forEach((j) => {
+          const extras: string[] = [];
+          if (j.bank_reference) extras.push(`Ref. Bancaria: ${j.bank_reference}`);
+          if (j.document_reference) extras.push(`Ref. Doc: ${j.document_reference}`);
+          if (j.beneficiary_name) extras.push(j.beneficiary_name);
+          const subtitle = [j.description, ...extras].filter(Boolean).join(" · ");
           allResults.push({
             id: `partida-${j.id}`,
             category: "partidas",
             title: `${j.entry_number}`,
-            subtitle: j.description,
+            subtitle,
             meta: `${formatCurrency(j.total_debit)} · ${j.entry_date}`,
             route: `/partidas?viewEntry=${j.id}`,
           });
