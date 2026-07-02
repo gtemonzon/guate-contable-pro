@@ -1632,7 +1632,14 @@ export default function LibrosFiscales() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-2">
+                  <LedgerSortControls
+                    field={sortField}
+                    dir={sortDir}
+                    partyLabel="Proveedor"
+                    onSort={handleSort}
+                  />
+                  <div className="flex gap-1">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
