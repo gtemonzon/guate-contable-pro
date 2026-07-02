@@ -408,7 +408,33 @@ export function useJournalEntryForm(
       }
 
       const { data } = await query.maybeSingle();
-      setBankRefDuplicate(data ? { entryNumber: data.entry_number, entryId: data.id } : null);
+      if (data) {
+        setBankRefDuplicate({ entryNumber: data.entry_number, entryId: data.id });
+      } else {
+        // Also check void cheques in tab_bank_documents
+        const { data: bankAcct } = await supabase
+          .from("tab_bank_accounts")
+          .select("id")
+          .eq("account_id", bankAccountId)
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .maybeSingle();
+        if (bankAcct?.id) {
+          const { data: voidDoc } = await supabase
+            .from("tab_bank_documents")
+            .select("id, document_number, status")
+            .eq("enterprise_id", parseInt(enterpriseId))
+            .eq("bank_account_id", bankAcct.id)
+            .eq("document_number", bankReference.trim())
+            .maybeSingle();
+          setBankRefDuplicate(
+            voidDoc
+              ? { entryNumber: `Cheque ${voidDoc.document_number} (${voidDoc.status})`, entryId: voidDoc.id }
+              : null,
+          );
+        } else {
+          setBankRefDuplicate(null);
+        }
+      }
     } catch {
       setBankRefDuplicate(null);
     } finally {
