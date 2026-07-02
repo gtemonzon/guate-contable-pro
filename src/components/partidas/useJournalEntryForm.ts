@@ -298,15 +298,63 @@ export function useJournalEntryForm(
     if (!open || !bankAccountId || bankReference) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
-    supabase.from("tab_journal_entries").select("bank_reference")
-      .eq("enterprise_id", parseInt(enterpriseId)).eq("bank_account_id", bankAccountId)
-      .not("bank_reference", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data?.bank_reference) {
-          const match = data.bank_reference.match(/(\d+)$/);
-          if (match) setBankReference(`${data.bank_reference.replace(/\d+$/, '')}${parseInt(match[1]) + 1}`);
-        }
+    const entId = parseInt(enterpriseId);
+
+    (async () => {
+      // 1) Latest bank_reference from journal entries (to preserve prefix pattern)
+      const { data: lastJe } = await supabase
+        .from("tab_journal_entries")
+        .select("bank_reference")
+        .eq("enterprise_id", entId)
+        .eq("bank_account_id", bankAccountId)
+        .not("bank_reference", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastJe?.bank_reference) return;
+      const baseMatch = lastJe.bank_reference.match(/^(.*?)(\d+)$/);
+      if (!baseMatch) return;
+      const prefix = baseMatch[1];
+      let maxSeq = parseInt(baseMatch[2]);
+
+      // 2) Consider higher numeric refs in journal entries (same prefix)
+      const { data: allJe } = await supabase
+        .from("tab_journal_entries")
+        .select("bank_reference")
+        .eq("enterprise_id", entId)
+        .eq("bank_account_id", bankAccountId)
+        .not("bank_reference", "is", null)
+        .like("bank_reference", `${prefix}%`)
+        .limit(500);
+      allJe?.forEach((r: { bank_reference: string | null }) => {
+        const m = r.bank_reference?.match(/^(.*?)(\d+)$/);
+        if (m && m[1] === prefix) maxSeq = Math.max(maxSeq, parseInt(m[2]));
       });
+
+      // 3) Consider void cheques stored only in tab_bank_documents
+      const { data: bankAcct } = await supabase
+        .from("tab_bank_accounts")
+        .select("id")
+        .eq("account_id", bankAccountId)
+        .eq("enterprise_id", entId)
+        .maybeSingle();
+      if (bankAcct?.id) {
+        const { data: docs } = await supabase
+          .from("tab_bank_documents")
+          .select("document_number")
+          .eq("enterprise_id", entId)
+          .eq("bank_account_id", bankAcct.id)
+          .like("document_number", `${prefix}%`)
+          .limit(500);
+        docs?.forEach((d: { document_number: string | null }) => {
+          const m = d.document_number?.match(/^(.*?)(\d+)$/);
+          if (m && m[1] === prefix) maxSeq = Math.max(maxSeq, parseInt(m[2]));
+        });
+      }
+
+      setBankReference(`${prefix}${maxSeq + 1}`);
+    })();
   }, [open, bankAccountId]);
 
   // ─── Auto Bank Line Management (single invariant) ──────────────────
