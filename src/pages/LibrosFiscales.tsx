@@ -235,6 +235,36 @@ export default function LibrosFiscales() {
     selectedYearRef.current = selectedYear;
   }, [selectedMonth, selectedYear]);
 
+  const handleSort = useCallback((field: LedgerSortField) => {
+    const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
+    setSortField(field);
+    setSortDir(nextDir);
+    const mult = nextDir === "asc" ? 1 : -1;
+    if (activeTab === "compras") {
+      setPurchases((prev) => {
+        const copy = [...prev];
+        copy.sort((a, b) => {
+          if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
+          if (field === "party") return mult * ((a.supplier_name || "").localeCompare(b.supplier_name || "", "es"));
+          if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+          return 0;
+        });
+        return copy;
+      });
+    } else {
+      setSales((prev) => {
+        const copy = [...prev];
+        copy.sort((a, b) => {
+          if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
+          if (field === "party") return mult * ((a.customer_name || "").localeCompare(b.customer_name || "", "es"));
+          if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+          return 0;
+        });
+        return copy;
+      });
+    }
+  }, [sortField, sortDir, activeTab]);
+
   const purchaseTotals = useMemo(() => {
     // Calculate totals considering affects_total from document type
     const totalWithVAT = purchases.reduce((sum, p) => {
@@ -1602,7 +1632,14 @@ export default function LibrosFiscales() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-2">
+                  <LedgerSortControls
+                    field={sortField}
+                    dir={sortDir}
+                    partyLabel="Proveedor"
+                    onSort={handleSort}
+                  />
+                  <div className="flex gap-1">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1645,6 +1682,7 @@ export default function LibrosFiscales() {
                       <TooltipContent><p>Nueva Factura (Alt+N)</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  </div>
                 </div>
               </div>
 
@@ -1712,7 +1750,14 @@ export default function LibrosFiscales() {
                     </Tooltip>
                   </TooltipProvider>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-2">
+                  <LedgerSortControls
+                    field={sortField}
+                    dir={sortDir}
+                    partyLabel="Cliente"
+                    onSort={handleSort}
+                  />
+                  <div className="flex gap-1">
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1755,6 +1800,7 @@ export default function LibrosFiscales() {
                       <TooltipContent><p>Nueva Factura (Alt+N)</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  </div>
                 </div>
               </div>
 
@@ -1792,42 +1838,6 @@ export default function LibrosFiscales() {
       <div className="mt-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="flex justify-end mb-3">
-              <LedgerSortControls
-                field={sortField}
-                dir={sortDir}
-                partyLabel={activeTab === "compras" ? "Proveedor" : "Cliente"}
-                onSort={(field) => {
-                  const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
-                  setSortField(field);
-                  setSortDir(nextDir);
-                  const mult = nextDir === "asc" ? 1 : -1;
-                  if (activeTab === "compras") {
-                    setPurchases((prev) => {
-                      const copy = [...prev];
-                      copy.sort((a, b) => {
-                        if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
-                        if (field === "party") return mult * ((a.supplier_name || "").localeCompare(b.supplier_name || "", "es"));
-                        if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
-                        return 0;
-                      });
-                      return copy;
-                    });
-                  } else {
-                    setSales((prev) => {
-                      const copy = [...prev];
-                      copy.sort((a, b) => {
-                        if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
-                        if (field === "party") return mult * ((a.customer_name || "").localeCompare(b.customer_name || "", "es"));
-                        if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
-                        return 0;
-                      });
-                      return copy;
-                    });
-                  }
-                }}
-              />
-            </div>
 
             {activeTab === "compras" ? (
               loading && purchases.length === 0 ? (
