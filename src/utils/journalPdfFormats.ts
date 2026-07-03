@@ -140,7 +140,7 @@ const renderLegal: RenderFn = ({
     );
     const beneficiary = entry.beneficiary_name?.trim();
     const reference = entry.reference?.trim();
-    const extraLines = (beneficiary ? 1 : 0) + (reference ? 1 : 0);
+    const extraLines = (beneficiary ? 1 : 0);
     const headerBlockH = 6 + 5 + extraLines * 5 + descLines.length * 4.2 + 2 + HEADER_ROW_H;
 
     // Reserve enough room for header + at least 2 rows + totals
@@ -157,14 +157,13 @@ const renderLegal: RenderFn = ({
     doc.setFontSize(9);
     doc.text(`Fecha: ${formatGtDate(entry.entry_date)}`, marginX, cursorY);
     doc.text(`Tipo: ${entry.entry_type}`, marginX + 70, cursorY);
+    if (reference) {
+      doc.text(`Referencia: ${reference}`, marginX + 130, cursorY);
+    }
     cursorY += 5;
 
     if (beneficiary) {
       doc.text(`Beneficiario: ${beneficiary}`, marginX, cursorY);
-      cursorY += 5;
-    }
-    if (reference) {
-      doc.text(`Referencia: ${reference}`, marginX, cursorY);
       cursorY += 5;
     }
 
