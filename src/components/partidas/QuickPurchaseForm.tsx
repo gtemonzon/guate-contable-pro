@@ -216,7 +216,7 @@ export function QuickPurchaseForm({
       setDuplicate(null);
       onCreated();
     } catch (err: unknown) {
-      toast({ title: "Error al vincular", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Error al vincular", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setLinkingExisting(false);
     }
