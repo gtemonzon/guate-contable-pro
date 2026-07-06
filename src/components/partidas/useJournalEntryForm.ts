@@ -51,6 +51,35 @@ export interface AuditInfo {
   updatedAt: string | null;
 }
 
+const getMonthBounds = (isoDate: string) => {
+  const year = Number(isoDate.slice(0, 4));
+  const month = Number(isoDate.slice(5, 7));
+  if (!year || !month) return null;
+
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+
+  return {
+    start: `${year}-${String(month).padStart(2, "0")}-01`,
+    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`,
+    key: `${year}-${String(month).padStart(2, "0")}`,
+  };
+};
+
+const parseBankReference = (value?: string | null) => {
+  const match = value?.trim().match(/^(.*?)(\d+)$/);
+  if (!match) return null;
+  return {
+    value: value.trim(),
+    prefix: match[1],
+    sequence: Number(match[2]),
+    width: match[2].length,
+  };
+};
+
+const formatNextBankReference = (prefix: string, sequence: number, width: number) =>
+  `${prefix}${String(sequence).padStart(width, "0")}`;
+
 interface EntryToEdit {
   id: number;
   entry_number: string;
@@ -116,6 +145,7 @@ export function useJournalEntryForm(
 
   // Auto-draft support
   const draftEntryIdRef = useRef<number | null>(null);
+  const suggestedBankReferenceRef = useRef<{ value: string; context: string } | null>(null);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const initialSnapshotRef = useRef<string>("");
@@ -151,6 +181,7 @@ export function useJournalEntryForm(
     setAuditInfo(null); setEntryStatus('borrador'); setAccountSearch({});
     setIsReadOnly(false); setActiveLineId(null);
     draftEntryIdRef.current = null;
+    suggestedBankReferenceRef.current = null;
   };
 
   const resetForm = () => {
@@ -171,6 +202,7 @@ export function useJournalEntryForm(
     setShowCloseConfirm(false); setShowRejectDialog(false); setRejectionReason("");
     setEntryStatus('borrador'); setActiveLineId(freshLines[0]?.id || null);
     draftEntryIdRef.current = null;
+    suggestedBankReferenceRef.current = null;
   };
 
   const loadInitialData = async () => {
@@ -295,93 +327,79 @@ export function useJournalEntryForm(
   // No longer preview entry numbers on open — numbers are assigned only at save time
 
   useEffect(() => {
-    if (!open || !bankAccountId || bankReference) return;
+    if (!open || !bankAccountId || !entryDate || entryToEdit) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
     const entId = parseInt(enterpriseId);
+    const monthBounds = getMonthBounds(entryDate);
+    if (!monthBounds) return;
+    const contextKey = `${entId}:${bankAccountId}:${bankDirection}:${monthBounds.key}`;
+    const currentSuggestion = suggestedBankReferenceRef.current;
+    const canReplaceReference = !bankReference || bankReference === currentSuggestion?.value;
+    if (!canReplaceReference) return;
+    if (currentSuggestion?.context === contextKey && bankReference === currentSuggestion.value) return;
 
+    let cancelled = false;
     (async () => {
-      // 1) Look at the last ~30 bank references for this account and pick the
-      //    MOST FREQUENT prefix pattern (tiebreak: most recent). This avoids
-      //    that a one-off transfer reference (e.g. 2110368199) hijacks the
-      //    suggestion when the user is actually numbering cheques (4301, 4302…).
-      const { data: recentJe } = await supabase
-        .from("tab_journal_entries")
-        .select("bank_reference, created_at")
-        .eq("enterprise_id", entId)
-        .eq("bank_account_id", bankAccountId)
-        .not("bank_reference", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(30);
+      const [{ data: monthlyEntries }, { data: bankAcct }] = await Promise.all([
+        supabase
+          .from("tab_journal_entries")
+          .select("bank_reference, entry_date, created_at")
+          .eq("enterprise_id", entId)
+          .eq("bank_account_id", bankAccountId)
+          .eq("bank_direction", bankDirection)
+          .gte("entry_date", monthBounds.start)
+          .lt("entry_date", monthBounds.end)
+          .not("bank_reference", "is", null)
+          .is("deleted_at", null)
+          .order("entry_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(200),
+        supabase
+          .from("tab_bank_accounts")
+          .select("id")
+          .eq("account_id", bankAccountId)
+          .eq("enterprise_id", entId)
+          .maybeSingle(),
+      ]);
 
-      if (!recentJe?.length) return;
+      const parsedEntries = (monthlyEntries || [])
+        .map((row: { bank_reference: string | null }) => parseBankReference(row.bank_reference))
+        .filter(Boolean) as Array<NonNullable<ReturnType<typeof parseBankReference>>>;
 
-      const prefixStats = new Map<string, { count: number; latestIdx: number; maxSeq: number }>();
-      recentJe.forEach((r: { bank_reference: string | null }, idx: number) => {
-        const m = r.bank_reference?.match(/^(.*?)(\d+)$/);
-        if (!m) return;
-        const p = m[1];
-        const seq = parseInt(m[2]);
-        const cur = prefixStats.get(p);
-        if (!cur) prefixStats.set(p, { count: 1, latestIdx: idx, maxSeq: seq });
-        else {
-          cur.count += 1;
-          cur.maxSeq = Math.max(cur.maxSeq, seq);
-          cur.latestIdx = Math.min(cur.latestIdx, idx);
-        }
-      });
-
-      if (!prefixStats.size) return;
-
-      // Pick prefix: highest count, then most recent (lowest latestIdx)
-      let prefix = "";
-      let best = { count: -1, latestIdx: Infinity, maxSeq: 0 };
-      for (const [p, s] of prefixStats) {
-        if (s.count > best.count || (s.count === best.count && s.latestIdx < best.latestIdx)) {
-          prefix = p;
-          best = s;
-        }
-      }
-      let maxSeq = best.maxSeq;
-
-      // 2) Consider higher numeric refs in journal entries (same prefix)
-      const { data: allJe } = await supabase
-        .from("tab_journal_entries")
-        .select("bank_reference")
-        .eq("enterprise_id", entId)
-        .eq("bank_account_id", bankAccountId)
-        .not("bank_reference", "is", null)
-        .like("bank_reference", `${prefix}%`)
-        .limit(500);
-      allJe?.forEach((r: { bank_reference: string | null }) => {
-        const m = r.bank_reference?.match(/^(.*?)(\d+)$/);
-        if (m && m[1] === prefix) maxSeq = Math.max(maxSeq, parseInt(m[2]));
-      });
-
-      // 3) Consider void cheques stored only in tab_bank_documents
-      const { data: bankAcct } = await supabase
-        .from("tab_bank_accounts")
-        .select("id")
-        .eq("account_id", bankAccountId)
-        .eq("enterprise_id", entId)
-        .maybeSingle();
+      let parsedDocs: Array<NonNullable<ReturnType<typeof parseBankReference>>> = [];
       if (bankAcct?.id) {
         const { data: docs } = await supabase
           .from("tab_bank_documents")
           .select("document_number")
           .eq("enterprise_id", entId)
           .eq("bank_account_id", bankAcct.id)
-          .like("document_number", `${prefix}%`)
-          .limit(500);
-        docs?.forEach((d: { document_number: string | null }) => {
-          const m = d.document_number?.match(/^(.*?)(\d+)$/);
-          if (m && m[1] === prefix) maxSeq = Math.max(maxSeq, parseInt(m[2]));
-        });
+          .eq("direction", bankDirection)
+          .gte("document_date", monthBounds.start)
+          .lt("document_date", monthBounds.end)
+          .order("document_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(200);
+
+        parsedDocs = (docs || [])
+          .map((row: { document_number: string | null }) => parseBankReference(row.document_number))
+          .filter(Boolean) as Array<NonNullable<ReturnType<typeof parseBankReference>>>;
       }
 
-      setBankReference(`${prefix}${maxSeq + 1}`);
+      const seedReference = parsedEntries[0] || parsedDocs[0];
+      if (!seedReference) return;
+
+      const sameSeries = [...parsedEntries, ...parsedDocs].filter((ref) => ref.prefix === seedReference.prefix);
+      const maxSequence = sameSeries.reduce((max, ref) => Math.max(max, ref.sequence), seedReference.sequence);
+      const nextReference = formatNextBankReference(seedReference.prefix, maxSequence + 1, seedReference.width);
+
+      if (!cancelled) {
+        suggestedBankReferenceRef.current = { value: nextReference, context: contextKey };
+        if (bankReference !== nextReference) setBankReference(nextReference);
+      }
     })();
-  }, [open, bankAccountId]);
+    return () => { cancelled = true; };
+  }, [open, bankAccountId, bankDirection, entryDate, bankReference, entryToEdit]);
 
   // ─── Auto Bank Line Management (single invariant) ──────────────────
   useEffect(() => {
