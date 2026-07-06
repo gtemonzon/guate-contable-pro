@@ -642,14 +642,14 @@ export default function LibroCompras() {
       setSaveStatus("idle");
       let errorMessage = getSafeErrorMessage(error);
       
-      // Mensajes más específicos según el error
-      const errMsg = error instanceof Error ? error.message : '';
+      // Mensajes más específicos según el error.
+      // Nota: no sobrescribimos el mensaje cuando la BD ya devuelve texto en
+      // español (p.ej. el disparador de fecha), porque ese texto ya trae la
+      // información puntual (fecha real y rango permitido).
       const errCode = (error as Record<string, unknown>)?.code;
-      if (errMsg?.includes("fecha")) {
-        errorMessage = "La fecha de la factura debe estar en el mes seleccionado o máximo 2 meses atrás";
-      } else if (errCode === "23502") {
+      if (errCode === "23502" && !/[áéíóúñ]/i.test(errorMessage)) {
         errorMessage = "Faltan campos requeridos. Verifique que haya completado todos los campos obligatorios.";
-      } else if (errCode === "23503") {
+      } else if (errCode === "23503" && !/[áéíóúñ]/i.test(errorMessage)) {
         errorMessage = "Error de referencia: Verifique que las cuentas seleccionadas sean válidas.";
       }
       
