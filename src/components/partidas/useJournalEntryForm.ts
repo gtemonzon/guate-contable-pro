@@ -971,7 +971,7 @@ export function useJournalEntryForm(
           } as any).eq("id", entryToEdit.id);
           if (postError) throw postError;
         }
-        toast({ title: "Partida actualizada", description: `Partida ${nextEntryNumber} actualizada exitosamente` });
+        toast({ title: "Partida actualizada", description: `Partida ${updatedEntryNumber} actualizada exitosamente` });
         onSuccess(entryToEdit.id);
 
       } else if (draftEntryIdRef.current) {
