@@ -17,6 +17,21 @@ import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { calculatePurchaseAccounting, TAX_CATEGORIES } from "@/utils/purchaseAccountingEngine";
 
+function extractErrorMessage(err: unknown): string {
+  if (!err) return "Error desconocido";
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const parts = [e.message, e.details, e.hint, e.code]
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+    if (parts.length > 0) return parts.join(" · ");
+    try { return JSON.stringify(err); } catch { return String(err); }
+  }
+  return String(err);
+}
+
+
 interface QuickPurchaseFormProps {
   enterpriseId: number;
   journalEntryId: number;
