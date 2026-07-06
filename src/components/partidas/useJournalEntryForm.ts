@@ -922,8 +922,28 @@ export function useJournalEntryForm(
 
       if (entryToEdit) {
         // ─── Existing entry: update ─────────────────────────────
+        // If entry_date moved to a different year/month than the current entry_number
+        // encodes, reassign a fresh sequential number for the new month.
+        let updatedEntryNumber = entryToEdit.entry_number;
+        const parsedCurrent = parseEntryNumber(entryToEdit.entry_number);
+        const newYear = parseInt(entryDate.slice(0, 4), 10);
+        const newMonth = parseInt(entryDate.slice(5, 7), 10);
+        if (
+          parsedCurrent &&
+          parsedCurrent.month != null &&
+          (parsedCurrent.year !== newYear || parsedCurrent.month !== newMonth)
+        ) {
+          try {
+            updatedEntryNumber = await allocateEntryNumber(enterpriseId, entryType, entryDate);
+            setNextEntryNumber(updatedEntryNumber);
+          } catch (reallocErr) {
+            console.warn("[useJournalEntryForm] No se pudo reasignar correlativo, se conserva el original:", reallocErr);
+          }
+        }
+
         // Step 1: Update header as draft first (avoid trigger rejecting empty lines)
         const { error: updateError } = await supabase.from("tab_journal_entries").update({
+          entry_number: updatedEntryNumber,
           entry_date: entryDate, entry_type: entryType, accounting_period_id: periodId,
           document_reference: documentReference || null, description: headerDescription,
           document_references: documentReferences.length > 0 ? documentReferences : null,
