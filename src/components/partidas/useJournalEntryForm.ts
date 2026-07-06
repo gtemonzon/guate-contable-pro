@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
+import { allocateEntryNumber, parseEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
