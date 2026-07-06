@@ -301,22 +301,48 @@ export function useJournalEntryForm(
     const entId = parseInt(enterpriseId);
 
     (async () => {
-      // 1) Latest bank_reference from journal entries (to preserve prefix pattern)
-      const { data: lastJe } = await supabase
+      // 1) Look at the last ~30 bank references for this account and pick the
+      //    MOST FREQUENT prefix pattern (tiebreak: most recent). This avoids
+      //    that a one-off transfer reference (e.g. 2110368199) hijacks the
+      //    suggestion when the user is actually numbering cheques (4301, 4302…).
+      const { data: recentJe } = await supabase
         .from("tab_journal_entries")
-        .select("bank_reference")
+        .select("bank_reference, created_at")
         .eq("enterprise_id", entId)
         .eq("bank_account_id", bankAccountId)
         .not("bank_reference", "is", null)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(30);
 
-      if (!lastJe?.bank_reference) return;
-      const baseMatch = lastJe.bank_reference.match(/^(.*?)(\d+)$/);
-      if (!baseMatch) return;
-      const prefix = baseMatch[1];
-      let maxSeq = parseInt(baseMatch[2]);
+      if (!recentJe?.length) return;
+
+      const prefixStats = new Map<string, { count: number; latestIdx: number; maxSeq: number }>();
+      recentJe.forEach((r: { bank_reference: string | null }, idx: number) => {
+        const m = r.bank_reference?.match(/^(.*?)(\d+)$/);
+        if (!m) return;
+        const p = m[1];
+        const seq = parseInt(m[2]);
+        const cur = prefixStats.get(p);
+        if (!cur) prefixStats.set(p, { count: 1, latestIdx: idx, maxSeq: seq });
+        else {
+          cur.count += 1;
+          cur.maxSeq = Math.max(cur.maxSeq, seq);
+          cur.latestIdx = Math.min(cur.latestIdx, idx);
+        }
+      });
+
+      if (!prefixStats.size) return;
+
+      // Pick prefix: highest count, then most recent (lowest latestIdx)
+      let prefix = "";
+      let best = { count: -1, latestIdx: Infinity, maxSeq: 0 };
+      for (const [p, s] of prefixStats) {
+        if (s.count > best.count || (s.count === best.count && s.latestIdx < best.latestIdx)) {
+          prefix = p;
+          best = s;
+        }
+      }
+      let maxSeq = best.maxSeq;
 
       // 2) Consider higher numeric refs in journal entries (same prefix)
       const { data: allJe } = await supabase
