@@ -471,7 +471,7 @@ export function QuickPurchaseForm({
       onCreated();
       setTimeout(() => dateInputRef.current?.focus(), 50);
     } catch (err: unknown) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: "Error", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setLoading(false);
     }
