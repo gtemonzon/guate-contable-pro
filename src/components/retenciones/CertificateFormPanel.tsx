@@ -22,7 +22,7 @@ import {
   type CertificateInput,
   REGIME_LABELS,
 } from "@/hooks/useTaxCertificates";
-import { validateNIT } from "@/utils/nitValidation";
+import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
 import { generateJournalEntryFromCertificate } from "@/services/taxCertificateJournalEntry";
 
 interface Props {
