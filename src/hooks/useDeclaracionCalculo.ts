@@ -87,6 +87,7 @@ export interface IVAGeneralCalculo {
 export interface IVAPequenoCalculo {
   totalIngresos: number; // Casilla 21
   tasaImpuesto: number; // Casilla 23 (ej: 5%)
+  retencionIVARealizada: number; // IVA retenido por terceros (resta del impuesto)
   impuestoAPagar: number; // Casilla 24
 }
 
