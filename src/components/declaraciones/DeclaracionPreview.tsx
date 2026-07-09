@@ -390,6 +390,43 @@ export function DeclaracionPreview({
             </div>
           </div>
 
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Retenciones</h4>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="flex items-center justify-between py-2">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm">(-) IVA Retenido por Terceros</span>
+                  {retencionIVAPequenoSugerida > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs gap-1 w-fit"
+                      onClick={() => {
+                        onRetencionIVAPequenoChange?.(retencionIVAPequenoSugerida);
+                        toast({ title: "Sugerencia aplicada", description: `Suma de constancias IVA recibidas: ${formatCurrency(retencionIVAPequenoSugerida)}` });
+                      }}
+                    >
+                      <Info className="h-3 w-3" />
+                      Sugerido constancias: {formatCurrency(retencionIVAPequenoSugerida)}
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={retencionIVAPequeno}
+                    onChange={(e) => onRetencionIVAPequenoChange?.(parseFloat(e.target.value) || 0)}
+                    className="w-32 text-right font-mono h-8"
+                    placeholder="0.00"
+                  />
+                  <CopyButton value={retencionIVAPequeno} />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="pt-4 border-t">
             <TotalRow label="IMPUESTO A PAGAR" value={ivaPequeno.impuestoAPagar} isHighlight />
           </div>
