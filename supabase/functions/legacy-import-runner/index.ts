@@ -2406,7 +2406,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
+    console.error("legacy-import-runner error:", e);
+    return new Response(JSON.stringify({ error: "Error interno al procesar la importación." }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

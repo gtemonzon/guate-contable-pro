@@ -196,8 +196,6 @@ Deno.serve(async (req) => {
         friendlyMessage = "La contraseña no cumple con los requisitos mínimos de seguridad.";
       } else if (/invalid.*email/i.test(rawMessage)) {
         friendlyMessage = "El correo electrónico no es válido.";
-      } else if (rawMessage) {
-        friendlyMessage = `No se pudo crear el usuario: ${rawMessage}`;
       }
       return jsonResponse({ error: friendlyMessage }, 400);
     }
@@ -257,7 +255,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ user_id: userId, message: "Usuario creado correctamente" });
   } catch (error) {
     console.error("create-managed-user error:", error);
-    const message = error instanceof Error ? error.message : "Error interno al crear usuario";
+    const message = "Error interno al crear usuario. Intente de nuevo.";
     return jsonResponse({ error: message }, 500);
   }
 });
