@@ -103,7 +103,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNewRecord = purchase.isNew;
   
   const isCompact = variant === 'compact';

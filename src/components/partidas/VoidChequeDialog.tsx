@@ -110,7 +110,7 @@ export default function VoidChequeDialog({
     if (existing) {
       const { error } = await supabase
         .from("tab_bank_documents")
-        .update(fields)
+        .update(fields as any)
         .eq("id", existing.id);
       if (error) throw error;
     } else {

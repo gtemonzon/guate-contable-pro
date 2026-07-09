@@ -85,7 +85,7 @@ export default function LibroCompras() {
   const [focusNewRow, setFocusNewRow] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const newCardRef = useRef<PurchaseCardRef>(null);
 

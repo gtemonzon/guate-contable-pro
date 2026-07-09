@@ -343,7 +343,7 @@ export function useUpdateTicket() {
 
       const { error } = await supabase
         .from("tickets")
-        .update(updateData)
+        .update(updateData as any)
         .eq("id", input.ticketId);
 
       if (error) throw error;
