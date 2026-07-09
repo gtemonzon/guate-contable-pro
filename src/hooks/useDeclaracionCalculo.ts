@@ -646,14 +646,16 @@ export function useDeclaracionCalculo(
       totalIngresos += sale.total_amount * multiplier;
     });
 
-    const impuestoAPagar = totalIngresos * (tasaImpuesto / 100);
+    const impuestoAPagarBruto = totalIngresos * (tasaImpuesto / 100);
+    const impuestoAPagar = Math.max(0, impuestoAPagarBruto - retencionIVAPequenoInput);
 
     return {
       totalIngresos: Math.round(totalIngresos),
       tasaImpuesto,
+      retencionIVARealizada: Math.round(retencionIVAPequenoInput),
       impuestoAPagar: Math.round(impuestoAPagar),
     };
-  }, [sales, taxConfigs, felDocTypes]);
+  }, [sales, taxConfigs, felDocTypes, retencionIVAPequenoInput]);
 
   // Calculate ISR Mensual con escala progresiva (5% hasta Q30,000 / 7% excedente)
   const isrMensualCalculo = useMemo((): ISRMensualCalculo => {
