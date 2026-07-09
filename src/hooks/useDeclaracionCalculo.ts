@@ -146,6 +146,7 @@ export function useDeclaracionCalculo(
   creditoRemanenteInput: number = 0,
   exencionIVAInput: number = 0,
   retencionISRInput: number = 0,
+  retencionIVAPequenoInput: number = 0,
   inventarioFinalEstimadoInput: number = 0,
   otrosValoresInput: OtroValorISR[] = [],
   isrPagadoAnteriorInput: number = 0,
