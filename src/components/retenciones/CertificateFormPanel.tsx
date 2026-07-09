@@ -60,6 +60,8 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
   const { selectedEnterpriseId } = useEnterprise();
   const { data: categories = [] } = useIsrCategories();
   const save = useSaveCertificate();
+  const { lookupNit, isLooking } = useNitLookup();
+  const nitInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CertificateInput>(emptyForm());
   const [generateJournal, setGenerateJournal] = useState(false);
   const [issuanceFlags, setIssuanceFlags] = useState({ isr: false, vat: false, exemption: false });
