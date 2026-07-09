@@ -183,7 +183,7 @@ export default function LibrosFiscales() {
 
   // Save status indicator state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();

@@ -92,7 +92,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNewRecord = sale.isNew;
   
   const saleRef = useRef(sale);
