@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ user_id: userId, message: "Usuario creado correctamente" });
   } catch (error) {
     console.error("create-managed-user error:", error);
-    const message = error instanceof Error ? error.message : "Error interno al crear usuario";
+    const message = "Error interno al crear usuario. Intente de nuevo.";
     return jsonResponse({ error: message }, 500);
   }
 });
