@@ -151,6 +151,9 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
         data: { ...form, enterprise_id: selectedEnterpriseId },
       });
 
+      // Cache the taxpayer name for future NIT lookups
+      upsertTaxpayerCache(form.counterpart_nit, form.counterpart_name).catch(() => {});
+
       if (generateJournal) {
         try {
           const result = await generateJournalEntryFromCertificate(savedId);
