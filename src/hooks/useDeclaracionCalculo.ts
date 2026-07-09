@@ -87,6 +87,7 @@ export interface IVAGeneralCalculo {
 export interface IVAPequenoCalculo {
   totalIngresos: number; // Casilla 21
   tasaImpuesto: number; // Casilla 23 (ej: 5%)
+  retencionIVARealizada: number; // IVA retenido por terceros (resta del impuesto)
   impuestoAPagar: number; // Casilla 24
 }
 
@@ -145,6 +146,7 @@ export function useDeclaracionCalculo(
   creditoRemanenteInput: number = 0,
   exencionIVAInput: number = 0,
   retencionISRInput: number = 0,
+  retencionIVAPequenoInput: number = 0,
   inventarioFinalEstimadoInput: number = 0,
   otrosValoresInput: OtroValorISR[] = [],
   isrPagadoAnteriorInput: number = 0,
@@ -644,14 +646,16 @@ export function useDeclaracionCalculo(
       totalIngresos += sale.total_amount * multiplier;
     });
 
-    const impuestoAPagar = totalIngresos * (tasaImpuesto / 100);
+    const impuestoAPagarBruto = totalIngresos * (tasaImpuesto / 100);
+    const impuestoAPagar = Math.max(0, impuestoAPagarBruto - retencionIVAPequenoInput);
 
     return {
       totalIngresos: Math.round(totalIngresos),
       tasaImpuesto,
+      retencionIVARealizada: Math.round(retencionIVAPequenoInput),
       impuestoAPagar: Math.round(impuestoAPagar),
     };
-  }, [sales, taxConfigs, felDocTypes]);
+  }, [sales, taxConfigs, felDocTypes, retencionIVAPequenoInput]);
 
   // Calculate ISR Mensual con escala progresiva (5% hasta Q30,000 / 7% excedente)
   const isrMensualCalculo = useMemo((): ISRMensualCalculo => {
