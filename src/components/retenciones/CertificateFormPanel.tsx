@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup, upsertTaxpayerCache } from "@/hooks/useNitLookup";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
@@ -19,7 +22,7 @@ import {
   type CertificateInput,
   REGIME_LABELS,
 } from "@/hooks/useTaxCertificates";
-import { validateNIT } from "@/utils/nitValidation";
+import { validateNIT, sanitizeNIT } from "@/utils/nitValidation";
 import { generateJournalEntryFromCertificate } from "@/services/taxCertificateJournalEntry";
 
 interface Props {
@@ -57,6 +60,8 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
   const { selectedEnterpriseId } = useEnterprise();
   const { data: categories = [] } = useIsrCategories();
   const save = useSaveCertificate();
+  const { lookupNit, isLooking } = useNitLookup();
+  const nitInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<CertificateInput>(emptyForm());
   const [generateJournal, setGenerateJournal] = useState(false);
   const [issuanceFlags, setIssuanceFlags] = useState({ isr: false, vat: false, exemption: false });
@@ -146,6 +151,9 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
         data: { ...form, enterprise_id: selectedEnterpriseId },
       });
 
+      // Cache the taxpayer name for future NIT lookups
+      upsertTaxpayerCache(form.counterpart_nit, form.counterpart_name).catch(() => {});
+
       if (generateJournal) {
         try {
           const result = await generateJournalEntryFromCertificate(savedId);
@@ -224,7 +232,39 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>NIT contraparte</Label>
-              <Input value={form.counterpart_nit} onChange={(e) => update("counterpart_nit", e.target.value)} disabled={readOnly} />
+              <div className="relative mt-1">
+                <NitAutocomplete
+                  ref={nitInputRef}
+                  value={form.counterpart_nit}
+                  onChange={(e) => update("counterpart_nit", sanitizeNIT(e.target.value))}
+                  onBlur={async () => {
+                    const cleaned = form.counterpart_nit.trim();
+                    if (!cleaned || !validateNIT(cleaned)) return;
+                    if (!form.counterpart_name.trim()) {
+                      const result = await lookupNit(cleaned);
+                      if (result?.found && result.name) {
+                        update("counterpart_name", result.name);
+                      }
+                    }
+                  }}
+                  onSelectTaxpayer={(selectedNit, name) => {
+                    update("counterpart_nit", sanitizeNIT(selectedNit));
+                    update("counterpart_name", name);
+                  }}
+                  disabled={readOnly}
+                  className={`pr-8 ${form.counterpart_nit && validateNIT(form.counterpart_nit) === false ? 'border-destructive focus-visible:ring-destructive' : form.counterpart_nit && validateNIT(form.counterpart_nit) === true ? 'border-green-500 focus-visible:ring-green-500' : ''}`}
+                  placeholder="NIT contraparte"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10 pointer-events-none">
+                  {isLooking ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  ) : form.counterpart_nit && validateNIT(form.counterpart_nit) ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : form.counterpart_nit && !validateNIT(form.counterpart_nit) ? (
+                    <XCircle className="h-3.5 w-3.5 text-destructive" />
+                  ) : null}
+                </div>
+              </div>
             </div>
             <div>
               <Label>Nombre contraparte</Label>
