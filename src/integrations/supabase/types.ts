@@ -1094,7 +1094,7 @@ export type Database = {
       tab_bank_movements: {
         Row: {
           balance: number | null
-          bank_account_id: number | null
+          bank_account_id: number
           created_at: string | null
           credit_amount: number | null
           debit_amount: number | null
@@ -1109,7 +1109,7 @@ export type Database = {
         }
         Insert: {
           balance?: number | null
-          bank_account_id?: number | null
+          bank_account_id: number
           created_at?: string | null
           credit_amount?: number | null
           debit_amount?: number | null
@@ -1124,7 +1124,7 @@ export type Database = {
         }
         Update: {
           balance?: number | null
-          bank_account_id?: number | null
+          bank_account_id?: number
           created_at?: string | null
           credit_amount?: number | null
           debit_amount?: number | null
