@@ -1947,7 +1947,9 @@ export default function LibrosFiscales() {
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
-                  {purchases.map((purchase, index) => (
+                  {filteredPurchases.map((purchase) => {
+                    const index = purchases.indexOf(purchase);
+                    return (
                     <PurchaseCard
                       key={purchase._uid || purchase.id || `new-${index}`}
                       ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
@@ -1971,7 +1973,8 @@ export default function LibrosFiscales() {
                       }}
                       onCancelEdit={() => setEditingPurchaseIndex(null)}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )
             ) : (
