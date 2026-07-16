@@ -814,21 +814,27 @@ export default function LibrosFiscales() {
 
   const checkExistingJournalEntries = async (enterpriseId: string, month: number, year: number) => {
     try {
-      const salesEntryNumber = `VENT-${year}-${String(month).padStart(2, '0')}`;
-      const purchasesEntryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+      const salesEntryPattern = `VENT-${year}-${String(month).padStart(2, '0')}-%`;
+      const purchasesEntryPattern = `COMP-${year}-${String(month).padStart(2, '0')}-%`;
+      const salesEntryLegacy = `VENT-${year}-${String(month).padStart(2, '0')}`;
+      const purchasesEntryLegacy = `COMP-${year}-${String(month).padStart(2, '0')}`;
 
       const { data: salesEntry } = await supabase
         .from("tab_journal_entries")
-        .select("id")
+        .select("id, entry_number")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", salesEntryNumber)
+        .or(`entry_number.like.${salesEntryPattern},entry_number.eq.${salesEntryLegacy}`)
+        .order("id", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       const { data: purchasesEntry } = await supabase
         .from("tab_journal_entries")
-        .select("id")
+        .select("id, entry_number")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", purchasesEntryNumber)
+        .or(`entry_number.like.${purchasesEntryPattern},entry_number.eq.${purchasesEntryLegacy}`)
+        .order("id", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       setExistingSalesJournalEntry({ exists: !!salesEntry, id: salesEntry?.id });
