@@ -886,6 +886,9 @@ export default function ReporteEstadoResultados() {
                   : 'Desglose derivado del inventario y compras. Existe una diferencia respecto al saldo de la cuenta de Costo de Ventas; revise los ajustes del período.'}
               </p>
             </div>
+          )}
+
+
 
           {/* Inventory Analysis Panel — only in projection mode */}
           {projectionMode && estimatedCogs.estimatedCostOfSales !== null && (
