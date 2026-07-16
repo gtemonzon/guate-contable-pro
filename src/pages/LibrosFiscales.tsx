@@ -2293,7 +2293,8 @@ export default function LibrosFiscales() {
 
                       const cashAccountId = customersAccountId || (cashAccounts?.[0]?.id ?? null);
 
-                      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+                      const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, "0")}`;
+                      const entryNumber = await allocateEntryNumber(currentEnterpriseId, "ventas", entryDateStr);
 
                       const validSales = sales.filter(s => !s.is_annulled);
 
