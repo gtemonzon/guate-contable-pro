@@ -3,6 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
 import type { EnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 
+export interface RealCogsBreakdown {
+  initialInventory: number;
+  purchases: number;
+  availableForSale: number;
+  finalInventory: number;
+  /** CoS derived from inventory identity: available - final. */
+  derivedCostOfSales: number;
+  /** CoS actually posted in the period (movement in CoS account). */
+  postedCostOfSales: number;
+  /** True when derived and posted CoS agree within Q0.01. */
+  matches: boolean;
+}
+
 export interface EstimatedCogsResult {
   enabled: boolean;
   loading: boolean;
@@ -17,6 +30,9 @@ export interface EstimatedCogsResult {
   purchasesInPeriod: number;
   availableInventory: number;
   estimatedEndingInventory: number | null;
+  /** Real breakdown derived from posted movements — shown when period already
+   *  has both a posted Cost of Sales and an inventory adjustment. */
+  realBreakdown: RealCogsBreakdown | null;
   reason?: string;
 }
 
@@ -40,6 +56,7 @@ const EMPTY: EstimatedCogsResult = {
   method: 'disabled',
   beginningInventory: 0,
   purchasesInPeriod: 0,
+  realBreakdown: null,
   availableInventory: 0,
   estimatedEndingInventory: null,
 };
