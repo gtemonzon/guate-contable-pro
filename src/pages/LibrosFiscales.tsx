@@ -2773,7 +2773,8 @@ export default function LibrosFiscales() {
                       // Lógica de pólizas de VENTAS
                       if (journalType === "mes") {
                         // Póliza consolidada del mes
-                        const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+                        const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, "0")}`;
+                        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "ventas", entryDateStr);
 
                         // Filtrar facturas anuladas y calcular totales con multiplicador affects_total
                         const validSales = sales.filter(s => !s.is_annulled);
