@@ -318,6 +318,7 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
         purchasesInPeriod,
         availableInventory: available,
         estimatedEndingInventory: estEnding,
+        realBreakdown: null,
       });
     } catch (err) {
       console.error('Error computing estimated CoS:', err);
