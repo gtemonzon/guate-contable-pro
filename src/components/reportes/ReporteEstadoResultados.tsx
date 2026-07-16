@@ -941,7 +941,7 @@ export default function ReporteEstadoResultados() {
 
 
           {/* Warning when method is coeficiente but no posted closing exists AND no estimate is enabled */}
-          {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && !estimatedCogs.enabled && filteredReportLines.length > 0 && (
+          {config?.cost_of_sales_method === 'coeficiente' && !cdvBreakdown && !estimatedCogs.realBreakdown && !estimatedCogs.enabled && filteredReportLines.length > 0 && (
             <Alert className="mt-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
