@@ -1863,12 +1863,21 @@ export default function LibrosFiscales() {
                 {salesByOperationType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Operación:</span>
-                    {salesByOperationType.map(op => (
-                      <div key={op.name}>
-                        <span>{op.name}: </span>
-                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                      </div>
-                    ))}
+                    {salesByOperationType.map(op => {
+                      const active = saleOpFilter === op.name;
+                      return (
+                        <div
+                          key={op.name}
+                          onClick={() => setSaleOpFilter(active ? null : op.name)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{op.name}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {op.total} ({op.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {salesByDocType.length > 0 && (
