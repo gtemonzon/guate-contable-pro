@@ -25,6 +25,7 @@ import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 
 
 
@@ -813,21 +814,27 @@ export default function LibrosFiscales() {
 
   const checkExistingJournalEntries = async (enterpriseId: string, month: number, year: number) => {
     try {
-      const salesEntryNumber = `VENT-${year}-${String(month).padStart(2, '0')}`;
-      const purchasesEntryNumber = `COMP-${year}-${String(month).padStart(2, '0')}`;
+      const salesEntryPattern = `VENT-${year}-${String(month).padStart(2, '0')}-%`;
+      const purchasesEntryPattern = `COMP-${year}-${String(month).padStart(2, '0')}-%`;
+      const salesEntryLegacy = `VENT-${year}-${String(month).padStart(2, '0')}`;
+      const purchasesEntryLegacy = `COMP-${year}-${String(month).padStart(2, '0')}`;
 
       const { data: salesEntry } = await supabase
         .from("tab_journal_entries")
-        .select("id")
+        .select("id, entry_number")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", salesEntryNumber)
+        .or(`entry_number.like.${salesEntryPattern},entry_number.eq.${salesEntryLegacy}`)
+        .order("id", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       const { data: purchasesEntry } = await supabase
         .from("tab_journal_entries")
-        .select("id")
+        .select("id, entry_number")
         .eq("enterprise_id", parseInt(enterpriseId))
-        .eq("entry_number", purchasesEntryNumber)
+        .or(`entry_number.like.${purchasesEntryPattern},entry_number.eq.${purchasesEntryLegacy}`)
+        .order("id", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       setExistingSalesJournalEntry({ exists: !!salesEntry, id: salesEntry?.id });
@@ -2151,7 +2158,8 @@ export default function LibrosFiscales() {
                       const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
                       const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
 
-                      const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+                      const entryNumber = await allocateEntryNumber(currentEnterpriseId, "compras", entryDateStr);
                       const { data: journalEntry, error: journalError } = await supabase
                         .from("tab_journal_entries")
                         .insert({
@@ -2285,7 +2293,8 @@ export default function LibrosFiscales() {
 
                       const cashAccountId = customersAccountId || (cashAccounts?.[0]?.id ?? null);
 
-                      const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+                      const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, "0")}`;
+                      const entryNumber = await allocateEntryNumber(currentEnterpriseId, "ventas", entryDateStr);
 
                       const validSales = sales.filter(s => !s.is_annulled);
 
@@ -2595,7 +2604,8 @@ export default function LibrosFiscales() {
                       // Lógica de pólizas de COMPRAS
                       if (journalType === "mes") {
                         // Póliza consolidada del mes
-                        const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                        const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+                        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "compras", entryDateStr);
                         const { data: journalEntry, error: journalError } = await supabase
                           .from("tab_journal_entries")
                           .insert({
@@ -2763,7 +2773,8 @@ export default function LibrosFiscales() {
                       // Lógica de pólizas de VENTAS
                       if (journalType === "mes") {
                         // Póliza consolidada del mes
-                        const entryNumber = `VENT-${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+                        const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, "0")}`;
+                        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "ventas", entryDateStr);
 
                         // Filtrar facturas anuladas y calcular totales con multiplicador affects_total
                         const validSales = sales.filter(s => !s.is_annulled);
