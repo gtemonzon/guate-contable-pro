@@ -2604,7 +2604,8 @@ export default function LibrosFiscales() {
                       // Lógica de pólizas de COMPRAS
                       if (journalType === "mes") {
                         // Póliza consolidada del mes
-                        const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                        const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+                        const entryNumber = await allocateEntryNumber(currentEnterpriseId, "compras", entryDateStr);
                         const { data: journalEntry, error: journalError } = await supabase
                           .from("tab_journal_entries")
                           .insert({
