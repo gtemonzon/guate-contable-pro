@@ -848,6 +848,45 @@ export default function ReporteEstadoResultados() {
             </div>
           )}
 
+          {/* CDV Breakdown Section — derived from posted movements (no formal closing yet) */}
+          {!cdvBreakdown && estimatedCogs.realBreakdown && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <h4 className="font-bold text-sm mb-2">COSTO DE VENTAS (calculado desde movimientos contables):</h4>
+              <div className="space-y-1 font-mono text-sm">
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>Inventario Inicial de Mercaderías</div>
+                  <div className="text-right">{formatQ(estimatedCogs.realBreakdown.initialInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>(+) Compras Netas del Período</div>
+                  <div className="text-right">{formatQ(estimatedCogs.realBreakdown.purchases)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4 bg-muted/50 font-semibold">
+                  <div>(=) Mercadería Disponible p/Venta</div>
+                  <div className="text-right">{formatQ(estimatedCogs.realBreakdown.availableForSale)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4">
+                  <div>(-) Inventario Final de Mercaderías</div>
+                  <div className="text-right">{formatQ(estimatedCogs.realBreakdown.finalInventory)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 py-1 pl-4 border-t-2 border-border font-bold">
+                  <div>(=) Costo de Ventas (derivado)</div>
+                  <div className="text-right">{formatQ(estimatedCogs.realBreakdown.derivedCostOfSales)}</div>
+                </div>
+                {!estimatedCogs.realBreakdown.matches && (
+                  <div className="grid grid-cols-2 gap-4 py-1 pl-4 text-muted-foreground text-xs">
+                    <div>Costo de Ventas registrado en cuenta</div>
+                    <div className="text-right">{formatQ(estimatedCogs.realBreakdown.postedCostOfSales)}</div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                {estimatedCogs.realBreakdown.matches
+                  ? 'Desglose derivado del inventario inicial, compras del período e inventario final registrado. Cuadra con el costo de ventas contabilizado.'
+                  : 'Desglose derivado del inventario y compras. Existe una diferencia respecto al saldo de la cuenta de Costo de Ventas; revise los ajustes del período.'}
+              </p>
+            </div>
+
           {/* Inventory Analysis Panel — only in projection mode */}
           {projectionMode && estimatedCogs.estimatedCostOfSales !== null && (
             <div className="mt-6 pt-4 border-t border-dashed border-sky-300 dark:border-sky-800">
