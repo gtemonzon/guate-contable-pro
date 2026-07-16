@@ -434,6 +434,39 @@ export default function LibrosFiscales() {
       .sort((a, b) => a.type.localeCompare(b.type));
   }, [sales, felDocTypes]);
 
+  const filteredPurchases = useMemo(() => {
+    if (!purchaseOpFilter && !purchaseDocFilter) return purchases;
+    return purchases.filter(p => {
+      if (purchaseOpFilter) {
+        const opName = operationTypes.find(ot => ot.id === p.operation_type_id)?.name;
+        if (opName !== purchaseOpFilter) return false;
+      }
+      if (purchaseDocFilter && p.fel_document_type !== purchaseDocFilter) return false;
+      return true;
+    });
+  }, [purchases, purchaseOpFilter, purchaseDocFilter, operationTypes]);
+
+  const filteredSales = useMemo(() => {
+    if (!saleOpFilter && !saleDocFilter) return sales;
+    return sales.filter(s => {
+      if (saleOpFilter) {
+        const opName = operationTypes.find(ot => ot.id === s.operation_type_id)?.name;
+        if (opName !== saleOpFilter) return false;
+      }
+      if (saleDocFilter && s.fel_document_type !== saleDocFilter) return false;
+      return true;
+    });
+  }, [sales, saleOpFilter, saleDocFilter, operationTypes]);
+
+  // Clear filters when context changes
+  useEffect(() => {
+    setPurchaseOpFilter(null);
+    setPurchaseDocFilter(null);
+    setSaleOpFilter(null);
+    setSaleDocFilter(null);
+  }, [selectedMonth, selectedYear, activeTab, currentEnterpriseId]);
+
+
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     setCurrentEnterpriseId(enterpriseId);
