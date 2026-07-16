@@ -136,6 +136,31 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
         ? await sumDetails(config.purchases_account_id, currentEntryIds, 'debit_minus_credit')
         : 0;
 
+      // 1.b) If the period already reflects a real Cost of Sales (movement in the
+      // configured CoS account) AND an inventory adjustment (movement in the
+      // inventory account), skip the projection — the user has already booked
+      // an inventory cut/closure and the projected number would be misleading.
+      const invAccountId = config.inventory_account_id ?? config.initial_inventory_account_id ?? null;
+      const [realCos, invMovement] = await Promise.all([
+        config.cost_of_sales_account_id
+          ? sumDetails(config.cost_of_sales_account_id, currentEntryIds, 'debit_minus_credit')
+          : Promise.resolve(0),
+        invAccountId
+          ? sumDetails(invAccountId, currentEntryIds, 'debit_minus_credit')
+          : Promise.resolve(0),
+      ]);
+      if (Math.abs(realCos) > 0.005 && Math.abs(invMovement) > 0.005) {
+        setState({
+          ...EMPTY,
+          method,
+          enabled: false,
+          currentSales,
+          purchasesInPeriod,
+          reason: 'El período ya tiene Costo de Ventas y ajuste de inventario registrados; se omite la proyección.',
+        });
+        return;
+      }
+
       // 2) Beginning inventory — from most recent contabilizado closing before dateFrom
       let beginningInventory = 0;
       const { data: lastClosing } = await supabase
