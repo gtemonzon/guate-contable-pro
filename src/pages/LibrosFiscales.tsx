@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -102,6 +102,10 @@ export default function LibrosFiscales() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
+  const [purchaseOpFilter, setPurchaseOpFilter] = useState<string | null>(null);
+  const [purchaseDocFilter, setPurchaseDocFilter] = useState<string | null>(null);
+  const [saleOpFilter, setSaleOpFilter] = useState<string | null>(null);
+  const [saleDocFilter, setSaleDocFilter] = useState<string | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
@@ -429,6 +433,39 @@ export default function LibrosFiscales() {
       }))
       .sort((a, b) => a.type.localeCompare(b.type));
   }, [sales, felDocTypes]);
+
+  const filteredPurchases = useMemo(() => {
+    if (!purchaseOpFilter && !purchaseDocFilter) return purchases;
+    return purchases.filter(p => {
+      if (purchaseOpFilter) {
+        const opName = operationTypes.find(ot => ot.id === p.operation_type_id)?.name;
+        if (opName !== purchaseOpFilter) return false;
+      }
+      if (purchaseDocFilter && p.fel_document_type !== purchaseDocFilter) return false;
+      return true;
+    });
+  }, [purchases, purchaseOpFilter, purchaseDocFilter, operationTypes]);
+
+  const filteredSales = useMemo(() => {
+    if (!saleOpFilter && !saleDocFilter) return sales;
+    return sales.filter(s => {
+      if (saleOpFilter) {
+        const opName = operationTypes.find(ot => ot.id === s.operation_type_id)?.name;
+        if (opName !== saleOpFilter) return false;
+      }
+      if (saleDocFilter && s.fel_document_type !== saleDocFilter) return false;
+      return true;
+    });
+  }, [sales, saleOpFilter, saleDocFilter, operationTypes]);
+
+  // Clear filters when context changes
+  useEffect(() => {
+    setPurchaseOpFilter(null);
+    setPurchaseDocFilter(null);
+    setSaleOpFilter(null);
+    setSaleDocFilter(null);
+  }, [selectedMonth, selectedYear, activeTab, currentEnterpriseId]);
+
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -1599,9 +1636,23 @@ export default function LibrosFiscales() {
               {/* Resumen principal */}
               <div className="flex justify-between items-center gap-2">
                 <div className="flex gap-4 md:gap-6 text-sm items-center flex-wrap">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
+                    {(purchaseOpFilter || purchaseDocFilter) && (
+                      <span className="flex items-center gap-1 text-xs text-primary">
+                        Mostrando {filteredPurchases.length} de {purchases.length} (filtrado)
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => { setPurchaseOpFilter(null); setPurchaseDocFilter(null); }}
+                          title="Limpiar filtros"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    )}
                   </div>
                   {appliesVat && (
                     <>
@@ -1690,23 +1741,41 @@ export default function LibrosFiscales() {
                 {purchasesByOperationType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Operación:</span>
-                    {purchasesByOperationType.map(op => (
-                      <div key={op.name}>
-                        <span>{op.name}: </span>
-                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                      </div>
-                    ))}
+                    {purchasesByOperationType.map(op => {
+                      const active = purchaseOpFilter === op.name;
+                      return (
+                        <div
+                          key={op.name}
+                          onClick={() => setPurchaseOpFilter(active ? null : op.name)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{op.name}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {op.total} ({op.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {purchasesByDocType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Documento:</span>
-                    {purchasesByDocType.map(doc => (
-                      <div key={doc.type}>
-                        <span>{doc.type}: </span>
-                        <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
-                      </div>
-                    ))}
+                    {purchasesByDocType.map(doc => {
+                      const active = purchaseDocFilter === doc.type;
+                      return (
+                        <div
+                          key={doc.type}
+                          onClick={() => setPurchaseDocFilter(active ? null : doc.type)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{doc.type}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {doc.total} ({doc.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CollapsibleContent>
@@ -1723,6 +1792,20 @@ export default function LibrosFiscales() {
                     <Badge variant="secondary">{salesTotals.activeCount} activos</Badge>
                     {salesTotals.annulledCount > 0 && (
                       <Badge variant="destructive">{salesTotals.annulledCount} anulados</Badge>
+                    )}
+                    {(saleOpFilter || saleDocFilter) && (
+                      <span className="flex items-center gap-1 text-xs text-primary">
+                        Mostrando {filteredSales.length} de {sales.length} (filtrado)
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => { setSaleOpFilter(null); setSaleDocFilter(null); }}
+                          title="Limpiar filtros"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
                     )}
                   </div>
                   <div>
@@ -1808,23 +1891,41 @@ export default function LibrosFiscales() {
                 {salesByOperationType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Operación:</span>
-                    {salesByOperationType.map(op => (
-                      <div key={op.name}>
-                        <span>{op.name}: </span>
-                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                      </div>
-                    ))}
+                    {salesByOperationType.map(op => {
+                      const active = saleOpFilter === op.name;
+                      return (
+                        <div
+                          key={op.name}
+                          onClick={() => setSaleOpFilter(active ? null : op.name)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{op.name}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {op.total} ({op.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {salesByDocType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Documento:</span>
-                    {salesByDocType.map(doc => (
-                      <div key={doc.type}>
-                        <span>{doc.type}: </span>
-                        <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
-                      </div>
-                    ))}
+                    {salesByDocType.map(doc => {
+                      const active = saleDocFilter === doc.type;
+                      return (
+                        <div
+                          key={doc.type}
+                          onClick={() => setSaleDocFilter(active ? null : doc.type)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{doc.type}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {doc.total} ({doc.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CollapsibleContent>
@@ -1846,7 +1947,9 @@ export default function LibrosFiscales() {
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
-                  {purchases.map((purchase, index) => (
+                  {filteredPurchases.map((purchase) => {
+                    const index = purchases.indexOf(purchase);
+                    return (
                     <PurchaseCard
                       key={purchase._uid || purchase.id || `new-${index}`}
                       ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
@@ -1870,7 +1973,8 @@ export default function LibrosFiscales() {
                       }}
                       onCancelEdit={() => setEditingPurchaseIndex(null)}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )
             ) : (
@@ -1880,7 +1984,9 @@ export default function LibrosFiscales() {
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
-                  {sales.map((sale, index) => (
+                  {filteredSales.map((sale) => {
+                    const index = sales.indexOf(sale);
+                    return (
                     <SalesCard
                       key={sale.client_id}
                       ref={editingSaleIndex === index ? saleEditRef : undefined}
@@ -1903,7 +2009,8 @@ export default function LibrosFiscales() {
                       }}
                       onCancelEdit={() => setEditingSaleIndex(null)}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )
             )}
