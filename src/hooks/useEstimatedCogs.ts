@@ -64,7 +64,7 @@ const EMPTY: EstimatedCogsResult = {
 const sumDetails = async (
   accountId: number,
   entryIds: number[],
-  mode: 'debit_minus_credit' | 'credit_minus_debit'
+  mode: 'debit_minus_credit' | 'credit_minus_debit' | 'debits_only'
 ): Promise<number> => {
   if (entryIds.length === 0) return 0;
   let total = 0;
@@ -80,7 +80,9 @@ const sumDetails = async (
     (data || []).forEach((d: { debit_amount: number | null; credit_amount: number | null }) => {
       const dr = Number(d.debit_amount) || 0;
       const cr = Number(d.credit_amount) || 0;
-      total += mode === 'debit_minus_credit' ? dr - cr : cr - dr;
+      if (mode === 'debit_minus_credit') total += dr - cr;
+      else if (mode === 'credit_minus_debit') total += cr - dr;
+      else total += dr; // debits_only
     });
   }
   return Math.round(total * 100) / 100;
