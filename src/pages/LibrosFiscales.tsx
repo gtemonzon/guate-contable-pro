@@ -1984,7 +1984,9 @@ export default function LibrosFiscales() {
                 <p className="text-center text-muted-foreground">No hay facturas registradas</p>
               ) : (
                 <div className="space-y-2">
-                  {sales.map((sale, index) => (
+                  {filteredSales.map((sale) => {
+                    const index = sales.indexOf(sale);
+                    return (
                     <SalesCard
                       key={sale.client_id}
                       ref={editingSaleIndex === index ? saleEditRef : undefined}
@@ -2007,7 +2009,8 @@ export default function LibrosFiscales() {
                       }}
                       onCancelEdit={() => setEditingSaleIndex(null)}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )
             )}
