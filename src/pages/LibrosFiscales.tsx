@@ -1793,6 +1793,20 @@ export default function LibrosFiscales() {
                     {salesTotals.annulledCount > 0 && (
                       <Badge variant="destructive">{salesTotals.annulledCount} anulados</Badge>
                     )}
+                    {(saleOpFilter || saleDocFilter) && (
+                      <span className="flex items-center gap-1 text-xs text-primary">
+                        Mostrando {filteredSales.length} de {sales.length} (filtrado)
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => { setSaleOpFilter(null); setSaleDocFilter(null); }}
+                          title="Limpiar filtros"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Neto: </span>
