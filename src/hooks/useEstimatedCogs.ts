@@ -153,10 +153,7 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
         ? await sumDetails(config.purchases_account_id, currentEntryIds, 'debit_minus_credit')
         : 0;
 
-      // 1.b) If the period already reflects a real Cost of Sales (movement in the
-      // configured CoS account) AND an inventory adjustment (movement in the
-      // inventory account), skip the projection — the user has already booked
-      // an inventory cut/closure and the projected number would be misleading.
+      // 1.b) Detect real posted CoS + inventory movement in the period.
       const invAccountId = config.inventory_account_id ?? config.initial_inventory_account_id ?? null;
       const [realCos, invMovement] = await Promise.all([
         config.cost_of_sales_account_id
@@ -166,17 +163,6 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
           ? sumDetails(invAccountId, currentEntryIds, 'debit_minus_credit')
           : Promise.resolve(0),
       ]);
-      if (Math.abs(realCos) > 0.005 && Math.abs(invMovement) > 0.005) {
-        setState({
-          ...EMPTY,
-          method,
-          enabled: false,
-          currentSales,
-          purchasesInPeriod,
-          reason: 'El período ya tiene Costo de Ventas y ajuste de inventario registrados; se omite la proyección.',
-        });
-        return;
-      }
 
       // 2) Beginning inventory — from most recent contabilizado closing before dateFrom
       let beginningInventory = 0;
@@ -207,6 +193,35 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
         );
         beginningInventory = await sumDetails(invAccId, (priorIds || []).map((e: { id: number }) => e.id), 'debit_minus_credit');
       }
+
+      // 1.c) If the period already has posted CoS + an inventory movement, build
+      // a REAL breakdown from posted balances instead of showing a projection.
+      if (Math.abs(realCos) > 0.005 && Math.abs(invMovement) > 0.005) {
+        const finalInventory = Math.round((beginningInventory + invMovement) * 100) / 100;
+        const availableForSale = Math.round((beginningInventory + purchasesInPeriod) * 100) / 100;
+        const derivedCos = Math.round((availableForSale - finalInventory) * 100) / 100;
+        const postedCos = Math.round(realCos * 100) / 100;
+        setState({
+          ...EMPTY,
+          method,
+          enabled: false,
+          currentSales,
+          purchasesInPeriod,
+          beginningInventory,
+          availableInventory: availableForSale,
+          realBreakdown: {
+            initialInventory: beginningInventory,
+            purchases: purchasesInPeriod,
+            availableForSale,
+            finalInventory,
+            derivedCostOfSales: derivedCos,
+            postedCostOfSales: postedCos,
+            matches: Math.abs(derivedCos - postedCos) < 0.01,
+          },
+        });
+        return;
+      }
+
 
       // 3) Fetch closed periods (most recent first)
       const limit = method === 'last_period' ? 1 : Math.max(1, Math.min(24, config.estimated_cogs_periods || 3));
