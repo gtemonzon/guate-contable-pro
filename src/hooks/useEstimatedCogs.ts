@@ -200,20 +200,36 @@ export function useEstimatedCogs({ enterpriseId, config, dateFrom, dateTo, skip 
       // a REAL breakdown from posted balances instead of showing a projection.
       if (Math.abs(realCos) > 0.005 && Math.abs(invMovement) > 0.005) {
         const finalInventory = Math.round((beginningInventory + invMovement) * 100) / 100;
-        const availableForSale = Math.round((beginningInventory + purchasesInPeriod) * 100) / 100;
-        const derivedCos = Math.round((availableForSale - finalInventory) * 100) / 100;
         const postedCos = Math.round(realCos * 100) / 100;
+
+        // Purchases: prefer gross debits to the purchases account (the net figure
+        // often becomes 0 after the closing entry credits it back). If that also
+        // yields 0, fall back to the accounting identity so the breakdown is
+        // consistent with the posted Cost of Sales.
+        let grossPurchases = 0;
+        if (config.purchases_account_id) {
+          grossPurchases = await sumDetails(
+            config.purchases_account_id,
+            currentEntryIds,
+            'debits_only',
+          );
+        }
+        const identityPurchases = Math.round((postedCos + finalInventory - beginningInventory) * 100) / 100;
+        const purchases = grossPurchases > 0.005 ? grossPurchases : identityPurchases;
+
+        const availableForSale = Math.round((beginningInventory + purchases) * 100) / 100;
+        const derivedCos = Math.round((availableForSale - finalInventory) * 100) / 100;
         setState({
           ...EMPTY,
           method,
           enabled: false,
           currentSales,
-          purchasesInPeriod,
+          purchasesInPeriod: purchases,
           beginningInventory,
           availableInventory: availableForSale,
           realBreakdown: {
             initialInventory: beginningInventory,
-            purchases: purchasesInPeriod,
+            purchases,
             availableForSale,
             finalInventory,
             derivedCostOfSales: derivedCos,
