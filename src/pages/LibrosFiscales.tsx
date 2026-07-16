@@ -1727,12 +1727,21 @@ export default function LibrosFiscales() {
                 {purchasesByOperationType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Operación:</span>
-                    {purchasesByOperationType.map(op => (
-                      <div key={op.name}>
-                        <span>{op.name}: </span>
-                        <span className="font-semibold text-foreground">Q {op.total} ({op.count})</span>
-                      </div>
-                    ))}
+                    {purchasesByOperationType.map(op => {
+                      const active = purchaseOpFilter === op.name;
+                      return (
+                        <div
+                          key={op.name}
+                          onClick={() => setPurchaseOpFilter(active ? null : op.name)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{op.name}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {op.total} ({op.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {purchasesByDocType.length > 0 && (
