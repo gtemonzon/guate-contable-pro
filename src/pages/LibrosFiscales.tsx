@@ -102,6 +102,10 @@ export default function LibrosFiscales() {
   const [felDocTypes, setFelDocTypes] = useState<FELDocumentType[]>([]);
   const [currentBookId, setCurrentBookId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"compras" | "ventas">("compras");
+  const [purchaseOpFilter, setPurchaseOpFilter] = useState<string | null>(null);
+  const [purchaseDocFilter, setPurchaseDocFilter] = useState<string | null>(null);
+  const [saleOpFilter, setSaleOpFilter] = useState<string | null>(null);
+  const [saleDocFilter, setSaleDocFilter] = useState<string | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
