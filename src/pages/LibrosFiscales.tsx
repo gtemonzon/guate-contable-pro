@@ -1636,9 +1636,23 @@ export default function LibrosFiscales() {
               {/* Resumen principal */}
               <div className="flex justify-between items-center gap-2">
                 <div className="flex gap-4 md:gap-6 text-sm items-center flex-wrap">
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">Documentos: </span>
                     <Badge variant="secondary">{purchaseTotals.documentCount}</Badge>
+                    {(purchaseOpFilter || purchaseDocFilter) && (
+                      <span className="flex items-center gap-1 text-xs text-primary">
+                        Mostrando {filteredPurchases.length} de {purchases.length} (filtrado)
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => { setPurchaseOpFilter(null); setPurchaseDocFilter(null); }}
+                          title="Limpiar filtros"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </span>
+                    )}
                   </div>
                   {appliesVat && (
                     <>
