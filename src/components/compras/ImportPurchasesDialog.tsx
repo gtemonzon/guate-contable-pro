@@ -1704,26 +1704,30 @@ export function ImportPurchasesDialog({
                               const serieNum = `${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`.toLowerCase();
                               if (!record.supplier_name.toLowerCase().includes(q) && !serieNum.includes(q)) return null;
                             }
+                            const toggleIndex = (idx: number) => {
+                              const next = new Set(selectedIndices);
+                              if (next.has(idx)) {
+                                next.delete(idx);
+                              } else {
+                                next.add(idx);
+                              }
+                              setSelectedIndices(next);
+                            };
                             return (
                               <div
                                 key={idx}
                                 className={cn(
-                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors",
+                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer",
                                   !selectedIndices.has(idx) && "opacity-50"
                                 )}
+                                onClick={() => toggleIndex(idx)}
                               >
-                                <Checkbox
-                                  checked={selectedIndices.has(idx)}
-                                  onCheckedChange={(checked) => {
-                                    const next = new Set(selectedIndices);
-                                    if (checked) {
-                                      next.add(idx);
-                                    } else {
-                                      next.delete(idx);
-                                    }
-                                    setSelectedIndices(next);
-                                  }}
-                                />
+                                <div onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    checked={selectedIndices.has(idx)}
+                                    onCheckedChange={() => toggleIndex(idx)}
+                                  />
+                                </div>
                                 <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
                                 <span className="w-[90px] text-right font-mono shrink-0">
                                   Q{formatCurrency(record.total_amount)}
