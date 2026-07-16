@@ -1883,12 +1883,21 @@ export default function LibrosFiscales() {
                 {salesByDocType.length > 0 && (
                   <div className="flex gap-6 text-sm text-muted-foreground flex-wrap">
                     <span className="font-medium">Por Documento:</span>
-                    {salesByDocType.map(doc => (
-                      <div key={doc.type}>
-                        <span>{doc.type}: </span>
-                        <span className="font-semibold text-foreground">Q {doc.total} ({doc.count})</span>
-                      </div>
-                    ))}
+                    {salesByDocType.map(doc => {
+                      const active = saleDocFilter === doc.type;
+                      return (
+                        <div
+                          key={doc.type}
+                          onClick={() => setSaleDocFilter(active ? null : doc.type)}
+                          className={`cursor-pointer rounded-md px-2 py-0.5 transition-colors ${
+                            active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{doc.type}: </span>
+                          <span className={`font-semibold ${active ? "" : "text-foreground"}`}>Q {doc.total} ({doc.count})</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CollapsibleContent>
