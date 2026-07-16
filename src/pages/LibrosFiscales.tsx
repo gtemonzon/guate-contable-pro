@@ -2158,7 +2158,8 @@ export default function LibrosFiscales() {
                       const vatCreditAccountId = enterpriseConfig?.vat_credit_account_id;
                       const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
 
-                      const entryNumber = `COMP-${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                      const entryDateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+                      const entryNumber = await allocateEntryNumber(currentEnterpriseId, "compras", entryDateStr);
                       const { data: journalEntry, error: journalError } = await supabase
                         .from("tab_journal_entries")
                         .insert({
