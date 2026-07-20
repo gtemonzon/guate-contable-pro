@@ -83,6 +83,12 @@ export function TenantDialog({
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [modules, setModules] = useState<Record<string, boolean>>({
+    cxc: false,
+    cxp: false,
+    inventario: false,
+    tax_avanzada: false,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!tenant;
 
