@@ -197,9 +197,14 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
           <h1 className="text-2xl font-bold">{title}</h1>
           <p className="text-muted-foreground text-sm">{selectedEnterprise?.business_name}</p>
         </div>
-        <Button variant="outline" onClick={() => setShowInitial(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowGeneratePoliza(true)}>
+            <FileText className="h-4 w-4 mr-1" /> Generar Póliza
+          </Button>
+          <Button variant="outline" onClick={() => setShowInitial(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
+          </Button>
+        </div>
       </div>
 
       <Card>
