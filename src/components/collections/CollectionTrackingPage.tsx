@@ -21,8 +21,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Check, Clock, FileText, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert,
+  Check, ChevronDown, ChevronRight, Clock, Download, FileText, Filter, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert, X,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
