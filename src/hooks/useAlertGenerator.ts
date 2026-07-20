@@ -306,6 +306,56 @@ export function useAlertGenerator() {
         }
       }
 
+      // 4b. Collections tracking (CxC / CxP) — aggregated notification per direction
+      for (const dir of ['cxc', 'cxp'] as const) {
+        const alertType = `vencimiento_${dir}`;
+        const cfg = getAlertConfig(alertType);
+        if (!cfg.is_enabled) continue;
+
+        const horizon = new Date(today);
+        horizon.setDate(horizon.getDate() + (cfg.days_before || 5));
+        const horizonStr = horizon.toISOString().split('T')[0];
+
+        const { data: dueRows } = await supabase
+          .from('tab_collection_tracking')
+          .select('due_date, amount_total, amount_paid, status')
+          .eq('enterprise_id', enterpriseId)
+          .eq('direction', dir)
+          .neq('status', 'pagada')
+          .lte('due_date', horizonStr);
+
+        const rows = dueRows || [];
+        if (rows.length === 0) continue;
+
+        const todayStr = today.toISOString().split('T')[0];
+        const hasOverdue = rows.some((r: any) => r.due_date < todayStr);
+        const totalPending = rows.reduce(
+          (sum: number, r: any) => sum + (Number(r.amount_total) - Number(r.amount_paid || 0)),
+          0
+        );
+
+        const existingCheck = await supabase
+          .from('tab_notifications')
+          .select('id')
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', alertType)
+          .gte('created_at', subDays(today, 1).toISOString())
+          .limit(1);
+
+        if (!(existingCheck.data || []).length) {
+          const label = dir === 'cxc' ? 'por cobrar' : 'por pagar';
+          const fmt = totalPending.toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' });
+          await createAlert(
+            alertType,
+            `${rows.length} factura${rows.length > 1 ? 's' : ''} ${label} próxima${rows.length > 1 ? 's' : ''} a vencer o vencida${rows.length > 1 ? 's' : ''}`,
+            `Monto pendiente total: ${fmt}${hasOverdue ? ' (con facturas ya vencidas)' : ''}.`,
+            today,
+            hasOverdue ? 'urgente' : 'importante',
+            dir === 'cxc' ? '/cuentas-por-cobrar' : '/cuentas-por-pagar'
+          );
+        }
+      }
+
       // 5. Check for custom reminders due soon
       const { data: reminders } = await supabase
         .from('tab_custom_reminders')
