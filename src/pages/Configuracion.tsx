@@ -41,7 +41,7 @@ type Category = {
 
 export default function Configuracion() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isSuperAdmin } = useTenant();
+  const { isSuperAdmin, hasModule } = useTenant();
 
   const categories: Category[] = useMemo(
     () => [
