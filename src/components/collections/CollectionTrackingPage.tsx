@@ -841,3 +841,379 @@ function InitialBalancesDialog({
     </Dialog>
   );
 }
+
+// ---------- Generar Póliza ----------
+
+type GroupMode = "documento" | "dia" | "mes";
+
+interface PendingPayment {
+  id: number;
+  tracking_id: number;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod | null;
+  bank_account_id: number | null;
+  receipt_number: string | null;
+  source_ledger_id: number;
+  third_party_name: string;
+  document_number: string;
+}
+
+function GeneratePolizaDialog({
+  enterpriseId, direction, onClose,
+}: { enterpriseId: number; direction: "cxc" | "cxp"; onClose: (r: boolean) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = today.slice(0, 8) + "01";
+  const [step, setStep] = useState<1 | 2>(1);
+  const [dateFrom, setDateFrom] = useState(firstOfMonth);
+  const [dateTo, setDateTo] = useState(today);
+  const [mode, setMode] = useState<GroupMode>("dia");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [payments, setPayments] = useState<PendingPayment[]>([]);
+  const [banks, setBanks] = useState<BankAccountOption[]>([]);
+  // Resolver cuenta bancaria por grupo pendiente (efectivo/cheque/otro)
+  const [methodBankAccount, setMethodBankAccount] = useState<Record<string, string>>({});
+
+  useEffect(() => { fetchBankAccounts(enterpriseId).then(setBanks); }, [enterpriseId]);
+
+  const loadPending = async () => {
+    setLoading(true);
+    // 1. tracking ids for this enterprise+direction
+    const { data: tr } = await supabase.from("tab_collection_tracking")
+      .select("id,source_ledger_id")
+      .eq("enterprise_id", enterpriseId).eq("direction", direction);
+    const trList = (tr || []) as any[];
+    const trIds = trList.map((t) => Number(t.id));
+    if (trIds.length === 0) { setPayments([]); setLoading(false); setStep(2); return; }
+
+    // 2. pending payments
+    const { data: pays } = await supabase.from("tab_collection_payments")
+      .select("id,tracking_id,amount,payment_date,payment_method,bank_account_id,receipt_number,journal_entry_id")
+      .in("tracking_id", trIds)
+      .is("journal_entry_id", null)
+      .gte("payment_date", dateFrom)
+      .lte("payment_date", dateTo)
+      .order("payment_date", { ascending: true });
+    const payList = (pays || []) as any[];
+
+    // 3. enrich third-party from ledger via tracking source_ledger_id
+    const trMap = new Map<number, number>();
+    trList.forEach((t) => trMap.set(Number(t.id), Number(t.source_ledger_id)));
+    const ledgerIds = Array.from(new Set(payList.map((p) => trMap.get(Number(p.tracking_id))).filter(Boolean) as number[]));
+    const ledgerMap = new Map<number, { name: string; doc: string }>();
+    if (ledgerIds.length > 0) {
+      const table = direction === "cxc" ? "tab_sales_ledger" : "tab_purchase_ledger";
+      const nameCol = direction === "cxc" ? "customer_name" : "supplier_name";
+      const { data: ledger } = await supabase.from(table as any)
+        .select(`id,${nameCol},invoice_series,invoice_number`).in("id", ledgerIds);
+      (ledger || []).forEach((l: any) => {
+        ledgerMap.set(Number(l.id), {
+          name: l[nameCol] || "", doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+        });
+      });
+    }
+
+    const enriched: PendingPayment[] = payList.map((p) => {
+      const ledgerId = trMap.get(Number(p.tracking_id)) || 0;
+      const info = ledgerMap.get(ledgerId);
+      return {
+        id: Number(p.id), tracking_id: Number(p.tracking_id), amount: Number(p.amount),
+        payment_date: p.payment_date, payment_method: p.payment_method,
+        bank_account_id: p.bank_account_id ? Number(p.bank_account_id) : null,
+        receipt_number: p.receipt_number, source_ledger_id: ledgerId,
+        third_party_name: info?.name || "—", document_number: info?.doc || "—",
+      };
+    });
+    setPayments(enriched);
+    setLoading(false);
+    setStep(2);
+  };
+
+  // Groups needing bank account resolution
+  const pendingMethodGroups = useMemo(() => {
+    const groups: Record<string, { method: PaymentMethod; count: number; total: number }> = {};
+    payments.forEach((p) => {
+      const m = (p.payment_method || "otro") as PaymentMethod;
+      if (m === "transferencia" && p.bank_account_id) return; // already resolved
+      const key = m;
+      if (!groups[key]) groups[key] = { method: m, count: 0, total: 0 };
+      groups[key].count++;
+      groups[key].total += p.amount;
+    });
+    return groups;
+  }, [payments]);
+
+  // Already-resolved transfer groups (informative)
+  const resolvedTransferGroups = useMemo(() => {
+    const g: Record<number, { count: number; total: number }> = {};
+    payments.forEach((p) => {
+      if (p.payment_method === "transferencia" && p.bank_account_id) {
+        if (!g[p.bank_account_id]) g[p.bank_account_id] = { count: 0, total: 0 };
+        g[p.bank_account_id].count++;
+        g[p.bank_account_id].total += p.amount;
+      }
+    });
+    return g;
+  }, [payments]);
+
+  const allResolved = useMemo(() => {
+    return Object.keys(pendingMethodGroups).every((k) => !!methodBankAccount[k]);
+  }, [pendingMethodGroups, methodBankAccount]);
+
+  const resolveBank = (p: PendingPayment): number | null => {
+    if (p.payment_method === "transferencia" && p.bank_account_id) return p.bank_account_id;
+    const key = (p.payment_method || "otro") as string;
+    const v = methodBankAccount[key];
+    return v ? Number(v) : null;
+  };
+
+  const handleGenerate = async () => {
+    if (payments.length === 0) { toast({ title: "No hay abonos pendientes en el rango" }); return; }
+    if (!allResolved) { toast({ title: "Selecciona la cuenta bancaria para cada grupo", variant: "destructive" }); return; }
+
+    setSaving(true);
+    try {
+      // Load enterprise config for third-party accounts
+      const { data: cfg } = await supabase.from("tab_enterprise_config")
+        .select("customers_account_id,suppliers_account_id")
+        .eq("enterprise_id", enterpriseId).maybeSingle();
+      const thirdPartyAccId = direction === "cxc"
+        ? (cfg as any)?.customers_account_id
+        : (cfg as any)?.suppliers_account_id;
+      if (!thirdPartyAccId) {
+        throw new Error(direction === "cxc"
+          ? "Configura la cuenta de Clientes en Configuración de la empresa."
+          : "Configura la cuenta de Proveedores en Configuración de la empresa.");
+      }
+
+      // bank id -> account_id (contable)
+      const bankAccountMap = new Map<number, number>();
+      banks.forEach((b) => { if (b.account_id) bankAccountMap.set(b.id, b.account_id); });
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+
+      // Grouping key by mode
+      const keyFor = (p: PendingPayment) => {
+        if (mode === "documento") return `doc_${p.id}`;
+        if (mode === "dia") return p.payment_date;
+        return `${p.payment_date.slice(0, 7)}`; // yyyy-mm
+      };
+
+      const groups = new Map<string, PendingPayment[]>();
+      payments.forEach((p) => {
+        const k = keyFor(p);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k)!.push(p);
+      });
+
+      let entriesCreated = 0;
+      let totalAmount = 0;
+
+      for (const [, list] of groups) {
+        // entry_date
+        const entryDate = mode === "mes"
+          ? (() => {
+              const ym = list[0].payment_date.slice(0, 7);
+              const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(5, 7));
+              const last = new Date(y, m, 0).getDate();
+              return `${ym}-${String(last).padStart(2, "0")}`;
+            })()
+          : list[0].payment_date;
+
+        // Find accounting period
+        const year = Number(entryDate.slice(0, 4));
+        const { data: period } = await supabase.from("tab_accounting_periods")
+          .select("id").eq("enterprise_id", enterpriseId).eq("year", year).maybeSingle();
+        if (!period) throw new Error(`No hay período contable para el año ${year}`);
+
+        const groupTotal = list.reduce((s, p) => s + p.amount, 0);
+        totalAmount += groupTotal;
+
+        const entryNumber = await allocateEntryNumber(String(enterpriseId), "diario", entryDate);
+        const descBase = direction === "cxc" ? "Cobros" : "Pagos";
+        const description = mode === "documento"
+          ? `${descBase} — ${list[0].third_party_name} ${list[0].document_number}`
+          : mode === "dia"
+            ? `${descBase} del día ${entryDate}`
+            : `${descBase} del mes ${entryDate.slice(0, 7)}`;
+
+        const { data: je, error: jeErr } = await supabase.from("tab_journal_entries").insert({
+          enterprise_id: enterpriseId, accounting_period_id: (period as any).id,
+          entry_number: entryNumber, entry_date: entryDate, entry_type: "diario",
+          description, total_debit: groupTotal, total_credit: groupTotal,
+          is_posted: false, created_by: userId,
+        } as any).select("id").single();
+        if (jeErr) throw jeErr;
+        const journalEntryId = Number((je as any).id);
+
+        // Build detail lines: aggregate by bank account
+        const bankAgg = new Map<number, number>(); // bank_account_id -> total
+        let thirdPartyTotal = 0;
+        list.forEach((p) => {
+          const bid = resolveBank(p)!;
+          bankAgg.set(bid, (bankAgg.get(bid) || 0) + p.amount);
+          thirdPartyTotal += p.amount;
+        });
+
+        const details: any[] = [];
+        let lineNumber = 1;
+        // Debit/Credit assignment
+        if (direction === "cxc") {
+          // DEBIT bank(s), CREDIT third-party
+          for (const [bankId, amt] of bankAgg) {
+            const accId = bankAccountMap.get(bankId);
+            if (!accId) throw new Error(`La cuenta bancaria seleccionada no tiene cuenta contable configurada.`);
+            const b = banks.find((x) => x.id === bankId);
+            details.push({
+              journal_entry_id: journalEntryId, line_number: lineNumber++, account_id: accId,
+              description: `${b?.bank_name || "Banco"} ${b?.account_number || ""}`.trim(),
+              debit_amount: parseFloat(amt.toFixed(2)), credit_amount: 0,
+            });
+          }
+          details.push({
+            journal_entry_id: journalEntryId, line_number: lineNumber++, account_id: thirdPartyAccId,
+            description, debit_amount: 0, credit_amount: parseFloat(thirdPartyTotal.toFixed(2)),
+          });
+        } else {
+          // cxp: DEBIT third-party, CREDIT bank(s)
+          details.push({
+            journal_entry_id: journalEntryId, line_number: lineNumber++, account_id: thirdPartyAccId,
+            description, debit_amount: parseFloat(thirdPartyTotal.toFixed(2)), credit_amount: 0,
+          });
+          for (const [bankId, amt] of bankAgg) {
+            const accId = bankAccountMap.get(bankId);
+            if (!accId) throw new Error(`La cuenta bancaria seleccionada no tiene cuenta contable configurada.`);
+            const b = banks.find((x) => x.id === bankId);
+            details.push({
+              journal_entry_id: journalEntryId, line_number: lineNumber++, account_id: accId,
+              description: `${b?.bank_name || "Banco"} ${b?.account_number || ""}`.trim(),
+              debit_amount: 0, credit_amount: parseFloat(amt.toFixed(2)),
+            });
+          }
+        }
+
+        const { error: detErr } = await supabase.from("tab_journal_entry_details").insert(details);
+        if (detErr) throw detErr;
+
+        // Mark payments with journal_entry_id
+        const paymentIds = list.map((p) => p.id);
+        await supabase.from("tab_collection_payments")
+          .update({ journal_entry_id: journalEntryId } as any).in("id", paymentIds);
+
+        entriesCreated++;
+      }
+
+      toast({
+        title: "Pólizas generadas",
+        description: `${entriesCreated} póliza(s) creada(s) por un total de ${formatCurrency(totalAmount)}.`,
+      });
+      onClose(true);
+    } catch (e: any) {
+      toast({ title: "Error al generar póliza", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose(false)}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><FileText className="h-4 w-4" /> Generar Póliza de Abonos</DialogTitle>
+          <DialogDescription>
+            {step === 1
+              ? "Selecciona el rango de fechas y cómo agrupar los abonos."
+              : "Revisa los abonos pendientes de póliza y resuelve la cuenta bancaria para cada grupo."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {step === 1 && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Desde</Label>
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label>Hasta</Label>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label>Modo de agrupación</Label>
+              <Select value={mode} onValueChange={(v) => setMode(v as GroupMode)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="documento">Póliza por Documento (una por abono)</SelectItem>
+                  <SelectItem value="dia">Póliza por Día</SelectItem>
+                  <SelectItem value="mes">Póliza Consolidada del Mes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
+              <Button onClick={loadPending} disabled={loading}>{loading ? "Buscando…" : "Continuar"}</Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-3">
+            {payments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No hay abonos pendientes de póliza en el rango seleccionado.
+              </p>
+            ) : (
+              <>
+                <div className="bg-muted p-3 rounded text-sm">
+                  <p><strong>{payments.length}</strong> abonos · Total <strong>{formatCurrency(payments.reduce((s, p) => s + p.amount, 0))}</strong></p>
+                  <p className="text-xs text-muted-foreground">Modo: {mode === "documento" ? "por documento" : mode === "dia" ? "por día" : "consolidada del mes"}</p>
+                </div>
+
+                {Object.entries(resolvedTransferGroups).map(([bankId, g]) => {
+                  const b = banks.find((x) => x.id === Number(bankId));
+                  return (
+                    <div key={`resolved_${bankId}`} className="border rounded p-3 text-sm bg-emerald-50/50">
+                      <p className="font-medium">{g.count} abono(s) por transferencia — {b?.bank_name} {b?.account_number}</p>
+                      <p className="text-xs text-muted-foreground">Total {formatCurrency(g.total)} · Cuenta resuelta ✓</p>
+                    </div>
+                  );
+                })}
+
+                {Object.entries(pendingMethodGroups).map(([key, g]) => (
+                  <div key={`pending_${key}`} className="border rounded p-3 space-y-2">
+                    <p className="font-medium text-sm">
+                      {g.count} abono(s) en {METHOD_LABEL[g.method]} — Total {formatCurrency(g.total)}
+                    </p>
+                    <div>
+                      <Label className="text-xs">Cuenta bancaria/caja a usar</Label>
+                      <Select
+                        value={methodBankAccount[key] || ""}
+                        onValueChange={(v) => setMethodBankAccount((prev) => ({ ...prev, [key]: v }))}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecciona la cuenta" /></SelectTrigger>
+                        <SelectContent>
+                          {banks.map((b) => (
+                            <SelectItem key={b.id} value={String(b.id)}>{b.bank_name} — {b.account_number}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep(1)} disabled={saving}>Atrás</Button>
+              <Button onClick={handleGenerate} disabled={saving || payments.length === 0 || !allResolved}>
+                {saving ? "Generando…" : "Generar Póliza"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
