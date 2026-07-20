@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { useTenant } from "@/contexts/TenantContext";
+
 
 interface Reason {
   id: number;
@@ -21,8 +21,8 @@ interface Reason {
 const DIR_LABEL: Record<string, string> = { cxc: "Solo CxC", cxp: "Solo CxP", both: "Ambos" };
 
 export function CollectionReasonsManager() {
-  const { currentEnterprise } = useTenant();
-  const enterpriseId = currentEnterprise?.id;
+  const enterpriseIdStr = typeof window !== "undefined" ? localStorage.getItem("currentEnterpriseId") : null;
+  const enterpriseId = enterpriseIdStr ? parseInt(enterpriseIdStr) : null;
   const [items, setItems] = useState<Reason[]>([]);
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");

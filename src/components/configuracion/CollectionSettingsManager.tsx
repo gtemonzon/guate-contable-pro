@@ -5,11 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { useTenant } from "@/contexts/TenantContext";
+
 
 export function CollectionSettingsManager() {
-  const { currentEnterprise } = useTenant();
-  const enterpriseId = currentEnterprise?.id;
+  const enterpriseIdStr = typeof window !== "undefined" ? localStorage.getItem("currentEnterpriseId") : null;
+  const enterpriseId = enterpriseIdStr ? parseInt(enterpriseIdStr) : null;
   const [adjust, setAdjust] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

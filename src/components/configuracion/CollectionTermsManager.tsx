@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Plus, Trash2, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { useTenant } from "@/contexts/TenantContext";
+
 
 interface Term {
   id: number;
@@ -17,8 +17,8 @@ interface Term {
 }
 
 export function CollectionTermsManager() {
-  const { currentEnterprise } = useTenant();
-  const enterpriseId = currentEnterprise?.id;
+  const enterpriseIdStr = typeof window !== "undefined" ? localStorage.getItem("currentEnterpriseId") : null;
+  const enterpriseId = enterpriseIdStr ? parseInt(enterpriseIdStr) : null;
   const [items, setItems] = useState<Term[]>([]);
   const [loading, setLoading] = useState(true);
   const [newDays, setNewDays] = useState<string>("");
