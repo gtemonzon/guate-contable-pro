@@ -48,6 +48,12 @@ interface PaymentRow {
   payment_date: string;
   note: string | null;
   created_at: string;
+  payment_method?: string | null;
+  receipt_number?: string | null;
+  bank_account_id?: number | null;
+  journal_entry_id?: number | null;
+  bank_name?: string;
+  bank_account_number?: string;
 }
 
 interface StatusHistoryRow {
