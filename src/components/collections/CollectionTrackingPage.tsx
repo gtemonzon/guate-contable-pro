@@ -173,6 +173,30 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Handle ?highlight={id} query param after rows load
+  useEffect(() => {
+    if (loading || rows.length === 0) return;
+    const highlightParam = searchParams.get("highlight");
+    if (!highlightParam) return;
+    const hId = parseInt(highlightParam);
+    if (isNaN(hId)) return;
+    const match = rows.find((r) => r.id === hId);
+    if (!match) return;
+    setHighlightedId(hId);
+    // Scroll into view on next frame
+    requestAnimationFrame(() => {
+      const el = rowRefs.current.get(hId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    // Clear URL param and highlight after a few seconds
+    const params = new URLSearchParams(searchParams);
+    params.delete("highlight");
+    setSearchParams(params, { replace: true });
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows]);
+
   const totals = useMemo(() => {
     const pending = rows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
     return { count: rows.length, pending };
