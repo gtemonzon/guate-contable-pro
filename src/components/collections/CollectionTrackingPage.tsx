@@ -254,7 +254,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <Button size="icon" variant="ghost" title="Registrar abono" onClick={() => setPaymentTarget(r)}>
-                            <DollarSign className="h-4 w-4" />
+                            <HandCoins className="h-4 w-4" />
                           </Button>
                           <Button size="icon" variant="ghost" title="Ver abonos" onClick={() => setPaymentsHistoryTarget(r)}>
                             <ListOrdered className="h-4 w-4" />
