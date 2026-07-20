@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useTenant } from "@/contexts/TenantContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface MenuItem {
@@ -24,6 +25,7 @@ interface MenuItem {
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   requiredPermission?: keyof ReturnType<typeof useUserPermissions>;
+  requiredModule?: string;
   hideIfSuperAdmin?: boolean;
   disabled?: boolean;
   badge?: string;
@@ -80,8 +82,8 @@ const allMenuItems: MenuItemOrSection[] = [
     title: "Módulos ERP",
     icon: Boxes,
     items: [
-      { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
-      { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Cuentas por Cobrar", url: "/cuentas-por-cobrar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxc" },
+      { title: "Cuentas por Pagar", url: "/cuentas-por-pagar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxp" },
       { title: "Inventario", url: "#inv", icon: Store, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
       { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
     ],
@@ -120,6 +122,7 @@ export function AppSidebar() {
   const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
+  const { hasModule } = useTenant();
   const { data: openTicketsCount } = useOpenTicketsCount();
   const location = useLocation();
 
@@ -134,6 +137,7 @@ export function AppSidebar() {
       }
       if (item.hideIfSuperAdmin && permissions.isSuperAdmin) return null;
       if (item.requiredPermission && permissions[item.requiredPermission] !== true) return null;
+      if (item.requiredModule && !hasModule(item.requiredModule)) return null;
       return filteredChildren ? { ...item, children: filteredChildren } : item;
     };
 
@@ -147,7 +151,7 @@ export function AppSidebar() {
         return filterItem(item);
       })
       .filter(Boolean) as MenuItemOrSection[];
-  }, [permissions]);
+  }, [permissions, hasModule]);
 
   // Find which group/subgroup contains the current route
   const { activeGroupTitle, activeSubgroupTitle } = useMemo(() => {

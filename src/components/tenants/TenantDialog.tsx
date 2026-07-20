@@ -83,6 +83,12 @@ export function TenantDialog({
   const [uploading, setUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [modules, setModules] = useState<Record<string, boolean>>({
+    cxc: false,
+    cxp: false,
+    inventario: false,
+    tax_avanzada: false,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!tenant;
 
@@ -120,6 +126,18 @@ export function TenantDialog({
       });
       setLogoUrl(tenant.logo_url);
       setLogoPreview(tenant.logo_url);
+      // Load modules for this tenant
+      (async () => {
+        const { data } = await supabase
+          .from("tab_tenant_modules")
+          .select("module_key,is_enabled")
+          .eq("tenant_id", tenant.id);
+        const map: Record<string, boolean> = { cxc: false, cxp: false, inventario: false, tax_avanzada: false };
+        (data || []).forEach((r: { module_key: string; is_enabled: boolean }) => {
+          map[r.module_key] = r.is_enabled;
+        });
+        setModules(map);
+      })();
     } else {
       form.reset({
         tenant_code: "",
@@ -136,6 +154,7 @@ export function TenantDialog({
       });
       setLogoUrl(null);
       setLogoPreview(null);
+      setModules({ cxc: false, cxp: false, inventario: false, tax_avanzada: false });
     }
   }, [tenant, form]);
 
@@ -222,6 +241,7 @@ export function TenantDialog({
         logo_url: logoUrl,
       };
 
+      let tenantId: number | null = null;
       if (isEditing) {
         const { error } = await supabase
           .from("tab_tenants")
@@ -229,16 +249,34 @@ export function TenantDialog({
           .eq("id", tenant.id);
 
         if (error) throw error;
-
+        tenantId = tenant.id;
         toast.success("Tenant actualizado correctamente");
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("tab_tenants")
-          .insert(dataToSave);
+          .insert(dataToSave)
+          .select("id")
+          .single();
 
         if (error) throw error;
-
+        tenantId = inserted?.id ?? null;
         toast.success("Tenant creado correctamente");
+      }
+
+      // Upsert enabled modules
+      if (tenantId != null) {
+        const { data: authUser } = await supabase.auth.getUser();
+        const rows = Object.entries(modules).map(([module_key, is_enabled]) => ({
+          tenant_id: tenantId!,
+          module_key,
+          is_enabled,
+          updated_by: authUser?.user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        }));
+        const { error: modErr } = await supabase
+          .from("tab_tenant_modules")
+          .upsert(rows, { onConflict: "tenant_id,module_key" });
+        if (modErr) console.error("Error saving tenant modules:", modErr);
       }
 
       onClose();
@@ -506,6 +544,35 @@ export function TenantDialog({
                 )}
               />
             </div>
+
+            {/* Módulos habilitados */}
+            <div className="space-y-2 rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Módulos habilitados</FormLabel>
+                <FormDescription>
+                  Activa los módulos ERP disponibles para esta oficina.
+                </FormDescription>
+              </div>
+              <div className="space-y-3 pt-2">
+                {[
+                  { key: "cxc", label: "Cuentas por Cobrar" },
+                  { key: "cxp", label: "Cuentas por Pagar" },
+                  { key: "inventario", label: "Inventario" },
+                  { key: "tax_avanzada", label: "Gestión Tributaria Avanzada" },
+                ].map((m) => (
+                  <div key={m.key} className="flex items-center justify-between">
+                    <span className="text-sm">{m.label}</span>
+                    <Switch
+                      checked={!!modules[m.key]}
+                      onCheckedChange={(v) =>
+                        setModules((prev) => ({ ...prev, [m.key]: v }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
 
             <FormField
               control={form.control}
