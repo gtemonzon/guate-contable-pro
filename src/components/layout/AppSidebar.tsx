@@ -151,7 +151,7 @@ export function AppSidebar() {
         return filterItem(item);
       })
       .filter(Boolean) as MenuItemOrSection[];
-  }, [permissions]);
+  }, [permissions, hasModule]);
 
   // Find which group/subgroup contains the current route
   const { activeGroupTitle, activeSubgroupTitle } = useMemo(() => {
