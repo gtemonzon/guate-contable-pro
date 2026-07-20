@@ -26,6 +26,8 @@ interface TenantContextType {
   isSuperAdmin: boolean;
   isTenantAdmin: boolean;
   isTenantActive: boolean;
+  enabledModules: string[];
+  hasModule: (moduleKey: string) => boolean;
   switchTenant: (tenantId: number) => Promise<void>;
   refreshTenants: () => Promise<void>;
 }
