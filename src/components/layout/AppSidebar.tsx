@@ -137,6 +137,7 @@ export function AppSidebar() {
       }
       if (item.hideIfSuperAdmin && permissions.isSuperAdmin) return null;
       if (item.requiredPermission && permissions[item.requiredPermission] !== true) return null;
+      if (item.requiredModule && !hasModule(item.requiredModule)) return null;
       return filteredChildren ? { ...item, children: filteredChildren } : item;
     };
 
