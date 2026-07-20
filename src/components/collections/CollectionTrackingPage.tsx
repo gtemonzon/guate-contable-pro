@@ -285,9 +285,11 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
       {paymentsHistoryTarget && (
         <PaymentsHistoryDialog row={paymentsHistoryTarget} onClose={() => setPaymentsHistoryTarget(null)} />
       )}
-      {statusTarget && (
+      {statusTarget && selectedEnterprise && (
         <StatusChangeDialog
           row={statusTarget}
+          enterpriseId={selectedEnterprise.id}
+          direction={direction}
           onClose={(refreshed) => { setStatusTarget(null); if (refreshed) load(); }}
         />
       )}
