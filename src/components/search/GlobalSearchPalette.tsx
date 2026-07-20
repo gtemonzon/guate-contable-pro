@@ -76,6 +76,9 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const { hasModule } = useTenant();
+  const hasCxc = hasModule("cxc");
+  const hasCxp = hasModule("cxp");
 
   // Quick actions
   const quickActions: QuickAction[] = [
