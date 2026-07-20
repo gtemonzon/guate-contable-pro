@@ -82,8 +82,8 @@ const allMenuItems: MenuItemOrSection[] = [
     title: "Módulos ERP",
     icon: Boxes,
     items: [
-      { title: "Cuentas por Cobrar", url: "#cxc", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
-      { title: "Cuentas por Pagar", url: "#cxp", icon: Boxes, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Cuentas por Cobrar", url: "/cuentas-por-cobrar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxc" },
+      { title: "Cuentas por Pagar", url: "/cuentas-por-pagar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxp" },
       { title: "Inventario", url: "#inv", icon: Store, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
       { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
     ],
