@@ -120,6 +120,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const [statusTarget, setStatusTarget] = useState<TrackingRow | null>(null);
   const [historyTarget, setHistoryTarget] = useState<TrackingRow | null>(null);
   const [showInitial, setShowInitial] = useState(false);
+  const [showGeneratePoliza, setShowGeneratePoliza] = useState(false);
 
   const moduleEnabled = hasModule(direction);
 
