@@ -450,7 +450,7 @@ function StatusChangeDialog({ row, onClose }: { row: TrackingRow; onClose: (r: b
       // Do not alter amount_paid automatically; leave as-is unless user chose to adjust
     }
 
-    const { error: updErr } = await supabase.from("tab_collection_tracking").update(update).eq("id", row.id);
+    const { error: updErr } = await supabase.from("tab_collection_tracking").update(update as any).eq("id", row.id);
     if (updErr) { setSaving(false); toast({ title: "Error", description: updErr.message, variant: "destructive" }); return; }
 
     await supabase.from("tab_collection_status_history").insert({
