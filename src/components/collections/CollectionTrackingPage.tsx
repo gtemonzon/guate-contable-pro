@@ -20,8 +20,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Check, Clock, DollarSign, Info, ListOrdered, Pencil, Plus, ShieldAlert,
+  Check, Clock, FileText, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert,
 } from "lucide-react";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
