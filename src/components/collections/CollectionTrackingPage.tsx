@@ -579,7 +579,6 @@ function InitialBalancesDialog({
       const { data: term } = await supabase.from("tab_collection_terms")
         .select("days")
         .eq("enterprise_id", enterpriseId)
-        .eq("direction", direction)
         .eq("is_default", true)
         .maybeSingle();
       const defaultDays = (term as any)?.days ?? 30;
