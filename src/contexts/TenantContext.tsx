@@ -165,6 +165,32 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [currentTenant]);
 
+  // Load enabled modules whenever the active tenant changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!currentTenant) {
+        setEnabledModules([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("tab_tenant_modules")
+        .select("module_key,is_enabled")
+        .eq("tenant_id", currentTenant.id)
+        .eq("is_enabled", true);
+      if (cancelled) return;
+      if (error) {
+        console.error("Error loading tenant modules:", error);
+        setEnabledModules([]);
+        return;
+      }
+      setEnabledModules((data || []).map((r: { module_key: string }) => r.module_key));
+    })();
+    return () => { cancelled = true; };
+  }, [currentTenant]);
+
+  const hasModule = (moduleKey: string) => enabledModules.includes(moduleKey);
+
   return (
     <TenantContext.Provider
       value={{
@@ -174,6 +200,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         isSuperAdmin,
         isTenantAdmin,
         isTenantActive,
+        enabledModules,
+        hasModule,
         switchTenant,
         refreshTenants,
       }}
