@@ -1556,6 +1556,30 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_collection_settings: {
+        Row: {
+          adjust_to_business_days: boolean
+          created_at: string
+          enterprise_id: number
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          adjust_to_business_days?: boolean
+          created_at?: string
+          enterprise_id: number
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          adjust_to_business_days?: boolean
+          created_at?: string
+          enterprise_id?: number
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tab_collection_status_history: {
         Row: {
           changed_at: string
