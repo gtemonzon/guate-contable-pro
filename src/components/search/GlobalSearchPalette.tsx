@@ -24,9 +24,11 @@ import {
   BarChart3,
   ArrowRight,
   CreditCard,
+  HandCoins,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 const RECENT_SEARCHES_KEY_PREFIX = "global-search-recent";
 const MAX_RECENT = 8;
@@ -36,7 +38,7 @@ const getRecentSearchesKey = (enterpriseId: string | null) =>
 
 interface SearchResult {
   id: string;
-  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos" | "documentos_bancarios";
+  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos" | "documentos_bancarios" | "cobros_pagos";
   title: string;
   subtitle: string;
   meta?: string;
@@ -50,6 +52,7 @@ const CATEGORY_CONFIG = {
   ventas: { label: "Ventas", icon: DollarSign, color: "text-violet-600 dark:text-violet-400" },
   bancos: { label: "Movimientos Bancarios", icon: Banknote, color: "text-cyan-600 dark:text-cyan-400" },
   documentos_bancarios: { label: "Documentos Bancarios", icon: CreditCard, color: "text-pink-600 dark:text-pink-400" },
+  cobros_pagos: { label: "Cobros y Pagos", icon: HandCoins, color: "text-amber-600 dark:text-amber-400" },
 };
 
 interface QuickAction {
