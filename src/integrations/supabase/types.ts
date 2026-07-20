@@ -1462,6 +1462,193 @@ export type Database = {
           },
         ]
       }
+      tab_collection_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: number
+          note: string | null
+          payment_date: string
+          recorded_by: string | null
+          tracking_id: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: number
+          note?: string | null
+          payment_date: string
+          recorded_by?: string | null
+          tracking_id: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: number
+          note?: string | null
+          payment_date?: string
+          recorded_by?: string | null
+          tracking_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_collection_payments_tracking_id_fkey"
+            columns: ["tracking_id"]
+            isOneToOne: false
+            referencedRelation: "tab_collection_tracking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_collection_reasons: {
+        Row: {
+          created_at: string
+          direction: string
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          reason_text: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          direction?: string
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          reason_text: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          reason_text?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      tab_collection_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          changed_by_name: string | null
+          id: number
+          is_manual: boolean
+          new_status: string
+          old_status: string | null
+          reason: string | null
+          tracking_id: number
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          id?: number
+          is_manual?: boolean
+          new_status: string
+          old_status?: string | null
+          reason?: string | null
+          tracking_id: number
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          id?: number
+          is_manual?: boolean
+          new_status?: string
+          old_status?: string | null
+          reason?: string | null
+          tracking_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_collection_status_history_tracking_id_fkey"
+            columns: ["tracking_id"]
+            isOneToOne: false
+            referencedRelation: "tab_collection_tracking"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_collection_terms: {
+        Row: {
+          created_at: string
+          days: number
+          enterprise_id: number
+          id: number
+          is_default: boolean
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days: number
+          enterprise_id: number
+          id?: number
+          is_default?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: number
+          enterprise_id?: number
+          id?: number
+          is_default?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tab_collection_tracking: {
+        Row: {
+          amount_paid: number
+          amount_total: number
+          created_at: string
+          direction: string
+          due_date: string
+          enterprise_id: number
+          id: number
+          issue_date: string
+          payment_term_days: number
+          source_ledger_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_paid?: number
+          amount_total?: number
+          created_at?: string
+          direction: string
+          due_date: string
+          enterprise_id: number
+          id?: number
+          issue_date: string
+          payment_term_days?: number
+          source_ledger_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_paid?: number
+          amount_total?: number
+          created_at?: string
+          direction?: string
+          due_date?: string
+          enterprise_id?: number
+          id?: number
+          issue_date?: string
+          payment_term_days?: number
+          source_ledger_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tab_currencies: {
         Row: {
           currency_code: string
@@ -4254,6 +4441,41 @@ export type Database = {
           },
         ]
       }
+      tab_tenant_modules: {
+        Row: {
+          id: number
+          is_enabled: boolean
+          module_key: string
+          tenant_id: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: number
+          is_enabled?: boolean
+          module_key: string
+          tenant_id: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: number
+          is_enabled?: boolean
+          module_key?: string
+          tenant_id?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_tenant_modules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tab_tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_tenants: {
         Row: {
           address: string | null
@@ -4647,6 +4869,14 @@ export type Database = {
           p_exclude_entry_id?: number
         }
         Returns: number
+      }
+      calculate_due_date: {
+        Args: {
+          p_enterprise_id: number
+          p_issue_date: string
+          p_term_days: number
+        }
+        Returns: string
       }
       calculate_fx_settlement: {
         Args: {
