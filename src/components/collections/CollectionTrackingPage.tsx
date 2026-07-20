@@ -333,28 +333,58 @@ function computeStatus(paid: number, total: number): Status {
 
 // ---------- Payment dialog ----------
 
+type PaymentMethod = "efectivo" | "cheque" | "transferencia" | "otro";
+const METHOD_LABEL: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo", cheque: "Cheque", transferencia: "Transferencia", otro: "Otro",
+};
+
+interface BankAccountOption {
+  id: number;
+  bank_name: string;
+  account_number: string;
+  account_id: number | null;
+}
+
+async function fetchBankAccounts(enterpriseId: number): Promise<BankAccountOption[]> {
+  const { data } = await supabase
+    .from("tab_bank_accounts")
+    .select("id,bank_name,account_number,account_id,is_active")
+    .eq("enterprise_id", enterpriseId)
+    .eq("is_active", true)
+    .order("bank_name", { ascending: true });
+  return ((data || []) as any[]).map((b) => ({
+    id: Number(b.id), bank_name: b.bank_name, account_number: b.account_number, account_id: b.account_id ?? null,
+  }));
+}
+
 function PaymentDialog({ row, onClose }: { row: TrackingRow; onClose: (r: boolean) => void }) {
   const balance = Number(row.amount_total) - Number(row.amount_paid);
   const [amount, setAmount] = useState<string>(balance.toFixed(2));
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("efectivo");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [bankAccountId, setBankAccountId] = useState<string>("");
+  const [banks, setBanks] = useState<BankAccountOption[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { fetchBankAccounts(row.enterprise_id).then(setBanks); }, [row.enterprise_id]);
 
   const handleSave = async () => {
     const amt = Number(amount);
-    if (!amt || amt <= 0) {
-      toast({ title: "Monto inválido", variant: "destructive" });
-      return;
-    }
-    if (amt > balance + 0.005) {
-      toast({ title: "El monto excede el saldo pendiente", variant: "destructive" });
-      return;
+    if (!amt || amt <= 0) { toast({ title: "Monto inválido", variant: "destructive" }); return; }
+    if (amt > balance + 0.005) { toast({ title: "El monto excede el saldo pendiente", variant: "destructive" }); return; }
+    if (method === "transferencia" && !bankAccountId) {
+      toast({ title: "Selecciona la cuenta bancaria", variant: "destructive" }); return;
     }
     setSaving(true);
     const { id: userId, name: userName } = await getCurrentUserInfo();
     const { error: payErr } = await supabase.from("tab_collection_payments").insert({
       tracking_id: row.id, amount: amt, payment_date: paymentDate, note: note || null, recorded_by: userId,
-    });
+      payment_method: method,
+      receipt_number: receiptNumber.trim() || null,
+      bank_account_id: method === "transferencia" ? Number(bankAccountId) : null,
+    } as any);
     if (payErr) { setSaving(false); toast({ title: "Error", description: payErr.message, variant: "destructive" }); return; }
 
     const newPaid = Number(row.amount_paid) + amt;
@@ -380,19 +410,50 @@ function PaymentDialog({ row, onClose }: { row: TrackingRow; onClose: (r: boolea
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Registrar abono</DialogTitle>
-          <DialogDescription>
-            Saldo pendiente: <strong>{formatCurrency(balance)}</strong>
-          </DialogDescription>
+          <DialogDescription>Saldo pendiente: <strong>{formatCurrency(balance)}</strong></DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div>
-            <Label>Monto</Label>
-            <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Monto</Label>
+              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <Label>Fecha de pago</Label>
+              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <Label>Fecha de pago</Label>
-            <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Forma de pago</Label>
+              <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="otro">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><Receipt className="h-3.5 w-3.5" /> No. de recibo emitido</Label>
+              <Input value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} placeholder="Opcional" />
+            </div>
           </div>
+          {method === "transferencia" && (
+            <div>
+              <Label>Cuenta bancaria</Label>
+              <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                <SelectTrigger><SelectValue placeholder="Selecciona la cuenta bancaria" /></SelectTrigger>
+                <SelectContent>
+                  {banks.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>{b.bank_name} — {b.account_number}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>Nota (opcional)</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
@@ -414,10 +475,24 @@ function PaymentsHistoryDialog({ row, onClose }: { row: TrackingRow; onClose: ()
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("tab_collection_payments")
-        .select("id,amount,payment_date,note,created_at")
+        .select("id,amount,payment_date,note,created_at,payment_method,receipt_number,bank_account_id,journal_entry_id")
         .eq("tracking_id", row.id)
         .order("payment_date", { ascending: false });
-      setPayments((data || []) as PaymentRow[]);
+      const list = (data || []) as any[];
+      const bankIds = Array.from(new Set(list.map((p) => p.bank_account_id).filter(Boolean)));
+      const bankMap = new Map<number, { name: string; number: string }>();
+      if (bankIds.length > 0) {
+        const { data: banks } = await supabase.from("tab_bank_accounts")
+          .select("id,bank_name,account_number").in("id", bankIds);
+        (banks || []).forEach((b: any) => bankMap.set(Number(b.id), { name: b.bank_name, number: b.account_number }));
+      }
+      list.forEach((p) => {
+        if (p.bank_account_id && bankMap.has(p.bank_account_id)) {
+          const m = bankMap.get(p.bank_account_id)!;
+          p.bank_name = m.name; p.bank_account_number = m.number;
+        }
+      });
+      setPayments(list as PaymentRow[]);
     })();
   }, [row.id]);
 
@@ -432,12 +507,32 @@ function PaymentsHistoryDialog({ row, onClose }: { row: TrackingRow; onClose: ()
           {payments.length === 0 && <p className="text-sm text-muted-foreground">Sin abonos registrados.</p>}
           {payments.map((p) => (
             <div key={p.id} className="text-sm border-l-2 border-primary pl-3 py-1">
-              <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
-              <span className="text-muted-foreground"> — {p.payment_date}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
+                <span className="text-muted-foreground">— {p.payment_date}</span>
+                {p.payment_method && (
+                  <Badge variant="outline" className="text-xs">{METHOD_LABEL[p.payment_method as PaymentMethod] ?? p.payment_method}</Badge>
+                )}
+                {p.journal_entry_id && (
+                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">En póliza</Badge>
+                )}
+              </div>
+              {p.receipt_number && (
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Receipt className="h-3 w-3" /> Recibo: {p.receipt_number}
+                </div>
+              )}
+              {p.bank_name && (
+                <div className="text-xs text-muted-foreground">Banco: {p.bank_name} — {p.bank_account_number}</div>
+              )}
               {p.note && <div className="text-xs text-muted-foreground">{p.note}</div>}
             </div>
           ))}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
       </DialogContent>
     </Dialog>
   );
