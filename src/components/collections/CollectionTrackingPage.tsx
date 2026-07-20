@@ -301,6 +301,13 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
           onClose={(refreshed) => { setShowInitial(false); if (refreshed) load(); }}
         />
       )}
+      {showGeneratePoliza && selectedEnterprise && (
+        <GeneratePolizaDialog
+          enterpriseId={selectedEnterprise.id}
+          direction={direction}
+          onClose={(refreshed) => { setShowGeneratePoliza(false); if (refreshed) load(); }}
+        />
+      )}
     </div>
   );
 }
