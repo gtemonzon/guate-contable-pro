@@ -43,7 +43,7 @@ interface Props {
 }
 
 export default function CollectionTrackingPage({ direction, title }: Props) {
-  const { currentEnterprise } = useEnterprise();
+  const { selectedEnterprise } = useEnterprise();
   const { hasModule, isLoading: tenantLoading } = useTenant();
   const [rows, setRows] = useState<TrackingRow[]>([]);
   const [loading, setLoading] = useState(false);
