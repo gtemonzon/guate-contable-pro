@@ -123,6 +123,10 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const [showInitial, setShowInitial] = useState(false);
   const [showGeneratePoliza, setShowGeneratePoliza] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement | null>>(new Map());
+
   const moduleEnabled = hasModule(direction);
 
   const load = useCallback(async () => {
