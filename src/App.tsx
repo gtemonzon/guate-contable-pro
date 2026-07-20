@@ -58,6 +58,7 @@ const Soporte = lazyRetry(() => import("./pages/Soporte"));
 const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
 const Nomina = lazyRetry(() => import("./pages/Nomina"));
 const RetencionesExenciones = lazyRetry(() => import("./pages/RetencionesExenciones"));
+const Cotizaciones = lazyRetry(() => import("./pages/Cotizaciones"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -124,6 +125,7 @@ const App = () => (
               <Route path="/capacitacion" element={<Suspense fallback={<PageLoader />}><Capacitacion /></Suspense>} />
               <Route path="/nomina" element={<Suspense fallback={<PageLoader />}><Nomina /></Suspense>} />
               <Route path="/retenciones-exenciones" element={<Suspense fallback={<PageLoader />}><RetencionesExenciones /></Suspense>} />
+              <Route path="/cotizaciones" element={<Suspense fallback={<PageLoader />}><Cotizaciones /></Suspense>} />
               <Route path="/ayuda" element={<Suspense fallback={<PageLoader />}><Ayuda /></Suspense>} />
             </Route>
             
