@@ -437,7 +437,12 @@ function PaymentDialog({ row, onClose }: { row: TrackingRow; onClose: (r: boolea
               </Select>
             </div>
             <div>
-              <Label className="flex items-center gap-1"><Receipt className="h-3.5 w-3.5" /> No. de recibo emitido</Label>
+              <Label>
+                <span className="inline-flex items-center gap-1.5">
+                  <Receipt className="h-3.5 w-3.5 shrink-0" />
+                  No. de recibo emitido
+                </span>
+              </Label>
               <Input value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} placeholder="Opcional" />
             </div>
           </div>
