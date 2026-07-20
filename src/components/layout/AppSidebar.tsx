@@ -122,6 +122,7 @@ export function AppSidebar() {
   const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const permissions = useUserPermissions();
+  const { hasModule } = useTenant();
   const { data: openTicketsCount } = useOpenTicketsCount();
   const location = useLocation();
 
