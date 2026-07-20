@@ -157,7 +157,7 @@ export default function Configuracion() {
         ],
       },
     ],
-    []
+    [hasModule]
   );
 
   // Filter tabs by role
