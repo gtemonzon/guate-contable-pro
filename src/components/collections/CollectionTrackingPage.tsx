@@ -99,7 +99,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
       <div>
         <h1 className="text-2xl font-bold">{title}</h1>
         <p className="text-muted-foreground text-sm">
-          {selectedEnterprise?.enterprise_name}
+          {selectedEnterprise?.business_name}
         </p>
       </div>
 
