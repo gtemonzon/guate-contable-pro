@@ -200,10 +200,70 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, rows]);
 
+  const filteredRows = useMemo(() => {
+    if (!thirdPartyFilter) return rows;
+    return rows.filter((r) => (r.third_party_name || "") === thirdPartyFilter);
+  }, [rows, thirdPartyFilter]);
+
   const totals = useMemo(() => {
-    const pending = rows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
-    return { count: rows.length, pending };
+    const pending = filteredRows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
+    return { count: filteredRows.length, pending };
+  }, [filteredRows]);
+
+  // Aging report: group unpaid rows by third party into buckets
+  const agingReport = useMemo(() => {
+    const today = new Date();
+    const unpaid = rows.filter((r) => r.status !== "pagada");
+    const groups = new Map<string, { name: string; b0_30: number; b31_60: number; b61_90: number; b90plus: number; total: number }>();
+    for (const r of unpaid) {
+      const name = r.third_party_name || "—";
+      const balance = Number(r.amount_total) - Number(r.amount_paid);
+      if (balance <= 0) continue;
+      const days = Math.abs(daysBetween(r.due_date, today));
+      const g = groups.get(name) || { name, b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
+      if (days <= 30) g.b0_30 += balance;
+      else if (days <= 60) g.b31_60 += balance;
+      else if (days <= 90) g.b61_90 += balance;
+      else g.b90plus += balance;
+      g.total += balance;
+      groups.set(name, g);
+    }
+    const list = Array.from(groups.values()).sort((a, b) => b.total - a.total);
+    const totalsRow = list.reduce(
+      (acc, g) => {
+        acc.b0_30 += g.b0_30; acc.b31_60 += g.b31_60; acc.b61_90 += g.b61_90; acc.b90plus += g.b90plus; acc.total += g.total;
+        return acc;
+      },
+      { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 },
+    );
+    return { list, totalsRow };
   }, [rows]);
+
+  const thirdPartyHdr = direction === "cxc" ? "Cliente" : "Proveedor";
+
+  const exportAgingToExcel = () => {
+    const data = agingReport.list.map((g) => ({
+      [thirdPartyHdr]: g.name,
+      "0-30 días": Number(g.b0_30.toFixed(2)),
+      "31-60 días": Number(g.b31_60.toFixed(2)),
+      "61-90 días": Number(g.b61_90.toFixed(2)),
+      "Más de 90 días": Number(g.b90plus.toFixed(2)),
+      "Total": Number(g.total.toFixed(2)),
+    }));
+    data.push({
+      [thirdPartyHdr]: "TOTAL",
+      "0-30 días": Number(agingReport.totalsRow.b0_30.toFixed(2)),
+      "31-60 días": Number(agingReport.totalsRow.b31_60.toFixed(2)),
+      "61-90 días": Number(agingReport.totalsRow.b61_90.toFixed(2)),
+      "Más de 90 días": Number(agingReport.totalsRow.b90plus.toFixed(2)),
+      "Total": Number(agingReport.totalsRow.total.toFixed(2)),
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Antigüedad");
+    const prefix = direction === "cxc" ? "antiguedad_cxc" : "antiguedad_cxp";
+    XLSX.writeFile(wb, `${prefix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   if (tenantLoading) return null;
 
