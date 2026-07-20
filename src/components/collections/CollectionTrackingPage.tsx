@@ -123,6 +123,8 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const [historyTarget, setHistoryTarget] = useState<TrackingRow | null>(null);
   const [showInitial, setShowInitial] = useState(false);
   const [showGeneratePoliza, setShowGeneratePoliza] = useState(false);
+  const [showAgingReport, setShowAgingReport] = useState(false);
+  const [thirdPartyFilter, setThirdPartyFilter] = useState<string | null>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
