@@ -19,8 +19,11 @@ import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck"
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
 import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
 import { AccountingControlsConfig } from "@/components/configuracion/AccountingControlsConfig";
+import { CollectionTermsManager } from "@/components/configuracion/CollectionTermsManager";
+import { CollectionReasonsManager } from "@/components/configuracion/CollectionReasonsManager";
+import { CollectionSettingsManager } from "@/components/configuracion/CollectionSettingsManager";
 import { useTenant } from "@/contexts/TenantContext";
-import { Calculator, Receipt, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
+import { Calculator, HandCoins, Receipt, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
 
 type SubTab = {
   value: string;
@@ -38,7 +41,7 @@ type Category = {
 
 export default function Configuracion() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isSuperAdmin } = useTenant();
+  const { isSuperAdmin, hasModule } = useTenant();
 
   const categories: Category[] = useMemo(
     () => [
@@ -121,6 +124,18 @@ export default function Configuracion() {
           { value: "isr-categories", label: "Categorías ISR (Global)", render: () => <IsrCategoriesManager />, superAdminOnly: true },
         ],
       },
+      ...((hasModule("cxc") || hasModule("cxp"))
+        ? [{
+            value: "collections",
+            label: "Cobros y Pagos",
+            icon: HandCoins,
+            tabs: [
+              { value: "collection-terms", label: "Plazos de Pago", render: () => <CollectionTermsManager /> },
+              { value: "collection-reasons", label: "Motivos de Cambio", render: () => <CollectionReasonsManager /> },
+              { value: "collection-settings", label: "Ajustes", render: () => <CollectionSettingsManager /> },
+            ],
+          } as Category]
+        : []),
       {
         value: "security",
         label: "Seguridad",
@@ -142,7 +157,7 @@ export default function Configuracion() {
         ],
       },
     ],
-    []
+    [hasModule]
   );
 
   // Filter tabs by role

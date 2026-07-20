@@ -285,9 +285,11 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
       {paymentsHistoryTarget && (
         <PaymentsHistoryDialog row={paymentsHistoryTarget} onClose={() => setPaymentsHistoryTarget(null)} />
       )}
-      {statusTarget && (
+      {statusTarget && selectedEnterprise && (
         <StatusChangeDialog
           row={statusTarget}
+          enterpriseId={selectedEnterprise.id}
+          direction={direction}
           onClose={(refreshed) => { setStatusTarget(null); if (refreshed) load(); }}
         />
       )}
@@ -541,15 +543,46 @@ function PaymentsHistoryDialog({ row, onClose }: { row: TrackingRow; onClose: ()
 
 // ---------- Status change ----------
 
-function StatusChangeDialog({ row, onClose }: { row: TrackingRow; onClose: (r: boolean) => void }) {
+function StatusChangeDialog({ row, enterpriseId, direction, onClose }: {
+  row: TrackingRow;
+  enterpriseId: number;
+  direction: "cxc" | "cxp";
+  onClose: (r: boolean) => void;
+}) {
   const [newStatus, setNewStatus] = useState<Status>(row.status);
+  const [reasonOptions, setReasonOptions] = useState<{ id: number; text: string }[]>([]);
+  const [selectedReasonId, setSelectedReasonId] = useState<string>("__other__");
   const [reason, setReason] = useState("");
   const [markFullyPaid, setMarkFullyPaid] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("tab_collection_reasons")
+        .select("id, reason_text, direction, is_active, sort_order")
+        .eq("enterprise_id", enterpriseId)
+        .eq("is_active", true)
+        .in("direction", ["both", direction])
+        .order("sort_order", { ascending: true });
+      const opts = (data || []).map((r: any) => ({ id: r.id, text: r.reason_text }));
+      setReasonOptions(opts);
+      if (opts.length > 0) setSelectedReasonId(String(opts[0].id));
+    })();
+  }, [enterpriseId, direction]);
+
+  const isOther = selectedReasonId === "__other__";
+  const finalReason = isOther
+    ? reason.trim()
+    : (reasonOptions.find((o) => String(o.id) === selectedReasonId)?.text ?? "").trim();
+
   const handleSave = async () => {
-    if (reason.trim().length < 10) {
+    if (isOther && finalReason.length < 10) {
       toast({ title: "El motivo debe tener al menos 10 caracteres", variant: "destructive" });
+      return;
+    }
+    if (!finalReason) {
+      toast({ title: "Selecciona o escribe un motivo", variant: "destructive" });
       return;
     }
     if (newStatus === row.status && !markFullyPaid) {
@@ -562,8 +595,6 @@ function StatusChangeDialog({ row, onClose }: { row: TrackingRow; onClose: (r: b
     const update: Record<string, unknown> = { status: newStatus };
     if (newStatus === "pagada" && markFullyPaid) {
       update.amount_paid = Number(row.amount_total);
-    } else if (newStatus === "pendiente") {
-      // Do not alter amount_paid automatically; leave as-is unless user chose to adjust
     }
 
     const { error: updErr } = await supabase.from("tab_collection_tracking").update(update as any).eq("id", row.id);
@@ -571,7 +602,7 @@ function StatusChangeDialog({ row, onClose }: { row: TrackingRow; onClose: (r: b
 
     await supabase.from("tab_collection_status_history").insert({
       tracking_id: row.id, old_status: row.status, new_status: newStatus,
-      reason: reason.trim(), changed_by: userId, changed_by_name: userName, is_manual: true,
+      reason: finalReason, changed_by: userId, changed_by_name: userName, is_manual: true,
     });
     setSaving(false);
     toast({ title: "Estatus actualizado" });
@@ -615,8 +646,32 @@ function StatusChangeDialog({ row, onClose }: { row: TrackingRow; onClose: (r: b
           )}
           <div>
             <Label>Motivo (obligatorio)</Label>
-            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Explica el motivo del cambio (mínimo 10 caracteres)" />
-            <p className="text-xs text-muted-foreground mt-1">{reason.trim().length}/10 mínimo</p>
+            <Select value={selectedReasonId} onValueChange={setSelectedReasonId}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {reasonOptions.map((o) => (
+                  <SelectItem key={o.id} value={String(o.id)}>{o.text}</SelectItem>
+                ))}
+                <SelectItem value="__other__">Otro (especificar)</SelectItem>
+              </SelectContent>
+            </Select>
+            {isOther && (
+              <>
+                <Textarea
+                  className="mt-2"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  placeholder="Explica el motivo del cambio (mínimo 10 caracteres)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{reason.trim().length}/10 mínimo</p>
+              </>
+            )}
+            {reasonOptions.length === 0 && !isOther && (
+              <p className="text-xs text-muted-foreground mt-1">
+                No hay motivos predefinidos. Configúralos en Configuración → Cobros y Pagos → Motivos de Cambio.
+              </p>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -709,20 +764,41 @@ function InitialBalancesDialog({
         .order("invoice_date", { ascending: false })
         .limit(2000);
 
-      const list: LedgerCandidate[] = ((ledger || []) as any[])
+      const rawList = ((ledger || []) as any[])
         .filter((l) => !existingIds.has(Number(l.id)))
-        .map((l) => {
-          const d = new Date(l.invoice_date + "T00:00:00");
-          d.setDate(d.getDate() + Number(defaultDays));
-          return {
-            id: Number(l.id),
-            invoice_date: l.invoice_date,
-            third_party_name: l[nameCol] || "",
-            document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-            total_amount: Number(l.total_amount) || 0,
-            suggested_due_date: d.toISOString().slice(0, 10),
-          };
-        });
+        .map((l) => ({
+          id: Number(l.id),
+          invoice_date: l.invoice_date as string,
+          third_party_name: l[nameCol] || "",
+          document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+          total_amount: Number(l.total_amount) || 0,
+        }));
+
+      // Compute suggested_due_date via RPC (respects business-day adjustment).
+      const list: LedgerCandidate[] = await Promise.all(
+        rawList.map(async (l) => {
+          let suggested: string;
+          try {
+            const { data: dueDate } = await supabase.rpc("calculate_due_date", {
+              p_enterprise_id: enterpriseId,
+              p_issue_date: l.invoice_date,
+              p_term_days: Number(defaultDays),
+            });
+            if (dueDate) {
+              suggested = String(dueDate);
+            } else {
+              const d = new Date(l.invoice_date + "T00:00:00");
+              d.setDate(d.getDate() + Number(defaultDays));
+              suggested = d.toISOString().slice(0, 10);
+            }
+          } catch {
+            const d = new Date(l.invoice_date + "T00:00:00");
+            d.setDate(d.getDate() + Number(defaultDays));
+            suggested = d.toISOString().slice(0, 10);
+          }
+          return { ...l, suggested_due_date: suggested };
+        })
+      );
 
       setCandidates(list);
       setLoading(false);
