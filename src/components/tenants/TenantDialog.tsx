@@ -545,6 +545,35 @@ export function TenantDialog({
               />
             </div>
 
+            {/* Módulos habilitados */}
+            <div className="space-y-2 rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Módulos habilitados</FormLabel>
+                <FormDescription>
+                  Activa los módulos ERP disponibles para esta oficina.
+                </FormDescription>
+              </div>
+              <div className="space-y-3 pt-2">
+                {[
+                  { key: "cxc", label: "Cuentas por Cobrar" },
+                  { key: "cxp", label: "Cuentas por Pagar" },
+                  { key: "inventario", label: "Inventario" },
+                  { key: "tax_avanzada", label: "Gestión Tributaria Avanzada" },
+                ].map((m) => (
+                  <div key={m.key} className="flex items-center justify-between">
+                    <span className="text-sm">{m.label}</span>
+                    <Switch
+                      checked={!!modules[m.key]}
+                      onCheckedChange={(v) =>
+                        setModules((prev) => ({ ...prev, [m.key]: v }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+
             <FormField
               control={form.control}
               name="is_active"
