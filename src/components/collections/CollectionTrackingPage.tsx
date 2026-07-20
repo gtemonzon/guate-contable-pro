@@ -533,10 +533,6 @@ function PaymentsHistoryDialog({ row, onClose }: { row: TrackingRow; onClose: ()
     </Dialog>
   );
 }
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ---------- Status change ----------
 
