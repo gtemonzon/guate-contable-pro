@@ -709,20 +709,41 @@ function InitialBalancesDialog({
         .order("invoice_date", { ascending: false })
         .limit(2000);
 
-      const list: LedgerCandidate[] = ((ledger || []) as any[])
+      const rawList = ((ledger || []) as any[])
         .filter((l) => !existingIds.has(Number(l.id)))
-        .map((l) => {
-          const d = new Date(l.invoice_date + "T00:00:00");
-          d.setDate(d.getDate() + Number(defaultDays));
-          return {
-            id: Number(l.id),
-            invoice_date: l.invoice_date,
-            third_party_name: l[nameCol] || "",
-            document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-            total_amount: Number(l.total_amount) || 0,
-            suggested_due_date: d.toISOString().slice(0, 10),
-          };
-        });
+        .map((l) => ({
+          id: Number(l.id),
+          invoice_date: l.invoice_date as string,
+          third_party_name: l[nameCol] || "",
+          document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+          total_amount: Number(l.total_amount) || 0,
+        }));
+
+      // Compute suggested_due_date via RPC (respects business-day adjustment).
+      const list: LedgerCandidate[] = await Promise.all(
+        rawList.map(async (l) => {
+          let suggested: string;
+          try {
+            const { data: dueDate } = await supabase.rpc("calculate_due_date", {
+              p_enterprise_id: enterpriseId,
+              p_issue_date: l.invoice_date,
+              p_term_days: Number(defaultDays),
+            });
+            if (dueDate) {
+              suggested = String(dueDate);
+            } else {
+              const d = new Date(l.invoice_date + "T00:00:00");
+              d.setDate(d.getDate() + Number(defaultDays));
+              suggested = d.toISOString().slice(0, 10);
+            }
+          } catch {
+            const d = new Date(l.invoice_date + "T00:00:00");
+            d.setDate(d.getDate() + Number(defaultDays));
+            suggested = d.toISOString().slice(0, 10);
+          }
+          return { ...l, suggested_due_date: suggested };
+        })
+      );
 
       setCandidates(list);
       setLoading(false);
