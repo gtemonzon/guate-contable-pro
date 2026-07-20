@@ -19,8 +19,11 @@ import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck"
 import { ExchangeRatesManager } from "@/components/configuracion/ExchangeRatesManager";
 import { IsrCategoriesManager } from "@/components/configuracion/IsrCategoriesManager";
 import { AccountingControlsConfig } from "@/components/configuracion/AccountingControlsConfig";
+import { CollectionTermsManager } from "@/components/configuracion/CollectionTermsManager";
+import { CollectionReasonsManager } from "@/components/configuracion/CollectionReasonsManager";
+import { CollectionSettingsManager } from "@/components/configuracion/CollectionSettingsManager";
 import { useTenant } from "@/contexts/TenantContext";
-import { Calculator, Receipt, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
+import { Calculator, HandCoins, Receipt, ShieldCheck, Settings as SettingsIcon } from "lucide-react";
 
 type SubTab = {
   value: string;
