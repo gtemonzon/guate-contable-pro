@@ -21,8 +21,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Check, Clock, FileText, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert,
+  Check, ChevronDown, ChevronRight, Clock, Download, FileText, Filter, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert, X,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -122,6 +123,8 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const [historyTarget, setHistoryTarget] = useState<TrackingRow | null>(null);
   const [showInitial, setShowInitial] = useState(false);
   const [showGeneratePoliza, setShowGeneratePoliza] = useState(false);
+  const [showAgingReport, setShowAgingReport] = useState(false);
+  const [thirdPartyFilter, setThirdPartyFilter] = useState<string | null>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
@@ -197,10 +200,70 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, rows]);
 
+  const filteredRows = useMemo(() => {
+    if (!thirdPartyFilter) return rows;
+    return rows.filter((r) => (r.third_party_name || "") === thirdPartyFilter);
+  }, [rows, thirdPartyFilter]);
+
   const totals = useMemo(() => {
-    const pending = rows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
-    return { count: rows.length, pending };
+    const pending = filteredRows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
+    return { count: filteredRows.length, pending };
+  }, [filteredRows]);
+
+  // Aging report: group unpaid rows by third party into buckets
+  const agingReport = useMemo(() => {
+    const today = new Date();
+    const unpaid = rows.filter((r) => r.status !== "pagada");
+    const groups = new Map<string, { name: string; b0_30: number; b31_60: number; b61_90: number; b90plus: number; total: number }>();
+    for (const r of unpaid) {
+      const name = r.third_party_name || "—";
+      const balance = Number(r.amount_total) - Number(r.amount_paid);
+      if (balance <= 0) continue;
+      const days = Math.abs(daysBetween(r.due_date, today));
+      const g = groups.get(name) || { name, b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
+      if (days <= 30) g.b0_30 += balance;
+      else if (days <= 60) g.b31_60 += balance;
+      else if (days <= 90) g.b61_90 += balance;
+      else g.b90plus += balance;
+      g.total += balance;
+      groups.set(name, g);
+    }
+    const list = Array.from(groups.values()).sort((a, b) => b.total - a.total);
+    const totalsRow = list.reduce(
+      (acc, g) => {
+        acc.b0_30 += g.b0_30; acc.b31_60 += g.b31_60; acc.b61_90 += g.b61_90; acc.b90plus += g.b90plus; acc.total += g.total;
+        return acc;
+      },
+      { b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 },
+    );
+    return { list, totalsRow };
   }, [rows]);
+
+  const thirdPartyHdr = direction === "cxc" ? "Cliente" : "Proveedor";
+
+  const exportAgingToExcel = () => {
+    const data = agingReport.list.map((g) => ({
+      [thirdPartyHdr]: g.name,
+      "0-30 días": Number(g.b0_30.toFixed(2)),
+      "31-60 días": Number(g.b31_60.toFixed(2)),
+      "61-90 días": Number(g.b61_90.toFixed(2)),
+      "Más de 90 días": Number(g.b90plus.toFixed(2)),
+      "Total": Number(g.total.toFixed(2)),
+    }));
+    data.push({
+      [thirdPartyHdr]: "TOTAL",
+      "0-30 días": Number(agingReport.totalsRow.b0_30.toFixed(2)),
+      "31-60 días": Number(agingReport.totalsRow.b31_60.toFixed(2)),
+      "61-90 días": Number(agingReport.totalsRow.b61_90.toFixed(2)),
+      "Más de 90 días": Number(agingReport.totalsRow.b90plus.toFixed(2)),
+      "Total": Number(agingReport.totalsRow.total.toFixed(2)),
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Antigüedad");
+    const prefix = direction === "cxc" ? "antiguedad_cxc" : "antiguedad_cxp";
+    XLSX.writeFile(wb, `${prefix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   if (tenantLoading) return null;
 
@@ -218,7 +281,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     );
   }
 
-  const thirdPartyHeader = direction === "cxc" ? "Cliente" : "Proveedor";
+  const thirdPartyHeader = thirdPartyHdr;
 
   return (
     <div className="p-6 space-y-4">
@@ -227,7 +290,11 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
           <h1 className="text-2xl font-bold">{title}</h1>
           <p className="text-muted-foreground text-sm">{selectedEnterprise?.business_name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => setShowAgingReport((v) => !v)}>
+            {showAgingReport ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+            {showAgingReport ? "Ocultar" : "Ver"} reporte de antigüedad
+          </Button>
           <Button variant="outline" onClick={() => setShowGeneratePoliza(true)}>
             <FileText className="h-4 w-4 mr-1" /> Generar Póliza
           </Button>
@@ -237,10 +304,97 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
         </div>
       </div>
 
+      {showAgingReport && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-base">
+              Reporte de antigüedad de saldos ({agingReport.list.length} {direction === "cxc" ? "clientes" : "proveedores"})
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={exportAgingToExcel} disabled={agingReport.list.length === 0}>
+              <Download className="h-4 w-4 mr-1" /> Exportar a Excel
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {agingReport.list.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No hay saldos pendientes.</p>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{thirdPartyHeader}</TableHead>
+                      <TableHead className="text-right">0-30 días</TableHead>
+                      <TableHead className="text-right">31-60 días</TableHead>
+                      <TableHead className="text-right">61-90 días</TableHead>
+                      <TableHead className="text-right">Más de 90</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {agingReport.list.map((g) => {
+                      const cellClass = "text-right cursor-pointer hover:bg-accent/50";
+                      const applyFilter = () => setThirdPartyFilter(g.name);
+                      return (
+                        <TableRow key={g.name}>
+                          <TableCell
+                            className="cursor-pointer hover:bg-accent/50 font-medium max-w-[280px] truncate"
+                            title={`Filtrar facturas de ${g.name}`}
+                            onClick={applyFilter}
+                          >
+                            {g.name}
+                          </TableCell>
+                          <TableCell className={cellClass} onClick={g.b0_30 > 0 ? applyFilter : undefined}>
+                            {g.b0_30 > 0 ? formatCurrency(g.b0_30) : "—"}
+                          </TableCell>
+                          <TableCell className={cellClass} onClick={g.b31_60 > 0 ? applyFilter : undefined}>
+                            {g.b31_60 > 0 ? formatCurrency(g.b31_60) : "—"}
+                          </TableCell>
+                          <TableCell className={cellClass} onClick={g.b61_90 > 0 ? applyFilter : undefined}>
+                            {g.b61_90 > 0 ? formatCurrency(g.b61_90) : "—"}
+                          </TableCell>
+                          <TableCell className={cellClass} onClick={g.b90plus > 0 ? applyFilter : undefined}>
+                            {g.b90plus > 0 ? formatCurrency(g.b90plus) : "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">{formatCurrency(g.total)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell>TOTAL</TableCell>
+                      <TableCell className="text-right">{formatCurrency(agingReport.totalsRow.b0_30)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(agingReport.totalsRow.b31_60)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(agingReport.totalsRow.b61_90)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(agingReport.totalsRow.b90plus)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(agingReport.totalsRow.total)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              Haz clic en un {direction === "cxc" ? "cliente" : "proveedor"} o celda con monto para filtrar la lista de facturas.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">
-            Facturas en seguimiento ({totals.count}) · Saldo pendiente {formatCurrency(totals.pending)}
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            <span>Facturas en seguimiento ({totals.count}) · Saldo pendiente {formatCurrency(totals.pending)}</span>
+            {thirdPartyFilter && (
+              <Badge variant="secondary" className="gap-1">
+                <Filter className="h-3 w-3" />
+                {thirdPartyFilter}
+                <button
+                  onClick={() => setThirdPartyFilter(null)}
+                  className="ml-1 hover:text-destructive"
+                  title="Quitar filtro"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -262,12 +416,12 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Cargando…</TableCell></TableRow>
-                ) : rows.length === 0 ? (
+                ) : filteredRows.length === 0 ? (
                   <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">
-                    Aún no hay facturas en seguimiento para esta empresa.
+                    {thirdPartyFilter ? "No hay facturas para el filtro seleccionado." : "Aún no hay facturas en seguimiento para esta empresa."}
                   </TableCell></TableRow>
                 ) : (
-                  rows.map((r) => {
+                  filteredRows.map((r) => {
                     const balance = Number(r.amount_total) - Number(r.amount_paid);
                     return (
                       <TableRow
