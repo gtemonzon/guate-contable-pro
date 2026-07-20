@@ -270,7 +270,11 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
                   rows.map((r) => {
                     const balance = Number(r.amount_total) - Number(r.amount_paid);
                     return (
-                      <TableRow key={r.id}>
+                      <TableRow
+                        key={r.id}
+                        ref={(el) => { rowRefs.current.set(r.id, el); }}
+                        className={highlightedId === r.id ? "ring-2 ring-primary bg-accent/30 transition-colors" : "transition-colors"}
+                      >
                         <TableCell>{r.issue_date}</TableCell>
                         <TableCell className="max-w-[220px] truncate" title={r.third_party_name}>{r.third_party_name}</TableCell>
                         <TableCell>{r.document_number}</TableCell>
