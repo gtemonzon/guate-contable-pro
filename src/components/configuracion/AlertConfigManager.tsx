@@ -28,6 +28,8 @@ const defaultAlertTypes: Omit<AlertConfigItem, 'is_enabled' | 'days_before' | 's
   { alert_type: 'periodo_pendiente', label: 'Períodos Pendientes', description: 'Alerta cuando hay períodos contables sin cerrar' },
   { alert_type: 'partida_borrador', label: 'Partidas en Borrador', description: 'Alerta cuando hay partidas sin contabilizar por varios días' },
   { alert_type: 'conciliacion_pendiente', label: 'Conciliación Pendiente', description: 'Alerta cuando hay movimientos bancarios sin conciliar' },
+  { alert_type: 'vencimiento_cxc', label: 'Vencimiento Cuentas por Cobrar', description: 'Alerta cuando hay facturas por cobrar próximas a vencer o vencidas' },
+  { alert_type: 'vencimiento_cxp', label: 'Vencimiento Cuentas por Pagar', description: 'Alerta cuando hay facturas por pagar próximas a vencer o vencidas' },
 ];
 
 export function AlertConfigManager() {
