@@ -102,6 +102,7 @@ const allMenuItems: MenuItemOrSection[] = [
     icon: Settings,
     items: [
       { title: "Configuración", url: "/configuracion", icon: Settings, requiredPermission: "canAccessConfiguration" },
+      { title: "Cotizaciones", url: "/cotizaciones", icon: FileText, requiredPermission: "isSuperAdmin" },
     ],
   },
   {

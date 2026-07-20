@@ -3595,6 +3595,163 @@ export type Database = {
           },
         ]
       }
+      tab_quote_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          line_total: number
+          quantity: number
+          quote_id: string
+          sort_order: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          line_total?: number
+          quantity?: number
+          quote_id: string
+          sort_order?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          line_total?: number
+          quantity?: number
+          quote_id?: string
+          sort_order?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_quote_items_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "tab_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_quote_price_catalog: {
+        Row: {
+          created_at: string
+          default_unit_price: number
+          description: string
+          id: string
+          is_active: boolean
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_unit_price?: number
+          description: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_unit_price?: number
+          description?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tab_quote_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          changed_by_name: string
+          id: string
+          quote_id: string
+          status: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by: string
+          changed_by_name: string
+          id?: string
+          quote_id: string
+          status: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          changed_by_name?: string
+          id?: string
+          quote_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_quote_status_history_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "tab_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_quotes: {
+        Row: {
+          client_contact: string | null
+          client_name: string
+          client_nit: string | null
+          created_at: string
+          created_by: string
+          id: string
+          issue_date: string
+          notes: string | null
+          quote_number: string
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          client_contact?: string | null
+          client_name: string
+          client_nit?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          quote_number: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          client_contact?: string | null
+          client_name?: string
+          client_nit?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          issue_date?: string
+          notes?: string | null
+          quote_number?: string
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
       tab_role_permissions: {
         Row: {
           created_at: string | null
@@ -4605,6 +4762,7 @@ export type Database = {
         Args: { p_asset_id: number }
         Returns: undefined
       }
+      generate_quote_number: { Args: never; Returns: string }
       get_account_balances_by_period: {
         Args: { p_end_date: string; p_enterprise_id: number }
         Returns: {
@@ -4882,6 +5040,7 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      is_current_user_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin_bypass: { Args: { _user_id: string }; Returns: boolean }
       is_support_agent: { Args: { p_user_id: string }; Returns: boolean }
