@@ -124,6 +124,18 @@ export default function Configuracion() {
           { value: "isr-categories", label: "Categorías ISR (Global)", render: () => <IsrCategoriesManager />, superAdminOnly: true },
         ],
       },
+      ...((hasModule("cxc") || hasModule("cxp"))
+        ? [{
+            value: "collections",
+            label: "Cobros y Pagos",
+            icon: HandCoins,
+            tabs: [
+              { value: "collection-terms", label: "Plazos de Pago", render: () => <CollectionTermsManager /> },
+              { value: "collection-reasons", label: "Motivos de Cambio", render: () => <CollectionReasonsManager /> },
+              { value: "collection-settings", label: "Ajustes", render: () => <CollectionSettingsManager /> },
+            ],
+          } as Category]
+        : []),
       {
         value: "security",
         label: "Seguridad",
