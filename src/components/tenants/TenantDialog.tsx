@@ -126,6 +126,18 @@ export function TenantDialog({
       });
       setLogoUrl(tenant.logo_url);
       setLogoPreview(tenant.logo_url);
+      // Load modules for this tenant
+      (async () => {
+        const { data } = await supabase
+          .from("tab_tenant_modules")
+          .select("module_key,is_enabled")
+          .eq("tenant_id", tenant.id);
+        const map: Record<string, boolean> = { cxc: false, cxp: false, inventario: false, tax_avanzada: false };
+        (data || []).forEach((r: { module_key: string; is_enabled: boolean }) => {
+          map[r.module_key] = r.is_enabled;
+        });
+        setModules(map);
+      })();
     } else {
       form.reset({
         tenant_code: "",
@@ -142,6 +154,7 @@ export function TenantDialog({
       });
       setLogoUrl(null);
       setLogoPreview(null);
+      setModules({ cxc: false, cxp: false, inventario: false, tax_avanzada: false });
     }
   }, [tenant, form]);
 
