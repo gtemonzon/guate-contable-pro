@@ -41,6 +41,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isTenantAdmin, setIsTenantAdmin] = useState(false);
   const [isTenantActive, setIsTenantActive] = useState(true);
+  const [enabledModules, setEnabledModules] = useState<string[]>([]);
 
   const fetchTenantData = async () => {
     try {
