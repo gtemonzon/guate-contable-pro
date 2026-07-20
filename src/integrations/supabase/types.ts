@@ -1465,32 +1465,58 @@ export type Database = {
       tab_collection_payments: {
         Row: {
           amount: number
+          bank_account_id: number | null
           created_at: string
           id: number
+          journal_entry_id: number | null
           note: string | null
           payment_date: string
+          payment_method: string | null
+          receipt_number: string | null
           recorded_by: string | null
           tracking_id: number
         }
         Insert: {
           amount: number
+          bank_account_id?: number | null
           created_at?: string
           id?: number
+          journal_entry_id?: number | null
           note?: string | null
           payment_date: string
+          payment_method?: string | null
+          receipt_number?: string | null
           recorded_by?: string | null
           tracking_id: number
         }
         Update: {
           amount?: number
+          bank_account_id?: number | null
           created_at?: string
           id?: number
+          journal_entry_id?: number | null
           note?: string | null
           payment_date?: string
+          payment_method?: string | null
+          receipt_number?: string | null
           recorded_by?: string | null
           tracking_id?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "tab_collection_payments_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "tab_bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_collection_payments_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "tab_journal_entries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tab_collection_payments_tracking_id_fkey"
             columns: ["tracking_id"]
