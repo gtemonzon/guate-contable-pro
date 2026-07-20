@@ -241,6 +241,7 @@ export function TenantDialog({
         logo_url: logoUrl,
       };
 
+      let tenantId: number | null = null;
       if (isEditing) {
         const { error } = await supabase
           .from("tab_tenants")
@@ -248,16 +249,34 @@ export function TenantDialog({
           .eq("id", tenant.id);
 
         if (error) throw error;
-
+        tenantId = tenant.id;
         toast.success("Tenant actualizado correctamente");
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("tab_tenants")
-          .insert(dataToSave);
+          .insert(dataToSave)
+          .select("id")
+          .single();
 
         if (error) throw error;
-
+        tenantId = inserted?.id ?? null;
         toast.success("Tenant creado correctamente");
+      }
+
+      // Upsert enabled modules
+      if (tenantId != null) {
+        const { data: authUser } = await supabase.auth.getUser();
+        const rows = Object.entries(modules).map(([module_key, is_enabled]) => ({
+          tenant_id: tenantId!,
+          module_key,
+          is_enabled,
+          updated_by: authUser?.user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        }));
+        const { error: modErr } = await supabase
+          .from("tab_tenant_modules")
+          .upsert(rows, { onConflict: "tenant_id,module_key" });
+        if (modErr) console.error("Error saving tenant modules:", modErr);
       }
 
       onClose();
