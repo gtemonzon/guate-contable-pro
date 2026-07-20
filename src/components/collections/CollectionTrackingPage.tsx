@@ -51,7 +51,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const moduleEnabled = hasModule(direction);
 
   useEffect(() => {
-    if (!currentEnterprise || !moduleEnabled) {
+    if (!selectedEnterprise || !moduleEnabled) {
       setRows([]);
       return;
     }
@@ -61,7 +61,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
       const { data, error } = await supabase
         .from("tab_collection_tracking")
         .select("id,issue_date,due_date,amount_total,amount_paid,status")
-        .eq("enterprise_id", currentEnterprise.id)
+        .eq("enterprise_id", selectedEnterprise.id)
         .eq("direction", direction)
         .order("due_date", { ascending: true });
       if (cancelled) return;
@@ -71,7 +71,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [currentEnterprise, direction, moduleEnabled]);
+  }, [selectedEnterprise, direction, moduleEnabled]);
 
   const totals = useMemo(() => {
     const pending = rows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
@@ -99,7 +99,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
       <div>
         <h1 className="text-2xl font-bold">{title}</h1>
         <p className="text-muted-foreground text-sm">
-          {currentEnterprise?.enterprise_name}
+          {selectedEnterprise?.enterprise_name}
         </p>
       </div>
 
