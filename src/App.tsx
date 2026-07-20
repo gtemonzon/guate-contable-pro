@@ -59,6 +59,8 @@ const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
 const Nomina = lazyRetry(() => import("./pages/Nomina"));
 const RetencionesExenciones = lazyRetry(() => import("./pages/RetencionesExenciones"));
 const Cotizaciones = lazyRetry(() => import("./pages/Cotizaciones"));
+const CuentasPorCobrar = lazyRetry(() => import("./pages/CuentasPorCobrar"));
+const CuentasPorPagar = lazyRetry(() => import("./pages/CuentasPorPagar"));
 
 // Loading fallback component
 const PageLoader = () => (
