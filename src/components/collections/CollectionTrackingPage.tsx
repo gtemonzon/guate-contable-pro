@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -122,6 +123,10 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const [showInitial, setShowInitial] = useState(false);
   const [showGeneratePoliza, setShowGeneratePoliza] = useState(false);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement | null>>(new Map());
+
   const moduleEnabled = hasModule(direction);
 
   const load = useCallback(async () => {
@@ -167,6 +172,30 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   }, [selectedEnterprise, direction, moduleEnabled]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Handle ?highlight={id} query param after rows load
+  useEffect(() => {
+    if (loading || rows.length === 0) return;
+    const highlightParam = searchParams.get("highlight");
+    if (!highlightParam) return;
+    const hId = parseInt(highlightParam);
+    if (isNaN(hId)) return;
+    const match = rows.find((r) => r.id === hId);
+    if (!match) return;
+    setHighlightedId(hId);
+    // Scroll into view on next frame
+    requestAnimationFrame(() => {
+      const el = rowRefs.current.get(hId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    // Clear URL param and highlight after a few seconds
+    const params = new URLSearchParams(searchParams);
+    params.delete("highlight");
+    setSearchParams(params, { replace: true });
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, rows]);
 
   const totals = useMemo(() => {
     const pending = rows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
@@ -241,7 +270,11 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
                   rows.map((r) => {
                     const balance = Number(r.amount_total) - Number(r.amount_paid);
                     return (
-                      <TableRow key={r.id}>
+                      <TableRow
+                        key={r.id}
+                        ref={(el) => { rowRefs.current.set(r.id, el); }}
+                        className={highlightedId === r.id ? "ring-2 ring-primary bg-accent/30 transition-colors" : "transition-colors"}
+                      >
                         <TableCell>{r.issue_date}</TableCell>
                         <TableCell className="max-w-[220px] truncate" title={r.third_party_name}>{r.third_party_name}</TableCell>
                         <TableCell>{r.document_number}</TableCell>

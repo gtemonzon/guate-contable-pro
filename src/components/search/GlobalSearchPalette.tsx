@@ -24,9 +24,11 @@ import {
   BarChart3,
   ArrowRight,
   CreditCard,
+  HandCoins,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
+import { useTenant } from "@/contexts/TenantContext";
 
 const RECENT_SEARCHES_KEY_PREFIX = "global-search-recent";
 const MAX_RECENT = 8;
@@ -36,7 +38,7 @@ const getRecentSearchesKey = (enterpriseId: string | null) =>
 
 interface SearchResult {
   id: string;
-  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos" | "documentos_bancarios";
+  category: "partidas" | "cuentas" | "compras" | "ventas" | "bancos" | "documentos_bancarios" | "cobros_pagos";
   title: string;
   subtitle: string;
   meta?: string;
@@ -50,6 +52,7 @@ const CATEGORY_CONFIG = {
   ventas: { label: "Ventas", icon: DollarSign, color: "text-violet-600 dark:text-violet-400" },
   bancos: { label: "Movimientos Bancarios", icon: Banknote, color: "text-cyan-600 dark:text-cyan-400" },
   documentos_bancarios: { label: "Documentos Bancarios", icon: CreditCard, color: "text-pink-600 dark:text-pink-400" },
+  cobros_pagos: { label: "Cobros y Pagos", icon: HandCoins, color: "text-amber-600 dark:text-amber-400" },
 };
 
 interface QuickAction {
@@ -73,6 +76,9 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const { hasModule } = useTenant();
+  const hasCxc = hasModule("cxc");
+  const hasCxp = hasModule("cxp");
 
   // Quick actions
   const quickActions: QuickAction[] = [
@@ -371,6 +377,62 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           });
         });
 
+        // Search collection tracking (CxC / CxP) — reuse matched purchase/sales IDs
+        const trackingDirs: Array<{ dir: "cxc" | "cxp"; ledgerIds: number[] }> = [];
+        if (hasCxc && sales.data && sales.data.length > 0) {
+          trackingDirs.push({ dir: "cxc", ledgerIds: sales.data.map((s: any) => s.id) });
+        }
+        if (hasCxp && purchases.data && purchases.data.length > 0) {
+          trackingDirs.push({ dir: "cxp", ledgerIds: purchases.data.map((p: any) => p.id) });
+        }
+
+        if (trackingDirs.length > 0) {
+          const trackingResults = await Promise.all(
+            trackingDirs.map(({ dir, ledgerIds }) =>
+              supabase
+                .from("tab_collection_tracking")
+                .select("id, source_ledger_id, direction, status, due_date, amount_total, amount_paid")
+                .eq("enterprise_id", eid)
+                .eq("direction", dir)
+                .in("source_ledger_id", ledgerIds)
+                .limit(8)
+            )
+          );
+
+          const statusLabel: Record<string, string> = {
+            pendiente: "Pendiente",
+            parcial: "Parcial",
+            pagada: "Pagada",
+          };
+
+          trackingResults.forEach((res, idx) => {
+            const { dir } = trackingDirs[idx];
+            const sourceRows: any[] = dir === "cxc" ? sales.data || [] : purchases.data || [];
+            const sourceMap = new Map<number, any>(sourceRows.map((r) => [r.id, r]));
+
+            (res.data || []).forEach((t: any) => {
+              const src = sourceMap.get(t.source_ledger_id);
+              if (!src) return;
+              const thirdParty = dir === "cxc" ? src.customer_name : src.supplier_name;
+              const invoiceLabel = dir === "cxc"
+                ? src.invoice_number
+                : `${src.invoice_series ? `${src.invoice_series}-` : ""}${src.invoice_number}`;
+              const balance = Number(t.amount_total) - Number(t.amount_paid || 0);
+              const route = dir === "cxc"
+                ? `/cuentas-por-cobrar?highlight=${t.id}`
+                : `/cuentas-por-pagar?highlight=${t.id}`;
+              allResults.push({
+                id: `tracking-${dir}-${t.id}`,
+                category: "cobros_pagos",
+                title: `Fact. ${invoiceLabel} - ${thirdParty}`,
+                subtitle: `${statusLabel[t.status] || t.status} · Vence ${t.due_date}`,
+                meta: `Saldo ${formatCurrency(balance)}`,
+                route,
+              });
+            });
+          });
+        }
+
         setResults(allResults);
       } catch (error) {
         console.error("Search error:", error);
@@ -378,7 +440,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
         setLoading(false);
       }
     },
-    [enterpriseId]
+    [enterpriseId, hasCxc, hasCxp]
   );
 
   // Debounced search
