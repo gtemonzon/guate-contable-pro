@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useTenant } from "@/contexts/TenantContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface MenuItem {
@@ -24,6 +25,7 @@ interface MenuItem {
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   requiredPermission?: keyof ReturnType<typeof useUserPermissions>;
+  requiredModule?: string;
   hideIfSuperAdmin?: boolean;
   disabled?: boolean;
   badge?: string;
