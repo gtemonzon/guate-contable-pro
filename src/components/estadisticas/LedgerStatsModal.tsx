@@ -28,7 +28,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 type LedgerType = "compras" | "ventas";
 
@@ -265,18 +264,16 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
                   Todo el año
                 </div>
                 <div className="border-t my-1" />
-                <ScrollArea className="max-h-48">
-                  {MONTHS.map((name, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded hover:bg-accent text-sm"
-                      onClick={() => toggleMonth(idx + 1)}
-                    >
-                      <Checkbox checked={selectedMonths.includes(idx + 1)} />
-                      {name}
-                    </div>
-                  ))}
-                </ScrollArea>
+                {MONTHS.map((name, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded hover:bg-accent text-sm"
+                    onClick={() => toggleMonth(idx + 1)}
+                  >
+                    <Checkbox checked={selectedMonths.includes(idx + 1)} />
+                    {name}
+                  </div>
+                ))}
               </PopoverContent>
             </Popover>
 
