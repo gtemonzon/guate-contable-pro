@@ -69,14 +69,16 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
   useEffect(() => {
     if (!open || !enterpriseId) return;
     const fetchYears = async () => {
-      const { data: rows } = await supabase
-        .from(tableName)
-        .select("invoice_date")
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .order("invoice_date", { ascending: true });
+      const rows = await fetchAllRecords<{ invoice_date: string }>(
+        supabase
+          .from(tableName)
+          .select("invoice_date")
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .order("invoice_date", { ascending: true })
+      );
 
       if (rows && rows.length > 0) {
-        const years = [...new Set(rows.map((r: { invoice_date: string }) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
+        const years = [...new Set(rows.map((r) => new Date(r.invoice_date).getFullYear()))].sort((a, b) => b - a);
         setAvailableYears(years);
         if (selectedYears.length === 0) setSelectedYears(years.length > 0 ? [years[0]] : []);
       }
