@@ -2,45 +2,48 @@
  * Fetches all records from a Supabase query by automatically handling pagination.
  * This ensures that queries returning more than 1000 records get all data.
  *
- * @param query - The Supabase query builder
+ * IMPORTANT: supabase-js's PostgrestTransformBuilder mutates its internal state
+ * on `.range()` and returns `this` (not a fresh copy). That means calling
+ * `.range()` multiple times on the SAME builder in parallel — before any of the
+ * promises resolve — causes every request to end up using the LAST range
+ * applied, producing duplicated rows AND missing ranges (holes) in the result.
+ *
+ * To safely use the parallel fan-out, pass a FACTORY function
+ * (`() => supabase.from(...).select(...)...`) as the first argument. The
+ * factory is invoked once per range so each HTTP request has its own builder.
+ *
+ * If a pre-built query object is passed instead, we fall back to the sequential
+ * implementation (correct, just slower) to avoid the shared-mutation hazard.
+ *
+ * @param queryOrFactory - Either a Supabase query builder OR a factory that returns one
  * @param pageSize - Number of records per page (default: 1000)
  * @returns Promise with all records
  */
 export async function fetchAllRecords<T>(
-  query: any,
+  queryOrFactory: any,
   pageSize: number = 1000
 ): Promise<T[]> {
-  // Fast path: try the first page WITH an exact count so we can fan out the
-  // remaining pages in parallel instead of fetching them sequentially.
-  //
-  // Why this matters:
-  //   sequential 5-page fetch ≈ 5 × RTT
-  //   parallel   5-page fetch ≈ 1 × RTT  (after the initial counted fetch)
-  try {
-    const counted = (typeof query.range === "function" && typeof query.select !== "function")
-      ? null
-      : null;
+  const isFactory = typeof queryOrFactory === "function";
 
-    // We only need the head count when the caller hasn't already requested one.
-    // Build a parallel-fetch path using `range`. The initial page is fetched
-    // separately so we can read `count`.
-    const first = await query.range(0, pageSize - 1);
+  // Safety: without a factory we cannot fan out in parallel without risking
+  // shared-state mutation across concurrent requests. Use the sequential path.
+  if (!isFactory) {
+    return fetchAllRecordsSequential<T>(queryOrFactory, pageSize);
+  }
+
+  const makeQuery = queryOrFactory as () => any;
+
+  try {
+    const first = await makeQuery().range(0, pageSize - 1);
     if (first.error) throw first.error;
 
     const firstRows: T[] = (first.data ?? []) as T[];
     if (!firstRows.length) return firstRows;
-
-    // If the first page didn't fill the page size, we already have everything.
     if (firstRows.length < pageSize) return firstRows;
 
-    // The supabase-js builder allows chaining `range` again to get further
-    // pages. We don't reliably have an exact count here (the caller controls
-    // the head/exact options), so we fall back to a parallel "blind" fan-out
-    // capped by an exponential probe to avoid overshooting badly.
-    //
-    // Strategy: fetch the next 4 pages in parallel; if any returns less than
-    // pageSize, we stop. Otherwise fetch the next 4, etc. This caps the worst
-    // case at ⌈N / (4·pageSize)⌉ round-trips instead of ⌈N / pageSize⌉.
+    // Parallel "blind" fan-out; stop as soon as any page comes back short.
+    // Each range is executed on a FRESH builder instance produced by the
+    // factory, so there is no shared mutable state between concurrent requests.
     const PARALLEL_BATCH = 4;
     const all: T[] = firstRows.slice();
     let nextStart = pageSize;
@@ -48,7 +51,7 @@ export async function fetchAllRecords<T>(
       const batch = await Promise.all(
         Array.from({ length: PARALLEL_BATCH }, (_, i) => {
           const start = nextStart + i * pageSize;
-          return query.range(start, start + pageSize - 1);
+          return makeQuery().range(start, start + pageSize - 1);
         })
       );
 
@@ -64,11 +67,11 @@ export async function fetchAllRecords<T>(
     }
     return all;
   } catch (err) {
-    // Fall back to the original sequential implementation on any unexpected
-    // error so behaviour is never worse than before.
-    return fetchAllRecordsSequential<T>(query, pageSize);
+    // Fall back to sequential using a fresh builder from the factory.
+    return fetchAllRecordsSequential<T>(makeQuery(), pageSize);
   }
 }
+
 
 async function fetchAllRecordsSequential<T>(
   query: any,
