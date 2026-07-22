@@ -70,11 +70,12 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
     if (!open || !enterpriseId) return;
     const fetchYears = async () => {
       const rows = await fetchAllRecords<{ invoice_date: string }>(
-        supabase
-          .from(tableName)
-          .select("invoice_date")
-          .eq("enterprise_id", parseInt(enterpriseId))
-          .order("invoice_date", { ascending: true })
+        () =>
+          supabase
+            .from(tableName)
+            .select("invoice_date")
+            .eq("enterprise_id", parseInt(enterpriseId))
+            .order("invoice_date", { ascending: true })
       );
 
       if (rows && rows.length > 0) {
