@@ -659,7 +659,7 @@ export default function LibrosFiscales() {
 
       // Separar por tipo de cuenta
       // Gastos/Compras: Cuentas que empiezan con 5 (Gastos), 6 (Costos) o 7 (Gastos/Costos de operación)
-      const expenses = movementAccounts?.filter(acc =>
+      let expenses = movementAccounts?.filter(acc =>
         acc.account_code.startsWith('5') || acc.account_code.startsWith('6') || acc.account_code.startsWith('7')
       ) || [];
 
@@ -667,6 +667,29 @@ export default function LibrosFiscales() {
       const incomes = movementAccounts?.filter(acc => 
         acc.account_code.startsWith('4')
       ) || [];
+
+      // Incluir la cuenta de compras configurada para la empresa, aunque no sea de gasto/costo
+      const { data: configData, error: configError } = await supabase
+        .from("tab_enterprise_config")
+        .select("purchases_account_id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .maybeSingle();
+
+      if (configError) throw configError;
+
+      const purchasesAccountId = configData?.purchases_account_id;
+      if (purchasesAccountId) {
+        const alreadyIncluded = expenses.some(acc => acc.id === purchasesAccountId);
+        if (!alreadyIncluded) {
+          const purchasesAccount = movementAccounts?.find(acc => acc.id === purchasesAccountId);
+          if (purchasesAccount) {
+            expenses = [...expenses, purchasesAccount];
+          }
+        }
+      }
+
+      // Ordenar por código de cuenta para mantener consistencia
+      expenses = expenses.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
       setExpenseAccounts(expenses);
       setIncomeAccounts(incomes);
