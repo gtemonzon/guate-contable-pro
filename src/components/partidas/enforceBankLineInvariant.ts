@@ -88,10 +88,8 @@ export function enforceBankLineInvariant(
       account_id: bankAccountId,
       is_bank_line: true,
     };
-    // Update description with context if it was generic or empty
-    if (!primaryBankLine.description || primaryBankLine.description === "" || primaryBankLine.description === "Banco (auto)") {
-      primaryBankLine.description = buildBankDescription(context);
-    }
+    // Always regenerate description to stay in sync with the current header context
+    primaryBankLine.description = buildBankDescription(context);
   } else {
     // Multiple candidates → pick the best one, discard/merge others
     // Prefer: (1) non-zero amount, (2) has "Ref:" or meaningful description, (3) already flagged
