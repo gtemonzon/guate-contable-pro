@@ -101,6 +101,7 @@ export function useJournalEntryForm(
   onOpenChange: (open: boolean) => void,
 ) {
   const [loading, setLoading] = useState(false);
+  const [savingMode, setSavingMode] = useState<'draft' | 'post' | null>(null);
   const [isLoadingEntry, setIsLoadingEntry] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
