@@ -9,6 +9,7 @@ interface JournalEntryActionsProps {
   entryStatus: EntryStatus;
   isBalanced: boolean;
   loading: boolean;
+  savingMode?: 'draft' | 'post' | null;
   isReadOnly: boolean;
   canCreateEntries: boolean;
   canPostEntries: boolean;
