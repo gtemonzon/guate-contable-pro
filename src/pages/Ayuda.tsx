@@ -532,9 +532,55 @@ const helpSections: HelpSection[] = [
       "Solo roles Super Admin y Admin Empresa pueden realizar respaldos y restauraciones.",
     ],
   },
+  {
+    id: "cierre-periodo",
+    title: "Cierre de Período",
+    icon: Lock,
+    description: "Proceso guiado para cerrar el año contable y abrir el siguiente.",
+    steps: [
+      { title: "Cómo llegar al asistente", description: "Vaya a Empresas → botón de edición de la empresa → pestaña 'Períodos'. En la tarjeta del período que desea cerrar, haga clic en el botón con el ícono de candado ('Iniciar asistente de cierre del período'). Se abre el modal 'Asistente de Cierre'." },
+      { title: "1. Partidas — Revisar pendientes", description: "El asistente lista las partidas en borrador del período: todas deben estar contabilizadas antes de continuar. En este mismo paso se verifica si existe una revaluación cambiaria pendiente del último mes; si falta, puede ejecutarla con el botón 'Ejecutar revaluación ahora' o marcar explícitamente 'Omitir revaluación (no recomendado)'." },
+      { title: "2. Costo Ventas", description: "Paso que aparece solo cuando la empresa maneja inventario: calcula el Costo de Ventas del período (inventario inicial + compras − inventario final) y genera la partida correspondiente." },
+      { title: "3. Cierre — Cierre de resultados", description: "Genera la partida de cierre que salda las cuentas de ingresos, costos y gastos contra la cuenta de resultado del ejercicio (prefijo CIER)." },
+      { title: "4. Traslado — A utilidades", description: "Genera la partida que traslada el resultado del ejercicio a la cuenta de utilidades/pérdidas acumuladas configurada en Cuentas Especiales (prefijo TRAS)." },
+      { title: "5. Apertura — Partida de apertura", description: "Genera la partida de apertura del siguiente período con los saldos de balance (activo, pasivo y patrimonio) al cierre (prefijo APER)." },
+      { title: "6. Verificar — Balances", description: "Muestra la verificación de cuadre: que el balance quede en cero en cuentas de resultado y que Activo = Pasivo + Patrimonio después del cierre." },
+      { title: "7. Confirmar — Cierre", description: "Confirma y contabiliza definitivamente las partidas generadas, y marca el período como cerrado (bloqueando el registro y la modificación de partidas)." },
+      { title: "8. Completado", description: "Resumen final del proceso con las partidas generadas. A partir de aquí el período queda cerrado; si necesita corregir algo, use el botón de reabrir período en la pestaña 'Períodos'." },
+    ],
+    tips: [
+      "Ejecute la Validación de Integridad Contable antes de iniciar el cierre para detectar descuadres o partidas mal clasificadas.",
+      "El asistente no se cierra con clic fuera ni con la tecla Escape: solo con el botón 'X', para no perder el progreso del flujo.",
+      "Las partidas de cierre usan los prefijos CIER, TRAS y APER, y se excluyen automáticamente de los reportes operativos (Estado de Resultados, Balance General, Mayor y Variaciones).",
+    ],
+  },
+  {
+    id: "cxc-cxp",
+    title: "Cuentas por Cobrar y por Pagar",
+    icon: HandCoins,
+    description: "Seguimiento de cobro y de pago de las facturas registradas en los libros fiscales.",
+    isNew: true,
+    requiredModule: ["cxc", "cxp"],
+    steps: [
+      { title: "Generación automática del seguimiento", description: "Al registrar o importar una factura nueva en el Libro de Compras o de Ventas, el sistema crea automáticamente su registro de seguimiento (Cuentas por Pagar para compras, Cuentas por Cobrar para ventas), con su fecha de vencimiento calculada según el plazo configurado." },
+      { title: "Cargar saldos iniciales", description: "Las facturas históricas no entran automáticamente. Use el botón 'Cargar saldos iniciales' para buscar por nombre o número de documento y seleccionar de forma selectiva las facturas anteriores que desea incorporar al seguimiento." },
+      { title: "Registrar abonos", description: "En la fila del documento, use el botón 'Registrar abono'. Capture monto, fecha, forma de pago (Efectivo, Cheque, Transferencia u Otro), número de recibo emitido (opcional) y, cuando la forma de pago es transferencia o cheque, la cuenta bancaria correspondiente." },
+      { title: "Cambiar estatus manualmente", description: "El botón 'Cambiar estatus' permite mover el documento de estado (pendiente, parcial, pagado, incobrable, etc.). El motivo es obligatorio (mínimo 10 caracteres) y queda registrado en la auditoría." },
+      { title: "Historial de estatus y de abonos", description: "Desde cada documento puede consultar el historial de cambios de estatus (con usuario, fecha y motivo) y el detalle de todos los abonos aplicados." },
+      { title: "Generar Póliza de abonos", description: "El botón 'Generar Póliza' crea las partidas contables de los abonos registrados. Puede elegir la agrupación: Póliza por Documento (una por abono), Póliza por Día o Póliza Consolidada del Mes. La cuenta bancaria a utilizar se resuelve por forma de pago." },
+      { title: "Reporte de antigüedad de saldos", description: "Con 'Ver reporte de antigüedad' se despliega el resumen por cliente o proveedor con cortes de 0-30, 31-60, 61-90 y más de 90 días. Al hacer clic en un nombre o en una celda de saldo, se filtra la lista principal de documentos. El botón 'Exportar a Excel' descarga el reporte." },
+      { title: "Configuración por empresa", description: "En Configuración → Cobros y Pagos defina los plazos de pago por defecto, los motivos predefinidos de cambio de estatus, el ajuste de vencimientos a días hábiles y las alertas de vencimiento." },
+    ],
+    tips: [
+      "El módulo se activa por oficina contable (tenant) desde el administrador del sistema: si no aparece en su menú, solicítelo.",
+      "Los totales del reporte de antigüedad se calculan sobre el saldo pendiente (total del documento menos los abonos aplicados).",
+      "Las facturas históricas no entran automáticamente al seguimiento: se incorporan de forma selectiva desde 'Cargar saldos iniciales'.",
+    ],
+  },
 ];
 
-const faqItems = [
+const faqItems: FaqItem[] = [
+
   {
     question: "¿Cómo cambio la empresa activa?",
     answer: "Haga clic en el selector de empresa en la barra superior. El sistema valida automáticamente que tenga acceso y persiste la selección entre sesiones y dispositivos.",
