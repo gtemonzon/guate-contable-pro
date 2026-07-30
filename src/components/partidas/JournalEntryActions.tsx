@@ -109,20 +109,39 @@ export function JournalEntryActions({
 
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
-              <Save className="mr-2 h-4 w-4" />
-              Borrador
-              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd>
+              {savingMode === 'draft' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Borrador
+                  <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd>
+                </>
+              )}
             </Button>
           )}
 
 
           {entryStatus !== 'contabilizado' && canPostEntries && !isReadOnly && (
             <Button onClick={onPost} disabled={loading || !isBalanced}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Contabilizar
-              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd>
+              {savingMode === 'post' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Contabilizando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Contabilizar
+                  <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd>
+                </>
+              )}
             </Button>
           )}
+
 
           {isReadOnly && (
             <Badge variant="secondary" className="px-3 py-2">
