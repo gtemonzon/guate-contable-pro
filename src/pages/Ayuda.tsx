@@ -858,7 +858,7 @@ const Ayuda = () => {
       );
       return matchesMain || matchesSub;
     });
-  }, [searchQuery]);
+  }, [searchQuery, visibleSections]);
 
   const filteredFaq = useMemo(() => {
     if (!searchQuery.trim()) return visibleFaq;
@@ -866,7 +866,7 @@ const Ayuda = () => {
     return visibleFaq.filter(
       (item) => item.question.toLowerCase().includes(query) || item.answer.toLowerCase().includes(query),
     );
-  }, [searchQuery]);
+  }, [searchQuery, visibleFaq]);
 
   const renderSteps = (steps: { title: string; description: string }[]) => (
     <div className="space-y-3 mt-4">
