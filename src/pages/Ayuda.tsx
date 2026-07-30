@@ -4,7 +4,7 @@ import {
   Search, Home, Building2, Users, Settings, BookOpen, FileText, ShoppingCart, Receipt,
   Calculator, FileBarChart, HelpCircle, ChevronRight, ExternalLink, Lightbulb, AlertCircle,
   FileDown, Bell, Banknote, CalendarDays, ClipboardList, Building, Keyboard, Download,
-  MessageCircle, Package, Inbox, Wand2, Key, Wrench,
+  MessageCircle, Package, Inbox, Wand2, Key, Wrench, Lock, HandCoins,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from "jspdf";
@@ -16,6 +16,27 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
+type ModuleRequirement = string | string[];
+
+interface HelpStep {
+  title: string;
+  description: string;
+  /** ISO date (YYYY-MM-DD). Steps with a publishedAt older than 14 days are hidden. */
+  publishedAt?: string;
+  requiredModule?: ModuleRequirement;
+}
+
+interface HelpSubsection {
+  id: string;
+  title: string;
+  description: string;
+  route?: string;
+  isNew?: boolean;
+  requiredModule?: ModuleRequirement;
+  steps?: HelpStep[];
+  tips?: string[];
+}
+
 interface HelpSection {
   id: string;
   title: string;
@@ -23,18 +44,18 @@ interface HelpSection {
   description: string;
   route?: string;
   isNew?: boolean;
-  steps?: { title: string; description: string; }[];
+  requiredModule?: ModuleRequirement;
+  steps?: HelpStep[];
   tips?: string[];
-  subsections?: {
-    id: string;
-    title: string;
-    description: string;
-    route?: string;
-    isNew?: boolean;
-    steps?: { title: string; description: string; }[];
-    tips?: string[];
-  }[];
+  subsections?: HelpSubsection[];
 }
+
+interface FaqItem {
+  question: string;
+  answer: string;
+  requiredModule?: ModuleRequirement;
+}
+
 
 const helpSections: HelpSection[] = [
   {
@@ -44,33 +65,25 @@ const helpSections: HelpSection[] = [
     description: "Mejoras y nuevas funcionalidades incorporadas recientemente al sistema.",
     isNew: true,
     steps: [
-      { title: "Régimen Fiscal en Libros SAT", description: "Los libros de Compras y Ventas ahora se adaptan automáticamente al régimen fiscal de la empresa. Contribuyente General y Profesional Liberal usan libros separados con columnas completas de IVA. Pequeño Contribuyente usa un libro combinado (Compras a la izquierda, Ventas a la derecha). ONG Exenta usa formatos simplificados sin columna de IVA. Verifique el régimen en Empresas → editar empresa → Impuestos." },
-      { title: "Sin Movimientos en Libros SAT", description: "Si un período no tiene transacciones de compras o ventas, el reporte muestra explícitamente 'SIN MOVIMIENTOS' en lugar de una hoja en blanco. Esto aplica a PDF, Excel y la vista en pantalla. En el libro combinado de Pequeño Contribuyente, si solo un lado está vacío se indica 'SIN MOVIMIENTOS' en ese panel; si ambos están vacíos, aparece un mensaje centralizado. Esta funcionalidad cumple requisitos de auditoría al demostrar que el período fue evaluado." },
-      { title: "Retenciones y Exenciones", description: "Nuevo módulo en Gestión Tributaria para registrar certificados de retención de IVA e ISR. Permite capturar número, serie, NIT, nombre, monto retenido, fecha y tipo. Incluye panel de conciliación que cruza certificados contra facturas registradas en libros fiscales, mostrando diferencias, certificados sin factura y facturas sin certificado. Exporta a Excel y PDF." },
-      { title: "Tipo de cuenta 'Patrimonio' (antes 'Capital')", description: "En el catálogo de cuentas (/cuentas), el tipo de cuenta antes llamado 'Capital' ahora se muestra como 'Patrimonio'. El cambio es solo de etiqueta visual: aplica a todas las empresas y refleja mejor que la cuenta 3 incluye tanto el capital aportado como los resultados acumulados del ejercicio. No requiere ninguna acción de su parte." },
-      { title: "Balance General — Total Pasivo y Patrimonio corregido", description: "El total de 'Pasivo y Patrimonio' del Balance General ahora suma correctamente las cuentas de tipo Pasivo (cuenta 2) más las de Patrimonio (cuenta 3). Antes, en el formato configurado desde el Diseñador de Estados Financieros, el total podía estar tomando solo la cuenta 2 cuando la sección de cierre incluía varios grupos. Verifique en /reportes que el cuadre Activo = Pasivo + Patrimonio refleja la realidad." },
-      { title: "Estado de Resultados — total acumulado correctamente", description: "El 'RESULTADO NETO' del Estado de Resultados ahora acumula correctamente los grupos que aparecen después del último subtotal calculado (ej. 'OTROS INGRESOS Y GASTOS'). Antes el último grupo podía sobrescribir el resultado en lugar de sumarlo." },
-      { title: "Estado de Resultados y reportes operativos — exclusión de partidas de cierre", description: "Los reportes operativos (Estado de Resultados, Balance General, Mayor, Variaciones) ya no incluyen partidas de cierre (entry_type = 'cierre', prefijos CIER/TRAS/APER). Si después de cierre veía cuentas como 6101 — Compras sin detalle, era por partidas mal clasificadas como 'diario'. Se reclasificaron automáticamente las partidas históricas con descripciones del tipo 'Resultado del período', 'Traslado de resultado' o 'Resultado del ejercicio'. Las nuevas importaciones detectan estos patrones y los clasifican como cierre desde el inicio." },
-      { title: "Dashboard — 'Utilidad del Período' calculada correctamente", description: "La tarjeta 'Utilidad del Período' del Dashboard antes sumaba ingresos + gastos (ambos como positivos), inflando el resultado. Ahora calcula correctamente Ingresos − Gastos y excluye las partidas de cierre/apertura (CIER, TRAS, APER), igual que los reportes operativos." },
-      { title: "Libro Diario (/partidas) — sin tope de 1,000 partidas y carga rápida", description: "Antes, en la vista 'Todos' del libro diario, varias empresas mostraban siempre 1,000 partidas debido al límite por defecto de la base de datos. Ahora la página hace una carga ligera inicial (solo fechas) para mostrar los conteos reales por año/mes en los tabs, y solo carga el detalle completo del año seleccionado (por defecto, el año actual). Esto mantiene la página rápida incluso en empresas con miles de partidas." },
-      { title: "Autorización de Libros SAT por empresa", description: "Nueva pestaña 'Libros SAT' en la edición de cada empresa para registrar las autorizaciones de libros emitidas por SAT (Libro de Compras, Ventas, Diario, Mayor y Estados Financieros). Cada autorización guarda número, fecha y cantidad de folios autorizados. Al exportar a PDF un libro, el sistema selecciona automáticamente la autorización activa más antigua con folios disponibles (FIFO), imprime la leyenda 'Autorización: {número} — Fecha: {fecha}' al pie de cada página y registra el consumo real de folios. Si quedan ≤ 10 folios o se agotan, se genera automáticamente una notificación en el centro de notificaciones (con anti-spam de 7 días). La columna 'Disponibles' permite hacer ajustes manuales para reconciliar con la cantidad física real, dejando trazabilidad. Si no hay autorización configurada, se exporta sin la leyenda y se muestra una alerta para configurarla." },
-      { title: "Detección de pérdida de internet", description: "El sistema ahora detecta automáticamente cuando se pierde la conexión a internet y muestra un banner rojo en la parte superior con el mensaje 'Sin conexión a internet'. Al restablecerse la conexión, aparece una notificación de confirmación. Las consultas fallidas por red se reintentan automáticamente con espera exponencial (hasta 3 veces). IMPORTANTE: actualmente, si pierde conexión mientras llena un formulario y presiona Guardar, el guardado fallará y los datos del formulario podrían perderse — próximamente se agregará protección automática de borradores." },
-      { title: "Costos y Gastos Acumulados en ISR Trimestral", description: "El formulario ISR Trimestral ahora incluye el campo 'Costos y gastos acumulados' (Costo de Ventas + Gastos de Operación, ej. cuenta 7) con botón de copiar al portapapeles. Aparece después de 'Gastos de Operación'." },
-      { title: "Filtro por defecto de año en /partidas", description: "Al entrar a Partidas, el filtro de año se posiciona automáticamente en el año actual. Si no hay transacciones registradas en el año en curso, el sistema retrocede al año anterior con datos." },
-      { title: "Barra de desplazamiento en selector de empresa", description: "El selector de empresa de la barra superior ahora incluye scroll vertical, facilitando la navegación cuando se administran muchas empresas." },
-      { title: "Sincronización de empresa fijada", description: "Al fijar una empresa desde /empresas, el nombre se actualiza inmediatamente en el selector de la barra superior, sin necesidad de recargar la página." },
-      { title: "Progreso al copiar catálogo de cuentas", description: "Al copiar el catálogo de cuentas desde otra empresa en /cuentas, ahora se muestra una barra de progreso con el contador (X / Y) y el nombre de la cuenta actual procesándose." },
-      { title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
-    ],
-    tips: [
-      "Verifique que el régimen fiscal esté correcto en Empresas → editar empresa → Impuestos antes de generar libros SAT.",
-      "Si un período no tiene transacciones, el reporte muestra 'SIN MOVIMIENTOS' en lugar de una hoja en blanco.",
-      "Concilie certificados de retención mensualmente en Gestión Tributaria → Retenciones y Exenciones antes de declarar.",
-      "El cambio de 'Capital' a 'Patrimonio' en /cuentas es solo de etiqueta: no requiere migrar datos ni reconfigurar nada.",
-      "Si tras el cierre ve cuentas de gasto/ingreso (cuenta 5, 6 o 7) sin detalle en el Estado de Resultados, era por partidas de cierre mal clasificadas; ya están corregidas.",
-      "El libro diario carga por año por defecto: cambie de tab para que descargue el detalle del año seleccionado sin tope.",
-      "Configure las autorizaciones SAT desde Empresas → editar empresa → pestaña 'Libros SAT' antes de imprimir libros oficiales.",
-      "El consumo de folios se registra automáticamente con el número real de páginas generadas en el PDF, no estimado.",
+      { publishedAt: "2026-07-30", requiredModule: ["cxc", "cxp"], title: "Módulo de Cuentas por Cobrar y por Pagar", description: "Nuevo módulo ERP para dar seguimiento de cobro y de pago a las facturas registradas en los libros fiscales. Permite registrar abonos, consultar el reporte de antigüedad de saldos y generar las pólizas contables de los abonos. Se activa por oficina contable (tenant): si no lo ve en su menú, contacte al administrador del sistema." },
+      { publishedAt: "2026-07-30", title: "IVA Retenido por Terceros en declaración de Pequeño Contribuyente", description: "El formulario SAT-2046 ahora permite restar el IVA retenido por operadoras de tarjeta de crédito u otros agentes de retención, con un botón de sugerencia automática que toma el total de las constancias registradas en Gestión Tributaria → Retenciones y Exenciones del período." },
+      { publishedAt: "2026-05-15", title: "Régimen Fiscal en Libros SAT", description: "Los libros de Compras y Ventas ahora se adaptan automáticamente al régimen fiscal de la empresa. Contribuyente General y Profesional Liberal usan libros separados con columnas completas de IVA. Pequeño Contribuyente usa un libro combinado (Compras a la izquierda, Ventas a la derecha). ONG Exenta usa formatos simplificados sin columna de IVA. Verifique el régimen en Empresas → editar empresa → Impuestos." },
+      { publishedAt: "2026-05-15", title: "Sin Movimientos en Libros SAT", description: "Si un período no tiene transacciones de compras o ventas, el reporte muestra explícitamente 'SIN MOVIMIENTOS' en lugar de una hoja en blanco. Esto aplica a PDF, Excel y la vista en pantalla. En el libro combinado de Pequeño Contribuyente, si solo un lado está vacío se indica 'SIN MOVIMIENTOS' en ese panel; si ambos están vacíos, aparece un mensaje centralizado. Esta funcionalidad cumple requisitos de auditoría al demostrar que el período fue evaluado." },
+      { publishedAt: "2026-05-15", title: "Retenciones y Exenciones", description: "Nuevo módulo en Gestión Tributaria para registrar certificados de retención de IVA e ISR. Permite capturar número, serie, NIT, nombre, monto retenido, fecha y tipo. Incluye panel de conciliación que cruza certificados contra facturas registradas en libros fiscales, mostrando diferencias, certificados sin factura y facturas sin certificado. Exporta a Excel y PDF." },
+      { publishedAt: "2026-05-15", title: "Tipo de cuenta 'Patrimonio' (antes 'Capital')", description: "En el catálogo de cuentas (/cuentas), el tipo de cuenta antes llamado 'Capital' ahora se muestra como 'Patrimonio'. El cambio es solo de etiqueta visual: aplica a todas las empresas y refleja mejor que la cuenta 3 incluye tanto el capital aportado como los resultados acumulados del ejercicio. No requiere ninguna acción de su parte." },
+      { publishedAt: "2026-05-15", title: "Balance General — Total Pasivo y Patrimonio corregido", description: "El total de 'Pasivo y Patrimonio' del Balance General ahora suma correctamente las cuentas de tipo Pasivo (cuenta 2) más las de Patrimonio (cuenta 3). Antes, en el formato configurado desde el Diseñador de Estados Financieros, el total podía estar tomando solo la cuenta 2 cuando la sección de cierre incluía varios grupos. Verifique en /reportes que el cuadre Activo = Pasivo + Patrimonio refleja la realidad." },
+      { publishedAt: "2026-05-15", title: "Estado de Resultados — total acumulado correctamente", description: "El 'RESULTADO NETO' del Estado de Resultados ahora acumula correctamente los grupos que aparecen después del último subtotal calculado (ej. 'OTROS INGRESOS Y GASTOS'). Antes el último grupo podía sobrescribir el resultado en lugar de sumarlo." },
+      { publishedAt: "2026-05-15", title: "Estado de Resultados y reportes operativos — exclusión de partidas de cierre", description: "Los reportes operativos (Estado de Resultados, Balance General, Mayor, Variaciones) ya no incluyen partidas de cierre (entry_type = 'cierre', prefijos CIER/TRAS/APER). Si después de cierre veía cuentas como 6101 — Compras sin detalle, era por partidas mal clasificadas como 'diario'. Se reclasificaron automáticamente las partidas históricas con descripciones del tipo 'Resultado del período', 'Traslado de resultado' o 'Resultado del ejercicio'. Las nuevas importaciones detectan estos patrones y los clasifican como cierre desde el inicio." },
+      { publishedAt: "2026-05-15", title: "Dashboard — 'Utilidad del Período' calculada correctamente", description: "La tarjeta 'Utilidad del Período' del Dashboard antes sumaba ingresos + gastos (ambos como positivos), inflando el resultado. Ahora calcula correctamente Ingresos − Gastos y excluye las partidas de cierre/apertura (CIER, TRAS, APER), igual que los reportes operativos." },
+      { publishedAt: "2026-05-15", title: "Libro Diario (/partidas) — sin tope de 1,000 partidas y carga rápida", description: "Antes, en la vista 'Todos' del libro diario, varias empresas mostraban siempre 1,000 partidas debido al límite por defecto de la base de datos. Ahora la página hace una carga ligera inicial (solo fechas) para mostrar los conteos reales por año/mes en los tabs, y solo carga el detalle completo del año seleccionado (por defecto, el año actual). Esto mantiene la página rápida incluso en empresas con miles de partidas." },
+      { publishedAt: "2026-05-15", title: "Autorización de Libros SAT por empresa", description: "Nueva pestaña 'Libros SAT' en la edición de cada empresa para registrar las autorizaciones de libros emitidas por SAT (Libro de Compras, Ventas, Diario, Mayor y Estados Financieros). Cada autorización guarda número, fecha y cantidad de folios autorizados. Al exportar a PDF un libro, el sistema selecciona automáticamente la autorización activa más antigua con folios disponibles (FIFO), imprime la leyenda 'Autorización: {número} — Fecha: {fecha}' al pie de cada página y registra el consumo real de folios. Si quedan ≤ 10 folios o se agotan, se genera automáticamente una notificación en el centro de notificaciones (con anti-spam de 7 días). La columna 'Disponibles' permite hacer ajustes manuales para reconciliar con la cantidad física real, dejando trazabilidad. Si no hay autorización configurada, se exporta sin la leyenda y se muestra una alerta para configurarla." },
+      { publishedAt: "2026-05-15", title: "Detección de pérdida de internet", description: "El sistema ahora detecta automáticamente cuando se pierde la conexión a internet y muestra un banner rojo en la parte superior con el mensaje 'Sin conexión a internet'. Al restablecerse la conexión, aparece una notificación de confirmación. Las consultas fallidas por red se reintentan automáticamente con espera exponencial (hasta 3 veces). IMPORTANTE: actualmente, si pierde conexión mientras llena un formulario y presiona Guardar, el guardado fallará y los datos del formulario podrían perderse — próximamente se agregará protección automática de borradores." },
+      { publishedAt: "2026-05-15", title: "Costos y Gastos Acumulados en ISR Trimestral", description: "El formulario ISR Trimestral ahora incluye el campo 'Costos y gastos acumulados' (Costo de Ventas + Gastos de Operación, ej. cuenta 7) con botón de copiar al portapapeles. Aparece después de 'Gastos de Operación'." },
+      { publishedAt: "2026-05-15", title: "Filtro por defecto de año en /partidas", description: "Al entrar a Partidas, el filtro de año se posiciona automáticamente en el año actual. Si no hay transacciones registradas en el año en curso, el sistema retrocede al año anterior con datos." },
+      { publishedAt: "2026-05-15", title: "Barra de desplazamiento en selector de empresa", description: "El selector de empresa de la barra superior ahora incluye scroll vertical, facilitando la navegación cuando se administran muchas empresas." },
+      { publishedAt: "2026-05-15", title: "Sincronización de empresa fijada", description: "Al fijar una empresa desde /empresas, el nombre se actualiza inmediatamente en el selector de la barra superior, sin necesidad de recargar la página." },
+      { publishedAt: "2026-05-15", title: "Progreso al copiar catálogo de cuentas", description: "Al copiar el catálogo de cuentas desde otra empresa en /cuentas, ahora se muestra una barra de progreso con el contador (X / Y) y el nombre de la cuenta actual procesándose." },
+      { publishedAt: "2026-05-15", title: "Progreso al borrar árbol de cuentas", description: "Al eliminar todo un árbol de cuentas en /cuentas, el modal permanece abierto mostrando una barra de progreso del borrado y al finalizar muestra un mensaje de confirmación con el total de cuentas eliminadas." },
     ],
   },
   {
@@ -519,9 +532,55 @@ const helpSections: HelpSection[] = [
       "Solo roles Super Admin y Admin Empresa pueden realizar respaldos y restauraciones.",
     ],
   },
+  {
+    id: "cierre-periodo",
+    title: "Cierre de Período",
+    icon: Lock,
+    description: "Proceso guiado para cerrar el año contable y abrir el siguiente.",
+    steps: [
+      { title: "Cómo llegar al asistente", description: "Vaya a Empresas → botón de edición de la empresa → pestaña 'Períodos'. En la tarjeta del período que desea cerrar, haga clic en el botón con el ícono de candado ('Iniciar asistente de cierre del período'). Se abre el modal 'Asistente de Cierre'." },
+      { title: "1. Partidas — Revisar pendientes", description: "El asistente lista las partidas en borrador del período: todas deben estar contabilizadas antes de continuar. En este mismo paso se verifica si existe una revaluación cambiaria pendiente del último mes; si falta, puede ejecutarla con el botón 'Ejecutar revaluación ahora' o marcar explícitamente 'Omitir revaluación (no recomendado)'." },
+      { title: "2. Costo Ventas", description: "Paso que aparece solo cuando la empresa maneja inventario: calcula el Costo de Ventas del período (inventario inicial + compras − inventario final) y genera la partida correspondiente." },
+      { title: "3. Cierre — Cierre de resultados", description: "Genera la partida de cierre que salda las cuentas de ingresos, costos y gastos contra la cuenta de resultado del ejercicio (prefijo CIER)." },
+      { title: "4. Traslado — A utilidades", description: "Genera la partida que traslada el resultado del ejercicio a la cuenta de utilidades/pérdidas acumuladas configurada en Cuentas Especiales (prefijo TRAS)." },
+      { title: "5. Apertura — Partida de apertura", description: "Genera la partida de apertura del siguiente período con los saldos de balance (activo, pasivo y patrimonio) al cierre (prefijo APER)." },
+      { title: "6. Verificar — Balances", description: "Muestra la verificación de cuadre: que el balance quede en cero en cuentas de resultado y que Activo = Pasivo + Patrimonio después del cierre." },
+      { title: "7. Confirmar — Cierre", description: "Confirma y contabiliza definitivamente las partidas generadas, y marca el período como cerrado (bloqueando el registro y la modificación de partidas)." },
+      { title: "8. Completado", description: "Resumen final del proceso con las partidas generadas. A partir de aquí el período queda cerrado; si necesita corregir algo, use el botón de reabrir período en la pestaña 'Períodos'." },
+    ],
+    tips: [
+      "Ejecute la Validación de Integridad Contable antes de iniciar el cierre para detectar descuadres o partidas mal clasificadas.",
+      "El asistente no se cierra con clic fuera ni con la tecla Escape: solo con el botón 'X', para no perder el progreso del flujo.",
+      "Las partidas de cierre usan los prefijos CIER, TRAS y APER, y se excluyen automáticamente de los reportes operativos (Estado de Resultados, Balance General, Mayor y Variaciones).",
+    ],
+  },
+  {
+    id: "cxc-cxp",
+    title: "Cuentas por Cobrar y por Pagar",
+    icon: HandCoins,
+    description: "Seguimiento de cobro y de pago de las facturas registradas en los libros fiscales.",
+    isNew: true,
+    requiredModule: ["cxc", "cxp"],
+    steps: [
+      { title: "Generación automática del seguimiento", description: "Al registrar o importar una factura nueva en el Libro de Compras o de Ventas, el sistema crea automáticamente su registro de seguimiento (Cuentas por Pagar para compras, Cuentas por Cobrar para ventas), con su fecha de vencimiento calculada según el plazo configurado." },
+      { title: "Cargar saldos iniciales", description: "Las facturas históricas no entran automáticamente. Use el botón 'Cargar saldos iniciales' para buscar por nombre o número de documento y seleccionar de forma selectiva las facturas anteriores que desea incorporar al seguimiento." },
+      { title: "Registrar abonos", description: "En la fila del documento, use el botón 'Registrar abono'. Capture monto, fecha, forma de pago (Efectivo, Cheque, Transferencia u Otro), número de recibo emitido (opcional) y, cuando la forma de pago es transferencia o cheque, la cuenta bancaria correspondiente." },
+      { title: "Cambiar estatus manualmente", description: "El botón 'Cambiar estatus' permite mover el documento de estado (pendiente, parcial, pagado, incobrable, etc.). El motivo es obligatorio (mínimo 10 caracteres) y queda registrado en la auditoría." },
+      { title: "Historial de estatus y de abonos", description: "Desde cada documento puede consultar el historial de cambios de estatus (con usuario, fecha y motivo) y el detalle de todos los abonos aplicados." },
+      { title: "Generar Póliza de abonos", description: "El botón 'Generar Póliza' crea las partidas contables de los abonos registrados. Puede elegir la agrupación: Póliza por Documento (una por abono), Póliza por Día o Póliza Consolidada del Mes. La cuenta bancaria a utilizar se resuelve por forma de pago." },
+      { title: "Reporte de antigüedad de saldos", description: "Con 'Ver reporte de antigüedad' se despliega el resumen por cliente o proveedor con cortes de 0-30, 31-60, 61-90 y más de 90 días. Al hacer clic en un nombre o en una celda de saldo, se filtra la lista principal de documentos. El botón 'Exportar a Excel' descarga el reporte." },
+      { title: "Configuración por empresa", description: "En Configuración → Cobros y Pagos defina los plazos de pago por defecto, los motivos predefinidos de cambio de estatus, el ajuste de vencimientos a días hábiles y las alertas de vencimiento." },
+    ],
+    tips: [
+      "El módulo se activa por oficina contable (tenant) desde el administrador del sistema: si no aparece en su menú, solicítelo.",
+      "Los totales del reporte de antigüedad se calculan sobre el saldo pendiente (total del documento menos los abonos aplicados).",
+      "Las facturas históricas no entran automáticamente al seguimiento: se incorporan de forma selectiva desde 'Cargar saldos iniciales'.",
+    ],
+  },
 ];
 
-const faqItems = [
+const faqItems: FaqItem[] = [
+
   {
     question: "¿Cómo cambio la empresa activa?",
     answer: "Haga clic en el selector de empresa en la barra superior. El sistema valida automáticamente que tenga acceso y persiste la selección entre sesiones y dispositivos.",
@@ -626,14 +685,73 @@ const faqItems = [
     question: "¿Dónde encuentro Formularios de Impuestos y Generar Declaración?",
     answer: "Estos módulos se trasladaron al grupo 'Gestión Tributaria' en el menú lateral, junto con Retenciones y Exenciones. Esto organiza mejor todas las funciones relacionadas con impuestos en un solo lugar.",
   },
+  {
+    question: "¿Dónde cierro el período contable?",
+    answer: "Vaya a Empresas → botón de edición de la empresa → pestaña 'Períodos'. En la tarjeta del período que desea cerrar, presione el botón con el ícono de candado ('Iniciar asistente de cierre del período'). El asistente lo guía por los pasos: Partidas pendientes, Costo de Ventas (si aplica), Cierre, Traslado, Apertura, Verificar, Confirmar y Completado. Solo se puede cerrar con el botón 'X'; el clic fuera y la tecla Escape están bloqueados para no perder el progreso.",
+  },
+  {
+    question: "¿Cómo registro un abono de un cliente o un pago a proveedor?",
+    answer: "Entre a Cuentas por Cobrar (clientes) o Cuentas por Pagar (proveedores), ubique el documento en la lista y presione el botón 'Registrar abono'. Capture el monto, la fecha, la forma de pago (Efectivo, Cheque, Transferencia u Otro), el número de recibo emitido si aplica y la cuenta bancaria cuando el pago sea por transferencia o cheque. Luego puede contabilizarlos con 'Generar Póliza'.",
+    requiredModule: ["cxc", "cxp"],
+  },
+  {
+    question: "¿Por qué no veo Cuentas por Cobrar / por Pagar en mi menú?",
+    answer: "Cuentas por Cobrar y Cuentas por Pagar son un módulo que se habilita por oficina contable (tenant). Si no aparece en su menú lateral, significa que su oficina aún no lo tiene activado: contacte al administrador del sistema para solicitar su activación.",
+  },
 ];
 
+
+const NEWS_MAX_AGE_DAYS = 14;
+
 const Ayuda = () => {
-  const { currentTenant } = useTenant();
+  const { currentTenant, hasModule } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [scrolled, setScrolled] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Content filtered by tenant modules + news expiry. Everything else (search,
+  // cards, mini icons, PDF export) works on top of this.
+  const { visibleSections, visibleFaq } = useMemo(() => {
+    const isAllowed = (requiredModule?: ModuleRequirement) => {
+      if (!requiredModule) return true;
+      const keys = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
+      return keys.some((k) => hasModule(k));
+    };
+
+    const cutoff = Date.now() - NEWS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const isFresh = (step: HelpStep) => {
+      if (!step.publishedAt) return true;
+      const ts = new Date(`${step.publishedAt}T00:00:00`).getTime();
+      return Number.isNaN(ts) ? true : ts >= cutoff;
+    };
+
+    const filterSteps = (steps?: HelpStep[]) =>
+      steps ? steps.filter((s) => isAllowed(s.requiredModule) && isFresh(s)) : undefined;
+
+    const sections = helpSections
+      .filter((section) => isAllowed(section.requiredModule))
+      .map((section) => ({
+        ...section,
+        steps: filterSteps(section.steps),
+        subsections: section.subsections
+          ?.filter((sub) => isAllowed(sub.requiredModule))
+          .map((sub) => ({ ...sub, steps: filterSteps(sub.steps) })),
+      }))
+      // Sections whose content is entirely time-limited (news) disappear when empty
+      .filter((section) => {
+        const hadTimedSteps = helpSections
+          .find((s) => s.id === section.id)?.steps?.some((s) => s.publishedAt);
+        if (!hadTimedSteps) return true;
+        return (section.steps?.length ?? 0) > 0;
+      });
+
+    return {
+      visibleSections: sections,
+      visibleFaq: faqItems.filter((item) => isAllowed(item.requiredModule)),
+    };
+  }, [hasModule]);
+
 
   useEffect(() => {
     // Listen on the nearest scrollable parent (MainLayout's scroll area)
@@ -674,7 +792,7 @@ const Ayuda = () => {
     doc.text("Centro de Ayuda - Manual de Usuario", margin, y);
     y += 15;
 
-    helpSections.forEach((section) => {
+    visibleSections.forEach((section) => {
       if (y > 250) { doc.addPage(); y = 20; }
       addText(`■ ${section.title}`, 14, true);
       addText(section.description, 10, false, 4);
@@ -714,7 +832,7 @@ const Ayuda = () => {
     y += 5;
     addText("PREGUNTAS FRECUENTES", 14, true);
     y += 3;
-    faqItems.forEach((item, idx) => {
+    visibleFaq.forEach((item, idx) => {
       if (y > 250) { doc.addPage(); y = 20; }
       addText(`${idx + 1}. ${item.question}`, 10, true, 4);
       addText(item.answer, 9, false, 8);
@@ -725,9 +843,9 @@ const Ayuda = () => {
   };
 
   const filteredSections = useMemo(() => {
-    if (!searchQuery.trim()) return helpSections;
+    if (!searchQuery.trim()) return visibleSections;
     const query = searchQuery.toLowerCase();
-    return helpSections.filter((section) => {
+    return visibleSections.filter((section) => {
       const matchesMain =
         section.title.toLowerCase().includes(query) ||
         section.description.toLowerCase().includes(query) ||
@@ -740,15 +858,15 @@ const Ayuda = () => {
       );
       return matchesMain || matchesSub;
     });
-  }, [searchQuery]);
+  }, [searchQuery, visibleSections]);
 
   const filteredFaq = useMemo(() => {
-    if (!searchQuery.trim()) return faqItems;
+    if (!searchQuery.trim()) return visibleFaq;
     const query = searchQuery.toLowerCase();
-    return faqItems.filter(
+    return visibleFaq.filter(
       (item) => item.question.toLowerCase().includes(query) || item.answer.toLowerCase().includes(query),
     );
-  }, [searchQuery]);
+  }, [searchQuery, visibleFaq]);
 
   const renderSteps = (steps: { title: string; description: string }[]) => (
     <div className="space-y-3 mt-4">
@@ -843,7 +961,7 @@ const Ayuda = () => {
               style={{ maxWidth: scrolled ? "400px" : "0px", opacity: scrolled ? 1 : 0 }}
             >
               <div className="w-px h-4 bg-border mx-1 flex-shrink-0" />
-              {helpSections.slice(0, 5).map((section) => (
+              {visibleSections.slice(0, 5).map((section) => (
                 <button
                   key={section.id}
                   title={section.title}
@@ -906,7 +1024,7 @@ const Ayuda = () => {
           }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pb-4">
-            {helpSections.slice(0, 5).map((section) => (
+            {visibleSections.slice(0, 5).map((section) => (
               <button
                 key={section.id}
                 onClick={() => {
