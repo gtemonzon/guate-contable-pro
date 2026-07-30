@@ -701,12 +701,57 @@ const faqItems: FaqItem[] = [
 ];
 
 
+const NEWS_MAX_AGE_DAYS = 14;
+
 const Ayuda = () => {
-  const { currentTenant } = useTenant();
+  const { currentTenant, hasModule } = useTenant();
   const [searchQuery, setSearchQuery] = useState("");
   const [scrolled, setScrolled] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Content filtered by tenant modules + news expiry. Everything else (search,
+  // cards, mini icons, PDF export) works on top of this.
+  const { visibleSections, visibleFaq } = useMemo(() => {
+    const isAllowed = (requiredModule?: ModuleRequirement) => {
+      if (!requiredModule) return true;
+      const keys = Array.isArray(requiredModule) ? requiredModule : [requiredModule];
+      return keys.some((k) => hasModule(k));
+    };
+
+    const cutoff = Date.now() - NEWS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const isFresh = (step: HelpStep) => {
+      if (!step.publishedAt) return true;
+      const ts = new Date(`${step.publishedAt}T00:00:00`).getTime();
+      return Number.isNaN(ts) ? true : ts >= cutoff;
+    };
+
+    const filterSteps = (steps?: HelpStep[]) =>
+      steps ? steps.filter((s) => isAllowed(s.requiredModule) && isFresh(s)) : undefined;
+
+    const sections = helpSections
+      .filter((section) => isAllowed(section.requiredModule))
+      .map((section) => ({
+        ...section,
+        steps: filterSteps(section.steps),
+        subsections: section.subsections
+          ?.filter((sub) => isAllowed(sub.requiredModule))
+          .map((sub) => ({ ...sub, steps: filterSteps(sub.steps) })),
+      }))
+      // Sections whose content is entirely time-limited (news) disappear when empty
+      .filter((section) => {
+        const hadTimedSteps = helpSections
+          .find((s) => s.id === section.id)?.steps?.some((s) => s.publishedAt);
+        if (!hadTimedSteps) return true;
+        return (section.steps?.length ?? 0) > 0;
+      });
+
+    return {
+      visibleSections: sections,
+      visibleFaq: faqItems.filter((item) => isAllowed(item.requiredModule)),
+    };
+  }, [hasModule]);
+
 
   useEffect(() => {
     // Listen on the nearest scrollable parent (MainLayout's scroll area)
