@@ -1147,7 +1147,7 @@ export function useJournalEntryForm(
 
   return {
     // State
-    loading, isLoadingEntry, accounts, periods, nextEntryNumber,
+    loading, savingMode, isLoadingEntry, accounts, periods, nextEntryNumber,
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
     documentReference, setDocumentReference, headerDescription, setHeaderDescription,
     documentReferences, setDocumentReferences,
