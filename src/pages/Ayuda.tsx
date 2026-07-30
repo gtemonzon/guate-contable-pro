@@ -16,6 +16,27 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 
+type ModuleRequirement = string | string[];
+
+interface HelpStep {
+  title: string;
+  description: string;
+  /** ISO date (YYYY-MM-DD). Steps with a publishedAt older than 14 days are hidden. */
+  publishedAt?: string;
+  requiredModule?: ModuleRequirement;
+}
+
+interface HelpSubsection {
+  id: string;
+  title: string;
+  description: string;
+  route?: string;
+  isNew?: boolean;
+  requiredModule?: ModuleRequirement;
+  steps?: HelpStep[];
+  tips?: string[];
+}
+
 interface HelpSection {
   id: string;
   title: string;
@@ -23,18 +44,18 @@ interface HelpSection {
   description: string;
   route?: string;
   isNew?: boolean;
-  steps?: { title: string; description: string; }[];
+  requiredModule?: ModuleRequirement;
+  steps?: HelpStep[];
   tips?: string[];
-  subsections?: {
-    id: string;
-    title: string;
-    description: string;
-    route?: string;
-    isNew?: boolean;
-    steps?: { title: string; description: string; }[];
-    tips?: string[];
-  }[];
+  subsections?: HelpSubsection[];
 }
+
+interface FaqItem {
+  question: string;
+  answer: string;
+  requiredModule?: ModuleRequirement;
+}
+
 
 const helpSections: HelpSection[] = [
   {
