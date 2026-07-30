@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle, Coins } from "lucide-react";
+import { Save, CheckCircle, Lock, Ban, FileEdit, Link2, AlertTriangle, Coins, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { EntryStatus } from "./useJournalEntryForm";
 
@@ -9,6 +9,7 @@ interface JournalEntryActionsProps {
   entryStatus: EntryStatus;
   isBalanced: boolean;
   loading: boolean;
+  savingMode?: 'draft' | 'post' | null;
   isReadOnly: boolean;
   canCreateEntries: boolean;
   canPostEntries: boolean;
@@ -40,7 +41,7 @@ const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase
 const modKey = isMac ? "⌘" : "Ctrl";
 
 export function JournalEntryActions({
-  entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
+  entryToEdit, entryStatus, isBalanced, loading, savingMode = null, isReadOnly, canCreateEntries, canPostEntries,
   hasBankAccount, hasBankReference, totalDebit, totalCredit, imbalanceAmount,
   onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, onLiquidateForeignInvoice,
   auditInfo, formatDateTime,
@@ -109,20 +110,39 @@ export function JournalEntryActions({
 
           {entryStatus !== 'contabilizado' && canCreateEntries && !isReadOnly && (
             <Button variant="secondary" onClick={onSaveDraft} disabled={loading}>
-              <Save className="mr-2 h-4 w-4" />
-              Borrador
-              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd>
+              {savingMode === 'draft' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Borrador
+                  <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}⇧↵</kbd>
+                </>
+              )}
             </Button>
           )}
 
 
           {entryStatus !== 'contabilizado' && canPostEntries && !isReadOnly && (
             <Button onClick={onPost} disabled={loading || !isBalanced}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Contabilizar
-              <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd>
+              {savingMode === 'post' ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Contabilizando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Contabilizar
+                  <kbd className="ml-2 hidden sm:inline-block px-1 py-0.5 rounded border border-border text-[10px] font-mono bg-muted">{modKey}↵</kbd>
+                </>
+              )}
             </Button>
           )}
+
 
           {isReadOnly && (
             <Badge variant="secondary" className="px-3 py-2">
