@@ -1126,6 +1126,7 @@ export function useJournalEntryForm(
       toast({ title: "Error al guardar", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } finally {
       setLoading(false);
+      setSavingMode(null);
     }
   };
 
