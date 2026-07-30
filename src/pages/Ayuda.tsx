@@ -748,7 +748,7 @@ const Ayuda = () => {
 
     return {
       visibleSections: sections,
-      visibleFaq: visibleFaq.filter((item) => isAllowed(item.requiredModule)),
+      visibleFaq: faqItems.filter((item) => isAllowed(item.requiredModule)),
     };
   }, [hasModule]);
 
