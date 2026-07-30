@@ -685,7 +685,21 @@ const faqItems: FaqItem[] = [
     question: "¿Dónde encuentro Formularios de Impuestos y Generar Declaración?",
     answer: "Estos módulos se trasladaron al grupo 'Gestión Tributaria' en el menú lateral, junto con Retenciones y Exenciones. Esto organiza mejor todas las funciones relacionadas con impuestos en un solo lugar.",
   },
+  {
+    question: "¿Dónde cierro el período contable?",
+    answer: "Vaya a Empresas → botón de edición de la empresa → pestaña 'Períodos'. En la tarjeta del período que desea cerrar, presione el botón con el ícono de candado ('Iniciar asistente de cierre del período'). El asistente lo guía por los pasos: Partidas pendientes, Costo de Ventas (si aplica), Cierre, Traslado, Apertura, Verificar, Confirmar y Completado. Solo se puede cerrar con el botón 'X'; el clic fuera y la tecla Escape están bloqueados para no perder el progreso.",
+  },
+  {
+    question: "¿Cómo registro un abono de un cliente o un pago a proveedor?",
+    answer: "Entre a Cuentas por Cobrar (clientes) o Cuentas por Pagar (proveedores), ubique el documento en la lista y presione el botón 'Registrar abono'. Capture el monto, la fecha, la forma de pago (Efectivo, Cheque, Transferencia u Otro), el número de recibo emitido si aplica y la cuenta bancaria cuando el pago sea por transferencia o cheque. Luego puede contabilizarlos con 'Generar Póliza'.",
+    requiredModule: ["cxc", "cxp"],
+  },
+  {
+    question: "¿Por qué no veo Cuentas por Cobrar / por Pagar en mi menú?",
+    answer: "Cuentas por Cobrar y Cuentas por Pagar son un módulo que se habilita por oficina contable (tenant). Si no aparece en su menú lateral, significa que su oficina aún no lo tiene activado: contacte al administrador del sistema para solicitar su activación.",
+  },
 ];
+
 
 const Ayuda = () => {
   const { currentTenant } = useTenant();
