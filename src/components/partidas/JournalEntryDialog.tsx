@@ -352,6 +352,7 @@ export default function JournalEntryDialog({
                 entryStatus={form.entryStatus}
                 isBalanced={balanced}
                 loading={form.loading}
+                savingMode={form.savingMode}
                 isReadOnly={form.isReadOnly}
                 canCreateEntries={form.permissions.canCreateEntries}
                 canPostEntries={form.permissions.canPostEntries}
