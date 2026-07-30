@@ -748,7 +748,7 @@ const Ayuda = () => {
 
     return {
       visibleSections: sections,
-      visibleFaq: faqItems.filter((item) => isAllowed(item.requiredModule)),
+      visibleFaq: visibleFaq.filter((item) => isAllowed(item.requiredModule)),
     };
   }, [hasModule]);
 
@@ -792,7 +792,7 @@ const Ayuda = () => {
     doc.text("Centro de Ayuda - Manual de Usuario", margin, y);
     y += 15;
 
-    helpSections.forEach((section) => {
+    visibleSections.forEach((section) => {
       if (y > 250) { doc.addPage(); y = 20; }
       addText(`■ ${section.title}`, 14, true);
       addText(section.description, 10, false, 4);
@@ -832,7 +832,7 @@ const Ayuda = () => {
     y += 5;
     addText("PREGUNTAS FRECUENTES", 14, true);
     y += 3;
-    faqItems.forEach((item, idx) => {
+    visibleFaq.forEach((item, idx) => {
       if (y > 250) { doc.addPage(); y = 20; }
       addText(`${idx + 1}. ${item.question}`, 10, true, 4);
       addText(item.answer, 9, false, 8);
@@ -843,9 +843,9 @@ const Ayuda = () => {
   };
 
   const filteredSections = useMemo(() => {
-    if (!searchQuery.trim()) return helpSections;
+    if (!searchQuery.trim()) return visibleSections;
     const query = searchQuery.toLowerCase();
-    return helpSections.filter((section) => {
+    return visibleSections.filter((section) => {
       const matchesMain =
         section.title.toLowerCase().includes(query) ||
         section.description.toLowerCase().includes(query) ||
@@ -861,9 +861,9 @@ const Ayuda = () => {
   }, [searchQuery]);
 
   const filteredFaq = useMemo(() => {
-    if (!searchQuery.trim()) return faqItems;
+    if (!searchQuery.trim()) return visibleFaq;
     const query = searchQuery.toLowerCase();
-    return faqItems.filter(
+    return visibleFaq.filter(
       (item) => item.question.toLowerCase().includes(query) || item.answer.toLowerCase().includes(query),
     );
   }, [searchQuery]);
@@ -961,7 +961,7 @@ const Ayuda = () => {
               style={{ maxWidth: scrolled ? "400px" : "0px", opacity: scrolled ? 1 : 0 }}
             >
               <div className="w-px h-4 bg-border mx-1 flex-shrink-0" />
-              {helpSections.slice(0, 5).map((section) => (
+              {visibleSections.slice(0, 5).map((section) => (
                 <button
                   key={section.id}
                   title={section.title}
@@ -1024,7 +1024,7 @@ const Ayuda = () => {
           }}
         >
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pb-4">
-            {helpSections.slice(0, 5).map((section) => (
+            {visibleSections.slice(0, 5).map((section) => (
               <button
                 key={section.id}
                 onClick={() => {
