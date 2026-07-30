@@ -864,6 +864,10 @@ export function useJournalEntryForm(
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
 
+    // Set loading immediately for instant UI feedback (before any network call)
+    setLoading(true);
+
+    try {
     // ── Fresh duplicate bank-ref check before save ──────────────────
     if (bankAccountId && bankReference.trim()) {
       let dupQuery = supabase.from("tab_journal_entries")
@@ -879,7 +883,18 @@ export function useJournalEntryForm(
       const currentId = entryToEdit?.id || draftEntryIdRef.current;
       if (currentId) dupQuery = dupQuery.neq("id", currentId);
 
-      const { data: dupRow } = await dupQuery.maybeSingle();
+      // Run both independent lookups in parallel (2 round-trips max instead of 3)
+      const [dupRes, bankAcctRes] = await Promise.all([
+        dupQuery.maybeSingle(),
+        supabase
+          .from("tab_bank_accounts")
+          .select("id")
+          .eq("account_id", bankAccountId)
+          .eq("enterprise_id", parseInt(enterpriseId))
+          .maybeSingle(),
+      ]);
+
+      const dupRow = dupRes.data;
       if (dupRow) {
         setBankRefDuplicate({ entryNumber: dupRow.entry_number, entryId: dupRow.id });
         toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${dupRow.entry_number} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
@@ -887,12 +902,7 @@ export function useJournalEntryForm(
       }
 
       // Also block if number exists as a void cheque in tab_bank_documents
-      const { data: bankAcctDup } = await supabase
-        .from("tab_bank_accounts")
-        .select("id")
-        .eq("account_id", bankAccountId)
-        .eq("enterprise_id", parseInt(enterpriseId))
-        .maybeSingle();
+      const bankAcctDup = bankAcctRes.data;
       if (bankAcctDup?.id) {
         const { data: voidDoc } = await supabase
           .from("tab_bank_documents")
@@ -910,43 +920,45 @@ export function useJournalEntryForm(
       setBankRefDuplicate(null);
     }
 
-    // Set loading immediately for instant UI feedback
-    setLoading(true);
+    // Overdraft check (only on posting) + auth, all in parallel
+    const overdraftLines = post
+      ? detailLines.filter(l => l.account_id !== null)
+          .map(l => ({ line: l, account: accounts.find(a => a.id === l.account_id) }))
+          .filter(x => x.account && x.account.balance_type !== 'indiferente')
+      : [];
+    const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
 
-    try {
-    // Overdraft check — only on posting
-    if (post) {
-      const validLines = detailLines.filter(l => l.account_id !== null);
-      const currentEntryId = entryToEdit?.id || draftEntryIdRef.current;
-      for (const line of validLines) {
-        const account = accounts.find(a => a.id === line.account_id);
-        if (!account || account.balance_type === 'indiferente') continue;
-        // Use RPC to get accumulated balance reliably (avoids the implicit 1000-row
-        // PostgREST limit that produced phantom negative balances on enterprises
-        // with many entries — e.g. account showing -212 when real balance was +382).
-        const { data: balData, error: balErr } = await supabase.rpc(
-          'calculate_account_balance_for_overdraft',
-          {
+    const [overdraftResults, authRes] = await Promise.all([
+      Promise.all(
+        overdraftLines.map(({ line }) =>
+          supabase.rpc('calculate_account_balance_for_overdraft', {
             p_account_id: line.account_id,
             p_enterprise_id: parseInt(enterpriseId),
             p_entry_date: entryDate,
             p_exclude_entry_id: currentEntryId ?? null,
-          },
-        );
-        if (balErr) {
-          console.error('[overdraft] balance RPC error', balErr);
-          continue;
-        }
-        const currentBalance = Number(balData) || 0;
-        const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
-        if (account.balance_type === 'deudor' && newBalance < 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
-        if (account.balance_type === 'acreedor' && newBalance > 0) { setLoading(false); toast({ title: "Sobregiro detectado", description: `La cuenta ${account.account_code} - ${account.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
+          }),
+        ),
+      ),
+      supabase.auth.getUser(),
+    ]);
+
+    // Evaluate in order so the first overdraft reported matches previous behavior
+    for (let i = 0; i < overdraftLines.length; i++) {
+      const { line, account } = overdraftLines[i];
+      const { data: balData, error: balErr } = overdraftResults[i];
+      if (balErr) {
+        console.error('[overdraft] balance RPC error', balErr);
+        continue;
       }
+      const currentBalance = Number(balData) || 0;
+      const newBalance = Math.round((currentBalance + (Number(line.debit_amount) || 0) - (Number(line.credit_amount) || 0)) * 100) / 100;
+      if (account!.balance_type === 'deudor' && newBalance < 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account!.account_code} - ${account!.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(currentBalance)}.`, variant: "destructive" }); return; }
+      if (account!.balance_type === 'acreedor' && newBalance > 0) { toast({ title: "Sobregiro detectado", description: `La cuenta ${account!.account_code} - ${account!.account_name} no tiene saldo suficiente. Saldo actual: ${formatCurrency(Math.abs(currentBalance))}.`, variant: "destructive" }); return; }
     }
 
-
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = authRes.data.user;
       if (!user) throw new Error("Usuario no autenticado");
+
 
       const bankDirectionValue = bankAccountId ? bankDirection : null;
 
