@@ -866,6 +866,7 @@ export function useJournalEntryForm(
     if (!enterpriseId) return;
 
     // Set loading immediately for instant UI feedback (before any network call)
+    setSavingMode(post ? 'post' : 'draft');
     setLoading(true);
 
     try {
