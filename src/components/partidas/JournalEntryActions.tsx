@@ -41,7 +41,7 @@ const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase
 const modKey = isMac ? "⌘" : "Ctrl";
 
 export function JournalEntryActions({
-  entryToEdit, entryStatus, isBalanced, loading, isReadOnly, canCreateEntries, canPostEntries,
+  entryToEdit, entryStatus, isBalanced, loading, savingMode = null, isReadOnly, canCreateEntries, canPostEntries,
   hasBankAccount, hasBankReference, totalDebit, totalCredit, imbalanceAmount,
   onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, onLiquidateForeignInvoice,
   auditInfo, formatDateTime,
