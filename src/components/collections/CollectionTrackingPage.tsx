@@ -114,6 +114,7 @@ function AgingCell({ row }: { row: TrackingRow }) {
 
 export default function CollectionTrackingPage({ direction, title }: Props) {
   const { selectedEnterprise } = useEnterprise();
+  const navigate = useNavigate();
   const { hasModule, isLoading: tenantLoading } = useTenant();
   const [rows, setRows] = useState<TrackingRow[]>([]);
   const [loading, setLoading] = useState(false);
