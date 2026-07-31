@@ -232,24 +232,28 @@ export function useDeclaracionCalculo(
       const previousYearStart = `${previousYear}-01-01`;
       const previousYearEnd = `${previousYear}-12-31`;
 
-      const [salesPrevYearRes, purchasesPrevYearRes] = await Promise.all([
-        supabase
-          .from("tab_sales_ledger")
-          .select("net_amount")
-          .eq("enterprise_id", enterpriseId)
-          .eq("is_annulled", false)
-          .gte("invoice_date", previousYearStart)
-          .lte("invoice_date", previousYearEnd),
-        supabase
-          .from("tab_purchase_ledger")
-          .select("net_amount")
-          .eq("enterprise_id", enterpriseId)
-          .gte("invoice_date", previousYearStart)
-          .lte("invoice_date", previousYearEnd),
+      const [salesPrevYear, purchasesPrevYear] = await Promise.all([
+        fetchAllRecords<{ net_amount: number | null }>(() =>
+          supabase
+            .from("tab_sales_ledger")
+            .select("net_amount")
+            .eq("enterprise_id", enterpriseId)
+            .eq("is_annulled", false)
+            .gte("invoice_date", previousYearStart)
+            .lte("invoice_date", previousYearEnd)
+        ),
+        fetchAllRecords<{ net_amount: number | null }>(() =>
+          supabase
+            .from("tab_purchase_ledger")
+            .select("net_amount")
+            .eq("enterprise_id", enterpriseId)
+            .gte("invoice_date", previousYearStart)
+            .lte("invoice_date", previousYearEnd)
+        ),
       ]);
 
-      const ingresosPrevYear = (salesPrevYearRes.data || []).reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
-      const comprasPrevYear = (purchasesPrevYearRes.data || []).reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
+      const ingresosPrevYear = salesPrevYear.reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
+      const comprasPrevYear = purchasesPrevYear.reduce((sum, row) => sum + Number(row.net_amount || 0), 0);
       setIngresosAnioAnterior(ingresosPrevYear);
       setComprasAnioAnterior(comprasPrevYear);
 
