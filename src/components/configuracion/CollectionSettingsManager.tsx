@@ -146,6 +146,8 @@ export function CollectionSettingsManager() {
   }
 
   return (
+    <div className="space-y-4">
+    <EnterpriseModulesSection enterpriseId={enterpriseId} />
     <Card>
       <CardHeader>
         <CardTitle>Ajustes de Cobros y Pagos</CardTitle>
