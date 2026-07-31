@@ -315,11 +315,48 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
           <Button variant="outline" onClick={() => setShowGeneratePoliza(true)}>
             <FileText className="h-4 w-4 mr-1" /> Generar Póliza
           </Button>
-          <Button variant="outline" onClick={() => setShowInitial(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowInitial(true)}
+                    disabled={enterpriseModuleEnabled === false}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {enterpriseModuleEnabled === false && (
+                <TooltipContent>
+                  Activa el módulo para esta empresa en Configuración → Cobros y Pagos → Ajustes.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
+
+      {enterpriseModuleEnabled === false && (
+        <Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Seguimiento automático desactivado</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>
+              El seguimiento automático está desactivado para esta empresa. Las facturas nuevas no
+              generarán seguimiento hasta activarlo en Configuración → Cobros y Pagos → Ajustes.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/configuracion?tab=collection-settings")}
+            >
+              Ir a Ajustes
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {showAgingReport && (
         <Card>
