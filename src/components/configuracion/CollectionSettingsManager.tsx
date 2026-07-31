@@ -172,5 +172,6 @@ export function CollectionSettingsManager() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }
