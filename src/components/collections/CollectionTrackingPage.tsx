@@ -131,6 +131,23 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const rowRefs = useRef<Map<number, HTMLTableRowElement | null>>(new Map());
 
   const moduleEnabled = hasModule(direction);
+  const [enterpriseModuleEnabled, setEnterpriseModuleEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!selectedEnterprise || !moduleEnabled) { setEnterpriseModuleEnabled(null); return; }
+      const { data } = await supabase
+        .from("tab_enterprise_modules" as any)
+        .select("is_enabled")
+        .eq("enterprise_id", selectedEnterprise.id)
+        .eq("module_key", direction)
+        .maybeSingle();
+      if (cancelled) return;
+      setEnterpriseModuleEnabled(!!(data as any)?.is_enabled);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEnterprise, direction, moduleEnabled]);
 
   const load = useCallback(async () => {
     if (!selectedEnterprise || !moduleEnabled) {
