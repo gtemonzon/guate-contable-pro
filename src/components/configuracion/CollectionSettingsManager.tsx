@@ -103,7 +103,12 @@ function EnterpriseModulesSection({ enterpriseId }: { enterpriseId: number }) {
   );
 }
 
-
+export function CollectionSettingsManager() {
+  const enterpriseIdStr = typeof window !== "undefined" ? localStorage.getItem("currentEnterpriseId") : null;
+  const enterpriseId = enterpriseIdStr ? parseInt(enterpriseIdStr) : null;
+  const [adjust, setAdjust] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
