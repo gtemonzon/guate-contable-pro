@@ -2131,6 +2131,33 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_enterprise_modules: {
+        Row: {
+          enterprise_id: number
+          id: number
+          is_enabled: boolean
+          module_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enterprise_id: number
+          id?: number
+          is_enabled?: boolean
+          module_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enterprise_id?: number
+          id?: number
+          is_enabled?: boolean
+          module_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       tab_enterprise_tax_config: {
         Row: {
           created_at: string | null
