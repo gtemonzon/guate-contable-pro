@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -113,6 +114,7 @@ function AgingCell({ row }: { row: TrackingRow }) {
 
 export default function CollectionTrackingPage({ direction, title }: Props) {
   const { selectedEnterprise } = useEnterprise();
+  const navigate = useNavigate();
   const { hasModule, isLoading: tenantLoading } = useTenant();
   const [rows, setRows] = useState<TrackingRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -131,6 +133,23 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   const rowRefs = useRef<Map<number, HTMLTableRowElement | null>>(new Map());
 
   const moduleEnabled = hasModule(direction);
+  const [enterpriseModuleEnabled, setEnterpriseModuleEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!selectedEnterprise || !moduleEnabled) { setEnterpriseModuleEnabled(null); return; }
+      const { data } = await supabase
+        .from("tab_enterprise_modules" as any)
+        .select("is_enabled")
+        .eq("enterprise_id", selectedEnterprise.id)
+        .eq("module_key", direction)
+        .maybeSingle();
+      if (cancelled) return;
+      setEnterpriseModuleEnabled(!!(data as any)?.is_enabled);
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEnterprise, direction, moduleEnabled]);
 
   const load = useCallback(async () => {
     if (!selectedEnterprise || !moduleEnabled) {
@@ -298,11 +317,48 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
           <Button variant="outline" onClick={() => setShowGeneratePoliza(true)}>
             <FileText className="h-4 w-4 mr-1" /> Generar Póliza
           </Button>
-          <Button variant="outline" onClick={() => setShowInitial(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowInitial(true)}
+                    disabled={enterpriseModuleEnabled === false}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Cargar saldos iniciales
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {enterpriseModuleEnabled === false && (
+                <TooltipContent>
+                  Activa el módulo para esta empresa en Configuración → Cobros y Pagos → Ajustes.
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
+
+      {enterpriseModuleEnabled === false && (
+        <Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Seguimiento automático desactivado</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>
+              El seguimiento automático está desactivado para esta empresa. Las facturas nuevas no
+              generarán seguimiento hasta activarlo en Configuración → Cobros y Pagos → Ajustes.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/configuracion?tab=collection-settings")}
+            >
+              Ir a Ajustes
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {showAgingReport && (
         <Card>
