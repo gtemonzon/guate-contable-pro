@@ -196,6 +196,37 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   };
 
+  /** Shortcut: pressing "+" in the NIT field repeats the last NIT entered in this book */
+  const repeatLastNit = async () => {
+    if (!enterpriseId) return;
+    try {
+      const { data } = await supabase
+        .from("tab_purchase_ledger")
+        .select("supplier_nit, supplier_name")
+        .eq("enterprise_id", enterpriseId)
+        .is("deleted_at", null)
+        .not("supplier_nit", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data?.supplier_nit) return;
+      const nit = data.supplier_nit.replace(/[-\s]/g, "").toUpperCase();
+      handleFieldChange("supplier_nit", nit);
+      if (data.supplier_name) handleFieldChange("supplier_name", data.supplier_name);
+      if (nit && !validateNIT(nit)) {
+        setNitError("NIT inválido");
+      } else {
+        setNitError(null);
+        fetchSupplierMapping(nit);
+      }
+    } catch {
+      // Non-critical, ignore
+    }
+  };
+
+
+
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setHasChanges(true);
@@ -537,6 +568,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     handleFieldChange("supplier_name", name);
                     fetchSupplierMapping(nit);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "+") {
+                      e.preventDefault();
+                      repeatLastNit();
+                    }
+                  }}
+                  title="Presiona + para repetir el último NIT ingresado"
                   placeholder="123456789"
                   className={cn("h-8 text-xs", nitError && "border-destructive")}
                 />

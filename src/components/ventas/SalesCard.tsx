@@ -130,6 +130,31 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     onUpdate(index, field, value);
   };
 
+  /** Shortcut: pressing "+" in the NIT field repeats the last NIT entered in this book */
+  const repeatLastNit = async () => {
+    const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    if (!enterpriseId) return;
+    try {
+      const { data } = await supabase
+        .from("tab_sales_ledger")
+        .select("customer_nit, customer_name")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .not("customer_nit", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!data?.customer_nit) return;
+      const nit = data.customer_nit.replace(/[-\s]/g, "").toUpperCase();
+      handleFieldChange("customer_nit", nit);
+      if (data.customer_name) handleFieldChange("customer_name", data.customer_name);
+      setNitError(nit && !validateNIT(nit) ? "NIT inválido" : null);
+    } catch {
+      // Non-critical, ignore
+    }
+  };
+
+
   const restoreFocusById = (activeId?: string | null) => {
     if (!activeId) return;
     window.setTimeout(() => {
@@ -409,6 +434,13 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   handleFieldChange("customer_nit", nit);
                   handleFieldChange("customer_name", name);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "+") {
+                    e.preventDefault();
+                    repeatLastNit();
+                  }
+                }}
+                title="Presiona + para repetir el último NIT ingresado"
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}
               />
