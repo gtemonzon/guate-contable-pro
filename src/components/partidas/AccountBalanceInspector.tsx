@@ -383,9 +383,12 @@ export function AccountBalanceInspector({
             </div>
             <div>
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Saldo al {entryDate ? formattedDate(entryDate) : "—"}</p>
-              <p className={cn("text-sm font-bold tabular-nums", balanceColor(closingBalance))}>
-                {formatCurrency(closingBalance)}
-              </p>
+              <div className="flex items-center justify-center gap-1">
+                <p className={cn("text-sm font-bold tabular-nums", balanceColor(closingBalance))}>
+                  {formatCurrency(closingBalance)}
+                </p>
+                <CopyBalanceButton amount={closingBalance} />
+              </div>
             </div>
           </div>
         </div>
