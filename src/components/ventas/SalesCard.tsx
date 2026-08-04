@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { validateNIT } from "@/utils/nitValidation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +91,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
+  const { lookupNit } = useNitLookup();
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -389,12 +391,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   handleFieldChange("customer_nit", val);
                   if (nitError && validateNIT(val)) setNitError(null);
                 }}
-                onBlur={(e) => {
+                onBlur={async (e) => {
                   const val = e.target.value;
                   if (val && !validateNIT(val)) {
                     setNitError("NIT inválido");
-                  } else {
-                    setNitError(null);
+                    return;
+                  }
+                  setNitError(null);
+                  if (val && validateNIT(val) && !sale.customer_name?.trim()) {
+                    const result = await lookupNit(val);
+                    if (result?.found && result.name) {
+                      handleFieldChange("customer_name", result.name);
+                    }
                   }
                 }}
                 onSelectTaxpayer={(nit, name) => {

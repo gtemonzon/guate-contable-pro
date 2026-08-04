@@ -11,9 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, ChevronDown, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, TrendingUp, TrendingDown, Minus, RefreshCw, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface AccountBalanceInspectorProps {
   open: boolean;
@@ -41,6 +42,36 @@ interface LedgerRow {
 }
 
 const PAGE_SIZE = 200;
+
+function CopyBalanceButton({ amount }: { amount: number }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(Math.abs(amount).toFixed(2)).then(() => {
+      setCopied(true);
+      toast({ title: "Saldo copiado" });
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      className="shrink-0 p-0.5 rounded hover:bg-accent transition-colors"
+      onClick={handleCopy}
+      title="Copiar saldo"
+      aria-label="Copiar saldo al portapapeles"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
+    </button>
+  );
+}
 
 export function AccountBalanceInspector({
   open,
@@ -186,6 +217,7 @@ export function AccountBalanceInspector({
                 {formatCurrency(closingBalance)}
                 <BalanceTrend value={closingBalance} />
               </span>
+              <CopyBalanceButton amount={closingBalance} />
             </div>
           </div>
         </DialogHeader>
@@ -351,9 +383,12 @@ export function AccountBalanceInspector({
             </div>
             <div>
               <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Saldo al {entryDate ? formattedDate(entryDate) : "—"}</p>
-              <p className={cn("text-sm font-bold tabular-nums", balanceColor(closingBalance))}>
-                {formatCurrency(closingBalance)}
-              </p>
+              <div className="flex items-center justify-center gap-1">
+                <p className={cn("text-sm font-bold tabular-nums", balanceColor(closingBalance))}>
+                  {formatCurrency(closingBalance)}
+                </p>
+                <CopyBalanceButton amount={closingBalance} />
+              </div>
             </div>
           </div>
         </div>

@@ -498,6 +498,19 @@ export function useJournalEntryForm(
     }
   }, [headerDescription, entryToEdit]);
 
+  // Update the header description and keep inherited (non-customized) line
+  // descriptions in sync. Manually edited lines and the automatic bank line
+  // are left untouched.
+  const updateHeaderDescription = useCallback((value: string) => {
+    const previous = headerDescription;
+    setHeaderDescription(value);
+    setDetailLines(lines => lines.map(line => {
+      if (line.is_bank_line) return line;
+      const inherited = line.description === previous || line.description.trim() === "";
+      return inherited ? { ...line, description: value } : line;
+    }));
+  }, [headerDescription]);
+
   const hasUnsavedChanges = useCallback(() => {
     if (!initialSnapshotRef.current) return false;
     return serializeForDirtyCheck({ entryDate, entryType, periodId, documentReference, headerDescription, detailLines: detailLines.map(({ id, ...rest }) => rest) }) !== initialSnapshotRef.current;
@@ -1149,7 +1162,7 @@ export function useJournalEntryForm(
     // State
     loading, savingMode, isLoadingEntry, accounts, periods, nextEntryNumber,
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
-    documentReference, setDocumentReference, headerDescription, setHeaderDescription,
+    documentReference, setDocumentReference, headerDescription, setHeaderDescription: updateHeaderDescription,
     documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
