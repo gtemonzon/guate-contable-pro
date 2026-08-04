@@ -211,7 +211,7 @@ export function AccountBalanceInspector({
                 </span>
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap pr-8">
               {balanceBadge()}
               <span className={cn("text-xl font-bold tabular-nums", balanceColor(closingBalance))}>
                 {formatCurrency(closingBalance)}
