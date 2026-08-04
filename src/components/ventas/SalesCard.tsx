@@ -90,6 +90,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
+  const { lookupNit } = useNitLookup();
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
