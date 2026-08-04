@@ -217,6 +217,7 @@ export function AccountBalanceInspector({
                 {formatCurrency(closingBalance)}
                 <BalanceTrend value={closingBalance} />
               </span>
+              <CopyBalanceButton amount={closingBalance} />
             </div>
           </div>
         </DialogHeader>
