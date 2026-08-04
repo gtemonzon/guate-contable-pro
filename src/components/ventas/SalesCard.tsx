@@ -434,6 +434,13 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   handleFieldChange("customer_nit", nit);
                   handleFieldChange("customer_name", name);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "+") {
+                    e.preventDefault();
+                    repeatLastNit();
+                  }
+                }}
+                title="Presiona + para repetir el último NIT ingresado"
                 placeholder="123456789"
                 className={cn("h-8", nitError && "border-destructive")}
               />
