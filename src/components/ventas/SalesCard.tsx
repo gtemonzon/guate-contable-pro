@@ -389,12 +389,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                   handleFieldChange("customer_nit", val);
                   if (nitError && validateNIT(val)) setNitError(null);
                 }}
-                onBlur={(e) => {
+                onBlur={async (e) => {
                   const val = e.target.value;
                   if (val && !validateNIT(val)) {
                     setNitError("NIT inválido");
-                  } else {
-                    setNitError(null);
+                    return;
+                  }
+                  setNitError(null);
+                  if (val && validateNIT(val) && !sale.customer_name?.trim()) {
+                    const result = await lookupNit(val);
+                    if (result?.found && result.name) {
+                      handleFieldChange("customer_name", result.name);
+                    }
                   }
                 }}
                 onSelectTaxpayer={(nit, name) => {
