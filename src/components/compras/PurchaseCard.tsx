@@ -568,6 +568,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     handleFieldChange("supplier_name", name);
                     fetchSupplierMapping(nit);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "+") {
+                      e.preventDefault();
+                      repeatLastNit();
+                    }
+                  }}
+                  title="Presiona + para repetir el último NIT ingresado"
                   placeholder="123456789"
                   className={cn("h-8 text-xs", nitError && "border-destructive")}
                 />
