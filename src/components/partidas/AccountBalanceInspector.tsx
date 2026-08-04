@@ -43,6 +43,36 @@ interface LedgerRow {
 
 const PAGE_SIZE = 200;
 
+function CopyBalanceButton({ amount }: { amount: number }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(Math.abs(amount).toFixed(2)).then(() => {
+      setCopied(true);
+      toast({ title: "Saldo copiado" });
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      className="shrink-0 p-0.5 rounded hover:bg-accent transition-colors"
+      onClick={handleCopy}
+      title="Copiar saldo"
+      aria-label="Copiar saldo al portapapeles"
+    >
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
+    </button>
+  );
+}
+
 export function AccountBalanceInspector({
   open,
   onOpenChange,
