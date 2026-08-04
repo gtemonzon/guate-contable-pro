@@ -11,9 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, ChevronDown, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, TrendingUp, TrendingDown, Minus, RefreshCw, Copy, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface AccountBalanceInspectorProps {
   open: boolean;
