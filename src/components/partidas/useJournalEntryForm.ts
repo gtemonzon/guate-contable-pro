@@ -1162,7 +1162,7 @@ export function useJournalEntryForm(
     // State
     loading, savingMode, isLoadingEntry, accounts, periods, nextEntryNumber,
     entryDate, setEntryDate, entryType, setEntryType, periodId, setPeriodId,
-    documentReference, setDocumentReference, headerDescription, setHeaderDescription,
+    documentReference, setDocumentReference, headerDescription, setHeaderDescription: updateHeaderDescription,
     documentReferences, setDocumentReferences,
     bankAccountId, setBankAccountId, bankReference, setBankReference,
     beneficiaryName, setBeneficiaryName, bankDirection, setBankDirection, detailLines,
