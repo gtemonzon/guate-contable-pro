@@ -435,7 +435,7 @@ const Dashboard = () => {
       {/* Secondary cards (tax / bank / etc.) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {visibleCards.includes('partidas_pendientes')      && <DashboardPendingEntries enterpriseId={currentEntId} />}
-        {visibleCards.includes('saldos_bancarios')         && <DashboardBankBalances enterpriseId={currentEntId} />}
+        {visibleCards.includes('saldos_bancarios')         && <DashboardBankBalances enterpriseId={currentEntId} activePeriod={activePeriod} />}
         {visibleCards.includes('resumen_iva')              && <DashboardIVASummary ivaData={taxData.ivaData} loading={taxData.loading} monthName={taxData.monthName} year={taxData.referenceYear} />}
         {visibleCards.includes('proximos_vencimientos')    && <DashboardTaxDeadlines enterpriseId={currentEntId} />}
         {visibleCards.includes('resumen_isr_mensual')      && <DashboardISRMensualSummary data={taxData.isrMensualData} loading={taxData.loading} monthName={taxData.monthName} year={taxData.referenceYear} />}
