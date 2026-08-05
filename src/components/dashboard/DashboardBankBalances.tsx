@@ -6,18 +6,26 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 
+interface ActivePeriod {
+  id: number;
+  start_date: string;
+  end_date: string;
+}
+
 interface DashboardBankBalancesProps {
   enterpriseId: number | null;
+  activePeriod?: ActivePeriod | null;
 }
+
 
 const formatNumber = (num: number): string =>
   num.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function DashboardBankBalances({ enterpriseId }: DashboardBankBalancesProps) {
+export function DashboardBankBalances({ enterpriseId, activePeriod }: DashboardBankBalancesProps) {
   const navigate = useNavigate();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard-bank-balances", enterpriseId],
+    queryKey: ["dashboard-bank-balances", enterpriseId, activePeriod?.id],
     queryFn: async () => {
       if (!enterpriseId) return [];
 
@@ -36,16 +44,22 @@ export function DashboardBankBalances({ enterpriseId }: DashboardBankBalancesPro
           let balance = 0;
 
           if (ba.account_id) {
-            const movQuery = supabase
+            let movQuery = supabase
               .from("tab_journal_entry_details")
               .select(`
                 debit_amount,
                 credit_amount,
-                tab_journal_entries!inner(enterprise_id, is_posted)
+                tab_journal_entries!inner(enterprise_id, is_posted, entry_date)
               `)
               .eq("tab_journal_entries.enterprise_id", enterpriseId)
               .eq("tab_journal_entries.is_posted", true)
               .eq("account_id", ba.account_id);
+
+            if (activePeriod) {
+              movQuery = movQuery
+                .gte("tab_journal_entries.entry_date", activePeriod.start_date)
+                .lte("tab_journal_entries.entry_date", activePeriod.end_date);
+            }
 
             const movements = await fetchAllRecords<any>(movQuery);
             balance = movements.reduce(
@@ -68,6 +82,7 @@ export function DashboardBankBalances({ enterpriseId }: DashboardBankBalancesPro
     enabled: !!enterpriseId,
     refetchInterval: 5 * 60 * 1000,
   });
+
 
   const totalBalance = (data || []).reduce((s, a) => s + a.balance, 0);
 
