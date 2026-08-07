@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Shield, Clock, User, ChevronDown, ChevronRight,
-  ArrowRight, CheckCircle2, AlertCircle, Link2,
+  ArrowRight, Link2,
 } from "lucide-react";
 
 // ──────────────────────────────────────────────
@@ -27,7 +27,6 @@ interface AuditEvent {
   metadata_json: Record<string, unknown> | null;
   prev_row_hash: string | null;
   row_hash: string | null;
-  chain_valid?: boolean;
 }
 
 export interface EntityAuditLogProps {
@@ -120,11 +119,7 @@ function AuditEventRow({ event, showHashChain }: { event: AuditEvent; showHashCh
                       className="flex items-center gap-1 text-xs text-muted-foreground font-mono"
                       title={`Hash: ${event.row_hash ?? "—"}`}
                     >
-                      {event.chain_valid === false ? (
-                        <AlertCircle className="h-3 w-3 text-destructive" />
-                      ) : (
-                        <Link2 className="h-3 w-3 text-muted-foreground" />
-                      )}
+                      <Link2 className="h-3 w-3 text-muted-foreground" />
                       {hashShort(event.row_hash)}
                     </span>
                   )}
@@ -199,12 +194,6 @@ function AuditEventRow({ event, showHashChain }: { event: AuditEvent; showHashCh
               <div className="text-xs text-muted-foreground font-mono space-y-0.5 border-t pt-2">
                 <div className="flex gap-2"><span className="w-28 shrink-0">prev_hash:</span><span>{hashShort(event.prev_row_hash)}</span></div>
                 <div className="flex gap-2"><span className="w-28 shrink-0">row_hash:</span><span>{hashShort(event.row_hash)}</span></div>
-                {event.chain_valid === false && (
-                  <p className="text-destructive flex items-center gap-1 mt-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Cadena rota — este registro puede haber sido alterado
-                  </p>
-                )}
               </div>
             )}
 
@@ -229,7 +218,6 @@ export default function EntityAuditLog({
 }: EntityAuditLogProps) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
-  const [chainIntact, setChainIntact] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (visible && entityId) {
@@ -270,21 +258,7 @@ export default function EntityAuditLog({
         actor_name: e.actor_user_id ? (userMap[e.actor_user_id] ?? "Usuario") : "Sistema",
       }));
 
-      // Verify hash chain (client-side quick check)
-      // chain is ordered ASC for verification; events are DESC for display
-      const asc = [...enriched].reverse();
-      let prevHash: string | null = null;
-      let allValid = true;
-      const validityMap: Record<number, boolean> = {};
-      for (const ev of asc) {
-        const valid = ev.prev_row_hash === prevHash;
-        validityMap[ev.id] = valid;
-        if (!valid) allValid = false;
-        prevHash = ev.row_hash;
-      }
-
-      setChainIntact(enriched.length === 0 ? null : allValid);
-      setEvents(enriched.map((e) => ({ ...e, chain_valid: validityMap[e.id] })));
+      setEvents(enriched);
     } catch (err) {
       console.error("Error fetching audit events:", err);
     } finally {
@@ -322,21 +296,6 @@ export default function EntityAuditLog({
 
   return (
     <div className="space-y-3">
-      {/* Chain integrity banner */}
-      {showHashChain && chainIntact !== null && (
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
-          chainIntact
-            ? "bg-success/10 border-success/30 text-success"
-            : "bg-destructive/10 border-destructive/30 text-destructive"
-        }`}>
-          {chainIntact ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <span className="font-medium">
-            {chainIntact ? "Cadena de hashes íntegra — no se detectaron alteraciones" : "⚠ Cadena rota — posible alteración detectada"}
-          </span>
-          <span className="ml-auto font-mono opacity-60">{events.length} evento{events.length !== 1 ? "s" : ""}</span>
-        </div>
-      )}
-
       <ScrollArea className="h-[420px] pr-2">
         <div className="relative pl-6">
           <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
@@ -347,6 +306,11 @@ export default function EntityAuditLog({
           </div>
         </div>
       </ScrollArea>
+
+      <p className="text-[11px] text-muted-foreground leading-snug pt-1">
+        La integridad global de la cadena de auditoría se verifica a nivel de todo el sistema en
+        Configuración → Sistema → Integridad.
+      </p>
     </div>
   );
 }
