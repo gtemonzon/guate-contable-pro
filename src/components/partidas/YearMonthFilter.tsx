@@ -13,6 +13,10 @@ interface YearMonthFilterProps {
   onMonthsChange: (months: number[]) => void;
   /** Optional override for available years and per-year counts (used when entries are loaded lazily by year). */
   yearCountsOverride?: Record<string, number>;
+  /** Compact mode: shows only the selected chip (used when the page header is compressed on scroll). */
+  compact?: boolean;
+  /** Called when the user clicks the compact chip, to request re-expansion. */
+  onExpandRequest?: () => void;
 }
 
 const MONTH_NAMES = [
