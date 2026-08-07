@@ -36,6 +36,8 @@ export default function YearMonthFilter({
   onYearChange,
   onMonthsChange,
   yearCountsOverride,
+  compact = false,
+  onExpandRequest,
 }: YearMonthFilterProps) {
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
