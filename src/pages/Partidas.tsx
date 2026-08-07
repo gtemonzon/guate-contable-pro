@@ -575,11 +575,18 @@ export default function Partidas() {
   const entryList = (
     <div className="flex flex-col h-full">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-muted/80 backdrop-blur-sm pt-4 pb-3 px-4 border-b">
-        <div className="flex justify-between items-center mb-3">
+      <div className={cn(
+        "sticky top-0 z-20 bg-muted/80 backdrop-blur-sm px-4 border-b transition-all duration-200",
+        headerCompact ? "pt-2 pb-2" : "pt-4 pb-3"
+      )}>
+        <div className={cn("flex justify-between items-center transition-all duration-200", headerCompact ? "mb-2" : "mb-3")}>
           <div>
-            <h1 className="text-2xl font-bold leading-tight">Partidas Contables</h1>
-            <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
+            <h1 className={cn("font-bold leading-tight transition-all duration-200", headerCompact ? "text-base" : "text-2xl")}>
+              Partidas Contables
+            </h1>
+            {!headerCompact && (
+              <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {permissions.canApproveEntries && pendingReviewCount > 0 && (
@@ -603,20 +610,22 @@ export default function Partidas() {
             </Tooltip>
             {permissions.canCreateEntries && (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowFxWizard(true)}
-                      disabled={!currentEnterpriseId}
-                    >
-                      <RefreshCw className="mr-1.5 h-4 w-4" />
-                      Revaluación FX
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Revaluación cambiaria — Diferencial NO realizado</TooltipContent>
-                </Tooltip>
+                {hasForeignCurrencies && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowFxWizard(true)}
+                        disabled={!currentEnterpriseId}
+                      >
+                        <RefreshCw className="mr-1.5 h-4 w-4" />
+                        Revaluación FX
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Revaluación cambiaria — Diferencial NO realizado</TooltipContent>
+                  </Tooltip>
+                )}
                 <Button size="sm" onClick={() => setShowEditDialog(true)}>
                   <Plus className="mr-1.5 h-4 w-4" />
                   Nueva
@@ -629,8 +638,8 @@ export default function Partidas() {
           </div>
         </div>
 
-        {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Period Row */}
+        <div className={cn("transition-all duration-200", headerCompact ? "mb-2" : "mb-2")}>
           <YearMonthFilter
             entries={entries}
             selectedYear={filterYear}
@@ -638,16 +647,20 @@ export default function Partidas() {
             onYearChange={setFilterYear}
             onMonthsChange={setFilterMonths}
             yearCountsOverride={yearCounts}
+            compact={headerCompact}
+            onExpandRequest={() => setForceExpanded(true)}
           />
-          
-          <div className="h-5 w-px bg-border" />
-          
+        </div>
+
+        {/* Filter Row */}
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
             <SelectTrigger className="w-[130px] h-8 text-xs">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
+
               <SelectItem value="borrador">Borrador</SelectItem>
               <SelectItem value="pendiente_revision">Pendiente</SelectItem>
               <SelectItem value="aprobado">Aprobado</SelectItem>
