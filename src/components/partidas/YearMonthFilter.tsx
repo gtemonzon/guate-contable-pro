@@ -140,6 +140,32 @@ export default function YearMonthFilter({
     return selectedYear === year;
   };
 
+  // Modo compacto: solo el chip seleccionado (año o "Todo")
+  if (compact) {
+    const label = selectedYear && selectedYear !== "all" ? selectedYear : "Todo";
+    const count = selectedYear && selectedYear !== "all"
+      ? (countByYear[selectedYear] || 0)
+      : (countByYear.all || 0);
+    return (
+      <div className="flex items-center gap-2">
+        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 text-xs transition-all"
+          onClick={() => onExpandRequest?.()}
+          title="Mostrar todos los períodos"
+        >
+          {label}
+          <Badge variant="secondary" className="ml-2 text-[10px]">
+            {count}
+          </Badge>
+          <ChevronDown className="ml-1 h-3 w-3" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {/* Selector de Años */}
