@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -139,12 +139,15 @@ export default function Partidas() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Compactación progresiva del encabezado al hacer scroll
-  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  // Se usa un callback ref: el contenedor se re-monta al abrir/cerrar el split view,
+  // por lo que un useEffect con ref.current perdería el listener.
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
   const [isCompact, setIsCompact] = useState(false);
   const [forceExpanded, setForceExpanded] = useState(false);
 
-  useEffect(() => {
-    const el = listScrollRef.current;
+  const listScrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollCleanupRef.current?.();
+    scrollCleanupRef.current = null;
     if (!el) return;
     let ticking = false;
     const onScroll = () => {
@@ -158,10 +161,15 @@ export default function Partidas() {
       });
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [loading]);
+    // sincroniza el estado con la posición actual al (re)montar
+    setIsCompact(el.scrollTop > 40);
+    scrollCleanupRef.current = () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => () => scrollCleanupRef.current?.(), []);
 
   const headerCompact = isCompact && !forceExpanded;
+
 
   // Mostrar "Revaluación FX" solo si la empresa tiene monedas adicionales activas
   const { data: hasForeignCurrencies = false } = useQuery({
@@ -572,6 +580,101 @@ export default function Partidas() {
     );
   }
 
+  const periodFilterEl = (
+    <YearMonthFilter
+      entries={entries}
+      selectedYear={filterYear}
+      selectedMonths={filterMonths}
+      onYearChange={setFilterYear}
+      onMonthsChange={setFilterMonths}
+      yearCountsOverride={yearCounts}
+      compact={headerCompact}
+      onExpandRequest={() => setForceExpanded(true)}
+    />
+  );
+
+  const filterControlsEl = (
+    <>
+      <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <SelectTrigger className={cn("h-8 text-xs", headerCompact ? "w-[110px]" : "w-[130px]")}>
+          <SelectValue placeholder="Estado" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="borrador">Borrador</SelectItem>
+          <SelectItem value="pendiente_revision">Pendiente</SelectItem>
+          <SelectItem value="aprobado">Aprobado</SelectItem>
+          <SelectItem value="contabilizado">Contabilizado</SelectItem>
+          <SelectItem value="rechazado">Rechazado</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={filterType} onValueChange={setFilterType}>
+        <SelectTrigger className={cn("h-8 text-xs", headerCompact ? "w-[95px]" : "w-[110px]")}>
+          <SelectValue placeholder="Tipo" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos tipos</SelectItem>
+          <SelectItem value="apertura">Apertura</SelectItem>
+          <SelectItem value="diario">Diario</SelectItem>
+          <SelectItem value="ajuste">Ajuste</SelectItem>
+          <SelectItem value="cierre">Cierre</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Input
+        placeholder={headerCompact ? "Buscar..." : "Buscar #, ref, cheque..."}
+        value={filterNumber}
+        onChange={(e) => setFilterNumber(e.target.value)}
+        className={cn("h-8 text-xs", headerCompact ? "w-[90px]" : "w-[120px]")}
+      />
+
+      {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
+        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs px-2">
+          Limpiar
+        </Button>
+      )}
+
+      {!headerCompact && <div className="flex-1" />}
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant={sortField === 'date' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-7 text-xs px-2 gap-1"
+          onClick={() => toggleSort('date')}
+        >
+          Fecha
+          {sortField === 'date' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        </Button>
+        <Button
+          variant={sortField === 'number' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-7 text-xs px-2 gap-1"
+          onClick={() => toggleSort('number')}
+        >
+          No.
+          {sortField === 'number' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        </Button>
+      </div>
+
+      <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+        <SelectTrigger className="w-[55px] h-7 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="10">10</SelectItem>
+          <SelectItem value="25">25</SelectItem>
+          <SelectItem value="50">50</SelectItem>
+          <SelectItem value="100">100</SelectItem>
+        </SelectContent>
+      </Select>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
+        {filteredEntries.length}
+      </span>
+    </>
+  );
+
   const entryList = (
     <div className="flex flex-col h-full">
       {/* Sticky Header */}
@@ -579,16 +682,25 @@ export default function Partidas() {
         "sticky top-0 z-20 bg-muted/80 backdrop-blur-sm px-4 border-b transition-all duration-200",
         headerCompact ? "pt-2 pb-2" : "pt-4 pb-3"
       )}>
-        <div className={cn("flex justify-between items-center transition-all duration-200", headerCompact ? "mb-2" : "mb-3")}>
-          <div>
-            <h1 className={cn("font-bold leading-tight transition-all duration-200", headerCompact ? "text-base" : "text-2xl")}>
-              Partidas Contables
-            </h1>
-            {!headerCompact && (
+        <div className={cn(
+          "flex justify-between items-center gap-2 transition-all duration-200",
+          headerCompact ? "mb-0" : "mb-3"
+        )}>
+          {headerCompact ? (
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 overflow-x-auto">
+              <h1 className="font-bold leading-tight text-sm whitespace-nowrap mr-1">Partidas</h1>
+              {periodFilterEl}
+              {filterControlsEl}
+            </div>
+          ) : (
+            <div>
+              <h1 className="font-bold leading-tight text-2xl transition-all duration-200">
+                Partidas Contables
+              </h1>
               <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
+            </div>
+          )}
+          <div className="flex items-center gap-2 shrink-0">
             {permissions.canApproveEntries && pendingReviewCount > 0 && (
               <Badge variant="outline" className="border-amber-400 text-amber-600 dark:text-amber-400 gap-1">
                 <AlertCircle className="h-3 w-3" />
@@ -610,7 +722,7 @@ export default function Partidas() {
             </Tooltip>
             {permissions.canCreateEntries && (
               <>
-                {hasForeignCurrencies && (
+                {hasForeignCurrencies && !headerCompact && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -629,111 +741,28 @@ export default function Partidas() {
                 <Button size="sm" onClick={() => setShowEditDialog(true)}>
                   <Plus className="mr-1.5 h-4 w-4" />
                   Nueva
-                  <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
-                    Alt+N
-                  </kbd>
+                  {!headerCompact && (
+                    <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                      Alt+N
+                    </kbd>
+                  )}
                 </Button>
               </>
             )}
           </div>
         </div>
 
-        {/* Period Row */}
-        <div className={cn("transition-all duration-200", headerCompact ? "mb-2" : "mb-2")}>
-          <YearMonthFilter
-            entries={entries}
-            selectedYear={filterYear}
-            selectedMonths={filterMonths}
-            onYearChange={setFilterYear}
-            onMonthsChange={setFilterMonths}
-            yearCountsOverride={yearCounts}
-            compact={headerCompact}
-            onExpandRequest={() => setForceExpanded(true)}
-          />
-        </div>
+        {!headerCompact && (
+          <>
+            {/* Period Row */}
+            <div className="mb-2 transition-all duration-200">{periodFilterEl}</div>
 
-        {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[130px] h-8 text-xs">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-
-              <SelectItem value="borrador">Borrador</SelectItem>
-              <SelectItem value="pendiente_revision">Pendiente</SelectItem>
-              <SelectItem value="aprobado">Aprobado</SelectItem>
-              <SelectItem value="contabilizado">Contabilizado</SelectItem>
-              <SelectItem value="rechazado">Rechazado</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[110px] h-8 text-xs">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos tipos</SelectItem>
-              <SelectItem value="apertura">Apertura</SelectItem>
-              <SelectItem value="diario">Diario</SelectItem>
-              <SelectItem value="ajuste">Ajuste</SelectItem>
-              <SelectItem value="cierre">Cierre</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Input
-            placeholder="Buscar #, ref, cheque..."
-            value={filterNumber}
-            onChange={(e) => setFilterNumber(e.target.value)}
-            className="w-[120px] h-8 text-xs"
-          />
-
-          {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs px-2">
-              Limpiar
-            </Button>
-          )}
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-1">
-            <Button
-              variant={sortField === 'date' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs px-2 gap-1"
-              onClick={() => toggleSort('date')}
-            >
-              Fecha
-              {sortField === 'date' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-            </Button>
-            <Button
-              variant={sortField === 'number' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs px-2 gap-1"
-              onClick={() => toggleSort('number')}
-            >
-              No.
-              {sortField === 'number' && (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-            </Button>
-          </div>
-
-          <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
-            <SelectTrigger className="w-[55px] h-7 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {filteredEntries.length}
-          </span>
-        </div>
+            {/* Filter Row */}
+            <div className="flex flex-wrap items-center gap-2">{filterControlsEl}</div>
+          </>
+        )}
       </div>
+
 
       {/* Scrollable list */}
       <div ref={listScrollRef} className="flex-1 overflow-auto px-4 py-3">
