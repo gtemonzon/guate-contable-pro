@@ -356,7 +356,7 @@ export function useAlertGenerator() {
           .lte('due_date', horizonStr);
 
         const rows = dueRows || [];
-        if (rows.length === 0) continue;
+        if (rows.length === 0) { await clearUnread(alertType); continue; }
 
         const todayStr = today.toISOString().split('T')[0];
         const hasOverdue = rows.some((r: any) => r.due_date < todayStr);
