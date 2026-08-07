@@ -238,73 +238,79 @@ export function useAlertGenerator() {
         }
       }
 
-      // 3. Check for draft journal entries older than 7 days
+      // Helper: elimina notificaciones no leídas de un tipo (supersede / auto-sanado)
+      const clearUnread = async (type: string) => {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', type)
+          .eq('is_read', false);
+      };
+
+      // 3. Check for draft journal entries older than N days
       const alertConfigDrafts = getAlertConfig('partida_borrador');
       if (alertConfigDrafts.is_enabled) {
-        const sevenDaysAgo = subDays(today, alertConfigDrafts.days_before || 7);
+        const draftDays = alertConfigDrafts.days_before || 7;
+        const sevenDaysAgo = subDays(today, draftDays);
 
         const { data: draftEntries, count } = await supabase
           .from('tab_journal_entries')
-          .select('id', { count: 'exact' })
+          .select('id, entry_number', { count: 'exact' })
           .eq('enterprise_id', enterpriseId)
           .in('status', ['borrador', 'pendiente_revision'])
-          .lt('created_at', sevenDaysAgo.toISOString());
+          .lt('created_at', sevenDaysAgo.toISOString())
+          .order('entry_date', { ascending: false });
+
+        // Siempre reemplazar/limpiar las pendientes previas no leídas
+        await clearUnread('partida_borrador');
 
         if (count && count > 0) {
-          const existingCheck = await supabase
-            .from('tab_notifications')
-            .select('id')
-            .eq('enterprise_id', enterpriseId)
-            .eq('notification_type', 'partida_borrador')
-            .gte('created_at', subDays(today, 1).toISOString())
-            .limit(1);
+          const numbers = (draftEntries || [])
+            .map((e: any) => e.entry_number)
+            .filter(Boolean);
+          const shown = numbers.slice(0, 3).join(', ');
+          const extra = numbers.length > 3 ? ` (+${numbers.length - 3} más)` : '';
+          const detail = shown ? ` Pendientes: ${shown}${extra}.` : '';
 
-          if (!(existingCheck.data || []).length) {
-            await createAlert(
-              'partida_borrador',
-              `${count} partida${count > 1 ? 's' : ''} en borrador`,
-              `Hay ${count} partida${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} de revisión con más de ${alertConfigDrafts.days_before || 7} días.`,
-              today,
-              count > 10 ? 'urgente' : 'importante',
-              '/partidas'
-            );
-          }
+          await createAlert(
+            'partida_borrador',
+            `${count} partida${count > 1 ? 's' : ''} en borrador`,
+            `Hay ${count} partida${count > 1 ? 's' : ''} pendiente${count > 1 ? 's' : ''} de revisión con más de ${draftDays} días.${detail}`,
+            today,
+            count > 10 ? 'urgente' : 'importante',
+            '/partidas'
+          );
         }
       }
 
       // 4. Check for pending bank reconciliations
       const alertConfigConciliacion = getAlertConfig('conciliacion_pendiente');
       if (alertConfigConciliacion.is_enabled) {
-        const thirtyDaysAgo = subDays(today, alertConfigConciliacion.days_before || 30);
+        const reconDays = alertConfigConciliacion.days_before || 30;
+        const thirtyDaysAgo = subDays(today, reconDays);
 
-        const { data: pendingMovements, count: movCount } = await supabase
+        const { count: movCount } = await supabase
           .from('tab_bank_movements')
-          .select('id', { count: 'exact' })
+          .select('id', { count: 'exact', head: true })
           .eq('enterprise_id', enterpriseId)
           .eq('is_reconciled', false)
           .lt('movement_date', thirtyDaysAgo.toISOString().split('T')[0]);
 
-        if (movCount && movCount > 0) {
-          const existingCheck = await supabase
-            .from('tab_notifications')
-            .select('id')
-            .eq('enterprise_id', enterpriseId)
-            .eq('notification_type', 'conciliacion_pendiente')
-            .gte('created_at', subDays(today, 1).toISOString())
-            .limit(1);
+        await clearUnread('conciliacion_pendiente');
 
-          if (!(existingCheck.data || []).length) {
-            await createAlert(
-              'conciliacion_pendiente',
-              'Movimientos bancarios sin conciliar',
-              `Hay ${movCount} movimiento${movCount > 1 ? 's' : ''} bancario${movCount > 1 ? 's' : ''} con más de ${alertConfigConciliacion.days_before || 30} días sin conciliar.`,
-              today,
-              movCount > 20 ? 'urgente' : 'importante',
-              '/conciliacion'
-            );
-          }
+        if (movCount && movCount > 0) {
+          await createAlert(
+            'conciliacion_pendiente',
+            'Movimientos bancarios sin conciliar',
+            `Hay ${movCount} movimiento${movCount > 1 ? 's' : ''} bancario${movCount > 1 ? 's' : ''} con más de ${reconDays} días sin conciliar.`,
+            today,
+            movCount > 20 ? 'urgente' : 'importante',
+            '/conciliacion'
+          );
         }
       }
+
 
       // 4b. Collections tracking (CxC / CxP) — aggregated notification per direction
       // Module must be enabled at BOTH levels: enterprise and tenant.
