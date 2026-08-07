@@ -139,12 +139,15 @@ export default function Partidas() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Compactación progresiva del encabezado al hacer scroll
-  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  // Se usa un callback ref: el contenedor se re-monta al abrir/cerrar el split view,
+  // por lo que un useEffect con ref.current perdería el listener.
+  const scrollCleanupRef = useRef<(() => void) | null>(null);
   const [isCompact, setIsCompact] = useState(false);
   const [forceExpanded, setForceExpanded] = useState(false);
 
-  useEffect(() => {
-    const el = listScrollRef.current;
+  const listScrollRef = useCallback((el: HTMLDivElement | null) => {
+    scrollCleanupRef.current?.();
+    scrollCleanupRef.current = null;
     if (!el) return;
     let ticking = false;
     const onScroll = () => {
@@ -158,10 +161,15 @@ export default function Partidas() {
       });
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [loading]);
+    // sincroniza el estado con la posición actual al (re)montar
+    setIsCompact(el.scrollTop > 40);
+    scrollCleanupRef.current = () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => () => scrollCleanupRef.current?.(), []);
 
   const headerCompact = isCompact && !forceExpanded;
+
 
   // Mostrar "Revaluación FX" solo si la empresa tiene monedas adicionales activas
   const { data: hasForeignCurrencies = false } = useQuery({
