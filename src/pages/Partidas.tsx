@@ -137,6 +137,46 @@ export default function Partidas() {
   const permissions = useUserPermissions();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Compactación progresiva del encabezado al hacer scroll
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  const [isCompact, setIsCompact] = useState(false);
+  const [forceExpanded, setForceExpanded] = useState(false);
+
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const compact = el.scrollTop > 40;
+        setIsCompact(compact);
+        if (!compact) setForceExpanded(false);
+        ticking = false;
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [loading]);
+
+  const headerCompact = isCompact && !forceExpanded;
+
+  // Mostrar "Revaluación FX" solo si la empresa tiene monedas adicionales activas
+  const { data: hasForeignCurrencies = false } = useQuery({
+    queryKey: ['enterprise-foreign-currencies', currentEnterpriseId],
+    enabled: !!currentEnterpriseId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tab_enterprise_currencies')
+        .select('currency_code')
+        .eq('enterprise_id', parseInt(currentEnterpriseId!))
+        .eq('is_active', true);
+      if (error) return false;
+      return (data || []).length > 0;
+    },
+  });
+
   // Listen for quick-action from command palette
   useEffect(() => {
     const handler = () => {
