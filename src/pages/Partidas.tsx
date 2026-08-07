@@ -736,7 +736,7 @@ export default function Partidas() {
       </div>
 
       {/* Scrollable list */}
-      <div className="flex-1 overflow-auto px-4 py-3">
+      <div ref={listScrollRef} className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
           <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
         ) : filteredEntries.length === 0 ? (
