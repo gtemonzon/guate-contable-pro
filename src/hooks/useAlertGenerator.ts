@@ -340,8 +340,8 @@ export function useAlertGenerator() {
       for (const dir of ['cxc', 'cxp'] as const) {
         const alertType = `vencimiento_${dir}`;
         const cfg = getAlertConfig(alertType);
-        if (!cfg.is_enabled) continue;
-        if (!moduleEnabled(dir)) continue;
+        if (!cfg.is_enabled) { await clearUnread(alertType); continue; }
+        if (!moduleEnabled(dir)) { await clearUnread(alertType); continue; }
 
         const horizon = new Date(today);
         horizon.setDate(horizon.getDate() + (cfg.days_before || 5));
