@@ -4562,12 +4562,9 @@ export type Database = {
           id: number
           is_active: boolean | null
           logo_url: string | null
-          max_enterprises: number | null
-          max_users: number | null
           pdf_font_family: string
           pdf_font_size: number
           plan_expires_at: string | null
-          plan_type: string | null
           primary_color: string | null
           secondary_color: string | null
           subdomain: string | null
@@ -4582,12 +4579,9 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           logo_url?: string | null
-          max_enterprises?: number | null
-          max_users?: number | null
           pdf_font_family?: string
           pdf_font_size?: number
           plan_expires_at?: string | null
-          plan_type?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           subdomain?: string | null
@@ -4602,12 +4596,9 @@ export type Database = {
           id?: number
           is_active?: boolean | null
           logo_url?: string | null
-          max_enterprises?: number | null
-          max_users?: number | null
           pdf_font_family?: string
           pdf_font_size?: number
           plan_expires_at?: string | null
-          plan_type?: string | null
           primary_color?: string | null
           secondary_color?: string | null
           subdomain?: string | null
