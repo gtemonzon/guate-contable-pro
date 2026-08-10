@@ -12,9 +12,6 @@ interface Tenant {
   contact_email: string | null;
   contact_phone: string | null;
   is_active: boolean;
-  max_enterprises: number;
-  max_users: number;
-  plan_type: string;
   pdf_font_family: string;
   pdf_font_size: number;
 }

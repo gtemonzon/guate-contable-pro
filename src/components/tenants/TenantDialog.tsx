@@ -45,9 +45,6 @@ interface Tenant {
   contact_email: string | null;
   contact_phone: string | null;
   is_active: boolean;
-  max_enterprises: number;
-  max_users: number;
-  plan_type: string;
 }
 
 const formSchema = z.object({
@@ -58,9 +55,6 @@ const formSchema = z.object({
   contact_phone: z.string().optional(),
   primary_color: z.string().default("#1e40af"),
   secondary_color: z.string().default("#3b82f6"),
-  max_enterprises: z.number().min(1).default(10),
-  max_users: z.number().min(1).default(5),
-  plan_type: z.enum(["basic", "professional", "enterprise"]).default("basic"),
   is_active: z.boolean().default(true),
 });
 
@@ -102,9 +96,6 @@ export function TenantDialog({
       contact_phone: "",
       primary_color: "#1e40af",
       secondary_color: "#3b82f6",
-      max_enterprises: 10,
-      max_users: 5,
-      plan_type: "basic",
       is_active: true,
     },
   });
@@ -119,9 +110,6 @@ export function TenantDialog({
         contact_phone: tenant.contact_phone || "",
         primary_color: tenant.primary_color,
         secondary_color: tenant.secondary_color,
-        max_enterprises: tenant.max_enterprises,
-        max_users: tenant.max_users,
-        plan_type: tenant.plan_type as "basic" | "professional" | "enterprise",
         is_active: tenant.is_active,
       });
       setLogoUrl(tenant.logo_url);
@@ -147,9 +135,6 @@ export function TenantDialog({
         contact_phone: "",
         primary_color: "#1e40af",
         secondary_color: "#3b82f6",
-        max_enterprises: 10,
-        max_users: 5,
-        plan_type: "basic",
         is_active: true,
       });
       setLogoUrl(null);
@@ -234,9 +219,6 @@ export function TenantDialog({
         contact_phone: values.contact_phone || null,
         primary_color: values.primary_color,
         secondary_color: values.secondary_color,
-        max_enterprises: values.max_enterprises,
-        max_users: values.max_users,
-        plan_type: values.plan_type,
         is_active: values.is_active,
         logo_url: logoUrl,
       };
@@ -325,31 +307,7 @@ export function TenantDialog({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="plan_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Plan</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="basic">Básico</SelectItem>
-                        <SelectItem value="professional">Profesional</SelectItem>
-                        <SelectItem value="enterprise">Empresarial</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
             </div>
 
             <FormField
@@ -505,45 +463,6 @@ export function TenantDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="max_enterprises"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Máx. Empresas</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        min={1}
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="max_users"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Máx. Usuarios</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        min={1}
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
             {/* Módulos habilitados */}
             <div className="space-y-2 rounded-lg border p-4">
