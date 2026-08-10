@@ -20,9 +20,6 @@ interface Tenant {
   contact_email: string | null;
   contact_phone: string | null;
   is_active: boolean;
-  max_enterprises: number;
-  max_users: number;
-  plan_type: string;
   created_at: string;
   enterprise_count?: number;
   user_count?: number;
@@ -113,16 +110,6 @@ const Tenants = () => {
     );
   });
 
-  const getPlanBadgeVariant = (plan: string) => {
-    switch (plan) {
-      case "enterprise":
-        return "default";
-      case "professional":
-        return "secondary";
-      default:
-        return "outline";
-    }
-  };
 
   if (loading) {
     return (
@@ -220,9 +207,6 @@ const Tenants = () => {
                       <CardDescription>{tenant.tenant_code}</CardDescription>
                     </div>
                   </div>
-                  <Badge variant={getPlanBadgeVariant(tenant.plan_type)}>
-                    {tenant.plan_type}
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -233,7 +217,7 @@ const Tenants = () => {
                       <span>Empresas</span>
                     </div>
                     <span className="font-medium">
-                      {tenant.enterprise_count} / {tenant.max_enterprises}
+                      {tenant.enterprise_count}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
@@ -242,7 +226,7 @@ const Tenants = () => {
                       <span>Usuarios</span>
                     </div>
                     <span className="font-medium">
-                      {tenant.user_count} / {tenant.max_users}
+                      {tenant.user_count}
                     </span>
                   </div>
                   {tenant.contact_email && (

@@ -358,9 +358,6 @@ export default function TenantSettings() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
             <Row label="Código de oficina" value={currentTenant.tenant_code} />
             <Row label="Subdominio" value={currentTenant.subdomain ?? "—"} />
-            <Row label="Plan" value={<Badge variant="secondary">{currentTenant.plan_type}</Badge>} />
-            <Row label="Máx. empresas" value={currentTenant.max_enterprises.toString()} />
-            <Row label="Máx. usuarios" value={currentTenant.max_users.toString()} />
             <Row
               label="Estado"
               value={
