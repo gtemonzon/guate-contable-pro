@@ -7,6 +7,7 @@ import { FelDocumentTypesManager } from "@/components/configuracion/FelDocumentT
 import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalEntryPrefixesManager";
 import { EnterpriseAccountsManager } from "@/components/configuracion/EnterpriseAccountsManager";
 import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
+import { CashFlowClassificationManager } from "@/components/configuracion/CashFlowClassificationManager";
 import { EnterpriseTaxConfigManager } from "@/components/configuracion/EnterpriseTaxConfigManager";
 import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix";
 import { AlertConfigManager } from "@/components/configuracion/AlertConfigManager";
