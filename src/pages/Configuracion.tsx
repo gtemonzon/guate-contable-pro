@@ -53,6 +53,7 @@ export default function Configuracion() {
         tabs: [
           { value: "enterprise-accounts", label: "Cuentas Contables", render: () => <EnterpriseAccountsManager /> },
           { value: "financial-statements", label: "Estados Financieros", render: () => <FinancialStatementDesigner /> },
+          { value: "cash-flow", label: "Flujo de Efectivo", render: () => <CashFlowClassificationManager /> },
           {
             value: "operation-types",
             label: "Tipos de Operaciones",
