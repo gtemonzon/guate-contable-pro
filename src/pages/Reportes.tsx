@@ -11,6 +11,7 @@ import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
 import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 import ReporteVariaciones from "@/components/reportes/ReporteVariaciones";
 import ReporteFacturasPorCuenta from "@/components/reportes/ReporteFacturasPorCuenta";
+import ReporteFlujoEfectivo from "@/components/reportes/ReporteFlujoEfectivo";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 
 export default function Reportes() {
@@ -35,7 +36,7 @@ export default function Reportes() {
     });
   };
 
-  const gridCols = combined ? "grid-cols-8" : "grid-cols-9";
+  const gridCols = combined ? "grid-cols-9" : "grid-cols-10";
 
   return (
     <div className="p-8 space-y-6">
@@ -62,6 +63,7 @@ export default function Reportes() {
           <TabsTrigger value="balance">Balance</TabsTrigger>
           <TabsTrigger value="resultados">Resultados</TabsTrigger>
           <TabsTrigger value="variaciones">Variaciones</TabsTrigger>
+          <TabsTrigger value="flujo-efectivo">Flujo de Efectivo</TabsTrigger>
           <TabsTrigger value="facturas-por-cuenta">Fact x Cta</TabsTrigger>
         </TabsList>
 
@@ -97,9 +99,13 @@ export default function Reportes() {
         <TabsContent value="variaciones">
           <Card><CardContent className="pt-6"><ReporteVariaciones /></CardContent></Card>
         </TabsContent>
+        <TabsContent value="flujo-efectivo">
+          <Card><CardContent className="pt-6"><ReporteFlujoEfectivo /></CardContent></Card>
+        </TabsContent>
         <TabsContent value="facturas-por-cuenta">
           <Card><CardContent className="pt-6"><ReporteFacturasPorCuenta /></CardContent></Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );
