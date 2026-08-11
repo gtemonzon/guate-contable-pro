@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { BookOpen, BarChart3, FolderOpen } from "lucide-react";
 import ReporteCompras from "@/components/reportes/ReporteCompras";
 import ReporteVentas from "@/components/reportes/ReporteVentas";
 import ReporteComprasVentas from "@/components/reportes/ReporteComprasVentas";
@@ -12,101 +14,153 @@ import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 import ReporteVariaciones from "@/components/reportes/ReporteVariaciones";
 import ReporteFacturasPorCuenta from "@/components/reportes/ReporteFacturasPorCuenta";
 import ReporteFlujoEfectivo from "@/components/reportes/ReporteFlujoEfectivo";
+import ReporteSaldos from "@/components/reportes/ReporteSaldos";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
+
+type SubTab = {
+  value: string;
+  label: string;
+  render: () => JSX.Element;
+  bare?: boolean;
+};
+
+type Category = {
+  value: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tabs: SubTab[];
+};
 
 export default function Reportes() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { strategy } = useEnterpriseTaxRegime();
   const combined = strategy.combinedBook;
-  const defaultTab = combined ? "compras-ventas" : "compras";
-  const rawTab = searchParams.get("tab") || defaultTab;
+
+  const categories: Category[] = useMemo(
+    () => [
+      {
+        value: "libros",
+        label: "Libros",
+        icon: BookOpen,
+        tabs: [
+          ...(combined
+            ? [{ value: "compras-ventas", label: "Compras y Ventas", render: () => <ReporteComprasVentas /> }]
+            : [
+                { value: "compras", label: "Compras", render: () => <ReporteCompras /> },
+                { value: "ventas", label: "Ventas", render: () => <ReporteVentas /> },
+              ]),
+          { value: "partidas", label: "Partidas", render: () => <ReportePartidas /> },
+          { value: "mayor", label: "Mayor", render: () => <ReporteLibroMayor /> },
+          { value: "bancos", label: "Bancos", render: () => <ReporteLibroBancos /> },
+        ],
+      },
+      {
+        value: "estados",
+        label: "Estados Financieros",
+        icon: BarChart3,
+        tabs: [
+          { value: "balance", label: "Balance", render: () => <ReporteBalanceGeneral /> },
+          { value: "resultados", label: "Resultados", render: () => <ReporteEstadoResultados /> },
+          { value: "variaciones", label: "Variaciones", render: () => <ReporteVariaciones /> },
+          { value: "flujo-efectivo", label: "Flujo de Efectivo", render: () => <ReporteFlujoEfectivo /> },
+        ],
+      },
+      {
+        value: "otros",
+        label: "Otros",
+        icon: FolderOpen,
+        tabs: [
+          { value: "saldos", label: "Saldos", render: () => <ReporteSaldos />, bare: true },
+          { value: "facturas-por-cuenta", label: "Fact x Cta", render: () => <ReporteFacturasPorCuenta /> },
+        ],
+      },
+    ],
+    [combined]
+  );
+
   // Coerce stale tabs to the regime-appropriate one
-  const activeTab =
+  const rawTab = searchParams.get("tab");
+  const requestedTab =
     combined && (rawTab === "compras" || rawTab === "ventas")
       ? "compras-ventas"
       : !combined && rawTab === "compras-ventas"
       ? "compras"
       : rawTab;
 
-  const handleTabChange = (value: string) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev);
-      next.set("tab", value);
-      return next;
-    });
+  const initialCategory = useMemo(() => {
+    if (requestedTab) {
+      const found = categories.find((c) => c.tabs.some((t) => t.value === requestedTab));
+      if (found) return found.value;
+    }
+    return categories[0]?.value ?? "libros";
+  }, [requestedTab, categories]);
+
+  const [category, setCategory] = useState(initialCategory);
+  useEffect(() => {
+    setCategory(initialCategory);
+  }, [initialCategory]);
+
+  const currentCategory = categories.find((c) => c.value === category) ?? categories[0];
+  const initialSubTab =
+    (requestedTab && currentCategory?.tabs.find((t) => t.value === requestedTab)?.value) ||
+    currentCategory?.tabs[0]?.value ||
+    "";
+
+  const [subTab, setSubTab] = useState(initialSubTab);
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
+
+  const handleSubTabChange = (value: string) => {
+    setSubTab(value);
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", value);
+    setSearchParams(next, { replace: true });
   };
 
-  const gridCols = combined ? "grid-cols-9" : "grid-cols-10";
+  if (!currentCategory) return null;
 
   return (
-    <div className="p-8 space-y-6">
-      <div>
+    <div className="container mx-auto p-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold">Reportes</h1>
         <p className="text-muted-foreground">
-          Genera reportes de compras, ventas, partidas, estados financieros y bancos
+          Libros contables, estados financieros y consultas de saldos
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className={`grid w-full max-w-7xl ${gridCols} divide-x divide-border/60`}>
-          {combined ? (
-            <TabsTrigger value="compras-ventas">Compras y Ventas</TabsTrigger>
-          ) : (
-            <>
-              <TabsTrigger value="compras">Compras</TabsTrigger>
-              <TabsTrigger value="ventas">Ventas</TabsTrigger>
-            </>
-          )}
-          <TabsTrigger value="partidas">Partidas</TabsTrigger>
-          <TabsTrigger value="mayor">Mayor</TabsTrigger>
-          <TabsTrigger value="bancos">Bancos</TabsTrigger>
-          <TabsTrigger value="balance">Balance</TabsTrigger>
-          <TabsTrigger value="resultados">Resultados</TabsTrigger>
-          <TabsTrigger value="variaciones">Variaciones</TabsTrigger>
-          <TabsTrigger value="flujo-efectivo">Flujo de Efectivo</TabsTrigger>
-          <TabsTrigger value="facturas-por-cuenta">Fact x Cta</TabsTrigger>
+      {/* Level 1: Categories */}
+      <Tabs value={category} onValueChange={setCategory} className="w-full">
+        <TabsList className="flex-wrap h-auto">
+          {categories.map((c) => {
+            const Icon = c.icon;
+            return (
+              <TabsTrigger key={c.value} value={c.value} className="gap-2">
+                <Icon className="h-4 w-4" />
+                {c.label}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
-
-        {combined ? (
-          <TabsContent value="compras-ventas">
-            <Card><CardContent className="pt-6"><ReporteComprasVentas /></CardContent></Card>
-          </TabsContent>
-        ) : (
-          <>
-            <TabsContent value="compras">
-              <Card><CardContent className="pt-6"><ReporteCompras /></CardContent></Card>
-            </TabsContent>
-            <TabsContent value="ventas">
-              <Card><CardContent className="pt-6"><ReporteVentas /></CardContent></Card>
-            </TabsContent>
-          </>
-        )}
-        <TabsContent value="partidas">
-          <Card><CardContent className="pt-6"><ReportePartidas /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="mayor">
-          <Card><CardContent className="pt-6"><ReporteLibroMayor /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="bancos">
-          <Card><CardContent className="pt-6"><ReporteLibroBancos /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="balance">
-          <Card><CardContent className="pt-6"><ReporteBalanceGeneral /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="resultados">
-          <Card><CardContent className="pt-6"><ReporteEstadoResultados /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="variaciones">
-          <Card><CardContent className="pt-6"><ReporteVariaciones /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="flujo-efectivo">
-          <Card><CardContent className="pt-6"><ReporteFlujoEfectivo /></CardContent></Card>
-        </TabsContent>
-        <TabsContent value="facturas-por-cuenta">
-          <Card><CardContent className="pt-6"><ReporteFacturasPorCuenta /></CardContent></Card>
-        </TabsContent>
-
       </Tabs>
+
+      {/* Level 2: Sub-tabs of the selected category */}
+      <div className="mt-6">
+        <Tabs value={subTab} onValueChange={handleSubTabChange} className="w-full">
+          <TabsList className="flex-wrap h-auto bg-muted/50">
+            {currentCategory.tabs.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {currentCategory.tabs.map((t) => (
+            <TabsContent key={t.value} value={t.value} className="mt-6">
+              {t.bare ? t.render() : <Card><CardContent className="pt-6">{t.render()}</CardContent></Card>}
+            </TabsContent>
+          ))}
+        </Tabs>
+      </div>
     </div>
   );
 }

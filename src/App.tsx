@@ -37,9 +37,7 @@ const Cuentas = lazyRetry(() => import("./pages/Cuentas"));
 const PeriodosContables = lazyRetry(() => import("./pages/PeriodosContables"));
 const Partidas = lazyRetry(() => import("./pages/Partidas"));
 const LibrosFiscales = lazyRetry(() => import("./pages/LibrosFiscales"));
-const BalanceSaldos = lazyRetry(() => import("./pages/BalanceSaldos"));
 
-const MayorGeneral = lazyRetry(() => import("./pages/MayorGeneral"));
 const ConciliacionBancaria = lazyRetry(() => import("./pages/ConciliacionBancaria"));
 const FormulariosImpuestos = lazyRetry(() => import("./pages/FormulariosImpuestos"));
 const GenerarDeclaracion = lazyRetry(() => import("./pages/GenerarDeclaracion"));
@@ -113,9 +111,9 @@ const App = () => (
               <Route path="/conciliacion" element={<Suspense fallback={<PageLoader />}><ConciliacionBancaria /></Suspense>} />
               <Route path="/formularios-impuestos" element={<Suspense fallback={<PageLoader />}><FormulariosImpuestos /></Suspense>} />
               <Route path="/generar-declaracion" element={<Suspense fallback={<PageLoader />}><GenerarDeclaracion /></Suspense>} />
-              <Route path="/saldos" element={<Suspense fallback={<PageLoader />}><BalanceSaldos /></Suspense>} />
-              <Route path="/saldos-mensuales" element={<Navigate to="/saldos?tab=mensual" replace />} />
-              <Route path="/mayor" element={<Suspense fallback={<PageLoader />}><MayorGeneral /></Suspense>} />
+              <Route path="/saldos" element={<Navigate to="/reportes?tab=saldos" replace />} />
+              <Route path="/saldos-mensuales" element={<Navigate to="/reportes?tab=saldos&sub=mensual" replace />} />
+              <Route path="/mayor" element={<Navigate to="/reportes?tab=mayor" replace />} />
               <Route path="/reportes" element={<Suspense fallback={<PageLoader />}><Reportes /></Suspense>} />
               <Route path="/configuracion" element={<Suspense fallback={<PageLoader />}><Configuracion /></Suspense>} />
               <Route path="/bitacora" element={<Suspense fallback={<PageLoader />}><Bitacora /></Suspense>} />
