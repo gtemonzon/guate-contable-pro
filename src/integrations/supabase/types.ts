@@ -698,6 +698,7 @@ export type Database = {
           account_type: string
           allows_movement: boolean | null
           balance_type: string | null
+          cash_flow_category: string | null
           created_at: string | null
           deleted_at: string | null
           deleted_by: string | null
@@ -716,6 +717,7 @@ export type Database = {
           account_type: string
           allows_movement?: boolean | null
           balance_type?: string | null
+          cash_flow_category?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -734,6 +736,7 @@ export type Database = {
           account_type?: string
           allows_movement?: boolean | null
           balance_type?: string | null
+          cash_flow_category?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
