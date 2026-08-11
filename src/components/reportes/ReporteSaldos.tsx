@@ -231,7 +231,7 @@ export default function ReporteSaldos() {
       startDate: startDate,
       endDate: endDate,
     });
-    navigate(`/mayor?${params.toString()}`);
+    navigate(`/reportes?tab=mayor&${params.toString()}`);
   };
 
   // ---- Export helpers ----

@@ -37,9 +37,7 @@ const Cuentas = lazyRetry(() => import("./pages/Cuentas"));
 const PeriodosContables = lazyRetry(() => import("./pages/PeriodosContables"));
 const Partidas = lazyRetry(() => import("./pages/Partidas"));
 const LibrosFiscales = lazyRetry(() => import("./pages/LibrosFiscales"));
-const BalanceSaldos = lazyRetry(() => import("./pages/BalanceSaldos"));
 
-const MayorGeneral = lazyRetry(() => import("./pages/MayorGeneral"));
 const ConciliacionBancaria = lazyRetry(() => import("./pages/ConciliacionBancaria"));
 const FormulariosImpuestos = lazyRetry(() => import("./pages/FormulariosImpuestos"));
 const GenerarDeclaracion = lazyRetry(() => import("./pages/GenerarDeclaracion"));
