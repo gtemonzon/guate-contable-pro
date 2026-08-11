@@ -11,6 +11,7 @@ import ReporteLibroMayor from "@/components/reportes/ReporteLibroMayor";
 import ReporteLibroBancos from "@/components/reportes/ReporteLibroBancos";
 import ReporteVariaciones from "@/components/reportes/ReporteVariaciones";
 import ReporteFacturasPorCuenta from "@/components/reportes/ReporteFacturasPorCuenta";
+import ReporteFlujoEfectivo from "@/components/reportes/ReporteFlujoEfectivo";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 
 export default function Reportes() {
