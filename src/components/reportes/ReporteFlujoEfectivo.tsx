@@ -196,7 +196,12 @@ export default function ReporteFlujoEfectivo() {
       for (const account of accounts) {
         const balances = trialByAccount.get(account.id);
         if (!balances) continue;
-        const delta = balances.closing - balances.opening;
+        const isDeudor =
+          account.balance_type === "deudor" || ["activo", "gasto"].includes(account.account_type);
+        const rawApertura = aperturaRawByAccount.get(account.id) ?? 0;
+        const aperturaEffect = isDeudor ? rawApertura : -rawApertura;
+        const adjustedOpening = balances.opening + aperturaEffect;
+        const delta = balances.closing - adjustedOpening;
 
         if (!account.cash_flow_category) {
           if (
@@ -210,10 +215,11 @@ export default function ReporteFlujoEfectivo() {
         }
 
         if (account.cash_flow_category === "efectivo_equivalente") {
-          efectivoInicial += balances.opening;
+          efectivoInicial += adjustedOpening;
           efectivoFinal += balances.closing;
           continue;
         }
+
 
         const cashEffect = account.balance_type === "deudor" ? -delta : delta;
         byCategory[account.cash_flow_category].push({
