@@ -69,15 +69,7 @@ const allMenuItems: MenuItemOrSection[] = [
       { title: "Retenciones y Exenciones", url: "/retenciones-exenciones", icon: ShieldCheck, requiredPermission: "canViewAccounts" },
     ],
   },
-  {
-    title: "Consultas",
-    icon: FileBarChart,
-    items: [
-      { title: "Saldos de Cuentas", url: "/saldos", icon: FileBarChart, requiredPermission: "canViewReports" },
-      { title: "Mayor General", url: "/mayor", icon: BookOpen, requiredPermission: "canViewReports" },
-      { title: "Reportes", url: "/reportes", icon: FileBarChart, requiredPermission: "canViewReports" },
-    ],
-  },
+  { title: "Reportes", url: "/reportes", icon: FileBarChart, requiredPermission: "canViewReports" },
   {
     title: "Módulos ERP",
     icon: Boxes,
