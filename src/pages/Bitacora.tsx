@@ -49,7 +49,7 @@ const Bitacora = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [filters.dateFrom, filters.dateTo, filters.userId, filters.action, filters.tableName, page, currentTenant]);
+  }, [filters.dateFrom, filters.dateTo, filters.userId, filters.action, filters.tableName, page, currentTenant?.id]);
 
   const fetchLogs = async () => {
     if (!isSuperAdmin && !isTenantAdmin) {
@@ -57,8 +57,22 @@ const Bitacora = () => {
       return;
     }
 
+    // Always scope to the currently selected tenant; wait until it is loaded
+    if (!currentTenant?.id) {
+      setLoading(true);
+      return;
+    }
+
     setLoading(true);
     try {
+      const [{ data: tenantEnterprises }, { data: tenantUsers }] = await Promise.all([
+        supabase.from("tab_enterprises").select("id").eq("tenant_id", currentTenant.id),
+        supabase.from("tab_users").select("id").eq("tenant_id", currentTenant.id),
+      ]);
+
+      const enterpriseIds = (tenantEnterprises || []).map((e) => e.id);
+      const tenantUserIds = (tenantUsers || []).map((u) => u.id);
+
       // Fetch more rows when client-side filtering is active
       const fetchSize = filters.userActionsOnly ? pageSize * 3 : pageSize;
 
@@ -67,6 +81,23 @@ const Bitacora = () => {
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
         .range((page - 1) * fetchSize, page * fetchSize - 1);
+
+      const orParts: string[] = [];
+      if (enterpriseIds.length > 0) {
+        orParts.push(`enterprise_id.in.(${enterpriseIds.join(",")})`);
+      }
+      if (tenantUserIds.length > 0) {
+        orParts.push(`and(enterprise_id.is.null,user_id.in.(${tenantUserIds.join(",")}))`);
+      }
+
+      if (orParts.length === 0) {
+        setLogs([]);
+        setTotalCount(0);
+        setLoading(false);
+        return;
+      }
+      query = query.or(orParts.join(","));
+
 
       if (filters.dateFrom) {
         query = query.gte("created_at", filters.dateFrom.toISOString());
