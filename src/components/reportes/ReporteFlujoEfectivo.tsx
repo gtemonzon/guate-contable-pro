@@ -88,7 +88,8 @@ export default function ReporteFlujoEfectivo() {
         (supabase as any)
           .from("tab_accounts")
           .select("id, account_code, account_name, account_type, balance_type, cash_flow_category")
-          .eq("enterprise_id", currentEnterpriseId),
+          .eq("enterprise_id", currentEnterpriseId)
+          .eq("allows_movement", true),
         (supabase as any)
           .from("tab_enterprise_config")
           .select("period_result_account_id, retained_earnings_account_id")
