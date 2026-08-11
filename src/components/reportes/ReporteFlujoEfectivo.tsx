@@ -101,6 +101,31 @@ export default function ReporteFlujoEfectivo() {
       if (trialRes.error) throw trialRes.error;
       if (accountsRes.error) throw accountsRes.error;
 
+      // ---- Efecto de partidas de APERTURA fechadas dentro del rango ----
+      const { data: aperturaRows, error: aperturaError } = await (supabase as any)
+        .from("tab_journal_entry_details")
+        .select(
+          "account_id, debit_amount, credit_amount, tab_journal_entries!inner(entry_type, entry_date, enterprise_id, is_posted, deleted_at)"
+        )
+        .eq("tab_journal_entries.enterprise_id", currentEnterpriseId)
+        .eq("tab_journal_entries.entry_type", "apertura")
+        .eq("tab_journal_entries.is_posted", true)
+        .is("tab_journal_entries.deleted_at", null)
+        .is("deleted_at", null)
+        .gte("tab_journal_entries.entry_date", dateFrom)
+        .lte("tab_journal_entries.entry_date", dateTo);
+      if (aperturaError) throw aperturaError;
+
+      // Suma cruda (debe - haber) por cuenta; el signo se normaliza más abajo
+      // según el balance_type de cada cuenta (igual que get_trial_balance).
+      const aperturaRawByAccount = new Map<number, number>();
+      for (const row of (aperturaRows || []) as any[]) {
+        const accId = Number(row.account_id);
+        const effect = Number(row.debit_amount ?? 0) - Number(row.credit_amount ?? 0);
+        aperturaRawByAccount.set(accId, (aperturaRawByAccount.get(accId) ?? 0) + effect);
+      }
+
+
       // ---- Resultado del período (mismo cálculo que el Balance General) ----
       const pnlAccounts = (pnlRes.data || []).map((row: any) => ({
         id: Number(row.account_id),
