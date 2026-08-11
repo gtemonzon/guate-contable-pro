@@ -1,0 +1,2 @@
+ALTER TABLE public.tab_accounts ADD COLUMN cash_flow_category text NULL;
+ALTER TABLE public.tab_accounts ADD CONSTRAINT tab_accounts_cash_flow_category_check CHECK (cash_flow_category IS NULL OR cash_flow_category = ANY (ARRAY['operacion'::text,'inversion'::text,'financiamiento'::text,'efectivo_equivalente'::text]));

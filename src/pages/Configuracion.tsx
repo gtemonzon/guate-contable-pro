@@ -7,6 +7,7 @@ import { FelDocumentTypesManager } from "@/components/configuracion/FelDocumentT
 import { JournalEntryPrefixesManager } from "@/components/configuracion/JournalEntryPrefixesManager";
 import { EnterpriseAccountsManager } from "@/components/configuracion/EnterpriseAccountsManager";
 import { FinancialStatementDesigner } from "@/components/configuracion/FinancialStatementDesigner";
+import { CashFlowClassificationManager } from "@/components/configuracion/CashFlowClassificationManager";
 import { EnterpriseTaxConfigManager } from "@/components/configuracion/EnterpriseTaxConfigManager";
 import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix";
 import { AlertConfigManager } from "@/components/configuracion/AlertConfigManager";
@@ -52,6 +53,7 @@ export default function Configuracion() {
         tabs: [
           { value: "enterprise-accounts", label: "Cuentas Contables", render: () => <EnterpriseAccountsManager /> },
           { value: "financial-statements", label: "Estados Financieros", render: () => <FinancialStatementDesigner /> },
+          { value: "cash-flow", label: "Flujo de Efectivo", render: () => <CashFlowClassificationManager /> },
           {
             value: "operation-types",
             label: "Tipos de Operaciones",
