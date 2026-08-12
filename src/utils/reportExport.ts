@@ -31,6 +31,10 @@ interface ExportOptions {
   forcePortrait?: boolean;
   boldRows?: number[];
   authorizationLegend?: AuthorizationLegend;
+  /** Opt-in: encabezado de tabla en blanco y negro (sin azul). */
+  monochrome?: boolean;
+  /** Opt-in: agrega "Página X de Y" al pie de cada página. */
+  pageNumbers?: boolean;
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
@@ -87,7 +91,7 @@ interface PdfOrientationOptions {
   forcePortrait?: boolean;
 }
 
-const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend }: Omit<ExportOptions, 'filename'>): jsPDF => {
+const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend, monochrome, pageNumbers }: Omit<ExportOptions, 'filename'>): jsPDF => {
   const doc = new jsPDF({
     orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
@@ -141,15 +145,24 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
       fontSize: baseFontSize,
       cellPadding: 2,
     },
-    headStyles: {
-      fillColor: [59, 130, 246],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: headerFontSize,
-    },
-    alternateRowStyles: {
-      fillColor: [245, 247, 250],
-    },
+    headStyles: monochrome
+      ? {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+          fontStyle: 'bold',
+          fontSize: headerFontSize,
+        }
+      : {
+          fillColor: [59, 130, 246],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: headerFontSize,
+        },
+    alternateRowStyles: monochrome
+      ? { fillColor: [255, 255, 255] }
+      : { fillColor: [245, 247, 250] },
     margin: { bottom: authorizationLegend ? 14 : 10 },
     didParseCell: (cellData) => {
       if (boldRows && boldRows.includes(cellData.row.index)) {
@@ -217,6 +230,17 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
     }
 
     currentY = Math.max(leftY, rightY) + 5;
+  }
+
+  if (pageNumbers) {
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setFontSize(Math.max(baseFontSize - 1, 6));
+      doc.setFont(fontFamily, 'normal');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Página ${i} de ${total}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
+    }
   }
 
   return doc;

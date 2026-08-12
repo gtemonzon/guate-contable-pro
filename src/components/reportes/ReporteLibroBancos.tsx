@@ -11,10 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download, Loader2, Landmark } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { exportToExcel, exportToPDF, estimatePdfPageCount } from "@/utils/reportExport";
+import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency, cn } from "@/lib/utils";
-import { FolioExportDialog, type FolioExportOptions } from "./FolioExportDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import EntityLink from "@/components/ui/entity-link";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -67,7 +67,7 @@ export default function ReporteLibroBancos() {
   
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
   const { toast } = useToast();
 
@@ -106,6 +106,11 @@ export default function ReporteLibroBancos() {
       }
     })();
   }, [searchParams]);
+
+  // Reset generated state when switching bank account
+  useEffect(() => {
+    setHasGenerated(false);
+  }, [selectedBankId]);
 
   // Suggest opening balance from posted movements before dateFrom
   useEffect(() => {
@@ -257,6 +262,7 @@ export default function ReporteLibroBancos() {
       });
 
       setRows(filtered);
+      setHasGenerated(true);
     } catch (error: unknown) {
       toast({ title: "Error al cargar libro de bancos", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
@@ -312,16 +318,13 @@ export default function ReporteLibroBancos() {
     };
   };
 
-  const handleExport = (options: FolioExportOptions) => {
-    const exportOpts = {
-      ...buildExportOptions(),
-      folioOptions: options.includeFolio ? { includeFolio: true, startingFolio: options.startingFolio } : undefined,
-    };
+  const handleExport = (format: "excel" | "pdf") => {
+    const exportOpts = buildExportOptions();
 
-    if (options.format === "excel") {
+    if (format === "excel") {
       exportToExcel(exportOpts);
     } else {
-      exportToPDF(exportOpts);
+      exportToPDF({ ...exportOpts, monochrome: true, pageNumbers: true });
     }
     toast({ title: "Reporte exportado" });
   };
@@ -393,16 +396,24 @@ export default function ReporteLibroBancos() {
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
             Generar
           </Button>
-          {rows.length > 0 && (
-            <Button variant="outline" size="icon" onClick={() => setExportDialogOpen(true)}>
-              <Download className="h-4 w-4" />
-            </Button>
+          {hasGenerated && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport("excel")}>Exportar a Excel</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf")}>Exportar a PDF</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
 
       {/* Results Table */}
-      {rows.length > 0 && (
+      {hasGenerated && (
         <div className="border rounded-lg">
           <Table>
             <TableHeader>
@@ -426,6 +437,15 @@ export default function ReporteLibroBancos() {
                 <TableCell className="text-right font-mono">{formatCurrency(openingBalance)}</TableCell>
                 <TableCell colSpan={2}></TableCell>
               </TableRow>
+
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <Info className="mx-auto h-6 w-6 mb-2 opacity-40" />
+                    Sin movimientos registrados en este período.
+                  </TableCell>
+                </TableRow>
+              )}
 
               {rowsWithBalance.map((r, i) => (
                 <TableRow key={i} className={cn(r.status === "VOID" && "opacity-60 line-through decoration-destructive/40")}>
@@ -472,20 +492,12 @@ export default function ReporteLibroBancos() {
         </div>
       )}
 
-      {!loading && rows.length === 0 && selectedBankId && (
+      {!loading && !hasGenerated && selectedBankId && (
         <div className="text-center py-12 text-muted-foreground">
           <Landmark className="mx-auto h-12 w-12 mb-4 opacity-30" />
           <p>Seleccione los filtros y presione <strong>Generar</strong> para ver el libro de bancos.</p>
         </div>
       )}
-
-      <FolioExportDialog
-        open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        onExport={handleExport}
-        title="Exportar Libro de Bancos"
-        estimatePageCount={rowsWithBalance.length === 0 ? undefined : () => estimatePdfPageCount(buildExportOptions())}
-      />
     </div>
   );
 }
