@@ -257,6 +257,7 @@ export default function ReporteLibroBancos() {
       });
 
       setRows(filtered);
+      setHasGenerated(true);
     } catch (error: unknown) {
       toast({ title: "Error al cargar libro de bancos", description: getSafeErrorMessage(error), variant: "destructive" });
     } finally {
