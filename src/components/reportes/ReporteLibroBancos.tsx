@@ -67,7 +67,7 @@ export default function ReporteLibroBancos() {
   
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
   const [currencyView, setCurrencyView] = useState<ReportCurrencyState>(defaultReportCurrencyState);
   const { toast } = useToast();
 
