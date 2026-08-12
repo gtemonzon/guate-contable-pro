@@ -408,7 +408,7 @@ export default function ReporteLibroBancos() {
       </div>
 
       {/* Results Table */}
-      {rows.length > 0 && (
+      {hasGenerated && (
         <div className="border rounded-lg">
           <Table>
             <TableHeader>
