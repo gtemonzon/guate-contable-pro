@@ -484,5 +484,6 @@ export default function ReporteLibroBancos() {
           <p>Seleccione los filtros y presione <strong>Generar</strong> para ver el libro de bancos.</p>
         </div>
       )}
+    </div>
   );
 }
