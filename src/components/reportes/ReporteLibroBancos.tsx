@@ -118,16 +118,18 @@ export default function ReporteLibroBancos() {
 
     (async () => {
       try {
-        const { data: priorMovements } = await supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            debit_amount, credit_amount,
-            journal_entry:tab_journal_entries!inner(entry_date, is_posted, enterprise_id)
-          `)
-          .eq("account_id", selectedBankId)
-          .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
-          .eq("journal_entry.is_posted", true)
-          .lt("journal_entry.entry_date", dateFrom);
+        const priorMovements = await fetchAllRecords<any>(
+          supabase
+            .from("tab_journal_entry_details")
+            .select(`
+              debit_amount, credit_amount,
+              journal_entry:tab_journal_entries!inner(entry_date, is_posted, enterprise_id)
+            `)
+            .eq("account_id", selectedBankId)
+            .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
+            .eq("journal_entry.is_posted", true)
+            .lt("journal_entry.entry_date", dateFrom)
+        );
 
         const rawSum = (priorMovements || []).reduce(
           (sum, m) => sum + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0),
@@ -136,7 +138,7 @@ export default function ReporteLibroBancos() {
         const suggestedOpening = Math.round(rawSum * 100) / 100;
         setOpeningBalance(suggestedOpening);
       } catch {
-        // Leave manual/default value on error
+        // Leave default value on error
       }
     })();
   }, [enterpriseId, selectedBankId, dateFrom]);
