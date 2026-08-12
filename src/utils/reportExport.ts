@@ -232,6 +232,17 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
     currentY = Math.max(leftY, rightY) + 5;
   }
 
+  if (pageNumbers) {
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setFontSize(Math.max(baseFontSize - 1, 6));
+      doc.setFont(fontFamily, 'normal');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Página ${i} de ${total}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
+    }
+  }
+
   return doc;
 };
 
