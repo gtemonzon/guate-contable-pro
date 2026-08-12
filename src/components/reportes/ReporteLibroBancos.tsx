@@ -408,12 +408,17 @@ export default function ReporteLibroBancos() {
           type="number"
           step="0.01"
           value={openingBalance || ""}
-          onChange={e => setOpeningBalance(parseFloat(e.target.value) || 0)}
+          onChange={e => {
+            setOpeningBalance(parseFloat(e.target.value) || 0);
+            setOpeningBalanceIsManual(true);
+          }}
           className="w-48 font-mono"
           placeholder="0.00"
         />
         <span className="text-xs text-muted-foreground">
-          Ingrese el saldo de apertura del período o el saldo del extracto anterior.
+          {openingBalanceIsManual
+            ? "Ingrese el saldo de apertura del período o el saldo del extracto anterior."
+            : "Sugerido automáticamente desde movimientos contables anteriores."}
         </span>
       </div>
 
