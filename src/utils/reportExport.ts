@@ -145,15 +145,24 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
       fontSize: baseFontSize,
       cellPadding: 2,
     },
-    headStyles: {
-      fillColor: [59, 130, 246],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: headerFontSize,
-    },
-    alternateRowStyles: {
-      fillColor: [245, 247, 250],
-    },
+    headStyles: monochrome
+      ? {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+          fontStyle: 'bold',
+          fontSize: headerFontSize,
+        }
+      : {
+          fillColor: [59, 130, 246],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: headerFontSize,
+        },
+    alternateRowStyles: monochrome
+      ? { fillColor: [255, 255, 255] }
+      : { fillColor: [245, 247, 250] },
     margin: { bottom: authorizationLegend ? 14 : 10 },
     didParseCell: (cellData) => {
       if (boldRows && boldRows.includes(cellData.row.index)) {
