@@ -313,16 +313,13 @@ export default function ReporteLibroBancos() {
     };
   };
 
-  const handleExport = (options: FolioExportOptions) => {
-    const exportOpts = {
-      ...buildExportOptions(),
-      folioOptions: options.includeFolio ? { includeFolio: true, startingFolio: options.startingFolio } : undefined,
-    };
+  const handleExport = (format: "excel" | "pdf") => {
+    const exportOpts = buildExportOptions();
 
-    if (options.format === "excel") {
+    if (format === "excel") {
       exportToExcel(exportOpts);
     } else {
-      exportToPDF(exportOpts);
+      exportToPDF({ ...exportOpts, monochrome: true, pageNumbers: true });
     }
     toast({ title: "Reporte exportado" });
   };
