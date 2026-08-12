@@ -91,7 +91,7 @@ interface PdfOrientationOptions {
   forcePortrait?: boolean;
 }
 
-const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend }: Omit<ExportOptions, 'filename'>): jsPDF => {
+const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statistics, folioOptions, pdfTypography, forcePortrait, boldRows, authorizationLegend, monochrome, pageNumbers }: Omit<ExportOptions, 'filename'>): jsPDF => {
   const doc = new jsPDF({
     orientation: forcePortrait ? 'portrait' : (headers.length > 5 ? 'landscape' : 'portrait'),
   });
