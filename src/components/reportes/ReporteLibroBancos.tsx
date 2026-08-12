@@ -433,6 +433,15 @@ export default function ReporteLibroBancos() {
                 <TableCell colSpan={2}></TableCell>
               </TableRow>
 
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <Info className="mx-auto h-6 w-6 mb-2 opacity-40" />
+                    Sin movimientos registrados en este período.
+                  </TableCell>
+                </TableRow>
+              )}
+
               {rowsWithBalance.map((r, i) => (
                 <TableRow key={i} className={cn(r.status === "VOID" && "opacity-60 line-through decoration-destructive/40")}>
                   <TableCell className="text-sm">{new Date(r.date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
