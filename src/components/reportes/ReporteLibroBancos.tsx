@@ -64,7 +64,7 @@ export default function ReporteLibroBancos() {
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [openingBalance, setOpeningBalance] = useState(0);
-  const [openingBalanceIsManual, setOpeningBalanceIsManual] = useState(false);
+  
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -124,12 +124,12 @@ export default function ReporteLibroBancos() {
           .eq("journal_entry.is_posted", true)
           .lt("journal_entry.entry_date", dateFrom);
 
-        const suggestedOpening = (priorMovements || []).reduce(
+        const rawSum = (priorMovements || []).reduce(
           (sum, m) => sum + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0),
           0
         );
+        const suggestedOpening = Math.round(rawSum * 100) / 100;
         setOpeningBalance(suggestedOpening);
-        setOpeningBalanceIsManual(false);
       } catch {
         // Leave manual/default value on error
       }
@@ -399,27 +399,6 @@ export default function ReporteLibroBancos() {
             </Button>
           )}
         </div>
-      </div>
-
-      {/* Opening Balance */}
-      <div className="flex items-center gap-4">
-        <Label className="whitespace-nowrap">Saldo Inicial (Q)</Label>
-        <Input
-          type="number"
-          step="0.01"
-          value={openingBalance || ""}
-          onChange={e => {
-            setOpeningBalance(parseFloat(e.target.value) || 0);
-            setOpeningBalanceIsManual(true);
-          }}
-          className="w-48 font-mono"
-          placeholder="0.00"
-        />
-        <span className="text-xs text-muted-foreground">
-          {openingBalanceIsManual
-            ? "Ingrese el saldo de apertura del período o el saldo del extracto anterior."
-            : "Sugerido automáticamente desde movimientos contables anteriores."}
-        </span>
       </div>
 
       {/* Results Table */}
