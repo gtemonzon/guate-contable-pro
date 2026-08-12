@@ -64,6 +64,7 @@ export default function ReporteLibroBancos() {
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [openingBalance, setOpeningBalance] = useState(0);
+  const [openingBalanceIsManual, setOpeningBalanceIsManual] = useState(false);
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -105,6 +106,35 @@ export default function ReporteLibroBancos() {
       }
     })();
   }, [searchParams]);
+
+  // Suggest opening balance from posted movements before dateFrom
+  useEffect(() => {
+    if (!enterpriseId || !selectedBankId || !dateFrom) return;
+
+    (async () => {
+      try {
+        const { data: priorMovements } = await supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            debit_amount, credit_amount,
+            journal_entry:tab_journal_entries!inner(entry_date, is_posted, enterprise_id)
+          `)
+          .eq("account_id", selectedBankId)
+          .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
+          .eq("journal_entry.is_posted", true)
+          .lt("journal_entry.entry_date", dateFrom);
+
+        const suggestedOpening = (priorMovements || []).reduce(
+          (sum, m) => sum + (Number(m.debit_amount) || 0) - (Number(m.credit_amount) || 0),
+          0
+        );
+        setOpeningBalance(suggestedOpening);
+        setOpeningBalanceIsManual(false);
+      } catch {
+        // Leave manual/default value on error
+      }
+    })();
+  }, [enterpriseId, selectedBankId, dateFrom]);
 
   const loadReport = async () => {
     if (!enterpriseId || !selectedBankId) {
@@ -378,12 +408,17 @@ export default function ReporteLibroBancos() {
           type="number"
           step="0.01"
           value={openingBalance || ""}
-          onChange={e => setOpeningBalance(parseFloat(e.target.value) || 0)}
+          onChange={e => {
+            setOpeningBalance(parseFloat(e.target.value) || 0);
+            setOpeningBalanceIsManual(true);
+          }}
           className="w-48 font-mono"
           placeholder="0.00"
         />
         <span className="text-xs text-muted-foreground">
-          Ingrese el saldo de apertura del período o el saldo del extracto anterior.
+          {openingBalanceIsManual
+            ? "Ingrese el saldo de apertura del período o el saldo del extracto anterior."
+            : "Sugerido automáticamente desde movimientos contables anteriores."}
         </span>
       </div>
 
