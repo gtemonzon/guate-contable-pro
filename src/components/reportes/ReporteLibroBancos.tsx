@@ -64,6 +64,7 @@ export default function ReporteLibroBancos() {
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [openingBalance, setOpeningBalance] = useState(0);
+  const [openingBalanceIsManual, setOpeningBalanceIsManual] = useState(false);
   const [rows, setRows] = useState<BankDocRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
