@@ -478,20 +478,11 @@ export default function ReporteLibroBancos() {
         </div>
       )}
 
-      {!loading && rows.length === 0 && selectedBankId && (
+      {!loading && !hasGenerated && selectedBankId && (
         <div className="text-center py-12 text-muted-foreground">
           <Landmark className="mx-auto h-12 w-12 mb-4 opacity-30" />
           <p>Seleccione los filtros y presione <strong>Generar</strong> para ver el libro de bancos.</p>
         </div>
       )}
-
-      <FolioExportDialog
-        open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        onExport={handleExport}
-        title="Exportar Libro de Bancos"
-        estimatePageCount={rowsWithBalance.length === 0 ? undefined : () => estimatePdfPageCount(buildExportOptions())}
-      />
-    </div>
   );
 }
