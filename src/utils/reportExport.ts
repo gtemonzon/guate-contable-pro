@@ -31,6 +31,10 @@ interface ExportOptions {
   forcePortrait?: boolean;
   boldRows?: number[];
   authorizationLegend?: AuthorizationLegend;
+  /** Opt-in: encabezado de tabla en blanco y negro (sin azul). */
+  monochrome?: boolean;
+  /** Opt-in: agrega "Página X de Y" al pie de cada página. */
+  pageNumbers?: boolean;
 }
 
 export const exportToExcel = ({ filename, title, enterpriseName, headers, data, totals, statistics }: ExportOptions) => {
