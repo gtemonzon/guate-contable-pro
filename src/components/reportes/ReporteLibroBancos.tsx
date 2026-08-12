@@ -391,10 +391,18 @@ export default function ReporteLibroBancos() {
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
             Generar
           </Button>
-          {rows.length > 0 && (
-            <Button variant="outline" size="icon" onClick={() => setExportDialogOpen(true)}>
-              <Download className="h-4 w-4" />
-            </Button>
+          {hasGenerated && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport("excel")}>Exportar a Excel</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf")}>Exportar a PDF</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
