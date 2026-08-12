@@ -107,6 +107,11 @@ export default function ReporteLibroBancos() {
     })();
   }, [searchParams]);
 
+  // Reset generated state when switching bank account
+  useEffect(() => {
+    setHasGenerated(false);
+  }, [selectedBankId]);
+
   // Suggest opening balance from posted movements before dateFrom
   useEffect(() => {
     if (!enterpriseId || !selectedBankId || !dateFrom) return;
