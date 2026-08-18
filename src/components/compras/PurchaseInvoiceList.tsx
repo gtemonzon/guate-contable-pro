@@ -132,7 +132,10 @@ export function PurchaseInvoiceList({
           duplicateWarning={duplicateWarnings?.[index] ?? null}
           onCheckDuplicate={onCheckDuplicate}
           appliesVat={appliesVat}
+          isHighlighted={highlightIndex === index}
+          isIncomplete={getIsIncomplete?.(index) ?? false}
         />
+
       ))}
     </div>
   );
