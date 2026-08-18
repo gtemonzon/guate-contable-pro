@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, Printer } from "lucide-react";
 import { subscribePdfPreview, type PdfPreviewRequest } from "@/lib/pdfPreview";
 
 /**
@@ -10,6 +10,7 @@ import { subscribePdfPreview, type PdfPreviewRequest } from "@/lib/pdfPreview";
  */
 export default function PdfPreviewHost() {
   const [request, setRequest] = useState<PdfPreviewRequest | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => subscribePdfPreview((req) => setRequest(req)), []);
 
@@ -41,6 +42,14 @@ export default function PdfPreviewHost() {
           <Button size="sm" onClick={handleDownload} className="gap-2">
             <Download className="h-4 w-4" /> Descargar
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => iframeRef.current?.contentWindow?.print()}
+            className="gap-2"
+          >
+            <Printer className="h-4 w-4" /> Imprimir
+          </Button>
           <Button size="sm" variant="outline" asChild className="gap-2">
             <a href={request?.url} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4" /> Abrir en pestaña nueva
@@ -51,6 +60,7 @@ export default function PdfPreviewHost() {
         <div className="flex-1 min-h-0 rounded-md border border-border overflow-hidden bg-muted">
           {request && (
             <iframe
+              ref={iframeRef}
               key={request.url}
               src={request.url}
               title={request.fileName}
