@@ -166,6 +166,23 @@ export default function TaxFormDialog({
     }
   }, [open, editingForm]);
 
+  const fetchEnterpriseInfo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_enterprises")
+        .select("nit, business_name")
+        .eq("id", enterpriseId)
+        .maybeSingle();
+      if (error) throw error;
+      setEnterpriseNit(data?.nit || "");
+      setEnterpriseName(data?.business_name || "");
+    } catch (error) {
+      console.error("Error fetching enterprise info:", error);
+      setEnterpriseNit("");
+      setEnterpriseName("");
+    }
+  };
+
   const fetchTaxTypeSuggestions = async () => {
     try {
       const { data, error } = await supabase
