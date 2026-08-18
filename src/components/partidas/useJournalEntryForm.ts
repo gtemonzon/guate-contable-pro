@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
 import { buildPurchaseLines } from "@/utils/purchaseJournalLinesBuilder";
+import { getFiscalBookStrategy } from "@/services/fiscalBookStrategy";
 
 export type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -676,7 +677,11 @@ export function useJournalEntryForm(
       return;
     }
 
-    const [{ data: purchases }, { data: felDocTypes }] = await Promise.all([
+    const [
+      { data: purchases },
+      { data: felDocTypes },
+      { data: enterpriseData },
+    ] = await Promise.all([
       supabase
         .from("tab_purchase_ledger")
         .select("*")
@@ -686,7 +691,14 @@ export function useJournalEntryForm(
         .from("tab_fel_document_types")
         .select("code, affects_total, applies_vat")
         .eq("is_active", true),
+      supabase
+        .from("tab_enterprises")
+        .select("tax_regime")
+        .eq("id", parseInt(enterpriseId))
+        .maybeSingle(),
     ]);
+
+    const enterpriseAppliesVat = getFiscalBookStrategy(enterpriseData?.tax_regime).appliesVat;
 
     if (!purchases || purchases.length === 0) return;
 
@@ -714,7 +726,8 @@ export function useJournalEntryForm(
 
     for (const p of purchases) {
       const docType = p.fel_document_type || 'FACT';
-      const { multiplier, appliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
+      const { multiplier, appliesVat: docTypeAppliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
+      const appliesVat = enterpriseAppliesVat && docTypeAppliesVat;
       const ref = `${docType} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`;
       const effectiveTotal = (Number(p.total_amount) || 0) * multiplier;
       totalAmount += effectiveTotal;

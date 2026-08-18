@@ -15,6 +15,7 @@ import { useNitLookup } from "@/hooks/useNitLookup";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { calculatePurchaseAccounting, TAX_CATEGORIES } from "@/utils/purchaseAccountingEngine";
 
 function extractErrorMessage(err: unknown): string {
@@ -66,6 +67,7 @@ export function QuickPurchaseForm({
   const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
   const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
   const { getRate } = useExchangeRates(enterpriseId);
+  const { strategy: taxRegimeStrategy } = useEnterpriseTaxRegime(enterpriseId);
   const isMultiCurrency = enabledCurrencies.length > 0;
 
   const [date, setDate] = useState(entryDate);
@@ -345,12 +347,13 @@ export function QuickPurchaseForm({
   };
 
   // Calculate base/VAT/non-VAT using the unified purchase accounting engine
+  const enterpriseAppliesVat = taxRegimeStrategy.appliesVat;
   const accounting = calculatePurchaseAccounting({
     totalAmount: total,
     nonVatAmount: exemptAmount,
     taxCategory,
     documentType: docType,
-    appliesVat: !isExemptOperation,
+    appliesVat: enterpriseAppliesVat && !isExemptOperation,
   });
   const base = accounting.base;
   const vat = accounting.vat;
