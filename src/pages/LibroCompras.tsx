@@ -1352,6 +1352,8 @@ export default function LibroCompras() {
               addShortcutHint="Alt+N"
               focusLastCard={focusNewRow}
               onFocusLastCardDone={() => setFocusNewRow(false)}
+              highlightIndex={highlightIndex}
+              getIsIncomplete={(idx) => incompleteIndexes.has(idx)}
             />
         </CardContent>
       </Card>
