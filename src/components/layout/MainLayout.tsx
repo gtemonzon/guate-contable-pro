@@ -217,7 +217,7 @@ const MainLayout = () => {
         <OfflineBanner />
         <div className="flex flex-1 w-full">
           <AppSidebar />
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
             <SidebarTrigger />
 
@@ -288,7 +288,7 @@ const MainLayout = () => {
             </div>
           </header>
 
-          <main className="flex-1 p-6 bg-muted/30">
+          <main className="flex-1 p-6 bg-muted/30 min-w-0 overflow-hidden">
             <Outlet />
           </main>
           </div>
