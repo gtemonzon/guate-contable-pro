@@ -140,6 +140,48 @@ export default function LibroCompras() {
     };
   }, [purchases, operationTypes, appliesVat]);
 
+  // ─── Registros incompletos ────────────────────────────────────────────────
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+
+  const incompleteGroups = useMemo(() => {
+    const toItem = (p: PurchaseEntry, index: number) => ({
+      index,
+      date: p.invoice_date,
+      docLabel: p.invoice_number
+        ? `${p.invoice_series ? `${p.invoice_series}-` : ""}${p.invoice_number}`
+        : "-",
+      partyName: p.supplier_name || "",
+      total: Number(p.total_amount) || 0,
+    });
+
+    const missingOperation = purchases
+      .map((p, index) => ({ p, index }))
+      .filter(({ p }) => !p.operation_type_id)
+      .map(({ p, index }) => toItem(p, index));
+
+    const missingDocType = purchases
+      .map((p, index) => ({ p, index }))
+      .filter(({ p }) => !p.fel_document_type || p.fel_document_type.trim() === "")
+      .map(({ p, index }) => toItem(p, index));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [purchases]);
+
+  const incompleteIndexes = useMemo(
+    () => new Set(incompleteGroups.flatMap(g => g.items.map(i => i.index))),
+    [incompleteGroups]
+  );
+
+  const jumpToIncomplete = useCallback((index: number) => {
+    setHighlightIndex(index);
+    setTimeout(() => setHighlightIndex(null), 2500);
+  }, []);
+
+
+
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
