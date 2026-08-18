@@ -677,7 +677,11 @@ export function useJournalEntryForm(
       return;
     }
 
-    const [{ data: purchases }, { data: felDocTypes }] = await Promise.all([
+    const [
+      { data: purchases },
+      { data: felDocTypes },
+      { data: enterpriseData },
+    ] = await Promise.all([
       supabase
         .from("tab_purchase_ledger")
         .select("*")
@@ -687,7 +691,14 @@ export function useJournalEntryForm(
         .from("tab_fel_document_types")
         .select("code, affects_total, applies_vat")
         .eq("is_active", true),
+      supabase
+        .from("tab_enterprises")
+        .select("tax_regime")
+        .eq("id", parseInt(enterpriseId))
+        .maybeSingle(),
     ]);
+
+    const enterpriseAppliesVat = getFiscalBookStrategy(enterpriseData?.tax_regime).appliesVat;
 
     if (!purchases || purchases.length === 0) return;
 
