@@ -231,7 +231,7 @@ export function PurchaseLinkManager({
               }, { onConflict: "enterprise_id,purchase_id" }),
             supabase
               .from("tab_purchase_ledger")
-              .update({ journal_entry_id: journalEntryId })
+              .update({ journal_entry_id: journalEntryId, batch_reference: bankReference || null })
               .eq("enterprise_id", enterpriseId)
               .eq("id", p.id)
               .is("deleted_at", null),
@@ -274,7 +274,7 @@ export function PurchaseLinkManager({
     } finally {
       if (isBatch) setBatchProgress({ active: false, action: 'linking', current: 0, total: 0 });
     }
-  }, [enterpriseId, journalEntryId, linkedPurchases, updatePendingFlag, autoApply, toast]);
+  }, [enterpriseId, journalEntryId, bankReference, linkedPurchases, updatePendingFlag, autoApply, toast]);
 
   /**
    * Batch unlink: delete all links, update UI state once, regenerate policy once.
@@ -307,7 +307,7 @@ export function PurchaseLinkManager({
               .eq("purchase_id", p.id),
             supabase
               .from("tab_purchase_ledger")
-              .update({ journal_entry_id: null })
+              .update({ journal_entry_id: null, batch_reference: null })
               .eq("enterprise_id", enterpriseId)
               .eq("id", p.id)
               .eq("journal_entry_id", journalEntryId)
