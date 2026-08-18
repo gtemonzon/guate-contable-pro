@@ -69,6 +69,8 @@ export interface PurchaseCardProps {
   onCheckDuplicate?: (index: number) => void;
   /** Phase 2: when false, hide VAT/Base/Exento fields and relabel Total. */
   appliesVat?: boolean;
+  /** Short label for the linked journal entry (e.g. "PD-13"). */
+  journalEntryLabel?: string;
 }
 
 export interface PurchaseCardRef {
@@ -99,6 +101,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   duplicateWarning: externalDuplicateWarning,
   onCheckDuplicate,
   appliesVat = true,
+  journalEntryLabel,
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [changeTick, setChangeTick] = useState(0);
