@@ -288,7 +288,7 @@ const MainLayout = () => {
             </div>
           </header>
 
-          <main className="flex-1 p-6 bg-muted/30 min-w-0 overflow-hidden">
+          <main className="flex-1 p-6 bg-muted/30 min-w-0 overflow-x-hidden">
             <Outlet />
           </main>
           </div>
