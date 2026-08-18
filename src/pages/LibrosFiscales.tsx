@@ -460,6 +460,84 @@ export default function LibrosFiscales() {
     });
   }, [sales, saleOpFilter, saleDocFilter, operationTypes]);
 
+  // ─── Registros incompletos ────────────────────────────────────────────────
+  const incompletePurchaseGroups = useMemo<IncompleteGroup[]>(() => {
+    const toItem = (p: PurchaseEntry) => ({
+      index: p.id as number,
+      date: p.invoice_date,
+      docLabel: p.invoice_number
+        ? `${p.invoice_series ? `${p.invoice_series}-` : ""}${p.invoice_number}`
+        : "-",
+      partyName: p.supplier_name || "",
+      total: Number(p.total_amount) || 0,
+    });
+
+    const saved = purchases.filter((p) => p.id);
+
+    const missingOperation = saved
+      .filter((p) => !p.operation_type_id)
+      .map((p) => toItem(p));
+
+    const missingDocType = saved
+      .filter((p) => !p.fel_document_type || p.fel_document_type.trim() === "")
+      .map((p) => toItem(p));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [purchases]);
+
+  const incompleteSaleGroups = useMemo<IncompleteGroup[]>(() => {
+    const toItem = (s: SaleEntry) => ({
+      index: s.id as number,
+      date: s.invoice_date,
+      docLabel: s.invoice_number
+        ? `${s.invoice_series ? `${s.invoice_series}-` : ""}${s.invoice_number}`
+        : "-",
+      partyName: s.customer_name || "",
+      total: Number(s.total_amount) || 0,
+    });
+
+    const saved = sales.filter((s) => s.id);
+
+    const missingOperation = saved
+      .filter((s) => !s.operation_type_id)
+      .map((s) => toItem(s));
+
+    const missingDocType = saved
+      .filter((s) => !s.fel_document_type || s.fel_document_type.trim() === "")
+      .map((s) => toItem(s));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [sales]);
+
+  const incompletePurchaseIds = useMemo(
+    () => new Set(incompletePurchaseGroups.flatMap((g) => g.items.map((i) => i.index))),
+    [incompletePurchaseGroups]
+  );
+
+  const incompleteSaleIds = useMemo(
+    () => new Set(incompleteSaleGroups.flatMap((g) => g.items.map((i) => i.index))),
+    [incompleteSaleGroups]
+  );
+
+  const jumpToIncomplete = useCallback((id: number) => {
+    if (activeTab === "compras") {
+      setPurchaseOpFilter(null);
+      setPurchaseDocFilter(null);
+    } else {
+      setSaleOpFilter(null);
+      setSaleDocFilter(null);
+    }
+    setHighlightedInvoiceId(id);
+    setTimeout(() => setHighlightedInvoiceId(null), 3000);
+  }, [activeTab]);
+
+
   // Clear filters when context changes
   useEffect(() => {
     setPurchaseOpFilter(null);
