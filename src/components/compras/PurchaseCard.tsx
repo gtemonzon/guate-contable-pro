@@ -91,6 +91,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   onDelete, 
   recommendedFields = [],
   isHighlighted,
+  isIncomplete = false,
   isEditing = false,
   onStartEdit,
   onCancelEdit,
