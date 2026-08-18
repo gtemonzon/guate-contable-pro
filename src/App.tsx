@@ -90,6 +90,8 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PdfPreviewHost />
+
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
