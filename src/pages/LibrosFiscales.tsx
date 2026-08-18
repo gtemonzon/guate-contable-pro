@@ -2080,6 +2080,7 @@ export default function LibrosFiscales() {
                       onDelete={deletePurchaseRow}
                       recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === purchase.id}
+                      isIncomplete={purchase.id ? incompletePurchaseIds.has(purchase.id) : false}
                       isEditing={editingPurchaseIndex === index}
                       onStartEdit={(idx) => {
                         setEditingPurchaseIndex(idx);
