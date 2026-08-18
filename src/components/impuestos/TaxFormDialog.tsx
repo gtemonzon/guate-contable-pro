@@ -123,6 +123,9 @@ export default function TaxFormDialog({
   const [loading, setLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
+  const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [nitCheck, setNitCheck] = useState<NitCheck>({ status: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
