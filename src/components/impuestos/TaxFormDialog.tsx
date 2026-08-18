@@ -338,6 +338,9 @@ export default function TaxFormDialog({
 
       const extractedData = data as ExtractedPdfData;
 
+      // NIT verification (applies whenever a PDF is attached)
+      verifyNit(extractedData.nit, extractedData.taxpayerName);
+
       if (extractedData.fieldsFound === 0) {
         toast({
           title: "Sin datos detectados",
