@@ -15,6 +15,7 @@ import { useNitLookup } from "@/hooks/useNitLookup";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
+import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { calculatePurchaseAccounting, TAX_CATEGORIES } from "@/utils/purchaseAccountingEngine";
 
 function extractErrorMessage(err: unknown): string {
