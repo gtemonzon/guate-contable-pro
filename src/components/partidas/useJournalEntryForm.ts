@@ -757,7 +757,7 @@ export function useJournalEntryForm(
         });
         slot.signed += bl.amount;
         if (bl.role === 'EXPENSE') {
-          slot.descriptions.push(`${p.supplier_name} - Fact. ${ref}`);
+          slot.descriptions.push(`${p.supplier_name} - ${ref}`);
           slot.refs.push(ref);
         } else if (bl.role === 'VAT_CREDIT') {
           vatRefs.push(ref);
