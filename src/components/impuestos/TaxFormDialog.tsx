@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, X, FileText, Search, Loader2 } from "lucide-react";
+import { CalendarIcon, Upload, X, FileText, Search, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -61,8 +62,17 @@ interface ExtractedPdfData {
   periodYear?: number;
   paymentDate?: string;
   amountPaid?: number;
+  nit?: string;
+  taxpayerName?: string;
   fieldsFound: number;
 }
+
+type NitCheck =
+  | { status: "idle" }
+  | { status: "ok"; pdfNit: string; pdfName?: string }
+  | { status: "mismatch"; pdfNit: string; pdfName?: string }
+  | { status: "unverified" };
+
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -113,6 +123,9 @@ export default function TaxFormDialog({
   const [loading, setLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [enterpriseNit, setEnterpriseNit] = useState<string>("");
+  const [enterpriseName, setEnterpriseName] = useState<string>("");
+  const [nitCheck, setNitCheck] = useState<NitCheck>({ status: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -133,6 +146,8 @@ export default function TaxFormDialog({
   useEffect(() => {
     if (open) {
       fetchTaxTypeSuggestions();
+      fetchEnterpriseInfo();
+      setNitCheck({ status: "idle" });
       if (editingForm) {
         setFormNumber(editingForm.form_number);
         setAccessCode(editingForm.access_code);
@@ -150,6 +165,23 @@ export default function TaxFormDialog({
       }
     }
   }, [open, editingForm]);
+
+  const fetchEnterpriseInfo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tab_enterprises")
+        .select("nit, business_name")
+        .eq("id", enterpriseId)
+        .maybeSingle();
+      if (error) throw error;
+      setEnterpriseNit(data?.nit || "");
+      setEnterpriseName(data?.business_name || "");
+    } catch (error) {
+      console.error("Error fetching enterprise info:", error);
+      setEnterpriseNit("");
+      setEnterpriseName("");
+    }
+  };
 
   const fetchTaxTypeSuggestions = async () => {
     try {
@@ -183,7 +215,35 @@ export default function TaxFormDialog({
     setFile(null);
     setExistingFileName(null);
     setShowSuggestions(false);
+    setNitCheck({ status: "idle" });
   };
+
+  // NIT verification helpers
+  const digitsOnly = (v: string) => (v || "").replace(/\D+/g, "");
+  const enterpriseNitDigits = digitsOnly(enterpriseNit);
+  // Skip verification when the enterprise NIT is not a real numeric NIT (test data)
+  const enterpriseNitIsValid =
+    enterpriseNitDigits.length >= 5 && /^[\d\s-]+[\dkK]?$/.test((enterpriseNit || "").trim());
+
+  const verifyNit = (extractedNit?: string, extractedName?: string) => {
+    if (!enterpriseNitIsValid) {
+      setNitCheck({ status: "idle" });
+      return;
+    }
+    const pdfNit = digitsOnly(extractedNit || "");
+    if (!pdfNit) {
+      setNitCheck({ status: "unverified" });
+      return;
+    }
+    if (pdfNit === enterpriseNitDigits) {
+      setNitCheck({ status: "ok", pdfNit, pdfName: extractedName });
+    } else {
+      setNitCheck({ status: "mismatch", pdfNit, pdfName: extractedName });
+    }
+  };
+
+  const nitBlocksSave =
+    !!file && (nitCheck.status === "mismatch" || nitCheck.status === "unverified");
 
   const filteredSuggestions = taxTypeSuggestions.filter((suggestion) =>
     suggestion.toLowerCase().includes(taxType.toLowerCase())
@@ -278,6 +338,9 @@ export default function TaxFormDialog({
 
       const extractedData = data as ExtractedPdfData;
 
+      // NIT verification (applies whenever a PDF is attached)
+      verifyNit(extractedData.nit, extractedData.taxpayerName);
+
       if (extractedData.fieldsFound === 0) {
         toast({
           title: "Sin datos detectados",
@@ -311,6 +374,7 @@ export default function TaxFormDialog({
       });
     } catch (error: unknown) {
       console.error("Error analyzing PDF:", error);
+      verifyNit(undefined, undefined);
       toast({
         title: "Error al analizar",
         description: error instanceof Error ? error.message : String(error) || "No se pudo procesar el PDF. Completa los campos manualmente.",
@@ -322,6 +386,18 @@ export default function TaxFormDialog({
   };
 
   const handleSubmit = async () => {
+    if (nitBlocksSave) {
+      toast({
+        title: "Verificación de NIT",
+        description:
+          nitCheck.status === "mismatch"
+            ? "El formulario no corresponde a la empresa activa. No se puede guardar."
+            : "No se pudo verificar el NIT del contribuyente en este PDF. No se puede guardar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!formNumber.trim() || !accessCode.trim() || !paymentDate || !amountPaid) {
       toast({
         title: "Error",
@@ -330,6 +406,7 @@ export default function TaxFormDialog({
       });
       return;
     }
+
 
     const amount = parseFloat(amountPaid);
     if (isNaN(amount) || amount < 0) {
@@ -456,6 +533,36 @@ export default function TaxFormDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {!!file && nitCheck.status === "mismatch" && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Este formulario NO corresponde a la empresa activa</AlertTitle>
+              <AlertDescription>
+                NIT en el PDF: {nitCheck.pdfNit}
+                {nitCheck.pdfName ? ` (${nitCheck.pdfName})` : ""}. NIT de la empresa activa:{" "}
+                {enterpriseNit} ({enterpriseName}).
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!!file && nitCheck.status === "unverified" && (
+            <Alert className="border-warning/50 text-warning-foreground bg-warning/10">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>No se pudo verificar el NIT del contribuyente</AlertTitle>
+              <AlertDescription>
+                No se pudo verificar el NIT del contribuyente en este PDF. Por seguridad, no se puede
+                guardar hasta confirmar manualmente.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!!file && nitCheck.status === "ok" && (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+              NIT verificado: {nitCheck.pdfNit} coincide con la empresa activa.
+            </p>
+          )}
+
           {/* Step 1: PDF Upload - First */}
           <div className="space-y-2">
             <Label className="text-base font-medium flex items-center gap-2">
@@ -501,7 +608,10 @@ export default function TaxFormDialog({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setFile(null)}
+                      onClick={() => {
+                        setFile(null);
+                        setNitCheck({ status: "idle" });
+                      }}
                       disabled={isAnalyzing}
                     >
                       <X className="h-4 w-4" />
@@ -742,7 +852,7 @@ export default function TaxFormDialog({
           <Button variant="outline" onClick={() => onOpenChange()} disabled={loading || isAnalyzing}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading || isAnalyzing}>
+          <Button onClick={handleSubmit} disabled={loading || isAnalyzing || nitBlocksSave}>
             {loading ? "Guardando..." : editingForm ? "Actualizar" : "Guardar Formulario"}
           </Button>
         </DialogFooter>
