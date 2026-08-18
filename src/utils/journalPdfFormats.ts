@@ -2,6 +2,7 @@
 import jsPDF from 'jspdf';
 import { formatCurrency } from '@/lib/utils';
 import type { AuthorizationLegend } from './reportExport';
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 export interface JournalPdfEntry {
   entry_number: string;
@@ -306,7 +307,7 @@ export const exportJournalEntriesToPDF = (
 ): { pageCount: number } => {
   const doc = buildJournalPdf(opts);
   const pageCount = doc.getNumberOfPages();
-  doc.save(`${opts.filename}.pdf`);
+  previewPdfDoc(doc, `${opts.filename}.pdf`);
   return { pageCount };
 };
 

@@ -6,6 +6,7 @@ import {
   DOCUMENT_TYPE_LABELS,
   DIRECTION_LABELS,
 } from "@/hooks/useTaxCertificates";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 function rows(certs: TaxCertificate[]) {
   return certs.map((c) => ({
@@ -50,5 +51,5 @@ export function exportCertificatesToPdf(certs: TaxCertificate[]) {
     headStyles: { fillColor: [60, 60, 60] },
   });
 
-  doc.save(`retenciones_exenciones_${new Date().toISOString().slice(0, 10)}.pdf`);
+  previewPdfDoc(doc, `retenciones_exenciones_${new Date().toISOString().slice(0, 10)}.pdf`);
 }

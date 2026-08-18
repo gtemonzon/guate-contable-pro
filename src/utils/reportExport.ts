@@ -2,6 +2,7 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface FolioOptions {
   includeFolio: boolean;
@@ -249,7 +250,7 @@ const buildPdfDocument = ({ title, enterpriseName, headers, data, totals, statis
 export const exportToPDF = (options: ExportOptions): { pageCount: number } => {
   const doc = buildPdfDocument(options);
   const pageCount = doc.getNumberOfPages();
-  doc.save(`${options.filename}.pdf`);
+  previewPdfDoc(doc, `${options.filename}.pdf`);
   return { pageCount };
 };
 

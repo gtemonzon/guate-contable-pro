@@ -27,6 +27,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { previewPdfBlob } from "@/lib/pdfPreview";
 
 interface TaxForm {
   id: number;
@@ -190,7 +191,7 @@ export default function FormulariosImpuestos() {
     }
   };
 
-  const handleDownloadPdf = async (form: TaxForm) => {
+  const handleViewPdf = async (form: TaxForm) => {
     if (!form.file_path) return;
 
     try {
@@ -200,15 +201,9 @@ export default function FormulariosImpuestos() {
 
       if (error) throw error;
 
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = form.file_name || "formulario.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      previewPdfBlob(data, form.file_name || "formulario.pdf");
     } catch (error: unknown) {
+
       toast({
         title: "Error",
         description: "No se pudo descargar el archivo",
@@ -382,8 +377,8 @@ export default function FormulariosImpuestos() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadPdf(form)}
-                            title="Descargar PDF"
+                            onClick={() => handleViewPdf(form)}
+                            title="Ver PDF"
                           >
                             <Download className="h-4 w-4" />
                           </Button>

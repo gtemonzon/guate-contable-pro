@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface PurchaseRow {
   invoice_date: string;
@@ -217,7 +218,7 @@ export default function ReporteComprasVentas() {
     doc.text(`Total Compras: Q ${formatCurrency(totals.totalPurchases)}`, leftX, pageHeight - 10);
     doc.text(`Total Ventas: Q ${formatCurrency(totals.totalSales)}`, rightX, pageHeight - 10);
 
-    doc.save(`${filenameBase}.pdf`);
+    previewPdfDoc(doc, `${filenameBase}.pdf`);
     toast({ title: "Exportado", description: "PDF generado correctamente" });
   };
 

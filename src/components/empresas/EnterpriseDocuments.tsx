@@ -52,6 +52,7 @@ import {
   getDocumentTypeLabel,
 } from "@/utils/documentValidation";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { showPdfPreview } from "@/lib/pdfPreview";
 import type { Database } from "@/integrations/supabase/types";
 
 type EnterpriseDocument = Database['public']['Tables']['tab_enterprise_documents']['Row'];
@@ -235,7 +236,8 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       if (error) throw error;
       if (!data?.signedUrl) throw new Error("No se pudo generar URL de descarga");
 
-      window.open(data.signedUrl, '_blank');
+      showPdfPreview({ url: data.signedUrl, fileName: document.file_name || 'documento.pdf' });
+
     } catch (error: unknown) {
       toast({
         variant: "destructive",
@@ -354,7 +356,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownload(doc)}
-                      title="Ver/Descargar"
+                      title="Ver PDF"
                     >
                       <Download className="h-4 w-4" />
                     </Button>

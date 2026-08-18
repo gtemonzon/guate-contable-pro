@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 type ModuleRequirement = string | string[];
 
@@ -839,7 +840,7 @@ const Ayuda = () => {
       y += 3;
     });
 
-    doc.save("Manual_de_Ayuda.pdf");
+    previewPdfDoc(doc, "Manual_de_Ayuda.pdf");
   };
 
   const filteredSections = useMemo(() => {
