@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { LedgerSortControls, LedgerSortField, LedgerSortDir } from "@/components/libros/LedgerSortControls";
+import { IncompleteRecordsAlert } from "@/components/libros/IncompleteRecordsAlert";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
