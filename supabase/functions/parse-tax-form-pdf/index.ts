@@ -537,6 +537,8 @@ Reglas:
 - periodYear: año en 4 dígitos.
 - paymentDate: fecha de presentación o pago en formato YYYY-MM-DD. Usa "Fecha de presentación" de la constancia, o "¿Cuándo pagará este formulario?", o "Fecha máxima de pago".
 - amountPaid: número decimal del "TOTAL A PAGAR" o "Impuesto a pagar".
+- nit: NIT del contribuyente, solo dígitos, aparece bajo "NIT DEL CONTRIBUYENTE".
+- taxpayerName: nombre del contribuyente que aparece junto al NIT, tal como está escrito en el PDF.
 
 Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
 
@@ -577,6 +579,8 @@ Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
           periodYear: { type: "integer", minimum: 2000, maximum: 2100 },
           paymentDate: { type: "string", description: "YYYY-MM-DD" },
           amountPaid: { type: "number" },
+          nit: { type: "string", description: "NIT del contribuyente, solo dígitos" },
+          taxpayerName: { type: "string", description: "Nombre del contribuyente" },
         },
         additionalProperties: false,
       },
@@ -632,6 +636,8 @@ Si un campo no se puede determinar con certeza, omítelo. NO inventes valores.`;
   assign("periodYear", typeof args.periodYear === "number" ? args.periodYear : undefined);
   assign("paymentDate", typeof args.paymentDate === "string" ? args.paymentDate : undefined);
   assign("amountPaid", typeof args.amountPaid === "number" ? args.amountPaid : undefined);
+  assign("nit", typeof args.nit === "string" ? onlyDigits(args.nit) : undefined);
+  assign("taxpayerName", typeof args.taxpayerName === "string" ? args.taxpayerName.trim() : undefined);
 
   return result;
 }
@@ -641,7 +647,7 @@ function mergeExtractions(primary: ExtractedData | null, fallback: ExtractedData
   const merged: ExtractedData = { ...primary };
   const keys: (keyof ExtractedData)[] = [
     "formNumber", "accessCode", "taxType", "periodType",
-    "periodMonth", "periodYear", "paymentDate", "amountPaid",
+    "periodMonth", "periodYear", "paymentDate", "amountPaid", "nit", "taxpayerName",
   ];
   let count = 0;
   for (const k of keys) {
