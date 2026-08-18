@@ -533,6 +533,36 @@ export default function TaxFormDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {!!file && nitCheck.status === "mismatch" && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Este formulario NO corresponde a la empresa activa</AlertTitle>
+              <AlertDescription>
+                NIT en el PDF: {nitCheck.pdfNit}
+                {nitCheck.pdfName ? ` (${nitCheck.pdfName})` : ""}. NIT de la empresa activa:{" "}
+                {enterpriseNit} ({enterpriseName}).
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!!file && nitCheck.status === "unverified" && (
+            <Alert className="border-warning/50 text-warning-foreground bg-warning/10">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>No se pudo verificar el NIT del contribuyente</AlertTitle>
+              <AlertDescription>
+                No se pudo verificar el NIT del contribuyente en este PDF. Por seguridad, no se puede
+                guardar hasta confirmar manualmente.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!!file && nitCheck.status === "ok" && (
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+              NIT verificado: {nitCheck.pdfNit} coincide con la empresa activa.
+            </p>
+          )}
+
           {/* Step 1: PDF Upload - First */}
           <div className="space-y-2">
             <Label className="text-base font-medium flex items-center gap-2">
@@ -578,7 +608,10 @@ export default function TaxFormDialog({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setFile(null)}
+                      onClick={() => {
+                        setFile(null);
+                        setNitCheck({ status: "idle" });
+                      }}
                       disabled={isAnalyzing}
                     >
                       <X className="h-4 w-4" />
