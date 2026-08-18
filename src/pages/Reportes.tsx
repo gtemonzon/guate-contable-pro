@@ -144,7 +144,7 @@ export default function Reportes() {
       </div>
 
       {/* Level 1: Categories */}
-      <Tabs value={category} onValueChange={setCategory} className="w-full">
+      <Tabs value={category} onValueChange={handleCategoryChange} className="w-full">
         <TabsList className="flex-wrap h-auto">
           {categories.map((c) => {
             const Icon = c.icon;
