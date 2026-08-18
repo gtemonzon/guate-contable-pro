@@ -1128,6 +1128,7 @@ export default function LibroVentas() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">Libro de Ventas</h1>
             <SaveStatusIndicator status={saveStatus} />
+            <IncompleteRecordsAlert groups={incompleteGroups} onJumpTo={jumpToIncomplete} />
           </div>
           <p className="text-muted-foreground">Registro mensual de facturas de venta</p>
           
