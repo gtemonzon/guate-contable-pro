@@ -193,6 +193,57 @@ export default function LibroVentas() {
     };
   }, [filteredSales, operationTypes, felDocTypes]);
 
+  // ─── Registros incompletos ────────────────────────────────────────────────
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+
+  const incompleteGroups = useMemo(() => {
+    const toItem = (s: typeof sales[number], index: number) => ({
+      index,
+      date: s.invoice_date,
+      docLabel: s.invoice_number
+        ? `${s.invoice_series ? `${s.invoice_series}-` : ""}${s.invoice_number}`
+        : "-",
+      partyName: s.customer_name || "",
+      total: Number(s.total_amount) || 0,
+    });
+
+    const missingOperation = sales
+      .map((s, index) => ({ s, index }))
+      .filter(({ s }) => !s.operation_type_id)
+      .map(({ s, index }) => toItem(s, index));
+
+    const missingDocType = sales
+      .map((s, index) => ({ s, index }))
+      .filter(({ s }) => !s.fel_document_type || s.fel_document_type.trim() === "")
+      .map(({ s, index }) => toItem(s, index));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [sales]);
+
+  const incompleteIndexes = useMemo(
+    () => new Set(incompleteGroups.flatMap(g => g.items.map(i => i.index))),
+    [incompleteGroups]
+  );
+
+  const jumpToIncomplete = useCallback((index: number) => {
+    const target = sales[index];
+    // Ensure the record is visible regardless of the active establishment filter
+    if (
+      target &&
+      selectedEstablishment !== "all" &&
+      target.establishment_code !== selectedEstablishment
+    ) {
+      setSelectedEstablishment("all");
+    }
+    setHighlightIndex(index);
+    setTimeout(() => setHighlightIndex(null), 2500);
+  }, [sales, selectedEstablishment]);
+
+
+
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
