@@ -16,7 +16,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
-import EntityLink, { type DateContext } from "@/components/ui/entity-link";
+import { type DateContext } from "@/components/ui/entity-link";
+import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
@@ -101,6 +103,8 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
   const [reversalInfo, setReversalInfo] = useState<{ entry_number: string; status: string; id: number } | null>(null);
   const [reversedByInfo, setReversedByInfo] = useState<{ entry_number: string; id: number } | null>(null);
   const [postingReversal, setPostingReversal] = useState(false);
+  const [ledgerDrawerAccount, setLedgerDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
+  const { selectedEnterpriseId } = useEnterprise();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -245,14 +249,12 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
     toast({ title: "Enlace copiado" });
   };
 
-  const handleNavigateToMayor = () => {
+  const handleOpenMayorDrawer = () => {
     if (!entry) return;
     const uniqueAccounts = [...new Map(entry.details.map(d => [d.account_id, d])).values()];
     if (uniqueAccounts.length === 0) return;
-    const firstAccount = uniqueAccounts[0];
-    let url = `/mayor?accountId=${firstAccount.account_id}`;
-    if (dateContext) url += `&startDate=${dateContext.dateFrom}&endDate=${dateContext.dateTo}`;
-    navigate(url);
+    const a = uniqueAccounts[0];
+    setLedgerDrawerAccount({ id: a.account_id, code: a.account_code, name: a.account_name });
   };
 
   const handleNavigateToBancos = () => {
@@ -401,7 +403,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(val) => {
-        if (val === "mayor") { handleNavigateToMayor(); return; }
+        if (val === "mayor") { handleOpenMayorDrawer(); return; }
         if (val === "bancos") { handleNavigateToBancos(); return; }
         setActiveTab(val);
       }} className="flex-1 flex flex-col min-h-0">
@@ -498,13 +500,23 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
                   {entry.details.map((d) => (
                     <TableRow key={d.line_number} className="group">
                       <TableCell className="text-xs py-1.5">
-                        <EntityLink
-                          type="account"
-                          label={d.account_code}
-                          id={d.account_id}
-                          secondaryLabel={d.account_name}
-                          dateContext={dateContext ?? undefined}
-                        />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLedgerDrawerAccount({ id: d.account_id, code: d.account_code, name: d.account_name });
+                              }}
+                              className="inline-flex items-center gap-1 font-mono text-xs text-primary underline-offset-2 hover:underline cursor-pointer transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm px-0.5 -mx-0.5"
+                            >
+                              {d.account_code}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Ver mayor · {d.account_name}
+                          </TooltipContent>
+                        </Tooltip>
                       </TableCell>
                       <TableCell className="text-xs py-1.5">
                         {d.account_name}
@@ -564,6 +576,18 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
           </div>
         </ScrollArea>
       </Tabs>
+
+      <AccountLedgerDrawer
+        open={!!ledgerDrawerAccount}
+        onOpenChange={(o) => !o && setLedgerDrawerAccount(null)}
+        accountId={ledgerDrawerAccount?.id ?? null}
+        accountCode={ledgerDrawerAccount?.code ?? ""}
+        accountName={ledgerDrawerAccount?.name ?? ""}
+        enterpriseId={selectedEnterpriseId}
+        startDate={dateContext?.dateFrom}
+        endDate={dateContext?.dateTo ?? entry.entry_date}
+        showFullReportLink
+      />
     </div>
   );
 }

@@ -37,7 +37,7 @@ function buildRoute(type: EntityType, id: number | undefined, dateContext?: Date
     case "journal_entry":
       return `/partidas?viewEntry=${id}`;
     case "account": {
-      let url = `/mayor?accountId=${id}`;
+      let url = `/reportes?tab=mayor&accountId=${id}`;
       if (dc) url += `&startDate=${dc.dateFrom}&endDate=${dc.dateTo}`;
       return url;
     }

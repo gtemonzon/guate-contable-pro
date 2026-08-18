@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { supabase } from "@/integrations/supabase/client";
 import { getFiscalFloorDate } from "@/utils/fiscalFloor";
@@ -31,6 +33,8 @@ interface AccountLedgerDrawerProps {
   /** For balance sheet: start of time → asOfDate */
   startDate?: string;
   endDate: string;
+  /** Show a "Ver reporte completo" link in the header (default false) */
+  showFullReportLink?: boolean;
 }
 
 const formatQ = (amount: number) =>
@@ -46,7 +50,9 @@ export default function AccountLedgerDrawer({
   enterpriseId,
   startDate,
   endDate,
+  showFullReportLink = false,
 }: AccountLedgerDrawerProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [viewEntryId, setViewEntryId] = useState<number | null>(null);
@@ -144,9 +150,27 @@ export default function AccountLedgerDrawer({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
           <SheetHeader className="pb-4">
-            <SheetTitle className="text-left">
-              <span className="text-primary font-mono">{accountCode}</span>
-              <span className="ml-2">{accountName}</span>
+            <SheetTitle className="text-left flex items-center justify-between gap-2">
+              <span>
+                <span className="text-primary font-mono">{accountCode}</span>
+                <span className="ml-2">{accountName}</span>
+              </span>
+              {showFullReportLink && accountId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 mr-6 shrink-0"
+                  onClick={() => {
+                    let url = `/reportes?tab=mayor&accountId=${accountId}`;
+                    if (startDate) url += `&startDate=${startDate}`;
+                    if (endDate) url += `&endDate=${endDate}`;
+                    navigate(url);
+                  }}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Ver reporte completo
+                </Button>
+              )}
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
