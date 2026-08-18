@@ -200,15 +200,9 @@ export default function FormulariosImpuestos() {
 
       if (error) throw error;
 
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = form.file_name || "formulario.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      previewPdfBlob(data, form.file_name || "formulario.pdf");
     } catch (error: unknown) {
+
       toast({
         title: "Error",
         description: "No se pudo descargar el archivo",
