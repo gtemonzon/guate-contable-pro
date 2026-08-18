@@ -374,6 +374,7 @@ export default function TaxFormDialog({
       });
     } catch (error: unknown) {
       console.error("Error analyzing PDF:", error);
+      verifyNit(undefined, undefined);
       toast({
         title: "Error al analizar",
         description: error instanceof Error ? error.message : String(error) || "No se pudo procesar el PDF. Completa los campos manualmente.",
