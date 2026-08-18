@@ -114,3 +114,15 @@ export const findNextAvailableNumber = async (
 ): Promise<string> => {
   return allocateEntryNumber(enterpriseId, entryType, entryDate);
 };
+
+/**
+ * Etiqueta corta para mostrar en badges de libros fiscales.
+ * "PART-2026-05-013" -> "PD-13" (sin ceros a la izquierda).
+ * Si no se puede parsear, devuelve "Póliza".
+ */
+export function formatShortEntryLabel(entryNumber?: string | null): string {
+  if (!entryNumber) return "Póliza";
+  const parsed = parseEntryNumber(entryNumber);
+  if (!parsed || !Number.isFinite(parsed.sequence)) return "Póliza";
+  return `PD-${parsed.sequence}`;
+}
