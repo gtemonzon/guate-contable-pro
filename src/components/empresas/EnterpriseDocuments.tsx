@@ -356,7 +356,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDownload(doc)}
-                      title="Ver/Descargar"
+                      title="Ver PDF"
                     >
                       <Download className="h-4 w-4" />
                     </Button>

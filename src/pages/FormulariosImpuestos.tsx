@@ -191,7 +191,7 @@ export default function FormulariosImpuestos() {
     }
   };
 
-  const handleDownloadPdf = async (form: TaxForm) => {
+  const handleViewPdf = async (form: TaxForm) => {
     if (!form.file_path) return;
 
     try {
@@ -377,8 +377,8 @@ export default function FormulariosImpuestos() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadPdf(form)}
-                            title="Descargar PDF"
+                            onClick={() => handleViewPdf(form)}
+                            title="Ver PDF"
                           >
                             <Download className="h-4 w-4" />
                           </Button>
