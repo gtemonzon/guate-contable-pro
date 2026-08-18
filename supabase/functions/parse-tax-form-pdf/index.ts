@@ -32,6 +32,8 @@ interface ExtractedData {
   periodYear?: number;
   paymentDate?: string;
   amountPaid?: number;
+  nit?: string;
+  taxpayerName?: string;
   fieldsFound: number;
 }
 
