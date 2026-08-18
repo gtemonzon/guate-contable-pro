@@ -587,6 +587,10 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         startDate={dateContext?.dateFrom}
         endDate={dateContext?.dateTo ?? entry.entry_date}
         showFullReportLink
+        highlightEntryId={entry.id}
+        entryDate={entry.entry_date}
+        allowMonthToggle
+
       />
     </div>
   );
