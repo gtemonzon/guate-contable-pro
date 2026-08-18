@@ -42,6 +42,14 @@ export default function PdfPreviewHost() {
           <Button size="sm" onClick={handleDownload} className="gap-2">
             <Download className="h-4 w-4" /> Descargar
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => iframeRef.current?.contentWindow?.print()}
+            className="gap-2"
+          >
+            <Printer className="h-4 w-4" /> Imprimir
+          </Button>
           <Button size="sm" variant="outline" asChild className="gap-2">
             <a href={request?.url} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-4 w-4" /> Abrir en pestaña nueva
