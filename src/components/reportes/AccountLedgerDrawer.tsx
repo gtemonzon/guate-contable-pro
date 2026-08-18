@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
 
 interface LedgerRow {
@@ -35,6 +36,12 @@ interface AccountLedgerDrawerProps {
   endDate: string;
   /** Show a "Ver reporte completo" link in the header (default false) */
   showFullReportLink?: boolean;
+  /** Scroll to and temporarily highlight the rows of this journal entry */
+  highlightEntryId?: number | null;
+  /** Date of the originating entry, enables the month toggle */
+  entryDate?: string;
+  /** Show the "Mes de la partida" / "Período completo" toggle (default false) */
+  allowMonthToggle?: boolean;
 }
 
 const formatQ = (amount: number) =>
@@ -51,29 +58,96 @@ export default function AccountLedgerDrawer({
   startDate,
   endDate,
   showFullReportLink = false,
+  highlightEntryId,
+  entryDate,
+  allowMonthToggle = false,
 }: AccountLedgerDrawerProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [viewEntryId, setViewEntryId] = useState<number | null>(null);
+  const [scope, setScope] = useState<'period' | 'month'>('period');
+  const [highlightActive, setHighlightActive] = useState(false);
+  const firstHighlightRef = useRef<HTMLTableRowElement | null>(null);
 
   const resolvedIds = accountIds && accountIds.length > 0 ? accountIds : (accountId ? [accountId] : []);
   const isConsolidated = resolvedIds.length > 1;
+
+  const monthToggleEnabled = allowMonthToggle && !!entryDate;
+
+  // Effective range depending on scope
+  let effectiveStartDate = startDate;
+  let effectiveEndDate = endDate;
+  if (monthToggleEnabled && scope === 'month' && entryDate) {
+    const d = new Date(entryDate + 'T00:00:00');
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    effectiveStartDate = `${y}-${pad(m + 1)}-01`;
+    const last = new Date(y, m + 1, 0);
+    effectiveEndDate = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`;
+  }
+
+  useEffect(() => {
+    if (!open) setScope('period');
+  }, [open]);
 
   useEffect(() => {
     if (open && resolvedIds.length > 0 && enterpriseId) {
       fetchLedger();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, accountId, JSON.stringify(accountIds), enterpriseId, startDate, endDate]);
+  }, [open, accountId, JSON.stringify(accountIds), enterpriseId, effectiveStartDate, effectiveEndDate]);
+
+  // Scroll to + highlight the originating entry once rows are loaded
+  useEffect(() => {
+    if (!open || loading || !highlightEntryId || rows.length === 0) return;
+    if (!rows.some(r => r.journal_entry_id === highlightEntryId)) return;
+    setHighlightActive(true);
+    const scrollTimer = setTimeout(() => {
+      firstHighlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    const clearTimer = setTimeout(() => setHighlightActive(false), 2600);
+    return () => { clearTimeout(scrollTimer); clearTimeout(clearTimer); };
+  }, [open, loading, rows, highlightEntryId]);
 
   const fetchLedger = async () => {
     if (resolvedIds.length === 0 || !enterpriseId) return;
     setLoading(true);
     try {
       // Determine fiscal floor: use the most recent apertura entry as lower bound
-      const effectiveStart = startDate || endDate;
-      const fiscalFloor = await getFiscalFloorDate(enterpriseId, effectiveStart);
+      const startRef = effectiveStartDate || effectiveEndDate;
+      const fiscalFloor = await getFiscalFloorDate(enterpriseId, startRef);
+
+      const lowerBound = effectiveStartDate || fiscalFloor || null;
+
+      // Opening balance: everything posted strictly before the effective start
+      let openingBalance = 0;
+      if (lowerBound) {
+        const { data: prevData, error: prevError } = await supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            debit_amount,
+            credit_amount,
+            tab_journal_entries!inner (
+              status,
+              is_posted,
+              entry_date
+            )
+          `)
+          .in("account_id", resolvedIds)
+          .eq("tab_journal_entries.is_posted", true)
+          .eq("tab_journal_entries.enterprise_id", enterpriseId)
+          .is("tab_journal_entries.reversal_entry_id", null)
+          .is("tab_journal_entries.reversed_by_entry_id", null)
+          .lt("tab_journal_entries.entry_date", lowerBound);
+
+        if (prevError) throw prevError;
+        openingBalance = (prevData || []).reduce(
+          (sum: number, r: any) => sum + (Number(r.debit_amount) || 0) - (Number(r.credit_amount) || 0),
+          0
+        );
+      }
 
       // Get all detail lines for the account(s) within the date range, from posted entries only
       const query = supabase
@@ -98,20 +172,17 @@ export default function AccountLedgerDrawer({
         .eq("tab_journal_entries.enterprise_id", enterpriseId)
         .is("tab_journal_entries.reversal_entry_id", null)
         .is("tab_journal_entries.reversed_by_entry_id", null)
-        .lte("tab_journal_entries.entry_date", endDate)
+        .lte("tab_journal_entries.entry_date", effectiveEndDate)
         .order("tab_journal_entries(entry_date)", { ascending: true });
 
-      // Apply fiscal floor or explicit startDate
-      if (startDate) {
-        query.gte("tab_journal_entries.entry_date", startDate);
-      } else if (fiscalFloor) {
-        query.gte("tab_journal_entries.entry_date", fiscalFloor);
+      if (lowerBound) {
+        query.gte("tab_journal_entries.entry_date", lowerBound);
       }
 
       const { data, error } = await query;
       if (error) throw error;
 
-      let runningBalance = 0;
+      let runningBalance = openingBalance;
       const ledgerRows: LedgerRow[] = (data || []).map((row: any) => {
         const debit = Number(row.debit_amount) || 0;
         const credit = Number(row.credit_amount) || 0;
@@ -136,6 +207,7 @@ export default function AccountLedgerDrawer({
     }
   };
 
+
   const safeFmt = (d: string | undefined) => {
     if (!d) return '';
     try {
@@ -155,28 +227,55 @@ export default function AccountLedgerDrawer({
                 <span className="text-primary font-mono">{accountCode}</span>
                 <span className="ml-2">{accountName}</span>
               </span>
-              {showFullReportLink && accountId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1 mr-6 shrink-0"
-                  onClick={() => {
-                    let url = `/reportes?tab=mayor&accountId=${accountId}`;
-                    if (startDate) url += `&startDate=${startDate}`;
-                    if (endDate) url += `&endDate=${endDate}`;
-                    navigate(url);
-                  }}
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Ver reporte completo
-                </Button>
-              )}
+              <span className="flex items-center gap-2 mr-6 shrink-0">
+                {monthToggleEnabled && (
+                  <span className="inline-flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setScope('period')}
+                      className={cn(
+                        "px-2 py-1 text-xs transition-colors",
+                        scope === 'period' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      )}
+                    >
+                      Período completo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScope('month')}
+                      className={cn(
+                        "px-2 py-1 text-xs transition-colors border-l",
+                        scope === 'month' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      )}
+                    >
+                      Mes de la partida
+                    </button>
+                  </span>
+                )}
+                {showFullReportLink && accountId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    onClick={() => {
+                      let url = `/reportes?tab=mayor&accountId=${accountId}`;
+                      if (effectiveStartDate) url += `&startDate=${effectiveStartDate}`;
+                      if (effectiveEndDate) url += `&endDate=${effectiveEndDate}`;
+                      navigate(url);
+                    }}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Ver reporte completo
+                  </Button>
+                )}
+              </span>
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
-              {startDate ? `del ${safeFmt(startDate)} ` : ''}
-              al {safeFmt(endDate)}
+              {effectiveStartDate ? `del ${safeFmt(effectiveStartDate)} ` : ''}
+              al {safeFmt(effectiveEndDate)}
             </p>
+
           </SheetHeader>
 
           {loading ? (
@@ -201,8 +300,17 @@ export default function AccountLedgerDrawer({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row, idx) => (
-                    <TableRow key={idx}>
+                  {rows.map((row, idx) => {
+                    const isTarget = !!highlightEntryId && row.journal_entry_id === highlightEntryId;
+                    const isFirstTarget =
+                      isTarget && rows.findIndex(r => r.journal_entry_id === highlightEntryId) === idx;
+                    return (
+                    <TableRow
+                      key={idx}
+                      ref={isFirstTarget ? firstHighlightRef : undefined}
+                      className={cn(isTarget && highlightActive && "ring-2 ring-primary bg-accent/20")}
+                    >
+
                       <TableCell className="font-mono text-xs whitespace-nowrap">
                         {safeFmt(row.entry_date)}
                       </TableCell>
@@ -228,7 +336,9 @@ export default function AccountLedgerDrawer({
                         {formatQ(row.running_balance)}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
+
                 </TableBody>
               </Table>
               <div className="mt-4 pt-3 border-t border-border flex justify-between text-sm font-mono font-bold">
