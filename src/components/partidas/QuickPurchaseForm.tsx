@@ -347,12 +347,13 @@ export function QuickPurchaseForm({
   };
 
   // Calculate base/VAT/non-VAT using the unified purchase accounting engine
+  const enterpriseAppliesVat = taxRegimeStrategy.appliesVat;
   const accounting = calculatePurchaseAccounting({
     totalAmount: total,
     nonVatAmount: exemptAmount,
     taxCategory,
     documentType: docType,
-    appliesVat: !isExemptOperation,
+    appliesVat: enterpriseAppliesVat && !isExemptOperation,
   });
   const base = accounting.base;
   const vat = accounting.vat;
