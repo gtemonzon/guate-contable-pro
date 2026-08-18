@@ -209,6 +209,22 @@ export default function Partidas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showEditDialog, permissions.canCreateEntries]);
 
+  // ESC closes the detail panel only when no Radix dialog/sheet is open
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (!splitViewOpen || !selectedEntryId) return;
+      // Let Radix dialogs/sheets handle their own ESC first
+      const openDialog = document.querySelector('[role="dialog"][data-state="open"]');
+      if (openDialog) return;
+      e.preventDefault();
+      setSelectedEntryId(null);
+      setSplitViewOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [splitViewOpen, selectedEntryId]);
+
   // Open view dialog from URL params (e.g. from global search)
   useEffect(() => {
     const viewEntryParam = searchParams.get("viewEntry");
