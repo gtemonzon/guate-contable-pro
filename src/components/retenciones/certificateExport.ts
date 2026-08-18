@@ -2,11 +2,11 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-import { previewPdfDoc } from "@/lib/pdfPreview";
   type TaxCertificate,
   DOCUMENT_TYPE_LABELS,
   DIRECTION_LABELS,
 } from "@/hooks/useTaxCertificates";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 function rows(certs: TaxCertificate[]) {
   return certs.map((c) => ({

@@ -15,7 +15,6 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import {
-import { previewPdfDoc } from "@/lib/pdfPreview";
   Table,
   TableBody,
   TableCell,
@@ -23,6 +22,7 @@ import { previewPdfDoc } from "@/lib/pdfPreview";
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface PurchaseRow {
   invoice_date: string;
