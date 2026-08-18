@@ -386,6 +386,18 @@ export default function TaxFormDialog({
   };
 
   const handleSubmit = async () => {
+    if (nitBlocksSave) {
+      toast({
+        title: "Verificación de NIT",
+        description:
+          nitCheck.status === "mismatch"
+            ? "El formulario no corresponde a la empresa activa. No se puede guardar."
+            : "No se pudo verificar el NIT del contribuyente en este PDF. No se puede guardar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!formNumber.trim() || !accessCode.trim() || !paymentDate || !amountPaid) {
       toast({
         title: "Error",
@@ -394,6 +406,7 @@ export default function TaxFormDialog({
       });
       return;
     }
+
 
     const amount = parseFloat(amountPaid);
     if (isNaN(amount) || amount < 0) {
