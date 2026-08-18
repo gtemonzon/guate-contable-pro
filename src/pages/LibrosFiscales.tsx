@@ -2117,6 +2117,7 @@ export default function LibrosFiscales() {
                       onToggleAnnulled={toggleSaleAnnulled}
                       recommendedFields={sale.isNew ? sale._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === sale.id}
+                      isIncomplete={sale.id ? incompleteSaleIds.has(sale.id) : false}
                       isEditing={editingSaleIndex === index}
                       onStartEdit={(idx) => {
                         setEditingSaleIndex(idx);
