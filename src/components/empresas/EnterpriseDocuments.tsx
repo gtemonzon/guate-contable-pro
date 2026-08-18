@@ -52,6 +52,7 @@ import {
   getDocumentTypeLabel,
 } from "@/utils/documentValidation";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { showPdfPreview } from "@/lib/pdfPreview";
 import type { Database } from "@/integrations/supabase/types";
 
 type EnterpriseDocument = Database['public']['Tables']['tab_enterprise_documents']['Row'];
