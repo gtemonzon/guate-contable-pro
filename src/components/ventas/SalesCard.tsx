@@ -85,6 +85,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   onToggleAnnulled, 
   recommendedFields = [],
   isHighlighted,
+  isIncomplete = false,
   isEditing = false,
   onStartEdit,
   onCancelEdit
