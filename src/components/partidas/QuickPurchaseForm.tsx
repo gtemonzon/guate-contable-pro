@@ -67,6 +67,7 @@ export function QuickPurchaseForm({
   const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
   const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
   const { getRate } = useExchangeRates(enterpriseId);
+  const { strategy: taxRegimeStrategy } = useEnterpriseTaxRegime(enterpriseId);
   const isMultiCurrency = enabledCurrencies.length > 0;
 
   const [date, setDate] = useState(entryDate);
