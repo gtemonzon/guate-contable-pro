@@ -25,6 +25,7 @@ import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
+import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 
 
@@ -458,6 +459,84 @@ export default function LibrosFiscales() {
       return true;
     });
   }, [sales, saleOpFilter, saleDocFilter, operationTypes]);
+
+  // ─── Registros incompletos ────────────────────────────────────────────────
+  const incompletePurchaseGroups = useMemo<IncompleteGroup[]>(() => {
+    const toItem = (p: PurchaseEntry) => ({
+      index: p.id as number,
+      date: p.invoice_date,
+      docLabel: p.invoice_number
+        ? `${p.invoice_series ? `${p.invoice_series}-` : ""}${p.invoice_number}`
+        : "-",
+      partyName: p.supplier_name || "",
+      total: Number(p.total_amount) || 0,
+    });
+
+    const saved = purchases.filter((p) => p.id);
+
+    const missingOperation = saved
+      .filter((p) => !p.operation_type_id)
+      .map((p) => toItem(p));
+
+    const missingDocType = saved
+      .filter((p) => !p.fel_document_type || p.fel_document_type.trim() === "")
+      .map((p) => toItem(p));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [purchases]);
+
+  const incompleteSaleGroups = useMemo<IncompleteGroup[]>(() => {
+    const toItem = (s: SaleEntry) => ({
+      index: s.id as number,
+      date: s.invoice_date,
+      docLabel: s.invoice_number
+        ? `${s.invoice_series ? `${s.invoice_series}-` : ""}${s.invoice_number}`
+        : "-",
+      partyName: s.customer_name || "",
+      total: Number(s.total_amount) || 0,
+    });
+
+    const saved = sales.filter((s) => s.id);
+
+    const missingOperation = saved
+      .filter((s) => !s.operation_type_id)
+      .map((s) => toItem(s));
+
+    const missingDocType = saved
+      .filter((s) => !s.fel_document_type || s.fel_document_type.trim() === "")
+      .map((s) => toItem(s));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [sales]);
+
+  const incompletePurchaseIds = useMemo(
+    () => new Set(incompletePurchaseGroups.flatMap((g) => g.items.map((i) => i.index))),
+    [incompletePurchaseGroups]
+  );
+
+  const incompleteSaleIds = useMemo(
+    () => new Set(incompleteSaleGroups.flatMap((g) => g.items.map((i) => i.index))),
+    [incompleteSaleGroups]
+  );
+
+  const jumpToIncomplete = useCallback((id: number) => {
+    if (activeTab === "compras") {
+      setPurchaseOpFilter(null);
+      setPurchaseDocFilter(null);
+    } else {
+      setSaleOpFilter(null);
+      setSaleDocFilter(null);
+    }
+    setHighlightedInvoiceId(id);
+    setTimeout(() => setHighlightedInvoiceId(null), 3000);
+  }, [activeTab]);
+
 
   // Clear filters when context changes
   useEffect(() => {
@@ -1565,6 +1644,11 @@ export default function LibrosFiscales() {
                 {activeTab === "compras" ? "Compras" : "Ventas"}
               </h1>
               <SaveStatusIndicator status={saveStatus} />
+              {activeTab === "compras" ? (
+                <IncompleteRecordsAlert groups={incompletePurchaseGroups} onJumpTo={jumpToIncomplete} />
+              ) : (
+                <IncompleteRecordsAlert groups={incompleteSaleGroups} onJumpTo={jumpToIncomplete} />
+              )}
               {isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
                 <TooltipProvider>
                   <Tooltip>
@@ -1996,6 +2080,7 @@ export default function LibrosFiscales() {
                       onDelete={deletePurchaseRow}
                       recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === purchase.id}
+                      isIncomplete={purchase.id ? incompletePurchaseIds.has(purchase.id) : false}
                       isEditing={editingPurchaseIndex === index}
                       onStartEdit={(idx) => {
                         setEditingPurchaseIndex(idx);
@@ -2032,6 +2117,7 @@ export default function LibrosFiscales() {
                       onToggleAnnulled={toggleSaleAnnulled}
                       recommendedFields={sale.isNew ? sale._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === sale.id}
+                      isIncomplete={sale.id ? incompleteSaleIds.has(sale.id) : false}
                       isEditing={editingSaleIndex === index}
                       onStartEdit={(idx) => {
                         setEditingSaleIndex(idx);
