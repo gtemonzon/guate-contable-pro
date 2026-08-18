@@ -336,7 +336,9 @@ export default function AccountLedgerDrawer({
                         {formatQ(row.running_balance)}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
+
                 </TableBody>
               </Table>
               <div className="mt-4 pt-3 border-t border-border flex justify-between text-sm font-mono font-bold">
