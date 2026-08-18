@@ -35,6 +35,10 @@ interface PurchaseInvoiceListProps {
   getRecommendedFields?: (index: number) => string[];
   /** Phase 2: VAT-exempt enterprises hide VAT-related fields. */
   appliesVat?: boolean;
+  /** Index of the card to highlight/scroll to */
+  highlightIndex?: number | null;
+  /** Returns whether the record at the index is missing required fields */
+  getIsIncomplete?: (index: number) => boolean;
 }
 
 export function PurchaseInvoiceList({
@@ -61,6 +65,8 @@ export function PurchaseInvoiceList({
   onFocusLastCardDone,
   getRecommendedFields,
   appliesVat = true,
+  highlightIndex = null,
+  getIsIncomplete,
 }: PurchaseInvoiceListProps) {
   const lastCardRef = useRef<PurchaseCardRef>(null);
 
@@ -126,7 +132,10 @@ export function PurchaseInvoiceList({
           duplicateWarning={duplicateWarnings?.[index] ?? null}
           onCheckDuplicate={onCheckDuplicate}
           appliesVat={appliesVat}
+          isHighlighted={highlightIndex === index}
+          isIncomplete={getIsIncomplete?.(index) ?? false}
         />
+
       ))}
     </div>
   );

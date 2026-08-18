@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Loader2, AlertCircle, RefreshCw, Plus, BarChart3 } from "lucide-react";
 import { SalesCard, SalesCardRef } from "@/components/ventas/SalesCard";
 import { LedgerSortControls, LedgerSortField, LedgerSortDir } from "@/components/libros/LedgerSortControls";
+import { IncompleteRecordsAlert } from "@/components/libros/IncompleteRecordsAlert";
 import { useToast } from "@/hooks/use-toast";
 import { ImportSalesDialog } from "@/components/ventas/ImportSalesDialog";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -192,6 +193,57 @@ export default function LibroVentas() {
       byOperation,
     };
   }, [filteredSales, operationTypes, felDocTypes]);
+
+  // ─── Registros incompletos ────────────────────────────────────────────────
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+
+  const incompleteGroups = useMemo(() => {
+    const toItem = (s: typeof sales[number], index: number) => ({
+      index,
+      date: s.invoice_date,
+      docLabel: s.invoice_number
+        ? `${s.invoice_series ? `${s.invoice_series}-` : ""}${s.invoice_number}`
+        : "-",
+      partyName: s.customer_name || "",
+      total: Number(s.total_amount) || 0,
+    });
+
+    const missingOperation = sales
+      .map((s, index) => ({ s, index }))
+      .filter(({ s }) => !s.operation_type_id)
+      .map(({ s, index }) => toItem(s, index));
+
+    const missingDocType = sales
+      .map((s, index) => ({ s, index }))
+      .filter(({ s }) => !s.fel_document_type || s.fel_document_type.trim() === "")
+      .map(({ s, index }) => toItem(s, index));
+
+    return [
+      { fieldLabel: "Tipo de Operación", items: missingOperation },
+      { fieldLabel: "Tipo de Documento", items: missingDocType },
+    ];
+  }, [sales]);
+
+  const incompleteIndexes = useMemo(
+    () => new Set(incompleteGroups.flatMap(g => g.items.map(i => i.index))),
+    [incompleteGroups]
+  );
+
+  const jumpToIncomplete = useCallback((index: number) => {
+    const target = sales[index];
+    // Ensure the record is visible regardless of the active establishment filter
+    if (
+      target &&
+      selectedEstablishment !== "all" &&
+      target.establishment_code !== selectedEstablishment
+    ) {
+      setSelectedEstablishment("all");
+    }
+    setHighlightIndex(index);
+    setTimeout(() => setHighlightIndex(null), 2500);
+  }, [sales, selectedEstablishment]);
+
+
 
   const monthNames = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -1076,6 +1128,7 @@ export default function LibroVentas() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">Libro de Ventas</h1>
             <SaveStatusIndicator status={saveStatus} />
+            <IncompleteRecordsAlert groups={incompleteGroups} onJumpTo={jumpToIncomplete} />
           </div>
           <p className="text-muted-foreground">Registro mensual de facturas de venta</p>
           
@@ -1336,6 +1389,8 @@ export default function LibroVentas() {
                     onToggleAnnulled={toggleAnnulled}
                     recommendedFields={sale.isNew ? (sale as any)._recommendedFields || [] : []}
                     isEditing={editingIndex === realIndex}
+                    isHighlighted={highlightIndex === realIndex}
+                    isIncomplete={incompleteIndexes.has(realIndex)}
                     onStartEdit={(idx) => setEditingIndex(idx)}
                     onCancelEdit={() => setEditingIndex(null)}
                   />

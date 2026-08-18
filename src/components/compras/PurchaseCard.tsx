@@ -56,6 +56,8 @@ export interface PurchaseCardProps {
   onDelete: (index: number) => void;
   recommendedFields?: string[];
   isHighlighted?: boolean;
+  /** Marks the record as missing required classification fields */
+  isIncomplete?: boolean;
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
   onCancelEdit?: () => void;
@@ -89,6 +91,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   onDelete, 
   recommendedFields = [],
   isHighlighted,
+  isIncomplete = false,
   isEditing = false,
   onStartEdit,
   onCancelEdit,
@@ -376,6 +379,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
           ref={cardRef}
           className={cn(
             "hover:bg-muted/50 cursor-pointer transition-colors group",
+            isIncomplete && !isHighlighted && "ring-1 ring-destructive/50 border-destructive/40",
             isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
             dupWarning && "border-destructive/50 bg-destructive/5",
           )}
@@ -428,6 +432,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         ref={cardRef}
         className={cn(
           "hover:bg-muted/50 cursor-pointer transition-colors group",
+          isIncomplete && !isHighlighted && "ring-1 ring-destructive/50 border-destructive/40",
           isHighlighted && "ring-2 ring-primary border-primary bg-accent/20"
         )}
         onClick={() => onStartEdit?.(index)}
