@@ -235,7 +235,8 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
       if (error) throw error;
       if (!data?.signedUrl) throw new Error("No se pudo generar URL de descarga");
 
-      window.open(data.signedUrl, '_blank');
+      showPdfPreview({ url: data.signedUrl, fileName: document.file_name || 'documento.pdf' });
+
     } catch (error: unknown) {
       toast({
         variant: "destructive",
