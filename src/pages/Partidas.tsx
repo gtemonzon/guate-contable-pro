@@ -127,6 +127,10 @@ export default function Partidas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Scroll dirigido hacia una partida abierta desde la URL (viewEntry)
+  const [pendingScrollEntryId, setPendingScrollEntryId] = useState<number | null>(null);
+  const entryRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
   // Delete-draft / Reopen state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; number: string } | null>(null);
