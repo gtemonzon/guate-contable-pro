@@ -1389,6 +1389,8 @@ export default function LibroVentas() {
                     onToggleAnnulled={toggleAnnulled}
                     recommendedFields={sale.isNew ? (sale as any)._recommendedFields || [] : []}
                     isEditing={editingIndex === realIndex}
+                    isHighlighted={highlightIndex === realIndex}
+                    isIncomplete={incompleteIndexes.has(realIndex)}
                     onStartEdit={(idx) => setEditingIndex(idx)}
                     onCancelEdit={() => setEditingIndex(null)}
                   />
