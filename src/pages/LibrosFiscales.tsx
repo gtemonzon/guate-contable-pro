@@ -25,6 +25,7 @@ import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
+import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 
 
