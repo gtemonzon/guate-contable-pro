@@ -56,6 +56,8 @@ export interface PurchaseCardProps {
   onDelete: (index: number) => void;
   recommendedFields?: string[];
   isHighlighted?: boolean;
+  /** Marks the record as missing required classification fields */
+  isIncomplete?: boolean;
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
   onCancelEdit?: () => void;
