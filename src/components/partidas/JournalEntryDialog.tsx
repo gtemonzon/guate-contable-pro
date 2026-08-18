@@ -478,6 +478,7 @@ export default function JournalEntryDialog({
           entryMonth={currentEntryMonth}
           entryYear={currentEntryYear}
           bankAccountId={form.bankAccountId}
+          bankReference={form.bankReference}
           onLinksChanged={() => {}} 
           onApplyToEntry={handleApplyToEntry}
         />
