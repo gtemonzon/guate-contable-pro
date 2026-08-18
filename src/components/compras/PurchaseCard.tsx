@@ -379,6 +379,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
           ref={cardRef}
           className={cn(
             "hover:bg-muted/50 cursor-pointer transition-colors group",
+            isIncomplete && !isHighlighted && "ring-1 ring-destructive/50 border-destructive/40",
             isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
             dupWarning && "border-destructive/50 bg-destructive/5",
           )}
