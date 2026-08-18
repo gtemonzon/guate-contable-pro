@@ -1644,6 +1644,11 @@ export default function LibrosFiscales() {
                 {activeTab === "compras" ? "Compras" : "Ventas"}
               </h1>
               <SaveStatusIndicator status={saveStatus} />
+              {activeTab === "compras" ? (
+                <IncompleteRecordsAlert groups={incompletePurchaseGroups} onJumpTo={jumpToIncomplete} />
+              ) : (
+                <IncompleteRecordsAlert groups={incompleteSaleGroups} onJumpTo={jumpToIncomplete} />
+              )}
               {isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
                 <TooltipProvider>
                   <Tooltip>
