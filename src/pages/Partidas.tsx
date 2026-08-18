@@ -127,6 +127,10 @@ export default function Partidas() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Scroll dirigido hacia una partida abierta desde la URL (viewEntry)
+  const [pendingScrollEntryId, setPendingScrollEntryId] = useState<number | null>(null);
+  const entryRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
   // Delete-draft / Reopen state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; number: string } | null>(null);
@@ -225,19 +229,54 @@ export default function Partidas() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [splitViewOpen, selectedEntryId]);
 
-  // Open view dialog from URL params (e.g. from global search)
+  // Open entry from URL params (e.g. from global search / "Copiar enlace")
   useEffect(() => {
     const viewEntryParam = searchParams.get("viewEntry");
-    if (viewEntryParam) {
-      const entryId = parseInt(viewEntryParam);
-      if (!isNaN(entryId)) {
-        setSelectedEntryId(entryId);
-        setSplitViewOpen(true);
+    if (!viewEntryParam) return;
+    const entryId = parseInt(viewEntryParam);
+    searchParams.delete("viewEntry");
+    setSearchParams(searchParams, { replace: true });
+    if (isNaN(entryId)) return;
+
+    setSelectedEntryId(entryId);
+    setSplitViewOpen(true);
+
+    (async () => {
+      const { data } = await supabase
+        .from("tab_journal_entries")
+        .select("entry_date")
+        .eq("id", entryId)
+        .single();
+      if (data?.entry_date) {
+        const year = String(data.entry_date).substring(0, 4);
+        setFilterNumber("");
+        setFilterType("all");
+        setFilterStatus("all");
+        setFilterMonths([]);
+        setFilterYear(year);
       }
-      searchParams.delete("viewEntry");
-      setSearchParams(searchParams, { replace: true });
-    }
+      setPendingScrollEntryId(entryId);
+    })();
   }, [searchParams]);
+
+  // Paginar y hacer scroll hacia la partida abierta por URL
+  useEffect(() => {
+    if (pendingScrollEntryId == null) return;
+    const idx = filteredEntries.findIndex((e) => e.id === pendingScrollEntryId);
+    if (idx === -1) return;
+    const targetPage = Math.floor(idx / pageSize) + 1;
+    setCurrentPage((p) => (p === targetPage ? p : targetPage));
+
+    const raf = requestAnimationFrame(() => {
+      const el = entryRowRefs.current[pendingScrollEntryId];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setPendingScrollEntryId(null);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pendingScrollEntryId, filteredEntries, pageSize, currentPage]);
+
 
   // Track which enterprise we already fetched to avoid redundant loads
   const fetchedEnterpriseRef = useRef<string | null>(null);
@@ -796,6 +835,7 @@ export default function Partidas() {
                 return (
                   <div
                     key={entry.id}
+                    ref={(el) => { entryRowRefs.current[entry.id] = el; }}
                     onClick={() => handleEntryClick(entry)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors group",
