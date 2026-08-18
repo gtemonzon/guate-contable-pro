@@ -789,17 +789,17 @@ export default function Partidas() {
                     )}
                   >
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">{entry.entry_number}</span>
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span className="font-semibold text-sm min-w-0 truncate">{entry.entry_number}</span>
                         <Badge
                           variant={statusConfig.variant}
-                          className={cn("text-[10px] h-5 px-1.5", statusConfig.className)}
+                          className={cn("text-[10px] h-5 px-1.5 shrink-0", statusConfig.className)}
                         >
                           {statusConfig.icon}
                           <span className="ml-1">{statusConfig.label}</span>
                         </Badge>
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5">{entry.entry_type}</Badge>
+                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{entry.entry_type}</Badge>
                         {/* Show "Revertida" tag if a reversal exists */}
                         {entry.reversal_entry_id && (() => {
                           const rev = entries.find(e => e.id === entry.reversal_entry_id);
@@ -808,7 +808,7 @@ export default function Partidas() {
                             <Badge
                               variant="outline"
                               className={cn(
-                                "text-[10px] h-5 px-1.5",
+                                "text-[10px] h-5 px-1.5 shrink-0",
                                 isRevPosted
                                   ? "border-destructive/50 text-destructive bg-destructive/10"
                                   : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
