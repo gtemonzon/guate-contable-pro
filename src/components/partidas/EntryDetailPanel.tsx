@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
-import EntityLink, { type DateContext } from "@/components/ui/entity-link";
+import { type DateContext } from "@/components/ui/entity-link";
 import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useToast } from "@/hooks/use-toast";
