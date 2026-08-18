@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, X, FileText, Search, Loader2 } from "lucide-react";
+import { CalendarIcon, Upload, X, FileText, Search, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -61,8 +62,17 @@ interface ExtractedPdfData {
   periodYear?: number;
   paymentDate?: string;
   amountPaid?: number;
+  nit?: string;
+  taxpayerName?: string;
   fieldsFound: number;
 }
+
+type NitCheck =
+  | { status: "idle" }
+  | { status: "ok"; pdfNit: string; pdfName?: string }
+  | { status: "mismatch"; pdfNit: string; pdfName?: string }
+  | { status: "unverified" };
+
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
