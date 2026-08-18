@@ -620,7 +620,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
           {sale.journal_entry_id && (
             <div className="pt-2 border-t">
-              <Badge variant="secondary">{journalEntryLabel ? `${journalEntryLabel} generada` : "Póliza generada"}</Badge>
+              <Badge variant="secondary">{journalEntryLabel || "Póliza generada"}</Badge>
             </div>
           )}
         </div>
