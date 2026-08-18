@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { supabase } from "@/integrations/supabase/client";
 import { getFiscalFloorDate } from "@/utils/fiscalFloor";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, ExternalLink } from "lucide-react";
@@ -131,25 +132,26 @@ export default function AccountLedgerDrawer({
       // Opening balance: everything posted strictly before the effective start
       let openingBalance = 0;
       if (lowerBound) {
-        const { data: prevData, error: prevError } = await supabase
-          .from("tab_journal_entry_details")
-          .select(`
-            debit_amount,
-            credit_amount,
-            tab_journal_entries!inner (
-              status,
-              is_posted,
-              entry_date
-            )
-          `)
-          .in("account_id", resolvedIds)
-          .eq("tab_journal_entries.is_posted", true)
-          .eq("tab_journal_entries.enterprise_id", enterpriseId)
-          .is("tab_journal_entries.reversal_entry_id", null)
-          .is("tab_journal_entries.reversed_by_entry_id", null)
-          .lt("tab_journal_entries.entry_date", lowerBound);
+        const prevData = await fetchAllRecords<any>(() =>
+          supabase
+            .from("tab_journal_entry_details")
+            .select(`
+              debit_amount,
+              credit_amount,
+              tab_journal_entries!inner (
+                status,
+                is_posted,
+                entry_date
+              )
+            `)
+            .in("account_id", resolvedIds)
+            .eq("tab_journal_entries.is_posted", true)
+            .eq("tab_journal_entries.enterprise_id", enterpriseId)
+            .is("tab_journal_entries.reversal_entry_id", null)
+            .is("tab_journal_entries.reversed_by_entry_id", null)
+            .lt("tab_journal_entries.entry_date", lowerBound)
+        );
 
-        if (prevError) throw prevError;
         openingBalance = (prevData || []).reduce(
           (sum: number, r: any) => sum + (Number(r.debit_amount) || 0) - (Number(r.credit_amount) || 0),
           0
@@ -157,37 +159,39 @@ export default function AccountLedgerDrawer({
       }
 
       // Get all detail lines for the account(s) within the date range, from posted entries only
-      const query = supabase
-        .from("tab_journal_entry_details")
-        .select(`
-          debit_amount,
-          credit_amount,
-          description,
-          journal_entry_id,
-          account_id,
-          tab_journal_entries!inner (
-            id,
-            entry_number,
-            entry_date,
+      const buildQuery = () => {
+        const q = supabase
+          .from("tab_journal_entry_details")
+          .select(`
+            debit_amount,
+            credit_amount,
             description,
-            status,
-            is_posted
-          )
-        `)
-        .in("account_id", resolvedIds)
-        .eq("tab_journal_entries.is_posted", true)
-        .eq("tab_journal_entries.enterprise_id", enterpriseId)
-        .is("tab_journal_entries.reversal_entry_id", null)
-        .is("tab_journal_entries.reversed_by_entry_id", null)
-        .lte("tab_journal_entries.entry_date", effectiveEndDate)
-        .order("tab_journal_entries(entry_date)", { ascending: true });
+            journal_entry_id,
+            account_id,
+            tab_journal_entries!inner (
+              id,
+              entry_number,
+              entry_date,
+              description,
+              status,
+              is_posted
+            )
+          `)
+          .in("account_id", resolvedIds)
+          .eq("tab_journal_entries.is_posted", true)
+          .eq("tab_journal_entries.enterprise_id", enterpriseId)
+          .is("tab_journal_entries.reversal_entry_id", null)
+          .is("tab_journal_entries.reversed_by_entry_id", null)
+          .lte("tab_journal_entries.entry_date", effectiveEndDate)
+          .order("tab_journal_entries(entry_date)", { ascending: true });
 
-      if (lowerBound) {
-        query.gte("tab_journal_entries.entry_date", lowerBound);
-      }
+        if (lowerBound) {
+          q.gte("tab_journal_entries.entry_date", lowerBound);
+        }
+        return q;
+      };
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllRecords<any>(buildQuery);
 
       let runningBalance = openingBalance;
       const ledgerRows: LedgerRow[] = (data || []).map((row: any) => {
