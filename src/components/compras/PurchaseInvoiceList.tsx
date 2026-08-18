@@ -65,6 +65,8 @@ export function PurchaseInvoiceList({
   onFocusLastCardDone,
   getRecommendedFields,
   appliesVat = true,
+  highlightIndex = null,
+  getIsIncomplete,
 }: PurchaseInvoiceListProps) {
   const lastCardRef = useRef<PurchaseCardRef>(null);
 
