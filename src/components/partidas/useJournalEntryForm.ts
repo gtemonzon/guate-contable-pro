@@ -726,7 +726,8 @@ export function useJournalEntryForm(
 
     for (const p of purchases) {
       const docType = p.fel_document_type || 'FACT';
-      const { multiplier, appliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
+      const { multiplier, appliesVat: docTypeAppliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
+      const appliesVat = enterpriseAppliesVat && docTypeAppliesVat;
       const ref = `${docType} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`;
       const effectiveTotal = (Number(p.total_amount) || 0) * multiplier;
       totalAmount += effectiveTotal;
