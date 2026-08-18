@@ -218,7 +218,7 @@ export function QuickPurchaseForm({
           }, { onConflict: "enterprise_id,purchase_id" }),
         supabase
           .from("tab_purchase_ledger")
-          .update({ journal_entry_id: journalEntryId, batch_reference: bankReference || null })
+          .update({ journal_entry_id: journalEntryId, batch_reference: bankReference || null, bank_account_id: bankAccountId || null })
           .eq("enterprise_id", enterpriseId)
           .eq("id", duplicate.id)
           .is("deleted_at", null),
@@ -432,6 +432,7 @@ export function QuickPurchaseForm({
           operation_type_id: operationTypeId,
           journal_entry_id: journalEntryId,
           batch_reference: bankReference || null,
+          bank_account_id: bankAccountId || null,
           purchase_book_id: purchaseBookId,
         })
         .select("id").single();

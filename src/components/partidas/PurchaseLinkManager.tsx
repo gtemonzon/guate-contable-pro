@@ -609,6 +609,7 @@ export function PurchaseLinkManager({
                   accounts={accounts}
                   felDocTypes={felDocTypes}
                   bankReference={bankReference}
+                  bankAccountId={bankAccountId}
                   onCreated={handleInvoiceCreated}
                 />
               </TabsContent>
