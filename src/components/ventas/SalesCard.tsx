@@ -63,6 +63,8 @@ interface SalesCardProps {
   isEditing?: boolean;
   onStartEdit?: (index: number) => void;
   onCancelEdit?: () => void;
+  /** Short label for the linked journal entry (e.g. "PD-13"). */
+  journalEntryLabel?: string;
 }
 
 export interface SalesCardRef {
@@ -88,7 +90,8 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   isIncomplete = false,
   isEditing = false,
   onStartEdit,
-  onCancelEdit
+  onCancelEdit,
+  journalEntryLabel
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [changeTick, setChangeTick] = useState(0);
@@ -319,7 +322,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
             <div className="col-span-1 flex items-center justify-end gap-1">
               {sale.journal_entry_id && (
-                <Badge variant="secondary" className="text-xs">Póliza</Badge>
+                <Badge variant="secondary" className="text-xs">{journalEntryLabel || "Póliza"}</Badge>
               )}
             </div>
           </div>
@@ -617,7 +620,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
           {sale.journal_entry_id && (
             <div className="pt-2 border-t">
-              <Badge variant="secondary">Póliza generada</Badge>
+              <Badge variant="secondary">{journalEntryLabel ? `${journalEntryLabel} generada` : "Póliza generada"}</Badge>
             </div>
           )}
         </div>

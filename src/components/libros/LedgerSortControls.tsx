@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDown, ArrowUp, Building2, Calendar, Coins } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, Calendar, Coins, Hash } from "lucide-react";
 
-export type LedgerSortField = "date" | "party" | "amount";
+export type LedgerSortField = "date" | "party" | "amount" | "journalEntry";
 export type LedgerSortDir = "asc" | "desc";
 
 interface Props {
@@ -23,6 +23,7 @@ export function LedgerSortControls({ field, dir, onSort, partyLabel = "Proveedor
     { key: "date", label: "Fecha", Icon: Calendar },
     { key: "party", label: partyLabel, Icon: Building2 },
     { key: "amount", label: "Monto", Icon: Coins },
+    { key: "journalEntry", label: "Partida", Icon: Hash },
   ];
 
   return (

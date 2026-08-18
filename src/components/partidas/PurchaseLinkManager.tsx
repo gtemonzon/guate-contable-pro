@@ -39,6 +39,7 @@ interface PurchaseLinkManagerProps {
   entryMonth?: number;
   entryYear?: number;
   bankAccountId?: number | null;
+  bankReference?: string | null;
   onLinksChanged?: () => void;
   onApplyToEntry?: () => Promise<void> | void;
 }
@@ -60,7 +61,7 @@ export interface PurchaseRecord {
 
 export function PurchaseLinkManager({
   open, onOpenChange, enterpriseId, journalEntryId, journalEntryNumber,
-  entryStatus, entryDate, entryMonth, entryYear, bankAccountId,
+  entryStatus, entryDate, entryMonth, entryYear, bankAccountId, bankReference,
   onLinksChanged, onApplyToEntry,
 }: PurchaseLinkManagerProps) {
   const [unlinkedPurchases, setUnlinkedPurchases] = useState<PurchaseRecord[]>([]);
@@ -607,6 +608,7 @@ export function PurchaseLinkManager({
                   entryYear={entryYear || new Date().getFullYear()}
                   accounts={accounts}
                   felDocTypes={felDocTypes}
+                  bankReference={bankReference}
                   onCreated={handleInvoiceCreated}
                 />
               </TabsContent>

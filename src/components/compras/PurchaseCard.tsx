@@ -69,6 +69,8 @@ export interface PurchaseCardProps {
   onCheckDuplicate?: (index: number) => void;
   /** Phase 2: when false, hide VAT/Base/Exento fields and relabel Total. */
   appliesVat?: boolean;
+  /** Short label for the linked journal entry (e.g. "PD-13"). */
+  journalEntryLabel?: string;
 }
 
 export interface PurchaseCardRef {
@@ -99,6 +101,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   duplicateWarning: externalDuplicateWarning,
   onCheckDuplicate,
   appliesVat = true,
+  journalEntryLabel,
 }, ref) => {
   const [hasChanges, setHasChanges] = useState(false);
   const [changeTick, setChangeTick] = useState(0);
@@ -409,7 +412,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className="col-span-2 text-xs truncate flex items-center gap-1" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
                 {getAccountName(purchase.expense_account_id, expenseAccounts)}
                 {purchase.journal_entry_id && (
-                  <Badge variant="secondary" className="text-[10px] shrink-0">Póliza</Badge>
+                  <Badge variant="secondary" className="text-[10px] shrink-0">{journalEntryLabel || "Póliza"}</Badge>
                 )}
                 {dupWarning && (
                   <Tooltip>
@@ -473,7 +476,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-1 flex items-center justify-end gap-1">
               {purchase.journal_entry_id && (
-                <Badge variant="secondary" className="text-xs">Póliza</Badge>
+                <Badge variant="secondary" className="text-xs">{journalEntryLabel || "Póliza"}</Badge>
               )}
             </div>
           </div>
@@ -1056,7 +1059,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
           {purchase.journal_entry_id && (
             <div className="pt-2 border-t">
-              <Badge variant="secondary">Póliza generada</Badge>
+              <Badge variant="secondary">{journalEntryLabel ? `${journalEntryLabel} generada` : "Póliza generada"}</Badge>
             </div>
           )}
         </div>
