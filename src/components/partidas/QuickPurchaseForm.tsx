@@ -43,6 +43,8 @@ interface QuickPurchaseFormProps {
   felDocTypes: Array<{ code: string; name: string }>;
   /** Ref. Bancaria de la partida activa; se propaga como Ref. Pago de la factura. */
   bankReference?: string | null;
+  /** Cuenta bancaria de la partida activa; se propaga a la factura vinculada. */
+  bankAccountId?: number | null;
   onCreated: () => void;
 }
 
@@ -64,7 +66,7 @@ const VAT_RATE = 0.12;
 
 export function QuickPurchaseForm({
   enterpriseId, journalEntryId, entryDate, entryMonth, entryYear,
-  accounts, felDocTypes, bankReference, onCreated,
+  accounts, felDocTypes, bankReference, bankAccountId, onCreated,
 }: QuickPurchaseFormProps) {
   const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
   const { items: enabledCurrencies } = useEnterpriseCurrencies(enterpriseId);
