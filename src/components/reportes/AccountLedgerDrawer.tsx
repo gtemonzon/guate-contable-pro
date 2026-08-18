@@ -68,7 +68,9 @@ export default function AccountLedgerDrawer({
   const [viewEntryId, setViewEntryId] = useState<number | null>(null);
   const [scope, setScope] = useState<'period' | 'month'>('period');
   const [highlightActive, setHighlightActive] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const firstHighlightRef = useRef<HTMLTableRowElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   const resolvedIds = accountIds && accountIds.length > 0 ? accountIds : (accountId ? [accountId] : []);
   const isConsolidated = resolvedIds.length > 1;
@@ -90,7 +92,8 @@ export default function AccountLedgerDrawer({
 
   useEffect(() => {
     if (!open) setScope('period');
-  }, [open]);
+    setScrolled(false);
+  }, [open, accountId, JSON.stringify(accountIds)]);
 
   useEffect(() => {
     if (open && resolvedIds.length > 0 && enterpriseId) {
@@ -110,6 +113,10 @@ export default function AccountLedgerDrawer({
     const clearTimer = setTimeout(() => setHighlightActive(false), 2600);
     return () => { clearTimeout(scrollTimer); clearTimeout(clearTimer); };
   }, [open, loading, rows, highlightEntryId]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrolled(e.currentTarget.scrollTop > 40);
+  };
 
   const fetchLedger = async () => {
     if (resolvedIds.length === 0 || !enterpriseId) return;
@@ -220,136 +227,211 @@ export default function AccountLedgerDrawer({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto">
-          <SheetHeader className="pb-4">
-            <SheetTitle className="text-left flex items-center justify-between gap-2">
-              <span>
-                <span className="text-primary font-mono">{accountCode}</span>
-                <span className="ml-2">{accountName}</span>
-              </span>
-              <span className="flex items-center gap-2 mr-6 shrink-0">
-                {monthToggleEnabled && (
-                  <span className="inline-flex rounded-md border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setScope('period')}
-                      className={cn(
-                        "px-2 py-1 text-xs transition-colors",
-                        scope === 'period' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      )}
-                    >
-                      Período completo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setScope('month')}
-                      className={cn(
-                        "px-2 py-1 text-xs transition-colors border-l",
-                        scope === 'month' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      )}
-                    >
-                      Mes de la partida
-                    </button>
+        <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-hidden flex flex-col p-0">
+          {/* Sticky collapsible header */}
+          <div
+            className={cn(
+              "sticky top-0 z-20 flex flex-col px-6 pt-6 transition-all duration-200",
+              scrolled
+                ? "pb-3 bg-background/95 backdrop-blur-sm border-b shadow-sm"
+                : "pb-0 bg-transparent"
+            )}
+          >
+            {!scrolled ? (
+              <SheetHeader className="pb-4">
+                <SheetTitle className="text-left flex items-center justify-between gap-2">
+                  <span>
+                    <span className="text-primary font-mono">{accountCode}</span>
+                    <span className="ml-2">{accountName}</span>
                   </span>
-                )}
-                {showFullReportLink && accountId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1 shrink-0"
-                    onClick={() => {
-                      let url = `/reportes?tab=mayor&accountId=${accountId}`;
-                      if (effectiveStartDate) url += `&startDate=${effectiveStartDate}`;
-                      if (effectiveEndDate) url += `&endDate=${effectiveEndDate}`;
-                      navigate(url);
-                    }}
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Ver reporte completo
-                  </Button>
-                )}
-              </span>
-            </SheetTitle>
-            <p className="text-sm text-muted-foreground">
-              {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
-              {effectiveStartDate ? `del ${safeFmt(effectiveStartDate)} ` : ''}
-              al {safeFmt(effectiveEndDate)}
-            </p>
-
-          </SheetHeader>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              No hay movimientos en este período
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[90px]">Fecha</TableHead>
-                    <TableHead className="w-[100px]">Partida</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead className="text-right w-[110px]">Debe</TableHead>
-                    <TableHead className="text-right w-[110px]">Haber</TableHead>
-                    <TableHead className="text-right w-[120px]">Saldo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row, idx) => {
-                    const isTarget = !!highlightEntryId && row.journal_entry_id === highlightEntryId;
-                    const isFirstTarget =
-                      isTarget && rows.findIndex(r => r.journal_entry_id === highlightEntryId) === idx;
-                    return (
-                    <TableRow
-                      key={idx}
-                      ref={isFirstTarget ? firstHighlightRef : undefined}
-                      className={cn(isTarget && highlightActive && "ring-2 ring-primary bg-accent/20")}
-                    >
-
-                      <TableCell className="font-mono text-xs whitespace-nowrap">
-                        {safeFmt(row.entry_date)}
-                      </TableCell>
-                      <TableCell>
+                  <span className="flex items-center gap-2 mr-6 shrink-0">
+                    {monthToggleEnabled && (
+                      <span className="inline-flex rounded-md border overflow-hidden">
                         <button
-                          onClick={() => setViewEntryId(row.journal_entry_id)}
-                          className="text-primary hover:underline font-mono text-xs flex items-center gap-1"
+                          type="button"
+                          onClick={() => setScope('period')}
+                          className={cn(
+                            "px-2 py-1 text-xs transition-colors",
+                            scope === 'period' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
                         >
-                          {row.entry_number}
-                          <ExternalLink className="h-3 w-3" />
+                          Período completo
                         </button>
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[250px]">
-                        <TruncatedText text={row.description} className="text-xs" inline />
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs whitespace-nowrap">
-                        {row.debit_amount > 0 ? formatQ(row.debit_amount) : ''}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs whitespace-nowrap">
-                        {row.credit_amount > 0 ? formatQ(row.credit_amount) : ''}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs whitespace-nowrap font-semibold">
-                        {formatQ(row.running_balance)}
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
+                        <button
+                          type="button"
+                          onClick={() => setScope('month')}
+                          className={cn(
+                            "px-2 py-1 text-xs transition-colors border-l",
+                            scope === 'month' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          Mes de la partida
+                        </button>
+                      </span>
+                    )}
+                    {showFullReportLink && accountId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1 shrink-0"
+                        onClick={() => {
+                          let url = `/reportes?tab=mayor&accountId=${accountId}`;
+                          if (effectiveStartDate) url += `&startDate=${effectiveStartDate}`;
+                          if (effectiveEndDate) url += `&endDate=${effectiveEndDate}`;
+                          navigate(url);
+                        }}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Ver reporte completo
+                      </Button>
+                    )}
+                  </span>
+                </SheetTitle>
+                <p className="text-sm text-muted-foreground">
+                  {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
+                  {effectiveStartDate ? `del ${safeFmt(effectiveStartDate)} ` : ''}
+                  al {safeFmt(effectiveEndDate)}
+                </p>
+              </SheetHeader>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-start gap-2 mr-6">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-primary font-mono text-sm shrink-0">{accountCode}</span>
+                    <span className="text-sm font-medium truncate" title={accountName}>{accountName}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
+                    {effectiveStartDate ? `${safeFmt(effectiveStartDate)} - ` : ''}
+                    {safeFmt(effectiveEndDate)}
+                  </span>
+                </div>
+                {(monthToggleEnabled || (showFullReportLink && accountId)) && (
+                  <div className="flex items-center justify-end gap-2">
+                    {monthToggleEnabled && (
+                      <span className="inline-flex rounded-md border overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setScope('period')}
+                          className={cn(
+                            "px-2 py-0.5 text-[11px] transition-colors",
+                            scope === 'period' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          Período completo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScope('month')}
+                          className={cn(
+                            "px-2 py-0.5 text-[11px] transition-colors border-l",
+                            scope === 'month' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          Mes de la partida
+                        </button>
+                      </span>
+                    )}
+                    {showFullReportLink && accountId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-[11px] gap-1 shrink-0"
+                        onClick={() => {
+                          let url = `/reportes?tab=mayor&accountId=${accountId}`;
+                          if (effectiveStartDate) url += `&startDate=${effectiveStartDate}`;
+                          if (effectiveEndDate) url += `&endDate=${effectiveEndDate}`;
+                          navigate(url);
+                        }}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Ver reporte completo
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-                </TableBody>
-              </Table>
-              <div className="mt-4 pt-3 border-t border-border flex justify-between text-sm font-mono font-bold">
-                <span>Totales:</span>
-                <div className="flex gap-6">
-                  <span>Debe: {formatQ(rows.reduce((s, r) => s + r.debit_amount, 0))}</span>
-                  <span>Haber: {formatQ(rows.reduce((s, r) => s + r.credit_amount, 0))}</span>
+          {/* Scrollable body */}
+          <div
+            ref={contentRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto px-6 pb-6"
+          >
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                No hay movimientos en este período
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[90px]">Fecha</TableHead>
+                      <TableHead className="w-[100px]">Partida</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right w-[110px]">Debe</TableHead>
+                      <TableHead className="text-right w-[110px]">Haber</TableHead>
+                      <TableHead className="text-right w-[120px]">Saldo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row, idx) => {
+                      const isTarget = !!highlightEntryId && row.journal_entry_id === highlightEntryId;
+                      const isFirstTarget =
+                        isTarget && rows.findIndex(r => r.journal_entry_id === highlightEntryId) === idx;
+                      return (
+                      <TableRow
+                        key={idx}
+                        ref={isFirstTarget ? firstHighlightRef : undefined}
+                        className={cn(isTarget && highlightActive && "ring-2 ring-primary bg-accent/20")}
+                      >
+
+                        <TableCell className="font-mono text-xs whitespace-nowrap">
+                          {safeFmt(row.entry_date)}
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => setViewEntryId(row.journal_entry_id)}
+                            className="text-primary hover:underline font-mono text-xs flex items-center gap-1"
+                          >
+                            {row.entry_number}
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-xs max-w-[250px]">
+                          <TruncatedText text={row.description} className="text-xs" inline />
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs whitespace-nowrap">
+                          {row.debit_amount > 0 ? formatQ(row.debit_amount) : ''}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs whitespace-nowrap">
+                          {row.credit_amount > 0 ? formatQ(row.credit_amount) : ''}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs whitespace-nowrap font-semibold">
+                          {formatQ(row.running_balance)}
+                        </TableCell>
+                      </TableRow>
+                      );
+                    })}
+
+                  </TableBody>
+                </Table>
+                <div className="mt-4 pt-3 border-t border-border flex justify-between text-sm font-mono font-bold">
+                  <span>Totales:</span>
+                  <div className="flex gap-6">
+                    <span>Debe: {formatQ(rows.reduce((s, r) => s + r.debit_amount, 0))}</span>
+                    <span>Haber: {formatQ(rows.reduce((s, r) => s + r.credit_amount, 0))}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </SheetContent>
       </Sheet>
 
