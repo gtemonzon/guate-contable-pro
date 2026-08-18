@@ -300,8 +300,17 @@ export default function AccountLedgerDrawer({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((row, idx) => (
-                    <TableRow key={idx}>
+                  {rows.map((row, idx) => {
+                    const isTarget = !!highlightEntryId && row.journal_entry_id === highlightEntryId;
+                    const isFirstTarget =
+                      isTarget && rows.findIndex(r => r.journal_entry_id === highlightEntryId) === idx;
+                    return (
+                    <TableRow
+                      key={idx}
+                      ref={isFirstTarget ? firstHighlightRef : undefined}
+                      className={cn(isTarget && highlightActive && "ring-2 ring-primary bg-accent/20")}
+                    >
+
                       <TableCell className="font-mono text-xs whitespace-nowrap">
                         {safeFmt(row.entry_date)}
                       </TableCell>
