@@ -26,7 +26,7 @@ import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
-import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
+import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
 
 
 
@@ -89,6 +89,7 @@ interface SaleEntry {
 export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
+  const [journalEntryNumbers, setJournalEntryNumbers] = useState<Record<number, string>>({});
   const [sortField, setSortField] = useState<LedgerSortField | null>(null);
   const [sortDir, setSortDir] = useState<LedgerSortDir>("asc");
 
@@ -241,6 +242,30 @@ export default function LibrosFiscales() {
     selectedYearRef.current = selectedYear;
   }, [selectedMonth, selectedYear]);
 
+  // Resolve entry_number for linked journal entries (badge label + sorting)
+  useEffect(() => {
+    const ids = Array.from(new Set([
+      ...purchases.map((p) => p.journal_entry_id),
+      ...sales.map((s) => s.journal_entry_id),
+    ].filter((id): id is number => typeof id === "number" && !!id)));
+    const missing = ids.filter((id) => !(id in journalEntryNumbers));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("tab_journal_entries")
+        .select("id, entry_number")
+        .in("id", missing);
+      if (cancelled || !data) return;
+      setJournalEntryNumbers((prev) => {
+        const next = { ...prev };
+        data.forEach((row: any) => { next[row.id] = row.entry_number; });
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [purchases, sales, journalEntryNumbers]);
+
   const handleSort = useCallback((field: LedgerSortField) => {
     const nextDir: LedgerSortDir = sortField === field && sortDir === "asc" ? "desc" : "asc";
     setSortField(field);
@@ -253,6 +278,14 @@ export default function LibrosFiscales() {
           if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
           if (field === "party") return mult * ((a.supplier_name || "").localeCompare(b.supplier_name || "", "es"));
           if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+          if (field === "journalEntry") {
+            const an = a.journal_entry_id ? (journalEntryNumbers[a.journal_entry_id] || "") : "";
+            const bn = b.journal_entry_id ? (journalEntryNumbers[b.journal_entry_id] || "") : "";
+            if (!an && !bn) return 0;
+            if (!an) return 1;
+            if (!bn) return -1;
+            return mult * an.localeCompare(bn);
+          }
           return 0;
         });
         return copy;
@@ -264,12 +297,20 @@ export default function LibrosFiscales() {
           if (field === "date") return mult * ((a.invoice_date || "").localeCompare(b.invoice_date || ""));
           if (field === "party") return mult * ((a.customer_name || "").localeCompare(b.customer_name || "", "es"));
           if (field === "amount") return mult * ((Number(a.total_amount) || 0) - (Number(b.total_amount) || 0));
+          if (field === "journalEntry") {
+            const an = a.journal_entry_id ? (journalEntryNumbers[a.journal_entry_id] || "") : "";
+            const bn = b.journal_entry_id ? (journalEntryNumbers[b.journal_entry_id] || "") : "";
+            if (!an && !bn) return 0;
+            if (!an) return 1;
+            if (!bn) return -1;
+            return mult * an.localeCompare(bn);
+          }
           return 0;
         });
         return copy;
       });
     }
-  }, [sortField, sortDir, activeTab]);
+  }, [sortField, sortDir, activeTab, journalEntryNumbers]);
 
   const purchaseTotals = useMemo(() => {
     // Calculate totals considering affects_total from document type
@@ -2075,6 +2116,7 @@ export default function LibrosFiscales() {
                       expenseAccounts={expenseAccounts}
                       bankAccounts={bankAccounts}
                       appliesVat={appliesVat}
+                      journalEntryLabel={purchase.journal_entry_id ? formatShortEntryLabel(journalEntryNumbers[purchase.journal_entry_id]) : undefined}
                       onUpdate={updatePurchaseRow}
                       onSave={savePurchaseRow}
                       onDelete={deletePurchaseRow}
@@ -2111,6 +2153,7 @@ export default function LibrosFiscales() {
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       incomeAccounts={incomeAccounts}
+                      journalEntryLabel={sale.journal_entry_id ? formatShortEntryLabel(journalEntryNumbers[sale.journal_entry_id]) : undefined}
                       onUpdate={updateSaleRow}
                       onSave={saveSaleRow}
                       onDelete={deleteSaleRow}
