@@ -852,7 +852,7 @@ export default function TaxFormDialog({
           <Button variant="outline" onClick={() => onOpenChange()} disabled={loading || isAnalyzing}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading || isAnalyzing}>
+          <Button onClick={handleSubmit} disabled={loading || isAnalyzing || nitBlocksSave}>
             {loading ? "Guardando..." : editingForm ? "Actualizar" : "Guardar Formulario"}
           </Button>
         </DialogFooter>
