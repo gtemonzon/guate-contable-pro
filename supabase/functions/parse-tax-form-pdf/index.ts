@@ -196,7 +196,7 @@ function extractDataFromText(text: string): ExtractedData {
         .map((l) => l.replace(/\s+/g, " ").trim())
         .find((l) => l.length > 2 && /[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(l));
       if (nameLine) {
-        result.taxpayerName = nameLine.replace(/,{2,}/g, ",").trim();
+        result.taxpayerName = nameLine.replace(/,{2,}/g, ",").trim().slice(0, 120);
         result.fieldsFound++;
       }
     }
