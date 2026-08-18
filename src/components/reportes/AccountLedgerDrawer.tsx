@@ -227,28 +227,55 @@ export default function AccountLedgerDrawer({
                 <span className="text-primary font-mono">{accountCode}</span>
                 <span className="ml-2">{accountName}</span>
               </span>
-              {showFullReportLink && accountId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1 mr-6 shrink-0"
-                  onClick={() => {
-                    let url = `/reportes?tab=mayor&accountId=${accountId}`;
-                    if (startDate) url += `&startDate=${startDate}`;
-                    if (endDate) url += `&endDate=${endDate}`;
-                    navigate(url);
-                  }}
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Ver reporte completo
-                </Button>
-              )}
+              <span className="flex items-center gap-2 mr-6 shrink-0">
+                {monthToggleEnabled && (
+                  <span className="inline-flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setScope('period')}
+                      className={cn(
+                        "px-2 py-1 text-xs transition-colors",
+                        scope === 'period' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      )}
+                    >
+                      Período completo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScope('month')}
+                      className={cn(
+                        "px-2 py-1 text-xs transition-colors border-l",
+                        scope === 'month' ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                      )}
+                    >
+                      Mes de la partida
+                    </button>
+                  </span>
+                )}
+                {showFullReportLink && accountId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    onClick={() => {
+                      let url = `/reportes?tab=mayor&accountId=${accountId}`;
+                      if (effectiveStartDate) url += `&startDate=${effectiveStartDate}`;
+                      if (effectiveEndDate) url += `&endDate=${effectiveEndDate}`;
+                      navigate(url);
+                    }}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Ver reporte completo
+                  </Button>
+                )}
+              </span>
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {isConsolidated ? 'Mayor de cuenta consolidado' : 'Mayor de cuenta'}{' '}
-              {startDate ? `del ${safeFmt(startDate)} ` : ''}
-              al {safeFmt(endDate)}
+              {effectiveStartDate ? `del ${safeFmt(effectiveStartDate)} ` : ''}
+              al {safeFmt(effectiveEndDate)}
             </p>
+
           </SheetHeader>
 
           {loading ? (
