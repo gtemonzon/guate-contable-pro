@@ -176,6 +176,33 @@ function extractDataFromText(text: string): ExtractedData {
     }
   }
 
+  // Extract NIT and taxpayer name (section "1. NIT DEL CONTRIBUYENTE")
+  const nitBlock = extractBetween(
+    text,
+    /NIT\s+DEL\s+CONTRIBUYENTE/i,
+    /PER[IÍ]ODO\s+DE\s+IMPOSICI[ÓO]N|R[ÉE]GIMEN|RENTA\s+IMPONIBLE|2\.\s|DETERMINACI[ÓO]N/i
+  );
+  if (nitBlock) {
+    const nitMatch = nitBlock.match(/\d[\d\s-]*\d|\d/);
+    if (nitMatch) {
+      const digits = onlyDigits(nitMatch[0]);
+      if (digits.length >= 5 && digits.length <= 12) {
+        result.nit = digits;
+        result.fieldsFound++;
+      }
+      const rest = nitBlock.slice((nitMatch.index ?? 0) + nitMatch[0].length);
+      const nameLine = rest
+        .split(/[\n\r]+/)
+        .map((l) => l.replace(/\s+/g, " ").trim())
+        .find((l) => l.length > 2 && /[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(l));
+      if (nameLine) {
+        result.taxpayerName = nameLine.replace(/,{2,}/g, ",").trim();
+        result.fieldsFound++;
+      }
+    }
+  }
+
+
   // Extract Tax Type - ISR, IVA, ISO, etc.
   const taxTypePatterns = [
     /(ISR\s+(?:OPCI[ÓO]N(?:AL)?\s+)?(?:MENSUAL|TRIMESTRAL|ANUAL|ACTIVIDADES\s+LUCRATIVAS)?)/gi,
