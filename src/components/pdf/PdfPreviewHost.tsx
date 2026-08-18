@@ -10,6 +10,7 @@ import { subscribePdfPreview, type PdfPreviewRequest } from "@/lib/pdfPreview";
  */
 export default function PdfPreviewHost() {
   const [request, setRequest] = useState<PdfPreviewRequest | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => subscribePdfPreview((req) => setRequest(req)), []);
 
