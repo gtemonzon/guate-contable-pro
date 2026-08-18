@@ -15,6 +15,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import {
+import { previewPdfDoc } from "@/lib/pdfPreview";
   Table,
   TableBody,
   TableCell,
@@ -217,7 +218,7 @@ export default function ReporteComprasVentas() {
     doc.text(`Total Compras: Q ${formatCurrency(totals.totalPurchases)}`, leftX, pageHeight - 10);
     doc.text(`Total Ventas: Q ${formatCurrency(totals.totalSales)}`, rightX, pageHeight - 10);
 
-    doc.save(`${filenameBase}.pdf`);
+    previewPdfDoc(doc, `${filenameBase}.pdf`);
     toast({ title: "Exportado", description: "PDF generado correctamente" });
   };
 

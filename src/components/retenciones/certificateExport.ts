@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
+import { previewPdfDoc } from "@/lib/pdfPreview";
   type TaxCertificate,
   DOCUMENT_TYPE_LABELS,
   DIRECTION_LABELS,
@@ -50,5 +51,5 @@ export function exportCertificatesToPdf(certs: TaxCertificate[]) {
     headStyles: { fillColor: [60, 60, 60] },
   });
 
-  doc.save(`retenciones_exenciones_${new Date().toISOString().slice(0, 10)}.pdf`);
+  previewPdfDoc(doc, `retenciones_exenciones_${new Date().toISOString().slice(0, 10)}.pdf`);
 }

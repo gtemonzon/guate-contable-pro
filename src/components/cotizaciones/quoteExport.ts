@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Quote, QuoteItem } from "@/hooks/useQuotes";
 import { formatCurrency } from "@/lib/utils";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -113,5 +114,5 @@ export async function exportQuoteToPdf(quote: Quote, items: QuoteItem[]) {
   doc.setFontSize(9);
   doc.text("Contador Público y Auditor", pageW / 2, sigY + 26, { align: "center" });
 
-  doc.save(`cotizacion_${quote.quote_number}.pdf`);
+  previewPdfDoc(doc, `cotizacion_${quote.quote_number}.pdf`);
 }

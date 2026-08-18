@@ -38,6 +38,7 @@ import EntityLink from "@/components/ui/entity-link";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface Account {
   id: number;
@@ -583,7 +584,7 @@ export default function ReporteLibroMayor() {
             : undefined,
         ),
       );
-      doc.save(`Libro_Mayor_${startDate}_${endDate}.pdf`);
+      previewPdfDoc(doc, `Libro_Mayor_${startDate}_${endDate}.pdf`);
 
       if (options.authorization && pageCount) {
         await consumePages(options.authorization.id, pageCount, {

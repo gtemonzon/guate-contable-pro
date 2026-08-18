@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 export interface ReconciliationExportMovement {
   movement_date: string;
@@ -164,7 +165,7 @@ export function exportReconciliationPDF(input: ReconciliationExportInput) {
   doc.text('Elaborado por', 180, y, { align: 'center' });
   doc.text('Revisado por', 440, y, { align: 'center' });
 
-  doc.save(`conciliacion-${input.bankName}-${input.reconciliationDate}.pdf`);
+  previewPdfDoc(doc, `conciliacion-${input.bankName}-${input.reconciliationDate}.pdf`);
 }
 
 export function exportReconciliationExcel(input: ReconciliationExportInput) {

@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ADJUSTMENT_TYPE_LABELS, type AdjustmentRecord } from '@/hooks/useBankReconciliationQuadratic';
+import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface PDFInput {
   enterpriseName: string;
@@ -103,5 +104,5 @@ export function generateQuadraticPDF(input: PDFInput) {
     doc.text(`Fecha: ${input.data.auditor_signature_date}`, 145, y, { align: 'center' });
   }
 
-  doc.save(`conciliacion-cuadratica-${input.reconciliationDate}.pdf`);
+  previewPdfDoc(doc, `conciliacion-cuadratica-${input.reconciliationDate}.pdf`);
 }
