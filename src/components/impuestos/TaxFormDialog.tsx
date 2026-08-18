@@ -146,6 +146,8 @@ export default function TaxFormDialog({
   useEffect(() => {
     if (open) {
       fetchTaxTypeSuggestions();
+      fetchEnterpriseInfo();
+      setNitCheck({ status: "idle" });
       if (editingForm) {
         setFormNumber(editingForm.form_number);
         setAccessCode(editingForm.access_code);
