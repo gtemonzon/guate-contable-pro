@@ -87,38 +87,52 @@ export default function Reportes() {
       ? "compras"
       : rawTab;
 
-  const initialCategory = useMemo(() => {
-    if (requestedTab) {
-      const found = categories.find((c) => c.tabs.some((t) => t.value === requestedTab));
-      if (found) return found.value;
+  // Single consistent derivation of (category, subTab) from the URL
+  const derived = useMemo(() => {
+    const found = requestedTab
+      ? categories.find((c) => c.tabs.some((t) => t.value === requestedTab))
+      : undefined;
+    if (found && requestedTab) {
+      return { category: found.value, subTab: requestedTab };
     }
-    return categories[0]?.value ?? "libros";
+    const first = categories[0];
+    return { category: first?.value ?? "libros", subTab: first?.tabs[0]?.value ?? "" };
   }, [requestedTab, categories]);
 
-  const [category, setCategory] = useState(initialCategory);
-  useEffect(() => {
-    setCategory(initialCategory);
-  }, [initialCategory]);
+  // Local override lets the user switch level-1 category without a URL tab yet
+  const [categoryOverride, setCategoryOverride] = useState<string | null>(null);
 
+  const category = categoryOverride ?? derived.category;
   const currentCategory = categories.find((c) => c.value === category) ?? categories[0];
-  const initialSubTab =
-    (requestedTab && currentCategory?.tabs.find((t) => t.value === requestedTab)?.value) ||
+  const subTab =
+    currentCategory?.tabs.find((t) => t.value === derived.subTab)?.value ||
     currentCategory?.tabs[0]?.value ||
     "";
 
-  const [subTab, setSubTab] = useState(initialSubTab);
+  // Reset the override whenever the URL points to a concrete tab
   useEffect(() => {
-    setSubTab(initialSubTab);
-  }, [initialSubTab]);
+    setCategoryOverride(null);
+  }, [derived.category, derived.subTab]);
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryOverride(value);
+    const target = categories.find((c) => c.value === value)?.tabs[0]?.value;
+    if (target) {
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", target);
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const handleSubTabChange = (value: string) => {
-    setSubTab(value);
+    setCategoryOverride(null);
     const next = new URLSearchParams(searchParams);
     next.set("tab", value);
     setSearchParams(next, { replace: true });
   };
 
   if (!currentCategory) return null;
+
 
   return (
     <div className="container mx-auto p-6">
