@@ -60,6 +60,7 @@ export default function PdfPreviewHost() {
         <div className="flex-1 min-h-0 rounded-md border border-border overflow-hidden bg-muted">
           {request && (
             <iframe
+              ref={iframeRef}
               key={request.url}
               src={request.url}
               title={request.fileName}
