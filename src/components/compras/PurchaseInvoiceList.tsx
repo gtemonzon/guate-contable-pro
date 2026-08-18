@@ -35,6 +35,10 @@ interface PurchaseInvoiceListProps {
   getRecommendedFields?: (index: number) => string[];
   /** Phase 2: VAT-exempt enterprises hide VAT-related fields. */
   appliesVat?: boolean;
+  /** Index of the card to highlight/scroll to */
+  highlightIndex?: number | null;
+  /** Returns whether the record at the index is missing required fields */
+  getIsIncomplete?: (index: number) => boolean;
 }
 
 export function PurchaseInvoiceList({
