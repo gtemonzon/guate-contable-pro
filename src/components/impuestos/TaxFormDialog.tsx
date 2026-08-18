@@ -215,7 +215,35 @@ export default function TaxFormDialog({
     setFile(null);
     setExistingFileName(null);
     setShowSuggestions(false);
+    setNitCheck({ status: "idle" });
   };
+
+  // NIT verification helpers
+  const digitsOnly = (v: string) => (v || "").replace(/\D+/g, "");
+  const enterpriseNitDigits = digitsOnly(enterpriseNit);
+  // Skip verification when the enterprise NIT is not a real numeric NIT (test data)
+  const enterpriseNitIsValid =
+    enterpriseNitDigits.length >= 5 && /^[\d\s-]+[\dkK]?$/.test((enterpriseNit || "").trim());
+
+  const verifyNit = (extractedNit?: string, extractedName?: string) => {
+    if (!enterpriseNitIsValid) {
+      setNitCheck({ status: "idle" });
+      return;
+    }
+    const pdfNit = digitsOnly(extractedNit || "");
+    if (!pdfNit) {
+      setNitCheck({ status: "unverified" });
+      return;
+    }
+    if (pdfNit === enterpriseNitDigits) {
+      setNitCheck({ status: "ok", pdfNit, pdfName: extractedName });
+    } else {
+      setNitCheck({ status: "mismatch", pdfNit, pdfName: extractedName });
+    }
+  };
+
+  const nitBlocksSave =
+    !!file && (nitCheck.status === "mismatch" || nitCheck.status === "unverified");
 
   const filteredSuggestions = taxTypeSuggestions.filter((suggestion) =>
     suggestion.toLowerCase().includes(taxType.toLowerCase())
