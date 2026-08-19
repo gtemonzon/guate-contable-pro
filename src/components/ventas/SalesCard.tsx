@@ -346,30 +346,30 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         <div className="space-y-3">
           {/* Primera fila: Fecha, info documento, NIT y cliente */}
           <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-2 flex items-end gap-1">
-              {sale.is_annulled && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Ban className="h-4 w-4 text-red-500 mb-2" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Factura anulada</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <div className="flex-1">
-                <label className="text-xs text-muted-foreground">Fecha</label>
-                <Input
-                  ref={dateInputRef}
-                  id={`sale-${rowId}-invoice_date`}
-                  type="date"
-                  value={sale.invoice_date}
-                  onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
-                  className={cn("h-8", isRecommended("invoice_date") && recommendedStyle)}
-                />
-              </div>
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                Fecha
+                {sale.is_annulled && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Ban className="h-3 w-3 text-red-500" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Factura anulada</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </label>
+              <Input
+                ref={dateInputRef}
+                id={`sale-${rowId}-invoice_date`}
+                type="date"
+                value={sale.invoice_date}
+                onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
+                className={cn("h-8", isRecommended("invoice_date") && recommendedStyle)}
+              />
             </div>
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
@@ -392,10 +392,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               />
             </div>
             <div className="col-span-1">
-              <label className="text-xs text-muted-foreground">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Tipo Doc
                 {isRecommended("fel_document_type") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
                 )}
               </label>
               <Select
