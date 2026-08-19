@@ -764,10 +764,14 @@ const Ayuda = () => {
       const scrollTop = el === (window as unknown as HTMLElement)
         ? window.scrollY
         : (el as HTMLElement).scrollTop;
-      setScrolled(scrollTop > 60);
+      setScrolled((prev) => {
+        if (prev) return scrollTop > 20; // already compact: only expand if scroll drops below 20
+        return scrollTop > 60; // expanded: only compact if scroll passes 60
+      });
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
