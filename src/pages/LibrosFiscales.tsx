@@ -126,7 +126,11 @@ export default function LibrosFiscales() {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        setIsHeaderCompact(window.scrollY > 40);
+        setIsHeaderCompact((prev) => {
+          const y = window.scrollY;
+          if (prev) return y > 20; // already compact: only expand if scroll drops below 20
+          return y > 60; // expanded: only compact if scroll passes 60
+        });
         ticking = false;
       });
     };
