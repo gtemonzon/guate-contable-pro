@@ -506,10 +506,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">
-                Tipo Operación
+              <label className="text-xs text-muted-foreground whitespace-nowrap">
+                Tipo Op.
                 {isRecommended("operation_type_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
                 )}
               </label>
               <Select
@@ -529,10 +529,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               </Select>
             </div>
             <div className="col-span-4">
-              <label className="text-xs text-muted-foreground">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Cuenta
                 {isRecommended("income_account_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
+                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
                 )}
               </label>
               <AccountCombobox
