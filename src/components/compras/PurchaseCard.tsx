@@ -212,22 +212,23 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         .eq("enterprise_id", enterpriseId)
         .is("deleted_at", null)
         .not("supplier_nit", "is", null)
+        .neq("supplier_nit", "")
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(5);
 
-      if (!data?.supplier_nit) return;
-      const nit = data.supplier_nit.replace(/[-\s]/g, "").toUpperCase();
+      const last = (data ?? []).find((r) => r.supplier_nit?.trim());
+      if (!last?.supplier_nit) return;
+      const nit = last.supplier_nit.replace(/[-\s]/g, "").toUpperCase();
       handleFieldChange("supplier_nit", nit);
-      if (data.supplier_name) handleFieldChange("supplier_name", data.supplier_name);
+      if (last.supplier_name) handleFieldChange("supplier_name", last.supplier_name);
       if (nit && !validateNIT(nit)) {
         setNitError("NIT inválido");
       } else {
         setNitError(null);
         fetchSupplierMapping(nit);
       }
-    } catch {
-      // Non-critical, ignore
+    } catch (error) {
+      console.warn("repeatLastNit falló:", error);
     }
   };
 

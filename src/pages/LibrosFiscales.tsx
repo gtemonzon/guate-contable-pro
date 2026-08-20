@@ -2154,6 +2154,7 @@ export default function LibrosFiscales() {
                       sale={sale}
                       index={index}
                       rowId={sale.client_id}
+                      enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       incomeAccounts={incomeAccounts}
