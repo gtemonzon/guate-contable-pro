@@ -337,10 +337,18 @@ export function ImportPurchasesDialog({
     const uniqueNits = [...new Set(records.map(r => r.supplier_nit).filter(n => n && n.toUpperCase() !== "CF"))];
     if (uniqueNits.length === 0) return;
 
+    // Ancla la ventana de historial a la fecha de las facturas importadas,
+    // no a la fecha de hoy (permite importar años anteriores con sugerencias).
+    const invoiceDates = records
+      .map(r => r.invoice_date)
+      .filter((d): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
+    const referenceDate = invoiceDates.length > 0 ? invoiceDates.reduce((a, b) => (a > b ? a : b)) : null;
+
     try {
       const { data, error } = await supabase.rpc("get_batch_purchase_mappings", {
         p_enterprise_id: enterpriseId,
         p_supplier_nits: uniqueNits,
+        ...(referenceDate ? { p_reference_date: referenceDate } : {}),
       });
       if (error) throw error;
       const map = new Map<string, SupplierMapping>();
