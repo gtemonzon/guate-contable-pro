@@ -49,6 +49,8 @@ interface SalesCardProps {
   sale: SaleEntry;
   index: number;
   rowId: string;
+  /** Enterprise ID for repeat-last-NIT lookup */
+  enterpriseId?: number | null;
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   incomeAccounts: { id: number; account_code: string; account_name: string }[];
