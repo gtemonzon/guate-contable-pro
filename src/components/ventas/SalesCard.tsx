@@ -141,25 +141,26 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
 
   /** Shortcut: pressing "+" in the NIT field repeats the last NIT entered in this book */
   const repeatLastNit = async () => {
-    const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
     try {
       const { data } = await supabase
         .from("tab_sales_ledger")
         .select("customer_nit, customer_name")
-        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("enterprise_id", enterpriseId)
+        .is("deleted_at", null)
         .not("customer_nit", "is", null)
+        .neq("customer_nit", "")
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(5);
 
-      if (!data?.customer_nit) return;
-      const nit = data.customer_nit.replace(/[-\s]/g, "").toUpperCase();
+      const last = (data ?? []).find((r) => r.customer_nit?.trim());
+      if (!last?.customer_nit) return;
+      const nit = last.customer_nit.replace(/[-\s]/g, "").toUpperCase();
       handleFieldChange("customer_nit", nit);
-      if (data.customer_name) handleFieldChange("customer_name", data.customer_name);
+      if (last.customer_name) handleFieldChange("customer_name", last.customer_name);
       setNitError(nit && !validateNIT(nit) ? "NIT inválido" : null);
-    } catch {
-      // Non-critical, ignore
+    } catch (error) {
+      console.warn("repeatLastNit falló:", error);
     }
   };
 
