@@ -668,9 +668,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className={cn(isFuelOperation ? "col-span-2" : "col-span-2", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">
                   Tipo Op.
-                  {isRecommended("operation_type_id") && (
-                    <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
-                  )}
                 </label>
                 <Select
                   value={purchase.operation_type_id?.toString() || ""}
@@ -804,9 +801,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">
                 Tipo Doc
-                {isRecommended("fel_document_type") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
-                )}
               </label>
               <Select
                 value={purchase.fel_document_type}
@@ -935,9 +929,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-2 min-w-0">
               <label className="text-xs text-muted-foreground">
                 Tipo Operación
-                {isRecommended("operation_type_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
-                )}
               </label>
               <Select
                 value={purchase.operation_type_id?.toString() || ""}
@@ -958,9 +949,6 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
               <label className="text-xs text-muted-foreground">
                 Cuenta
-                {isRecommended("expense_account_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sugerido)</span>
-                )}
               </label>
               <AccountCombobox
                 accounts={expenseAccounts}

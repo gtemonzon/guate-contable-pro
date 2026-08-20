@@ -398,9 +398,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Tipo Doc
-                {isRecommended("fel_document_type") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
-                )}
               </label>
               <Select
                 value={sale.fel_document_type}
@@ -512,9 +509,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Tipo Op.
-                {isRecommended("operation_type_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
-                )}
               </label>
               <Select
                 value={sale.operation_type_id?.toString() || ""}
@@ -535,9 +529,6 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-4">
               <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Cuenta
-                {isRecommended("income_account_id") && (
-                  <span className="ml-1 text-[10px] italic text-muted-foreground/50">(sug.)</span>
-                )}
               </label>
               <AccountCombobox
                 accounts={incomeAccounts}
