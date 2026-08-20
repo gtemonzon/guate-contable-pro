@@ -1329,6 +1329,16 @@ export function ImportPurchasesDialog({
                 </div>
               )}
 
+              {supplierMappings.size === 0 && (
+                <div className="border rounded-lg p-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    No se encontraron sugerencias históricas para los NIT de este archivo.
+                  </p>
+                </div>
+              )}
+
+
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
