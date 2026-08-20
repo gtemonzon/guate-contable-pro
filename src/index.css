@@ -165,4 +165,13 @@ All colors MUST be HSL.
   * {
     transition: var(--transition-base);
   }
+
+  /* Radix (react-remove-scroll-bar) compensa el ancho del scrollbar con
+     margin-right en <body> al abrir Select/Dialog/Sheet. Sin esto, la regla
+     universal de arriba lo anima 200ms y produce un shift visible. */
+  html,
+  body {
+    transition: none;
+  }
+
 }
