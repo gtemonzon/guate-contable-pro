@@ -120,6 +120,15 @@ export function useFormShortcuts({
 
       // --- Esc → Cancel (only when not dirty, or no unsaved changes) ---
       if (e.key === "Escape" && !isDirtyRef.current) {
+        // Don't intercept if a Radix Popover/Select/Combobox is currently open —
+        // it must close itself first without triggering the form's cancel action.
+        if (
+          document.querySelector(
+            '[data-radix-popper-content-wrapper], [role="listbox"][data-state="open"]'
+          )
+        ) {
+          return;
+        }
         if (onCancelRef.current) {
           // Don't prevent default here — let dialogs/modals also close naturally
           onCancelRef.current();
