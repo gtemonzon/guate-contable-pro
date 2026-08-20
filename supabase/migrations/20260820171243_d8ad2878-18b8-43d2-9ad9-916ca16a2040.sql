@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.get_batch_purchase_mappings(bigint, text[]);

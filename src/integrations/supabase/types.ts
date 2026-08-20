@@ -5153,7 +5153,11 @@ export type Database = {
         }[]
       }
       get_batch_purchase_mappings: {
-        Args: { p_enterprise_id: number; p_supplier_nits: string[] }
+        Args: {
+          p_enterprise_id: number
+          p_reference_date?: string
+          p_supplier_nits: string[]
+        }
         Returns: {
           expense_account_id: number
           operation_type_id: number
