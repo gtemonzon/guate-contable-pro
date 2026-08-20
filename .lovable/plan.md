@@ -1,30 +1,45 @@
-# Parpadeo al abrir el Select de "Mes" en Libros Fiscales — investigación
+# Atajo "+" en el campo NIT: causa confirmada
 
-## Causa confirmada
+## Qué encontré (con evidencia)
 
-El "salto" no lo produce el header sticky ni el refetch de datos: lo produce una regla global de CSS que **anima** la compensación de scrollbar de Radix.
+El handler `onKeyDown` **sí se dispara** y `repeatLastNit()` **sí se ejecuta**. El código de `PurchaseCard.tsx`, `SalesCard.tsx` y `nit-autocomplete.tsx` está correcto, y `enterpriseId` sí llega (se pasa desde `LibrosFiscales.tsx` línea 2117).
 
-1. Radix Select bloquea el scroll con `react-remove-scroll` / `react-remove-scroll-bar` (ambos presentes en `node_modules`). Al abrir, aplica sobre `<body>`: `overflow: hidden` + `margin-right: <ancho del scrollbar>px !important` (gapMode por defecto = `margin`), y lo quita al cerrar. Normalmente es instantáneo e imperceptible.
-2. En `src/index.css` (líneas 164-167) existe:
-   ```css
-   * { transition: var(--transition-base); }   /* all 0.2s cubic-bezier(...) */
-   ```
-   Esto aplica `transition: all 0.2s` a **todos** los elementos, incluidos `<html>` y `<body>`.
-3. Verificación en el navegador (localhost, Playwright): `getComputedStyle(document.body).transitionProperty === "all"`, `duration === "0.2s"`. Al aplicar `body.style.marginRight = "15px"` (exactamente lo que hace Radix), el valor computado avanza frame a frame: `0 → 0.26 → 1.28 → 3.54 → 6.85 → 9.69 → 11.6 → 12.9px`. Es decir, la compensación de scrollbar **se anima 200 ms** en vez de aplicarse de golpe, y el mismo efecto ocurre al cerrar el dropdown. Eso es el parpadeo/desplazamiento visible que reporta el usuario.
-4. El header sticky de `LibrosFiscales.tsx` (línea 1684 y elementos internos con `transition-all duration-200`) **amplifica** la percepción — al cambiar el ancho disponible, sus anchos/paddings también se animan — pero no es la causa raíz: el mismo problema existe en cualquier página, solo que aquí hay contenido ancho y encabezado fijo que lo hacen evidente.
+El problema está en el **dato que devuelve la consulta**, no en el evento.
 
-## Descartado
+`repeatLastNit()` busca el último NIT así:
 
-- **Refetch por cambio de `selectedMonth`**: el render de la lista usa `loading && purchases.length === 0` / `loading && sales.length === 0` (líneas 2103 y 2142), por lo que la lista existente no se vacía durante la recarga; además el refetch silencioso (línea 699) no activa `setLoading(true)`. No hay flash de estado de carga. Ese camino no explica el shift, que ocurre también con solo abrir y cerrar el desplegable sin cambiar de mes.
-- **Histéresis del header**: ya está corregida (compactar >60px, expandir <20px) y no se dispara al abrir el Select, porque el scroll queda bloqueado y `window.scrollY` no cambia.
+```
+.not("supplier_nit", "is", null)
+.order("created_at", { ascending: false })
+.limit(1)
+...
+if (!data?.supplier_nit) return;   // <-- salida silenciosa
+```
 
-Nota: no fue posible abrir `/libros` autenticado desde el sandbox (sesión de preview desconectada), por lo que la verificación se hizo sobre la app cargada en localhost midiendo directamente el comportamiento de `body` y del paquete de scroll-lock, no sobre el dropdown renderizado.
+El filtro excluye `NULL`, pero **no excluye la cadena vacía `''`**. Consulté la base de datos y el registro más reciente de la empresa donde se reportó el fallo (enterprise_id 14) es:
 
-## Fix propuesto (pendiente de tu aprobación)
+| id | created_at | supplier_nit |
+|---|---|---|
+| 204556 | 2026-08-20 15:57 | `''` (vacío) |
+| 204555 | 2026-08-20 15:56 | `92800` |
 
-Cambio mínimo, de una sola línea en `src/index.css`: dejar de aplicar transiciones al selector universal y limitarlas a lo que realmente las necesita.
+Es decir: existe una factura guardada **sin NIT** (permitido desde que se agregó el sistema de "registros incompletos"), y es la última creada. La consulta la trae, `data.supplier_nit` es `''`, y el `if (!data?.supplier_nit) return;` sale sin hacer nada y sin error. Por eso "no pasa nada" y la consola queda limpia: **no hay ninguna excepción, el `try/catch` vacío no está ocultando nada**.
 
-- Excluir `html, body` (y `:root`) de la regla `* { transition: ... }`, o mejor, reemplazar el selector universal por transiciones explícitas en los componentes que las requieren.
-- Opción conservadora y de menor riesgo visual: mantener la regla `*` pero añadir `html, body { transition: none; }` después, de modo que la compensación de scrollbar sea instantánea y el resto de la UI conserve su animación actual.
+Mientras esa factura sin NIT siga siendo la más reciente, el atajo queda muerto de forma permanente en esa empresa.
 
-Con eso, abrir/cerrar el Select (y cualquier diálogo, popover o sheet de Radix) deja de producir el desplazamiento animado.
+Libro de Ventas tiene exactamente el mismo filtro incompleto en `tab_sales_ledger` (`.not("customer_nit","is",null)` sin excluir `''`), aunque hoy en esa empresa el último registro sí tiene NIT, por eso ahí todavía funciona. Es el mismo bug latente.
+
+Diferencias secundarias detectadas en Ventas (no son la causa, pero conviene alinear):
+- lee `enterpriseId` de `localStorage` en vez de recibirlo como prop;
+- no filtra `deleted_at is null`, así que puede repetir el NIT de un registro borrado.
+
+## Fix propuesto
+
+En `src/components/compras/PurchaseCard.tsx` y `src/components/ventas/SalesCard.tsx`, dentro de `repeatLastNit`:
+
+1. Excluir también los vacíos: agregar `.neq("supplier_nit", "")` / `.neq("customer_nit", "")` al filtro.
+2. Traer varias filas en vez de una (`.limit(5)` sin `.maybeSingle()`) y quedarse con la primera cuyo NIT tenga contenido real tras `trim()`, como red de seguridad ante valores como `" "`.
+3. En Ventas: usar la prop `enterpriseId` (igual que Compras) en lugar de `localStorage`, y agregar `.is("deleted_at", null)`.
+4. Reemplazar el `catch {}` vacío por un `console.warn` con el error, para que un fallo futuro sea visible en consola.
+
+Sin cambios de UI ni de esquema de base de datos.
