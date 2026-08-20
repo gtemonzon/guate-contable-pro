@@ -5152,29 +5152,19 @@ export type Database = {
           total_debit: number
         }[]
       }
-      get_batch_purchase_mappings:
-        | {
-            Args: { p_enterprise_id: number; p_supplier_nits: string[] }
-            Returns: {
-              expense_account_id: number
-              operation_type_id: number
-              source_date: string
-              supplier_nit: string
-            }[]
-          }
-        | {
-            Args: {
-              p_enterprise_id: number
-              p_reference_date?: string
-              p_supplier_nits: string[]
-            }
-            Returns: {
-              expense_account_id: number
-              operation_type_id: number
-              source_date: string
-              supplier_nit: string
-            }[]
-          }
+      get_batch_purchase_mappings: {
+        Args: {
+          p_enterprise_id: number
+          p_reference_date?: string
+          p_supplier_nits: string[]
+        }
+        Returns: {
+          expense_account_id: number
+          operation_type_id: number
+          source_date: string
+          supplier_nit: string
+        }[]
+      }
       get_book_summaries_latest: {
         Args: { p_enterprise_id: number }
         Returns: {
