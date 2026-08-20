@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.update_posted_entry_metadata(bigint, text, text, text, text, text);
