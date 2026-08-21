@@ -2955,12 +2955,13 @@ export default function LibrosFiscales() {
 
                           if (journalError) throw journalError;
 
-                          // Motor compartido con "Vincular Facturas": desglose por cliente/factura
-                          const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                          // Descripción genérica (ventas: sin desglose por factura)
+                          const { lines: aggregatedLines } = buildGenericSalesLines({
                             sales: [s],
                             docTypeMap,
                             vatDebitAccountId,
                             contraAccountId: cashAccountId,
+                            description: `Venta ${s.customer_name}`,
                           });
                           const detailLines = aggregatedLines.map((l, idx) => ({
                             journal_entry_id: journalEntry.id,
