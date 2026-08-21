@@ -179,20 +179,20 @@ export default function JournalEntryDialog({
         return;
       }
 
-      // Skip remaining shortcuts if focus is in text input
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
-
-      if (inspectorOpen) return;
       const isF2   = e.key === "F2"  && !e.ctrlKey && !e.metaKey && !e.shiftKey;
-      const isAltB = e.key === "b"   && e.altKey   && !e.ctrlKey && !e.metaKey;
-      if (isF2 || isAltB) {
+      const isAltB = e.key === "b"   && e.altKey   && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+      if ((isF2 || isAltB) && !inspectorOpen) {
         if (activeAccount) {
           e.preventDefault();
           e.stopPropagation();
           setInspectorOpen(true);
         }
+        return;
       }
+
+      // Skip remaining shortcuts if focus is in text input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
