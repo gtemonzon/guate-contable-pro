@@ -276,6 +276,7 @@ export function PeriodClosingWizard({
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
+      setSkipWarning(null);
       setSkipFxRevaluation(false);
       setFxNeeded(false);
       setFxLastRunMonth(null);
