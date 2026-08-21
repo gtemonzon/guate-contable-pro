@@ -582,6 +582,14 @@ export default function Partidas() {
     setSplitViewOpen(true);
   };
 
+  const handleEntryDoubleClick = (e: React.MouseEvent, entry: JournalEntry) => {
+    e.stopPropagation();
+    if (entry.status !== 'borrador') return;
+    if (!isEntryInOpenPeriod(entry)) return;
+    setEditingEntry(entry);
+    setShowEditDialog(true);
+  };
+
   const handleEditFromPanel = (entryId: number) => {
     const entry = entries.find(e => e.id === entryId);
     if (entry) {
@@ -837,6 +845,7 @@ export default function Partidas() {
                     key={entry.id}
                     ref={(el) => { entryRowRefs.current[entry.id] = el; }}
                     onClick={() => handleEntryClick(entry)}
+                    onDoubleClick={(e) => handleEntryDoubleClick(e, entry)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors group",
                       isSelected
