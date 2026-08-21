@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig, EnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
+import { getFiscalFloorDate, applyFiscalFloor } from '@/utils/fiscalFloor';
 import { toast } from 'sonner';
 
 interface ClosingData {
