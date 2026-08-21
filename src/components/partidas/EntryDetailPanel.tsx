@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import { type DateContext } from "@/components/ui/entity-link";
 import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";

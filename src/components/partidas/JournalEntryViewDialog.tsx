@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { ShoppingCart } from "lucide-react";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import JournalEntryHistoryTimeline from "./JournalEntryHistoryTimeline";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 
