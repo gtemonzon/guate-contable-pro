@@ -2293,6 +2293,32 @@ export function PeriodClosingWizard({
           }}
         />
       )}
+
+      {/* Warning: advancing without generating the step's entry */}
+      <AlertDialog open={!!skipWarning} onOpenChange={(o) => { if (!o) setSkipWarning(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Partida pendiente en este paso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Falta generar/contabilizar la partida de <strong>{skipWarning?.label}</strong> de este paso.
+              Puedes continuar para revisar el resto del proceso, pero deberás volver a este paso y generarla
+              antes de poder confirmar el cierre.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver a este paso</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setSkipWarning(null);
+                await goToStep(currentStepIndex + 1);
+              }}
+            >
+              Continuar de todas formas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+
   );
 }
