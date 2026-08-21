@@ -19,6 +19,7 @@ import EntityLink from "@/components/ui/entity-link";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 
 interface BankAccount {
   id: number;
@@ -113,23 +114,30 @@ export default function ReporteLibroBancos() {
   }, [selectedBankId, dateFrom, dateTo]);
 
 
-  // Suggest opening balance from posted movements before dateFrom
+  // Suggest opening balance from posted movements before dateFrom,
+  // bounded below by the fiscal floor to avoid double-counting the apertura entry
   useEffect(() => {
     if (!enterpriseId || !selectedBankId || !dateFrom) return;
 
     (async () => {
       try {
+        const fiscalFloor = await getFiscalFloorDate(parseInt(enterpriseId), dateFrom);
+
         const priorMovements = await fetchAllRecords<any>(
-          supabase
-            .from("tab_journal_entry_details")
-            .select(`
-              debit_amount, credit_amount,
-              journal_entry:tab_journal_entries!inner(entry_date, is_posted, enterprise_id)
-            `)
-            .eq("account_id", selectedBankId)
-            .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
-            .eq("journal_entry.is_posted", true)
-            .lt("journal_entry.entry_date", dateFrom)
+          applyFiscalFloor(
+            supabase
+              .from("tab_journal_entry_details")
+              .select(`
+                debit_amount, credit_amount,
+                journal_entry:tab_journal_entries!inner(entry_date, is_posted, enterprise_id)
+              `)
+              .eq("account_id", selectedBankId)
+              .eq("journal_entry.enterprise_id", parseInt(enterpriseId))
+              .eq("journal_entry.is_posted", true)
+              .lt("journal_entry.entry_date", dateFrom),
+            "journal_entry.entry_date",
+            fiscalFloor
+          )
         );
 
         const rawSum = (priorMovements || []).reduce(
@@ -143,6 +151,7 @@ export default function ReporteLibroBancos() {
       }
     })();
   }, [enterpriseId, selectedBankId, dateFrom]);
+
 
   const loadReport = async () => {
     if (!enterpriseId || !selectedBankId) {

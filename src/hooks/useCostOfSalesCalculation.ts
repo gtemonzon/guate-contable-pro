@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig, EnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
+import { getFiscalFloorDate, applyFiscalFloor } from '@/utils/fiscalFloor';
 import { toast } from 'sonner';
 
 interface ClosingData {
@@ -48,17 +49,23 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
   const calculateInitialInventory = async (period: PeriodData): Promise<number> => {
     if (!config?.inventory_account_id) return 0;
 
-    // Include entries BEFORE period start + opening entries ON the start date
+    // An 'apertura' entry restates the accumulated balance of all prior years.
+    // If one exists on (or before) the period start, it IS the initial inventory:
+    // summing earlier history on top of it double-counts the same money.
+    const fiscalFloor = await getFiscalFloorDate(enterpriseId, period.start_date);
+
+    let entriesQuery = supabase
+      .from('tab_journal_entries')
+      .select('id')
+      .eq('enterprise_id', enterpriseId)
+      .eq('is_posted', true)
+      .is('deleted_at', null)
+      .lt('entry_date', period.start_date);
+
+    entriesQuery = applyFiscalFloor(entriesQuery, 'entry_date', fiscalFloor);
+
     const [entriesBefore, openingEntries] = await Promise.all([
-      fetchAllRecords(
-        supabase
-          .from('tab_journal_entries')
-          .select('id')
-          .eq('enterprise_id', enterpriseId)
-          .eq('is_posted', true)
-          .is('deleted_at', null)
-          .lt('entry_date', period.start_date)
-      ),
+      fetchAllRecords(entriesQuery),
       fetchAllRecords(
         supabase
           .from('tab_journal_entries')
@@ -71,10 +78,13 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
       ),
     ]);
 
-    const allEntries = [...(entriesBefore || []), ...(openingEntries || [])];
+    // When the fiscal floor lands on the period start, the apertura entry inside
+    // the range already carries everything: discard the prior-history sum.
+    const priorEntries = fiscalFloor && fiscalFloor >= period.start_date ? [] : (entriesBefore || []);
+    const allEntries = [...priorEntries, ...(openingEntries || [])];
     if (allEntries.length === 0) return 0;
 
-    const entryIds = allEntries.map((e: { id: number }) => e.id);
+    const entryIds = Array.from(new Set(allEntries.map((e: { id: number }) => e.id)));
     
     // Fetch details in batches
     let totalBalance = 0;
@@ -97,6 +107,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
 
     return Math.round(totalBalance * 100) / 100;
   };
+
 
   const calculatePurchases = async (period: PeriodData): Promise<number> => {
     if (!config?.purchases_account_id) return 0;

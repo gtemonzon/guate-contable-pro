@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { supabase } from "@/integrations/supabase/client";
-import { getFiscalFloorDate } from "@/utils/fiscalFloor";
+import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -129,11 +129,13 @@ export default function AccountLedgerDrawer({
 
       const lowerBound = effectiveStartDate || fiscalFloor || null;
 
-      // Opening balance: everything posted strictly before the effective start
+      // Opening balance: movements posted strictly before the effective start,
+      // BUT never earlier than the fiscal floor — the apertura entry already
+      // restates every prior-year balance, so ignoring the floor double-counts it.
       let openingBalance = 0;
       if (lowerBound) {
-        const prevData = await fetchAllRecords<any>(() =>
-          supabase
+        const prevData = await fetchAllRecords<any>(() => {
+          const q = supabase
             .from("tab_journal_entry_details")
             .select(`
               debit_amount,
@@ -149,14 +151,17 @@ export default function AccountLedgerDrawer({
             .eq("tab_journal_entries.enterprise_id", enterpriseId)
             .is("tab_journal_entries.reversal_entry_id", null)
             .is("tab_journal_entries.reversed_by_entry_id", null)
-            .lt("tab_journal_entries.entry_date", lowerBound)
-        );
+            .lt("tab_journal_entries.entry_date", lowerBound);
+
+          return applyFiscalFloor(q, "tab_journal_entries.entry_date", fiscalFloor);
+        });
 
         openingBalance = (prevData || []).reduce(
           (sum: number, r: any) => sum + (Number(r.debit_amount) || 0) - (Number(r.credit_amount) || 0),
           0
         );
       }
+
 
       // Get all detail lines for the account(s) within the date range, from posted entries only
       const buildQuery = () => {
