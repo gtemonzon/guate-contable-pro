@@ -1733,8 +1733,26 @@ export function PeriodClosingWizard({
                             {cdv.closingData?.journal_entry_id ? (
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                  Partida CDV generada
+                                  {cdv.closingData?.status === 'contabilizado' ? 'Partida CDV contabilizada' : 'Partida CDV generada (borrador)'}
                                 </Badge>
+                                {cdv.closingData?.status !== 'contabilizado' && (
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      const posted = await cdv.postCdvEntry();
+                                      if (posted) {
+                                        toast.success('Partida CDV contabilizada');
+                                        cdv.calculate();
+                                      } else {
+                                        toast.error('Error al contabilizar la partida de costo de ventas');
+                                      }
+                                    }}
+                                    disabled={cdv.loading}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                                    Contabilizar
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
