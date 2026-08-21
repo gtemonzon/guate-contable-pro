@@ -4868,27 +4868,6 @@ export type Database = {
           },
         ]
       }
-      tmp_desc_fix: {
-        Row: {
-          descr: string
-          detail_id: number
-          sref: string | null
-          stype: string
-        }
-        Insert: {
-          descr: string
-          detail_id: number
-          sref?: string | null
-          stype: string
-        }
-        Update: {
-          descr?: string
-          detail_id?: number
-          sref?: string | null
-          stype?: string
-        }
-        Relationships: []
-      }
       user_roles: {
         Row: {
           created_at: string | null
