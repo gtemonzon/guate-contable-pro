@@ -29,9 +29,81 @@ import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libro
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
 import {
   aggregatePurchaseJournalLines,
-  aggregateSalesJournalLines,
   buildDocTypeMap,
+  type DocTypeMap,
+  type SaleRowLike,
 } from "@/utils/consolidatedJournalLines";
+
+/**
+ * Líneas de póliza de VENTAS con descripción GENÉRICA (sin desglose por factura).
+ * A diferencia de compras, una partida de ventas puede tener cientos o miles de
+ * facturas, por lo que concatenar el detalle por línea es inmanejable.
+ */
+function buildGenericSalesLines(options: {
+  sales: SaleRowLike[];
+  docTypeMap: DocTypeMap;
+  vatDebitAccountId?: number | null;
+  contraAccountId?: number | null;
+  description: string;
+}) {
+  const { sales, docTypeMap, vatDebitAccountId, contraAccountId, description } = options;
+  const byAccount = new Map<number, number>();
+  let totalAmount = 0;
+  let totalVAT = 0;
+
+  for (const s of sales) {
+    const docType = s.fel_document_type || "FACT";
+    const multiplier = docTypeMap[docType]?.multiplier ?? 1;
+    totalAmount += (Number(s.total_amount) || 0) * multiplier;
+    totalVAT += (Number(s.vat_amount) || 0) * multiplier;
+    if (!s.income_account_id) continue;
+    byAccount.set(
+      s.income_account_id,
+      (byAccount.get(s.income_account_id) || 0) + (Number(s.net_amount) || 0) * multiplier
+    );
+  }
+
+  const lines: Array<{
+    account_id: number;
+    description: string;
+    debit_amount: number;
+    credit_amount: number;
+  }> = [];
+
+  if (contraAccountId) {
+    const debitAmount = Number(totalAmount.toFixed(2));
+    lines.push({
+      account_id: Number(contraAccountId),
+      description,
+      debit_amount: debitAmount >= 0 ? debitAmount : 0,
+      credit_amount: debitAmount < 0 ? Math.abs(debitAmount) : 0,
+    });
+  }
+
+  for (const [accountId, net] of byAccount.entries()) {
+    const amount = Number(net.toFixed(2));
+    if (amount === 0) continue;
+    lines.push({
+      account_id: Number(accountId),
+      description,
+      debit_amount: amount < 0 ? Math.abs(amount) : 0,
+      credit_amount: amount >= 0 ? amount : 0,
+    });
+  }
+
+  if (vatDebitAccountId && Number(totalVAT.toFixed(2)) !== 0) {
+    const vatAmount = Number(totalVAT.toFixed(2));
+    lines.push({
+      account_id: Number(vatDebitAccountId),
+      description,
+      debit_amount: vatAmount < 0 ? Math.abs(vatAmount) : 0,
+      credit_amount: vatAmount >= 0 ? vatAmount : 0,
+    });
+  }
+
+  return { lines };
+}
+
 
 
 
@@ -2428,12 +2500,13 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      // Crear líneas de detalle con el motor compartido
-                      const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                      // Descripción genérica (ventas: sin desglose por factura)
+                      const { lines: aggregatedLines } = buildGenericSalesLines({
                         sales: validSales,
                         docTypeMap,
                         vatDebitAccountId,
                         contraAccountId: cashAccountId,
+                        description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
                       });
                       const detailLines = aggregatedLines.map((l, idx) => ({
                         journal_entry_id: journalEntry.id,
@@ -2812,12 +2885,13 @@ export default function LibrosFiscales() {
 
                         if (journalError) throw journalError;
 
-                        // Motor compartido con "Vincular Facturas": desglose por cliente/factura
-                        const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                        // Descripción genérica (ventas: sin desglose por factura)
+                        const { lines: aggregatedLines } = buildGenericSalesLines({
                           sales: validSales,
                           docTypeMap,
                           vatDebitAccountId,
                           contraAccountId: cashAccountId,
+                          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
                         });
                         const detailLines = aggregatedLines.map((l, idx) => ({
                           journal_entry_id: journalEntry.id,
@@ -2881,12 +2955,13 @@ export default function LibrosFiscales() {
 
                           if (journalError) throw journalError;
 
-                          // Motor compartido con "Vincular Facturas": desglose por cliente/factura
-                          const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                          // Descripción genérica (ventas: sin desglose por factura)
+                          const { lines: aggregatedLines } = buildGenericSalesLines({
                             sales: [s],
                             docTypeMap,
                             vatDebitAccountId,
                             contraAccountId: cashAccountId,
+                            description: `Venta ${s.customer_name}`,
                           });
                           const detailLines = aggregatedLines.map((l, idx) => ({
                             journal_entry_id: journalEntry.id,
