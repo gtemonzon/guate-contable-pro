@@ -845,6 +845,7 @@ export default function Partidas() {
                     key={entry.id}
                     ref={(el) => { entryRowRefs.current[entry.id] = el; }}
                     onClick={() => handleEntryClick(entry)}
+                    onDoubleClick={(e) => handleEntryDoubleClick(e, entry)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors group",
                       isSelected
