@@ -582,6 +582,14 @@ export default function Partidas() {
     setSplitViewOpen(true);
   };
 
+  const handleEntryDoubleClick = (e: React.MouseEvent, entry: JournalEntry) => {
+    e.stopPropagation();
+    if (entry.status !== 'borrador') return;
+    if (!isEntryInOpenPeriod(entry)) return;
+    setEditingEntry(entry);
+    setShowEditDialog(true);
+  };
+
   const handleEditFromPanel = (entryId: number) => {
     const entry = entries.find(e => e.id === entryId);
     if (entry) {
