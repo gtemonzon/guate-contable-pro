@@ -1,44 +1,76 @@
-# Descripciones detalladas en pólizas de Libro de Compras / Ventas
+# Hallazgos: doble conteo de saldo inicial (Inventario 1.1.4.1.01, empresa 14)
 
-## Hallazgo importante antes de tocar datos (Tarea A)
+Hipótesis del usuario: **confirmada**. Nada fue modificado.
 
-Verifiqué el mecanismo de vínculo de las 36 partidas de la empresa 14:
+## 1. Evidencia SQL
 
-- Las 36 partidas existen y tienen 149 líneas con descripción genérica (12 COMP- de 2022, 24 VENT- de 2021-2022).
-- `tab_purchase_journal_links` tiene 324 filas para la empresa 14, pero **0** de ellas apunta a estas partidas COMP- de 2022. Las facturas de estas partidas están vinculadas **solo por el campo legado `journal_entry_id`** en `tab_purchase_ledger` (ej. partida 30574 = 12 facturas, 30657 = 9 facturas).
-- Para ventas **no existe** tabla de vínculos (no hay `tab_sales_journal_links`); el único mecanismo es `tab_sales_ledger.journal_entry_id` (232 filas con vínculo en la empresa 14).
+Cuenta id 591 (`1.1.4.1.01`), enterprise_id 14, movimientos contabilizados:
 
-Conclusión: la fuente para reconstruir es el campo legado `journal_entry_id` en ambos libros. No se usará `tab_purchase_journal_links` para estas partidas históricas.
+```text
+APER-2021-01-0001  2021-01-01  apertura  Debe  19,242.17
+CDV-2021-0001      2021-12-31  diario    Haber 19,242.17
+CDV-2021-0001      2021-12-31  diario    Debe  15,357.16
+APER-2022-0001     2022-01-01  apertura  Debe  15,357.16
+```
 
-Segundo hallazgo: **no existe** un motor equivalente a `buildPurchaseLines` para ventas (`buildSalesLines` no existe en el proyecto). Para ventas no voy a improvisar un motor: solo replicaré el **formato de descripciones** (`cliente - DOC serie-numero`), manteniendo intacta la lógica de montos/cuentas que ya existe.
+Suma de todo lo anterior a 2022-01-01 = **Q15,357.16** (3 líneas).
+La partida APER-2022-0001 vuelve a declarar **Q15,357.16**.
+15,357.16 (openingBalance calculado) + 15,357.16 (fila mostrada) = **Q30,714.32** = el doble reportado.
 
-## Tarea A — Corrección de datos (solo `description`)
+## 2. Mecanismo exacto del doble conteo en `AccountLedgerDrawer.tsx`
 
-Enfoque: por cada partida, agrupar las facturas vinculadas por su cuenta (`expense_account_id` / `income_account_id`) y reescribir el texto de la línea de detalle **cuya `account_id` coincide**. No se recalcula ningún monto ni se cambia ninguna cuenta.
+- Línea 128: se obtiene `fiscalFloor = getFiscalFloorDate(enterpriseId, startRef)` → devuelve `2022-01-01` (la apertura vigente).
+- Línea 130: `const lowerBound = effectiveStartDate || fiscalFloor || null;` — cuando el llamador pasa `startDate` (caso "Período completo" 2022), **el piso fiscal se descarta**; solo se usa como respaldo cuando no hay `startDate`.
+- Líneas 134-159: la consulta de saldo de apertura filtra únicamente `.lt(entry_date, lowerBound)` **sin `.gte(fiscalFloor)`**, así que arrastra todo 2021 (incluida la apertura de 2021) → Q15,357.16.
+- Líneas 162-210: la consulta del período incluye la propia APER-2022-0001 y el saldo corrido arranca en `openingBalance`, sumando el mismo dinero dos veces.
 
-- Líneas de gasto/ingreso: `proveedor - DOC serie-numero` unidas con `'; '` (mismo formato que `regenerateLinesFromLinkedPurchases`).
-- Línea de IVA (cuenta 588 crédito / 644 débito según `tab_enterprise_config`): `IVA Crédito Fiscal - N factura(s)` / `IVA Débito Fiscal - N factura(s)`.
-- Línea de contrapartida (proveedores/clientes o banco/caja, según la cuenta que ya tenga la línea): `Proveedores - N factura(s)` / `Clientes - N factura(s)`.
-- Se rellenará también `source_type` (`PURCHASE`/`SALE`) y `source_ref` (lista de referencias), hoy vacíos.
-- Alcance estricto: `enterprise_id = 14`, solo las 149 líneas cuya `description` empieza con `Libro de Compras`/`Libro de Ventas`.
+El patrón correcto ya existe en el proyecto: `src/pages/MayorGeneral.tsx:409-429` y `src/pages/ConciliacionBancaria.tsx:439-463` sí aplican `.gte(entry_date, fiscalFloor)` al saldo previo. `AccountLedgerDrawer` omitió ese guardarraíl.
 
-Verificación: consulta antes/después comparando `sum(debit_amount)` y `sum(credit_amount)` por partida (deben ser idénticos) y volcado completo de 2 partidas de ejemplo (una COMP-, una VENT-) para tu confirmación visual.
+## 3. Asistente de Cierre — cálculo independiente, mismo bug (pre-existente)
 
-Se ejecuta como migración (UPDATE de datos), en un solo paso reversible en cuanto al texto.
+`src/hooks/useCostOfSalesCalculation.ts` → `calculateInitialInventory` (líneas ~47-97):
 
-## Tarea B — Unificar el motor de "Generar Póliza"
+- Consulta A: todas las partidas contabilizadas con `entry_date < period.start_date` (sin piso fiscal).
+- Consulta B: partidas `entry_type='apertura'` **con `entry_date = period.start_date`**.
+- Suma A + B sobre `inventory_account_id`.
 
-Nueva utilidad compartida `src/utils/consolidatedJournalLines.ts`:
+Para 2022 eso da 15,357.16 + 15,357.16 = **Q30,714.32**. Es código propio, **no** usa `AccountLedgerDrawer` ni `getFiscalFloorDate`, y **no** cambió hoy (último cambio del archivo: 2026-04-26). Por lo tanto el bug del Asistente es anterior al cambio de hoy; la coincidencia de cifras es porque ambos cometen el mismo error conceptual.
 
-- `buildConsolidatedPurchaseLines(purchases, docTypeMap, config, enterpriseAppliesVat, bankAccountId)`: extrae tal cual la lógica de agregación de `regenerateLinesFromLinkedPurchases` (agrupación por cuenta con `buildPurchaseLines`, acumulación de `descriptions`/`refs`, línea de IVA, línea de contrapartida) y devuelve líneas con `description` y `source_ref`.
-- `buildConsolidatedSalesLines(sales, docTypeMap, config, ...)`: mantiene **exactamente** el cálculo de montos que hoy tiene `LibrosFiscales.tsx` para ventas (multiplicador por tipo FEL, `net_amount`/`vat_amount` reales, exclusión de anuladas), y solo añade el desglose de descripciones y `source_ref`.
+Alcance real de cierres ya contabilizados (`tab_period_inventory_closing`): solo **2 registros** en toda la base:
 
-Luego `src/components/partidas/useJournalEntryForm.ts` (`regenerateLinesFromLinkedPurchases`) pasa a consumir la utilidad compartida, y `src/pages/LibrosFiscales.tsx` reemplaza los `Map<number, number>` de la póliza consolidada (compras y ventas) por llamadas a la misma utilidad. Los flujos "por Banco" y "por Documento" quedan igual (ya tienen detalle).
+```text
+id 5  empresa 14  período 9  inicial 19,242.17  compras 63,181.45  final 15,357.16  costo 67,066.46  contabilizado 2026-07-30
+id 1  empresa 26  período 4  inicial 10,800.00  compras 182,504.33 final 5,000.00   costo 188,304.33 contabilizado 2026-03-14
+```
 
-Invariantes que respeto: régimen fiscal de la empresa (`appliesVat`), IDP / impuestos no acreditables vía `resolveNonVatAccount`, multiplicadores NCRE, y redondeos a 2 decimales. El cambio es estrictamente de texto y trazabilidad.
+Ambos con inventario inicial correcto (no duplicado), porque corresponden a períodos cuya apertura no coexistía con historia previa duplicada. **Ningún cierre contabilizado quedó mal**; el riesgo es sobre cierres futuros (ej. el de 2022 de la empresa 14, que hoy propondría 30,714.32).
 
-## Detalles técnicos
+## 4. Otros reportes
 
-- Tarea A: migración SQL con CTEs que agregan desde `tab_purchase_ledger`/`tab_sales_ledger` (`deleted_at is null`), construyen el texto con `string_agg(... , '; ' order by invoice_date, id)` y hacen `UPDATE tab_journal_entry_details` por `journal_entry_id` + `account_id`.
-- Nota: las líneas de IVA y contrapartida se identifican por `account_id` comparado con `tab_enterprise_config` y por signo debe/haber, no por texto.
-- Tarea B: sin cambios de esquema; typecheck con `tsgo` al terminar.
+Sin afectación (usan RPC con piso fiscal en Postgres):
+
+- `get_trial_balance` — tiene CTE `_fiscal_floor` y filtra `entry_date >= floor_date AND < p_start_date`. Lo usan `ReporteSaldos.tsx`, `BalanceSaldos.tsx`, `ReporteFlujoEfectivo.tsx`.
+- `get_balance_sheet` — mismo CTE `_fiscal_floor`. Lo usan `ReporteBalanceGeneral.tsx`, `ReporteVariaciones.tsx`, `useKpis.ts`.
+- `get_account_ledger_as_of` — detecta apertura del año y omite el arrastre previo para evitar doble conteo. Lo usa `AccountBalanceInspector.tsx`.
+- `ReporteLibroMayor.tsx` — usa el `opening_balance` del RPC servidor.
+
+Con el mismo patrón riesgoso (cliente, sin piso fiscal):
+
+- `src/components/reportes/ReporteLibroBancos.tsx:116-132` — saldo inicial sugerido = todo lo anterior a `dateFrom` sin `.gte(fiscalFloor)`. Si la cuenta bancaria tiene línea en la partida de apertura, duplica igual.
+
+## Resumen de impacto
+
+| Lugar | ¿Duplica? | ¿Cambió hoy? |
+|---|---|---|
+| `AccountLedgerDrawer.tsx` | Sí | Sí |
+| `useCostOfSalesCalculation.ts` (Asistente de Cierre) | Sí | No (pre-existente) |
+| `ReporteLibroBancos.tsx` (saldo inicial) | Sí, mismo patrón | No |
+| RPCs (`get_trial_balance`, `get_balance_sheet`, `get_account_ledger_as_of`) y reportes que los usan | No | No |
+| Cierres ya contabilizados en la base (2) | No | — |
+
+## Fix propuesto (pendiente de tu aprobación, aún sin tocar código)
+
+1. `AccountLedgerDrawer.tsx`: acotar la consulta de saldo previo con `.gte(entry_date, fiscalFloor)` cuando exista piso fiscal, replicando `MayorGeneral.tsx`. Si `fiscalFloor === lowerBound`, el saldo previo queda en 0 y la fila de apertura pasa a ser el arranque correcto.
+2. `useCostOfSalesCalculation.ts`: reemplazar "todo lo anterior + apertura del día de inicio" por "movimientos desde el piso fiscal (inclusive) hasta la fecha de inicio (inclusive para la apertura)" — es decir, si existe apertura en `start_date`, usar únicamente esa apertura y descartar la historia previa.
+3. `ReporteLibroBancos.tsx`: aplicar el mismo piso fiscal al saldo inicial sugerido.
+4. Extraer el criterio a un helper compartido en `src/utils/fiscalFloor.ts` para evitar reincidencias.
