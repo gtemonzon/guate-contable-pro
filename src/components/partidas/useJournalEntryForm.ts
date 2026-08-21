@@ -8,8 +8,8 @@ import { allocateEntryNumber, parseEntryNumber } from "@/utils/journalEntryNumbe
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
-import { buildPurchaseLines } from "@/utils/purchaseJournalLinesBuilder";
 import { getFiscalBookStrategy } from "@/services/fiscalBookStrategy";
+import { aggregatePurchaseJournalLines, buildDocTypeMap } from "@/utils/consolidatedJournalLines";
 
 export type EntryStatus = 'borrador' | 'pendiente_revision' | 'aprobado' | 'contabilizado' | 'rechazado';
 
@@ -703,13 +703,7 @@ export function useJournalEntryForm(
     if (!purchases || purchases.length === 0) return;
 
     // Build lookup for FEL document type multipliers and VAT applicability
-    const docTypeMap: Record<string, { multiplier: number; appliesVat: boolean }> = {};
-    (felDocTypes || []).forEach((dt: any) => {
-      docTypeMap[dt.code] = { multiplier: dt.affects_total ?? 1, appliesVat: dt.applies_vat ?? true };
-    });
-
-    // Exempt document types that don't generate IVA crédito fiscal
-    const exemptDocTypes = ['FPEQ', 'FESP', 'NABN', 'RDON', 'RECI'];
+    const docTypeMap = buildDocTypeMap(felDocTypes as any);
 
     // Load enterprise config for VAT and supplier accounts
     const { data: configData } = await supabase
@@ -718,97 +712,27 @@ export function useJournalEntryForm(
       .eq("enterprise_id", parseInt(enterpriseId))
       .maybeSingle();
 
-    const generatedLines: DetailLine[] = [];
-    // Aggregations across all purchase rows in the entry.
-    const lineAggByAccount: Record<number, { signed: number; descriptions: string[]; refs: string[]; role: 'EXPENSE' | 'NON_VAT' | 'VAT_CREDIT' }> = {};
-    let totalAmount = 0;
-    const vatRefs: string[] = [];
+    // Shared engine (same one used by "Generar Póliza" in Libros Fiscales):
+    // amount logic + per-supplier/invoice descriptions + traceability.
+    const { lines: aggregatedLines } = aggregatePurchaseJournalLines({
+      purchases: purchases as any,
+      docTypeMap,
+      mapping: configData ?? null,
+      enterpriseAppliesVat,
+      // Supplier line (credit) — only if no bank account selected
+      contraAccountId: !bankAccountId ? configData?.suppliers_account_id ?? null : null,
+    });
 
-    for (const p of purchases) {
-      const docType = p.fel_document_type || 'FACT';
-      const { multiplier, appliesVat: docTypeAppliesVat } = docTypeMap[docType] || { multiplier: 1, appliesVat: true };
-      const appliesVat = enterpriseAppliesVat && docTypeAppliesVat;
-      const ref = `${docType} ${p.invoice_series ? p.invoice_series + '-' : ''}${p.invoice_number}`;
-      const effectiveTotal = (Number(p.total_amount) || 0) * multiplier;
-      totalAmount += effectiveTotal;
-
-      // Centralized engine + journal-lines builder (Category → Mapping → Account)
-      const builtLines = buildPurchaseLines(
-        {
-          total_amount: Number(p.total_amount) || 0,
-          exempt_amount: Number(p.exempt_amount) || 0,
-          base_amount: Number(p.base_amount) || 0,
-          vat_amount: Number(p.vat_amount) || 0,
-          tax_category: (p as any).tax_category ?? null,
-          fel_document_type: docType,
-          expense_account_id: p.expense_account_id,
-          multiplier,
-          appliesVat,
-        },
-        configData ?? null
-      );
-
-      for (const bl of builtLines) {
-        const slot = (lineAggByAccount[bl.account_id] ||= {
-          signed: 0,
-          descriptions: [],
-          refs: [],
-          role: bl.role,
-        });
-        slot.signed += bl.amount;
-        if (bl.role === 'EXPENSE') {
-          slot.descriptions.push(`${p.supplier_name} - ${ref}`);
-          slot.refs.push(ref);
-        } else if (bl.role === 'VAT_CREDIT') {
-          vatRefs.push(ref);
-        } else if (bl.role === 'NON_VAT') {
-          slot.refs.push(ref);
-        }
-      }
-    }
-
-    // Emit aggregated lines (expense, non-VAT mapped, VAT credit)
-    for (const [accountId, data] of Object.entries(lineAggByAccount)) {
-      const amount = Number(data.signed.toFixed(2));
-      if (amount === 0) continue;
-      let description: string;
-      let sourceRef: string;
-      if (data.role === 'VAT_CREDIT') {
-        description = `IVA Crédito Fiscal - ${vatRefs.length} factura(s)`;
-        sourceRef = vatRefs.join(', ');
-      } else if (data.role === 'NON_VAT') {
-        description = `Impuestos no acreditables - ${data.refs.length} factura(s)`;
-        sourceRef = data.refs.join(', ');
-      } else {
-        description = data.descriptions.join('; ');
-        sourceRef = data.refs.join(', ');
-      }
-      generatedLines.push({
-        id: crypto.randomUUID(),
-        account_id: Number(accountId),
-        description,
-        cost_center: "",
-        debit_amount: amount >= 0 ? amount : 0,
-        credit_amount: amount < 0 ? Math.abs(amount) : 0,
-        source_type: 'PURCHASE',
-        source_ref: sourceRef,
-      });
-    }
-
-    // Supplier line (credit) — only if no bank account selected
-    if (!bankAccountId && configData?.suppliers_account_id) {
-      const creditAmount = Number(totalAmount.toFixed(2));
-      generatedLines.push({
-        id: crypto.randomUUID(),
-        account_id: configData.suppliers_account_id,
-        description: `Proveedores - ${purchases.length} factura(s)`,
-        cost_center: "",
-        debit_amount: creditAmount < 0 ? Math.abs(creditAmount) : 0,
-        credit_amount: creditAmount >= 0 ? creditAmount : 0,
-        source_type: 'PURCHASE',
-        source_ref: purchases.map(p => `${p.fel_document_type} ${p.invoice_number}`).join(', '),
-      });
-    }
+    const generatedLines: DetailLine[] = aggregatedLines.map((l) => ({
+      id: crypto.randomUUID(),
+      account_id: l.account_id,
+      description: l.description,
+      cost_center: "",
+      debit_amount: l.debit_amount,
+      credit_amount: l.credit_amount,
+      source_type: l.source_type,
+      source_ref: l.source_ref,
+    }));
 
     // Merge: keep non-purchase, non-bank lines; replace purchase lines
     const nonPurchaseLines = detailLines.filter(l => l.source_type !== 'PURCHASE' && !l.is_bank_line);
