@@ -1,64 +1,44 @@
-# Importación de compras sin cuenta/tipo: causa raíz confirmada
+# Descripciones detalladas en pólizas de Libro de Compras / Ventas
 
-## Lo que muestra la evidencia (no es lo que parecía)
+## Hallazgo importante antes de tocar datos (Tarea A)
 
-Consulté la bitácora (`tab_audit_log`) de los 22 registros del lote de las 17:01:49 en la empresa 14. Resultado:
+Verifiqué el mecanismo de vínculo de las 36 partidas de la empresa 14:
 
-| record_id | acción | hora | expense_account_id |
-|---|---|---|---|
-| 204576 | INSERT | 17:01:49 | NULL |
-| 204577 | INSERT | 17:01:49 | NULL |
-| 204578 | INSERT | 17:01:49 | NULL |
-| 204583 | INSERT | 17:01:49 | NULL |
-| 204594 | INSERT | 17:01:49 | NULL |
-| 204576 | UPDATE | 17:02:35 | 684 |
-| 204577 | UPDATE | 17:02:51 | 709 |
-| 204578 | UPDATE | 17:03:10 | 684 |
+- Las 36 partidas existen y tienen 149 líneas con descripción genérica (12 COMP- de 2022, 24 VENT- de 2021-2022).
+- `tab_purchase_journal_links` tiene 324 filas para la empresa 14, pero **0** de ellas apunta a estas partidas COMP- de 2022. Las facturas de estas partidas están vinculadas **solo por el campo legado `journal_entry_id`** en `tab_purchase_ledger` (ej. partida 30574 = 12 facturas, 30657 = 9 facturas).
+- Para ventas **no existe** tabla de vínculos (no hay `tab_sales_journal_links`); el único mecanismo es `tab_sales_ledger.journal_entry_id` (232 filas con vínculo en la empresa 14).
 
-Es decir: **los 22 registros se insertaron con `expense_account_id` y `operation_type_id` en NULL, sin excepción**. Los tres que hoy tienen valores (204576/77/78, los tres primeros de la lista) fueron editados a mano, uno por uno, entre 40 y 80 segundos después de la importación.
+Conclusión: la fuente para reconstruir es el campo legado `journal_entry_id` en ambos libros. No se usará `tab_purchase_journal_links` para estas partidas históricas.
 
-Esto descarta por completo la hipótesis de "solo la primera ocurrencia de cada NIT recibe el mapeo": no hubo mapeo para nadie. No hay closure obsoleta, ni problema de batching de estado en React, ni ruta alternativa que ponga NULL. El `.map(applyMappingToRecord)` sí es uniforme; simplemente no tenía nada que aplicar.
+Segundo hallazgo: **no existe** un motor equivalente a `buildPurchaseLines` para ventas (`buildSalesLines` no existe en el proyecto). Para ventas no voy a improvisar un motor: solo replicaré el **formato de descripciones** (`cliente - DOC serie-numero`), manteniendo intacta la lógica de montos/cuentas que ya existe.
 
-## Por qué la auto-sugerencia no aplicó a nada
+## Tarea A — Corrección de datos (solo `description`)
 
-La función `get_batch_purchase_mappings` filtra el historial con:
+Enfoque: por cada partida, agrupar las facturas vinculadas por su cuenta (`expense_account_id` / `income_account_id`) y reescribir el texto de la línea de detalle **cuya `account_id` coincide**. No se recalcula ningún monto ni se cambia ninguna cuenta.
 
-```sql
-AND pl.invoice_date >= (CURRENT_DATE - INTERVAL '12 months')
-```
+- Líneas de gasto/ingreso: `proveedor - DOC serie-numero` unidas con `'; '` (mismo formato que `regenerateLinesFromLinkedPurchases`).
+- Línea de IVA (cuenta 588 crédito / 644 débito según `tab_enterprise_config`): `IVA Crédito Fiscal - N factura(s)` / `IVA Débito Fiscal - N factura(s)`.
+- Línea de contrapartida (proveedores/clientes o banco/caja, según la cuenta que ya tenga la línea): `Proveedores - N factura(s)` / `Clientes - N factura(s)`.
+- Se rellenará también `source_type` (`PURCHASE`/`SALE`) y `source_ref` (lista de referencias), hoy vacíos.
+- Alcance estricto: `enterprise_id = 14`, solo las 149 líneas cuya `description` empieza con `Libro de Compras`/`Libro de Ventas`.
 
-Y en esta empresa:
+Verificación: consulta antes/después comparando `sum(debit_amount)` y `sum(credit_amount)` por partida (deben ser idénticos) y volcado completo de 2 partidas de ejemplo (una COMP-, una VENT-) para tu confirmación visual.
 
-```sql
-select max(invoice_date) from tab_purchase_ledger
-where enterprise_id = 14 and deleted_at is null
-  and (expense_account_id is not null or operation_type_id is not null);
--- 2022-06-30   (389 registros con mapeo, todos de 2022)
-```
+Se ejecuta como migración (UPDATE de datos), en un solo paso reversible en cuanto al texto.
 
-Hoy es 2026-08-20, así que la ventana solo mira desde 2025-08-20. Las 53 facturas históricas del NIT 92800 existen y tienen cuenta y tipo, pero **todas son de 2022**, fuera de la ventana. La RPC devuelve cero filas.
+## Tarea B — Unificar el motor de "Generar Póliza"
 
-Cadena completa: RPC devuelve `[]` → `supplierMappings` queda vacío → el `if (map.size > 0) setAutoSuggestMode("auto")` nunca se ejecuta → `autoSuggestMode` sigue en `"none"` → el panel "✨ Auto-sugerir por proveedor" ni siquiera se muestra en pantalla → `applyMappingToRecord` retorna cada registro tal cual. Todo insertado en NULL.
+Nueva utilidad compartida `src/utils/consolidatedJournalLines.ts`:
 
-Es exactamente el escenario de esta empresa: importación de datos históricos (2022) sobre un sistema cuyo "hoy" está en 2026. La ventana de 12 meses, pensada para no arrastrar clasificaciones viejas, deja el feature completamente muerto en cualquier importación retroactiva.
+- `buildConsolidatedPurchaseLines(purchases, docTypeMap, config, enterpriseAppliesVat, bankAccountId)`: extrae tal cual la lógica de agregación de `regenerateLinesFromLinkedPurchases` (agrupación por cuenta con `buildPurchaseLines`, acumulación de `descriptions`/`refs`, línea de IVA, línea de contrapartida) y devuelve líneas con `description` y `source_ref`.
+- `buildConsolidatedSalesLines(sales, docTypeMap, config, ...)`: mantiene **exactamente** el cálculo de montos que hoy tiene `LibrosFiscales.tsx` para ventas (multiplicador por tipo FEL, `net_amount`/`vat_amount` reales, exclusión de anuladas), y solo añade el desglose de descripciones y `source_ref`.
 
-## Fix propuesto
+Luego `src/components/partidas/useJournalEntryForm.ts` (`regenerateLinesFromLinkedPurchases`) pasa a consumir la utilidad compartida, y `src/pages/LibrosFiscales.tsx` reemplaza los `Map<number, number>` de la póliza consolidada (compras y ventas) por llamadas a la misma utilidad. Los flujos "por Banco" y "por Documento" quedan igual (ya tienen detalle).
 
-**1. Anclar la ventana a la fecha de las facturas importadas, no a `CURRENT_DATE`** (cambio principal, en la RPC `get_batch_purchase_mappings`):
+Invariantes que respeto: régimen fiscal de la empresa (`appliesVat`), IDP / impuestos no acreditables vía `resolveNonVatAccount`, multiplicadores NCRE, y redondeos a 2 decimales. El cambio es estrictamente de texto y trazabilidad.
 
-- Agregar un parámetro opcional `p_reference_date date default null`.
-- Cuando venga, filtrar `pl.invoice_date >= (p_reference_date - INTERVAL '12 months') AND pl.invoice_date <= p_reference_date` — es decir, "el último uso conocido antes o alrededor de la fecha del documento que estoy importando", que es lo que un contador esperaría.
-- Cuando no venga, mantener el comportamiento actual (compatibilidad con cualquier otra llamada).
-- `ORDER BY` se mantiene igual (`invoice_date DESC, id DESC`) para seguir tomando el uso más reciente.
+## Detalles técnicos
 
-**2. Enviar esa fecha desde el cliente** (`ImportPurchasesDialog.tsx`, en `fetchSupplierMappings`): calcular la fecha máxima de `invoice_date` entre los registros del archivo y pasarla como `p_reference_date`.
-
-**3. Fallback cuando aun así no haya nada en la ventana:** si con la fecha de referencia la RPC no devuelve filas, hacer una segunda llamada sin ventana (o con la ventana desactivada) para no dejar al usuario sin sugerencias. Se implementa dentro de la misma RPC: si el filtro con ventana no arroja resultados para un NIT, caer al último uso histórico de ese NIT sin restricción de fecha.
-
-**4. Visibilidad para el usuario:** hoy, cuando no hay sugerencias, la sección entera desaparece sin explicación. Mostrar una línea discreta en el paso de opciones cuando `supplierMappings.size === 0`: "No se encontraron sugerencias históricas para los NIT de este archivo." Así, un caso futuro se diagnostica en la pantalla en vez de en la base de datos.
-
-## Detalle técnico
-
-- Migración: `CREATE OR REPLACE FUNCTION public.get_batch_purchase_mappings(p_enterprise_id bigint, p_supplier_nits text[], p_reference_date date default null)`. Se conserva el chequeo de acceso (`is_super_admin` / `user_is_linked_to_enterprise`) y `SECURITY DEFINER` / `search_path = public` tal como están. Al agregar un parámetro con default no se rompen las llamadas actuales de 2 argumentos.
-- Cliente: solo `fetchSupplierMappings` cambia (agrega `p_reference_date`); `applyMappingToRecord` y `handleProceedToSummary` quedan intactos — ya son correctos.
-- Sin cambios de esquema ni de datos. Los 19 registros ya importados en NULL se pueden reclasificar a mano o volviendo a importar con sobrescritura, una vez aplicado el fix.
+- Tarea A: migración SQL con CTEs que agregan desde `tab_purchase_ledger`/`tab_sales_ledger` (`deleted_at is null`), construyen el texto con `string_agg(... , '; ' order by invoice_date, id)` y hacen `UPDATE tab_journal_entry_details` por `journal_entry_id` + `account_id`.
+- Nota: las líneas de IVA y contrapartida se identifican por `account_id` comparado con `tab_enterprise_config` y por signo debe/haber, no por texto.
+- Tarea B: sin cambios de esquema; typecheck con `tsgo` al terminar.
