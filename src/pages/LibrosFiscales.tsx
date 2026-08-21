@@ -27,6 +27,11 @@ import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalcul
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
+import {
+  aggregatePurchaseJournalLines,
+  aggregateSalesJournalLines,
+  buildDocTypeMap,
+} from "@/utils/consolidatedJournalLines";
 
 
 
@@ -199,6 +204,8 @@ export default function LibrosFiscales() {
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
   const appliesVat = strategy.appliesVat;
+  // Mapa de tipos de documento FEL (multiplicador + aplica IVA) para el motor compartido
+  const docTypeMap = useMemo(() => buildDocTypeMap(felDocTypes), [felDocTypes]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Read URL params from global search navigation
@@ -2308,7 +2315,7 @@ export default function LibrosFiscales() {
                       // Generar póliza de compras consolidada
                       const { data: enterpriseConfig } = await supabase
                         .from("tab_enterprise_config")
-                        .select("vat_credit_account_id, suppliers_account_id")
+                        .select("vat_credit_account_id, suppliers_account_id, account_non_vat_tourism_id, account_non_vat_idp_id, account_non_vat_electricity_id, account_non_vat_fiscal_stamp_id, account_non_vat_other_id")
                         .eq("enterprise_id", parseInt(currentEnterpriseId))
                         .maybeSingle();
 
@@ -2336,79 +2343,19 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      // Crear líneas de detalle
-                      const detailLines: Array<{
-                        journal_entry_id: number;
-                        line_number: number;
-                        account_id: number;
-                        description: string;
-                        debit_amount: number;
-                        credit_amount: number;
-                      }> = [];
-
-                      let lineNumber = 1;
-                      const expenseByAccount = new Map<number, number>();
-                      let totalVAT = 0;
-                      let totalAmount = 0;
-
-                      for (const p of purchases) {
-                        // Obtener multiplicador del tipo de documento (NCRE = -1)
-                        const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-                        const multiplier = docType?.affects_total ?? 1;
-                        
-                        if (p.expense_account_id) {
-                          let baseAmount: number;
-                          if (!appliesVat) {
-                            baseAmount = p.total_amount;
-                          } else {
-                            // Respetar IVA real: si vat_amount es 0, la base es el total
-                            baseAmount = p.vat_amount > 0
-                              ? (p.base_amount || p.total_amount - p.vat_amount)
-                              : p.total_amount;
-                          }
-                          expenseByAccount.set(
-                            p.expense_account_id,
-                            (expenseByAccount.get(p.expense_account_id) || 0) + (baseAmount * multiplier)
-                          );
-                        }
-                        // Usar IVA real con multiplicador, no recalcular
-                        totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
-                        totalAmount += p.total_amount * multiplier;
-                      }
-
-                      for (const [accountId, amount] of expenseByAccount) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: accountId,
-                          description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: parseFloat(amount.toFixed(2)),
-                          credit_amount: 0,
-                        });
-                      }
-
-                      if (appliesVat && vatCreditAccountId && totalVAT > 0) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: vatCreditAccountId,
-                          description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: parseFloat(totalVAT.toFixed(2)),
-                          credit_amount: 0,
-                        });
-                      }
-
-                      const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
-                      if (creditAccountId) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: creditAccountId,
-                          description: `Libro de Compras ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: 0,
-                          credit_amount: parseFloat(totalAmount.toFixed(2)),
-                        });
-                      }
+                      // Crear líneas de detalle con el motor compartido
+                      const { lines: aggregatedLines } = aggregatePurchaseJournalLines({
+                        purchases,
+                        docTypeMap,
+                        mapping: enterpriseConfig,
+                        enterpriseAppliesVat: appliesVat,
+                        contraAccountId: suppliersAccountId || bankAccounts[0]?.id || null,
+                      });
+                      const detailLines = aggregatedLines.map((l, idx) => ({
+                        journal_entry_id: journalEntry.id,
+                        line_number: idx + 1,
+                        ...l,
+                      }));
 
                       if (detailLines.length > 0) {
                         await supabase.from("tab_journal_entry_details").insert(detailLines);
@@ -2481,68 +2428,18 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      // Crear líneas de detalle
-                      const detailLines: Array<{
-                        journal_entry_id: number;
-                        line_number: number;
-                        account_id: number;
-                        description: string;
-                        debit_amount: number;
-                        credit_amount: number;
-                      }> = [];
-
-                      let lineNumber = 1;
-                      const accountTotals = new Map<number, number>();
-                      let totalVAT = 0;
-
-                      for (const s of validSales) {
-                        const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
-                        const multiplier = docType?.affects_total ?? 1;
-
-                        const vat = (Number(s.vat_amount) || 0) * multiplier;
-                        const net = (Number(s.net_amount) || 0) * multiplier;
-
-                        totalVAT += vat;
-
-                        if (!s.income_account_id) continue;
-                        accountTotals.set(
-                          s.income_account_id,
-                          (accountTotals.get(s.income_account_id) || 0) + net
-                        );
-                      }
-
-                      if (cashAccountId) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: cashAccountId,
-                          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: parseFloat(totalAmount.toFixed(2)),
-                          credit_amount: 0,
-                        });
-                      }
-
-                      for (const [accountId, netTotal] of accountTotals) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: accountId,
-                          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: 0,
-                          credit_amount: parseFloat(netTotal.toFixed(2)),
-                        });
-                      }
-
-                      if (vatDebitAccountId && totalVAT !== 0) {
-                        detailLines.push({
-                          journal_entry_id: journalEntry.id,
-                          line_number: lineNumber++,
-                          account_id: vatDebitAccountId,
-                          description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          debit_amount: 0,
-                          credit_amount: parseFloat(totalVAT.toFixed(2)),
-                        });
-                      }
+                      // Crear líneas de detalle con el motor compartido
+                      const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                        sales: validSales,
+                        docTypeMap,
+                        vatDebitAccountId,
+                        contraAccountId: cashAccountId,
+                      });
+                      const detailLines = aggregatedLines.map((l, idx) => ({
+                        journal_entry_id: journalEntry.id,
+                        line_number: idx + 1,
+                        ...l,
+                      }));
 
                       if (detailLines.length > 0) {
                         await supabase.from("tab_journal_entry_details").insert(detailLines);
@@ -2654,7 +2551,7 @@ export default function LibrosFiscales() {
                       // Obtener configuración de empresa para cuentas de IVA
                       const { data: enterpriseConfig } = await supabase
                         .from("tab_enterprise_config")
-                        .select("vat_credit_account_id, suppliers_account_id")
+                        .select("vat_credit_account_id, suppliers_account_id, account_non_vat_tourism_id, account_non_vat_idp_id, account_non_vat_electricity_id, account_non_vat_fiscal_stamp_id, account_non_vat_other_id")
                         .eq("enterprise_id", parseInt(currentEnterpriseId))
                         .maybeSingle();
 
@@ -2662,91 +2559,26 @@ export default function LibrosFiscales() {
                       const suppliersAccountId = enterpriseConfig?.suppliers_account_id;
 
                       // Función auxiliar para crear líneas de detalle de compras
+                      // (usa el motor compartido con "Vincular Facturas": misma lógica de
+                      //  montos + desglose por proveedor/factura en la descripción)
                       const createPurchaseDetailLines = async (
                         journalEntryId: number,
                         purchaseItems: PurchaseEntry[],
-                        description: string
+                        _description: string
                       ) => {
-                        const detailLines: Array<{
-                          journal_entry_id: number;
-                          line_number: number;
-                          account_id: number;
-                          description: string;
-                          debit_amount: number;
-                          credit_amount: number;
-                        }> = [];
+                        const { lines: aggregatedLines } = aggregatePurchaseJournalLines({
+                          purchases: purchaseItems,
+                          docTypeMap,
+                          mapping: enterpriseConfig,
+                          enterpriseAppliesVat: appliesVat,
+                          contraAccountId: suppliersAccountId || bankAccounts[0]?.id || null,
+                        });
 
-                        let lineNumber = 1;
-
-                        // Agrupar por cuenta de gasto (débitos)
-                        const expenseByAccount = new Map<number, number>();
-                        let totalVAT = 0;
-                        let totalAmount = 0;
-
-                        for (const p of purchaseItems) {
-                          // Obtener multiplicador del tipo de documento (NCRE = -1)
-                          const docType = felDocTypes.find(dt => dt.code === p.fel_document_type);
-                          const multiplier = docType?.affects_total ?? 1;
-                          
-                          if (p.expense_account_id) {
-                            let expenseAmount: number;
-                            if (!appliesVat) {
-                              expenseAmount = Number(p.total_amount) || 0;
-                            } else {
-                              // Respetar IVA real: si vat_amount es 0, la base es el total
-                              // Para impuestos no acreditables (IDP, turismo, etc.): gasto = base + No afecto
-                              const nonVat = Number((p as any).exempt_amount) || 0;
-                              const baseAmount = p.vat_amount > 0
-                                ? (Number(p.base_amount) || (Number(p.total_amount) - Number(p.vat_amount) - nonVat))
-                                : (Number(p.total_amount) - nonVat);
-                              expenseAmount = Number(baseAmount) + nonVat;
-                            }
-                            expenseByAccount.set(
-                              p.expense_account_id,
-                              (expenseByAccount.get(p.expense_account_id) || 0) + (expenseAmount * multiplier)
-                            );
-                          }
-                          // Usar IVA real con multiplicador, no recalcular
-                          totalVAT += appliesVat ? (p.vat_amount || 0) * multiplier : 0;
-                          totalAmount += p.total_amount * multiplier;
-                        }
-
-                        // Débitos: Cuentas de gasto (base sin IVA)
-                        for (const [accountId, amount] of expenseByAccount) {
-                          detailLines.push({
-                            journal_entry_id: journalEntryId,
-                            line_number: lineNumber++,
-                            account_id: accountId,
-                            description,
-                            debit_amount: parseFloat(amount.toFixed(2)),
-                            credit_amount: 0,
-                          });
-                        }
-
-                        // Débito: IVA Crédito Fiscal
-                        if (appliesVat && vatCreditAccountId && totalVAT > 0) {
-                          detailLines.push({
-                            journal_entry_id: journalEntryId,
-                            line_number: lineNumber++,
-                            account_id: vatCreditAccountId,
-                            description,
-                            debit_amount: parseFloat(totalVAT.toFixed(2)),
-                            credit_amount: 0,
-                          });
-                        }
-
-                        // Crédito: Proveedores o Banco/Caja
-                        const creditAccountId = suppliersAccountId || bankAccounts[0]?.id;
-                        if (creditAccountId) {
-                          detailLines.push({
-                            journal_entry_id: journalEntryId,
-                            line_number: lineNumber++,
-                            account_id: creditAccountId,
-                            description,
-                            debit_amount: 0,
-                            credit_amount: parseFloat(totalAmount.toFixed(2)),
-                          });
-                        }
+                        const detailLines = aggregatedLines.map((l, idx) => ({
+                          journal_entry_id: journalEntryId,
+                          line_number: idx + 1,
+                          ...l,
+                        }));
 
                         if (detailLines.length > 0) {
                           const { error: detailError } = await supabase
@@ -2980,54 +2812,18 @@ export default function LibrosFiscales() {
 
                         if (journalError) throw journalError;
 
-                        const detailLines: Array<{
-                          journal_entry_id: number;
-                          line_number: number;
-                          account_id: number;
-                          description: string;
-                          debit_amount: number;
-                          credit_amount: number;
-                        }> = [];
-
-                        let lineNumber = 1;
-
-                        // Débito: Caja/Clientes
-                        if (cashAccountId) {
-                          detailLines.push({
-                            journal_entry_id: journalEntry.id,
-                            line_number: lineNumber++,
-                            account_id: cashAccountId,
-                            description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                            debit_amount: parseFloat(totalAmount.toFixed(2)),
-                            credit_amount: 0,
-                          });
-                        }
-
-                        // Créditos: Ingresos (neto, sin IVA)
-                        for (const [accountId, netAmount] of accountTotals) {
-                          if (netAmount !== 0) {
-                            detailLines.push({
-                              journal_entry_id: journalEntry.id,
-                              line_number: lineNumber++,
-                              account_id: accountId,
-                              description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                              debit_amount: 0,
-                              credit_amount: parseFloat(netAmount.toFixed(2)),
-                            });
-                          }
-                        }
-
-                        // Crédito: IVA Débito Fiscal
-                        if (vatDebitAccountId && totalVAT !== 0) {
-                          detailLines.push({
-                            journal_entry_id: journalEntry.id,
-                            line_number: lineNumber++,
-                            account_id: vatDebitAccountId,
-                            description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                            debit_amount: 0,
-                            credit_amount: parseFloat(totalVAT.toFixed(2)),
-                          });
-                        }
+                        // Motor compartido con "Vincular Facturas": desglose por cliente/factura
+                        const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                          sales: validSales,
+                          docTypeMap,
+                          vatDebitAccountId,
+                          contraAccountId: cashAccountId,
+                        });
+                        const detailLines = aggregatedLines.map((l, idx) => ({
+                          journal_entry_id: journalEntry.id,
+                          line_number: idx + 1,
+                          ...l,
+                        }));
 
                         if (detailLines.length > 0) {
                           const { error: detailError } = await supabase
@@ -3085,53 +2881,18 @@ export default function LibrosFiscales() {
 
                           if (journalError) throw journalError;
 
-                          const detailLines: Array<{
-                            journal_entry_id: number;
-                            line_number: number;
-                            account_id: number;
-                            description: string;
-                            debit_amount: number;
-                            credit_amount: number;
-                          }> = [];
-
-                          const description = `Venta ${s.customer_name}`;
-                          let lineNumber = 1;
-
-                          // Débito: Caja/Clientes
-                          if (cashAccountId) {
-                            detailLines.push({
-                              journal_entry_id: journalEntry.id,
-                              line_number: lineNumber++,
-                              account_id: cashAccountId,
-                              description,
-                              debit_amount: parseFloat(total.toFixed(2)),
-                              credit_amount: 0,
-                            });
-                          }
-
-                          // Crédito: Ingreso (neto usando valor real, no recalculado)
-                          if (s.income_account_id) {
-                            detailLines.push({
-                              journal_entry_id: journalEntry.id,
-                              line_number: lineNumber++,
-                              account_id: Number(s.income_account_id),
-                              description,
-                              debit_amount: 0,
-                              credit_amount: parseFloat(net.toFixed(2)),
-                            });
-                          }
-
-                          // Crédito: IVA Débito Fiscal
-                          if (vatDebitAccountId && vat !== 0) {
-                            detailLines.push({
-                              journal_entry_id: journalEntry.id,
-                              line_number: lineNumber++,
-                              account_id: vatDebitAccountId,
-                              description,
-                              debit_amount: 0,
-                              credit_amount: parseFloat(vat.toFixed(2)),
-                            });
-                          }
+                          // Motor compartido con "Vincular Facturas": desglose por cliente/factura
+                          const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                            sales: [s],
+                            docTypeMap,
+                            vatDebitAccountId,
+                            contraAccountId: cashAccountId,
+                          });
+                          const detailLines = aggregatedLines.map((l, idx) => ({
+                            journal_entry_id: journalEntry.id,
+                            line_number: idx + 1,
+                            ...l,
+                          }));
 
                           if (detailLines.length > 0) {
                             const { error: detailError } = await supabase
