@@ -19,6 +19,7 @@ import EntityLink from "@/components/ui/entity-link";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 
 interface BankAccount {
   id: number;
