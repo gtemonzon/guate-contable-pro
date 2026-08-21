@@ -343,7 +343,16 @@ export default function JournalEntryViewDialog({
                           </TableCell>
                           <TableCell>{detail.account_name}</TableCell>
                           <TableCell className="text-muted-foreground">
-                            {detail.description || "-"}
+                            {detail.description ? (
+                              <TruncatedText
+                                text={detail.description}
+                                maxLength={50}
+                                expandable
+                                className="text-[10px]"
+                              />
+                            ) : (
+                              "-"
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {detail.debit_amount > 0
