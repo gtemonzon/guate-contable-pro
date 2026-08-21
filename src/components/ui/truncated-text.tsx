@@ -38,7 +38,6 @@ export function TruncatedText({
   const displayed = needsTruncation && !isExpanded
     ? value.slice(0, limit) + "…"
     : value;
-  const remaining = Math.max(0, value.length - limit);
 
   const Tag = inline ? "span" : "div";
 
@@ -58,7 +57,7 @@ export function TruncatedText({
           }}
           className="ml-1 text-primary hover:underline text-[10px] align-baseline"
         >
-          {isExpanded ? "Ver menos" : `+ ${remaining} más`}
+          {isExpanded ? "Ver menos" : "Ver más"}
         </button>
       </Tag>
     );
