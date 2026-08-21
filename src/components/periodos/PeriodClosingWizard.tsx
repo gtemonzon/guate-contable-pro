@@ -141,6 +141,10 @@ export function PeriodClosingWizard({
   // Step: Confirmation
   const [confirmClose, setConfirmClose] = useState(false);
 
+  // Warning dialog when advancing without generating the step's entry
+  const [skipWarning, setSkipWarning] = useState<{ stepId: string; label: string } | null>(null);
+
+
   // FX revaluation gating (Item 9)
   const [fxCheckLoading, setFxCheckLoading] = useState(false);
   const [fxNeeded, setFxNeeded] = useState(false);
