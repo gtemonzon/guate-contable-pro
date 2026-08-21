@@ -11,6 +11,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -130,6 +140,10 @@ export function PeriodClosingWizard({
   
   // Step: Confirmation
   const [confirmClose, setConfirmClose] = useState(false);
+
+  // Warning dialog when advancing without generating the step's entry
+  const [skipWarning, setSkipWarning] = useState<{ stepId: string; label: string } | null>(null);
+
 
   // FX revaluation gating (Item 9)
   const [fxCheckLoading, setFxCheckLoading] = useState(false);
@@ -262,6 +276,7 @@ export function PeriodClosingWizard({
       setTotalEquity(0);
       setIsBalanced(false);
       setConfirmClose(false);
+      setSkipWarning(null);
       setSkipFxRevaluation(false);
       setFxNeeded(false);
       setFxLastRunMonth(null);
@@ -1091,6 +1106,101 @@ export function PeriodClosingWizard({
   };
 
   // ---- Navigation Logic ----
+  const STEP_ENTRY_LABELS: Record<string, string> = {
+    cdv: 'Costo de Ventas',
+    generar: 'Cierre de Resultado',
+    traslado: 'Traslado',
+    apertura: 'Apertura',
+  };
+
+  const stepIndexOf = (stepId: string) => steps.findIndex(s => s.id === stepId);
+
+  const cdvReady = cdv.closingData?.status === 'contabilizado' && !!cdv.closingData?.journal_entry_id;
+  const transferRequired = !!config?.retained_earnings_account_id;
+
+  // Is the entry for a given step already generated / posted?
+  const stepEntryReady = (stepId: string): boolean => {
+    switch (stepId) {
+      case 'cdv':
+        return cdvReady;
+      case 'generar':
+        return closingEntryGenerated && !!closingEntryId;
+      case 'traslado':
+        return !transferRequired || transferEntryGenerated;
+      case 'apertura':
+        return openingEntryGenerated && !!openingEntryId;
+      default:
+        return true;
+    }
+  };
+
+  interface ConfirmCheck {
+    key: string;
+    label: string;
+    ok: boolean;
+    required: boolean;
+    neutral?: boolean;
+    stepId?: string;
+  }
+
+  const getConfirmChecks = (): ConfirmCheck[] => {
+    const checks: ConfirmCheck[] = [];
+
+    if (hasCdvStep) {
+      checks.push({
+        key: 'cdv',
+        label: 'Costo de ventas calculado y contabilizado',
+        ok: cdvReady,
+        required: true,
+        stepId: 'cdv',
+      });
+    }
+
+    checks.push({
+      key: 'cierre',
+      label: 'Partida de cierre de resultados generada',
+      ok: closingEntryGenerated && !!closingEntryId,
+      required: true,
+      stepId: 'generar',
+    });
+
+    checks.push(
+      transferRequired
+        ? {
+            key: 'traslado',
+            label: 'Resultado trasladado a utilidades acumuladas',
+            ok: transferEntryGenerated,
+            required: true,
+            stepId: 'traslado',
+          }
+        : {
+            key: 'traslado',
+            label: 'Traslado a utilidades acumuladas: No requerido (cuenta no configurada)',
+            ok: true,
+            required: false,
+            neutral: true,
+          }
+    );
+
+    checks.push({
+      key: 'apertura',
+      label: `Partida de apertura ${(period?.year ?? 0) + 1} generada`,
+      ok: openingEntryGenerated && !!openingEntryId,
+      required: true,
+      stepId: 'apertura',
+    });
+
+    checks.push({
+      key: 'balance',
+      label: 'Balance verificado (Activo = Pasivo + Capital)',
+      ok: isBalanced,
+      required: true,
+      stepId: 'verificar',
+    });
+
+    return checks;
+  };
+
   const canAdvance = () => {
     switch (currentStepId) {
       case 'partidas': {
@@ -1099,114 +1209,65 @@ export function PeriodClosingWizard({
         return pendingOk && fxOk;
       }
       case 'cdv':
-        if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) return true;
-        return cdv.finalInventory !== null &&
-          cdv.costOfSales !== null &&
-          !!config?.inventory_account_id &&
-          !!config?.purchases_account_id &&
-          !!config?.cost_of_sales_account_id;
       case 'generar':
-        return (incomeAccounts.length > 0 || expenseAccounts.length > 0 || closingEntryGenerated) && !!config?.period_result_account_id;
       case 'traslado':
-        return transferEntryGenerated || !config?.retained_earnings_account_id;
       case 'apertura':
-        return openingEntryGenerated;
       case 'verificar':
+        // Advancing is always allowed; a warning dialog appears when the
+        // step's entry has not been generated yet.
         return true;
       case 'confirmar':
-        return confirmClose && (closingEntryId || closingEntryGenerated);
+        return confirmClose && getConfirmChecks().every(c => !c.required || c.ok);
       default:
         return true;
     }
   };
 
-  const handleNext = async () => {
-    const nextIndex = currentStepIndex + 1;
-    if (nextIndex >= steps.length) return;
-    const nextStepId = steps[nextIndex].id;
-
-    if (currentStepId === 'partidas' && canAdvance()) {
-      if (nextStepId === 'cdv') {
-        setCurrentStepIndex(nextIndex);
-        cdv.calculate();
-      } else {
-        setCurrentStepIndex(nextIndex);
-        await loadAccountBalances();
-      }
-    } else if (currentStepId === 'cdv' && canAdvance()) {
-      if (cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id) {
-        setCurrentStepIndex(nextIndex);
-        await loadAccountBalances();
-        return;
-      }
-
-      setLoading(true);
-      try {
-        let journalEntryId = cdv.closingData?.journal_entry_id ?? null;
-
-        if (!journalEntryId && cdv.finalInventory !== null && cdv.costOfSales !== null && period) {
-          const generated = await cdv.generateCostOfSalesEntry();
-          if (generated) {
-            const { data: latestClosing } = await supabase
-              .from('tab_period_inventory_closing')
-              .select('journal_entry_id')
-              .eq('enterprise_id', enterpriseId)
-              .eq('accounting_period_id', period.id)
-              .maybeSingle();
-            journalEntryId = latestClosing?.journal_entry_id ?? null;
-          }
-        }
-
-        if (!journalEntryId) {
-          toast.error('No se pudo generar la póliza CDV. Use "Generar / Reintentar".');
-          return;
-        }
-
-        const posted = await cdv.postCdvEntry();
-        if (!posted) {
-          toast.error('Error al contabilizar la partida de costo de ventas');
-          return;
-        }
-
-        setCurrentStepIndex(nextIndex);
-        await loadAccountBalances();
-      } finally {
-        setLoading(false);
-      }
-    } else if (currentStepId === 'generar' && canAdvance()) {
-      if (!closingEntryGenerated) {
-        const existingEntry = await findExistingEntry('cierre', period!.id, 'CIER');
-        if (existingEntry) {
-          setClosingEntryGenerated(true);
-          setClosingEntryId(existingEntry.id);
-          setClosingEntryNumber(existingEntry.entry_number);
-          setClosingEntryStatus(existingEntry.status);
-          setCurrentStepIndex(nextIndex);
-          return;
-        }
-        await generateClosingEntry();
-        return;
-      }
-      setCurrentStepIndex(nextIndex);
-    } else if (currentStepId === 'traslado' && canAdvance()) {
-      if (!transferEntryGenerated && config?.retained_earnings_account_id) {
-        await generateTransferEntry();
-        return;
-      }
-      setCurrentStepIndex(nextIndex);
-    } else if (currentStepId === 'apertura' && canAdvance()) {
-      if (!openingEntryGenerated) {
-        await generateOpeningEntry();
-        return;
-      }
-      setCurrentStepIndex(nextIndex);
+  const goToStep = async (index: number) => {
+    const id = steps[index]?.id;
+    if (!id) return;
+    setCurrentStepIndex(index);
+    if (id === 'cdv') {
+      cdv.calculate();
+    } else if (id === 'generar') {
+      await loadAccountBalances();
+    } else if (id === 'verificar') {
       await loadBalanceVerification();
-    } else if (currentStepId === 'verificar') {
-      setCurrentStepIndex(nextIndex);
-    } else if (currentStepId === 'confirmar' && canAdvance()) {
-      await handleClosePeriod();
     }
   };
+
+  const handleNext = async () => {
+    if (!canAdvance()) return;
+
+    if (currentStepId === 'confirmar') {
+      await handleClosePeriod();
+      return;
+    }
+
+    const nextIndex = currentStepIndex + 1;
+    if (nextIndex >= steps.length) return;
+
+    // Re-sync closing entry in case it was generated outside this session
+    if (currentStepId === 'generar' && !closingEntryGenerated && period) {
+      const existingEntry = await findExistingEntry('cierre', period.id, 'CIER');
+      if (existingEntry) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(existingEntry.id);
+        setClosingEntryNumber(existingEntry.entry_number);
+        setClosingEntryStatus(existingEntry.status);
+        await goToStep(nextIndex);
+        return;
+      }
+    }
+
+    if (STEP_ENTRY_LABELS[currentStepId] && !stepEntryReady(currentStepId)) {
+      setSkipWarning({ stepId: currentStepId, label: STEP_ENTRY_LABELS[currentStepId] });
+      return;
+    }
+
+    await goToStep(nextIndex);
+  };
+
 
   const handleBack = () => {
     if (currentStepIndex > 0) {
@@ -1673,8 +1734,26 @@ export function PeriodClosingWizard({
                             {cdv.closingData?.journal_entry_id ? (
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400">
-                                  Partida CDV generada
+                                  {cdv.closingData?.status === 'contabilizado' ? 'Partida CDV contabilizada' : 'Partida CDV generada (borrador)'}
                                 </Badge>
+                                {cdv.closingData?.status !== 'contabilizado' && (
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      const posted = await cdv.postCdvEntry();
+                                      if (posted) {
+                                        toast.success('Partida CDV contabilizada');
+                                        cdv.calculate();
+                                      } else {
+                                        toast.error('Error al contabilizar la partida de costo de ventas');
+                                      }
+                                    }}
+                                    disabled={cdv.loading}
+                                  >
+                                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                                    Contabilizar
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -2058,34 +2137,40 @@ export function PeriodClosingWizard({
                 </div>
 
                 <Card>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Partida de cierre de resultados generada</span>
-                    </div>
-                    {hasCdvStep && (
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        <span>Costo de ventas calculado y contabilizado</span>
+                  <CardContent className="pt-6 space-y-3">
+                    {getConfirmChecks().map((check) => (
+                      <div key={check.key} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {check.neutral ? (
+                            <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+                          ) : check.ok ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                          )}
+                          <span className={cn(
+                            "text-sm",
+                            check.neutral && "text-muted-foreground",
+                            !check.neutral && !check.ok && "text-destructive font-medium"
+                          )}>
+                            {check.label}
+                          </span>
+                        </div>
+                        {!check.ok && check.stepId && stepIndexOf(check.stepId) >= 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => goToStep(stepIndexOf(check.stepId!))}
+                          >
+                            Ir a este paso
+                          </Button>
+                        )}
                       </div>
-                    )}
-                    {transferEntryGenerated && transferEntryStatus !== 'no_requerido' && (
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        <span>Resultado trasladado a utilidades acumuladas</span>
-                      </div>
-                    )}
+                    ))}
+                    <Separator />
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Partida de apertura {period.year + 1} generada</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Balance verificado</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>
+                      <Scale className="h-5 w-5 text-muted-foreground" />
+                      <span className="text-sm">
                         Resultado del período: {' '}
                         <span className={cn(
                           "font-bold",
@@ -2097,6 +2182,7 @@ export function PeriodClosingWizard({
                     </div>
                   </CardContent>
                 </Card>
+
 
                 <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
                   <CardContent className="pt-6">
@@ -2208,6 +2294,32 @@ export function PeriodClosingWizard({
           }}
         />
       )}
+
+      {/* Warning: advancing without generating the step's entry */}
+      <AlertDialog open={!!skipWarning} onOpenChange={(o) => { if (!o) setSkipWarning(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Partida pendiente en este paso</AlertDialogTitle>
+            <AlertDialogDescription>
+              Falta generar/contabilizar la partida de <strong>{skipWarning?.label}</strong> de este paso.
+              Puedes continuar para revisar el resto del proceso, pero deberás volver a este paso y generarla
+              antes de poder confirmar el cierre.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver a este paso</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setSkipWarning(null);
+                await goToStep(currentStepIndex + 1);
+              }}
+            >
+              Continuar de todas formas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+
   );
 }
