@@ -2136,34 +2136,40 @@ export function PeriodClosingWizard({
                 </div>
 
                 <Card>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Partida de cierre de resultados generada</span>
-                    </div>
-                    {hasCdvStep && (
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        <span>Costo de ventas calculado y contabilizado</span>
+                  <CardContent className="pt-6 space-y-3">
+                    {getConfirmChecks().map((check) => (
+                      <div key={check.key} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {check.neutral ? (
+                            <AlertCircle className="h-5 w-5 text-muted-foreground shrink-0" />
+                          ) : check.ok ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                          )}
+                          <span className={cn(
+                            "text-sm",
+                            check.neutral && "text-muted-foreground",
+                            !check.neutral && !check.ok && "text-destructive font-medium"
+                          )}>
+                            {check.label}
+                          </span>
+                        </div>
+                        {!check.ok && check.stepId && stepIndexOf(check.stepId) >= 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => goToStep(stepIndexOf(check.stepId!))}
+                          >
+                            Ir a este paso
+                          </Button>
+                        )}
                       </div>
-                    )}
-                    {transferEntryGenerated && transferEntryStatus !== 'no_requerido' && (
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        <span>Resultado trasladado a utilidades acumuladas</span>
-                      </div>
-                    )}
+                    ))}
+                    <Separator />
                     <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Partida de apertura {period.year + 1} generada</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>Balance verificado</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <span>
+                      <Scale className="h-5 w-5 text-muted-foreground" />
+                      <span className="text-sm">
                         Resultado del período: {' '}
                         <span className={cn(
                           "font-bold",
@@ -2175,6 +2181,7 @@ export function PeriodClosingWizard({
                     </div>
                   </CardContent>
                 </Card>
+
 
                 <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
                   <CardContent className="pt-6">
