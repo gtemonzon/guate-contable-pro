@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
+import { TruncatedText } from "@/components/ui/truncated-text";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import { type DateContext } from "@/components/ui/entity-link";
 import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";
@@ -521,7 +522,12 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
                       <TableCell className="text-xs py-1.5">
                         {d.account_name}
                         {d.description && (
-                          <span className="block text-muted-foreground text-[10px]">{d.description}</span>
+                          <TruncatedText
+                            text={d.description}
+                            maxLength={50}
+                            expandable
+                            className="block text-muted-foreground text-[10px]"
+                          />
                         )}
                       </TableCell>
                       <TableCell className="text-xs py-1.5 text-right font-mono">
