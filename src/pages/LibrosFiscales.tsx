@@ -2500,12 +2500,13 @@ export default function LibrosFiscales() {
 
                       if (journalError) throw journalError;
 
-                      // Crear líneas de detalle con el motor compartido
-                      const { lines: aggregatedLines } = aggregateSalesJournalLines({
+                      // Descripción genérica (ventas: sin desglose por factura)
+                      const { lines: aggregatedLines } = buildGenericSalesLines({
                         sales: validSales,
                         docTypeMap,
                         vatDebitAccountId,
                         contraAccountId: cashAccountId,
+                        description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
                       });
                       const detailLines = aggregatedLines.map((l, idx) => ({
                         journal_entry_id: journalEntry.id,
