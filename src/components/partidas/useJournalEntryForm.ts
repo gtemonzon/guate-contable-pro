@@ -8,7 +8,6 @@ import { allocateEntryNumber, parseEntryNumber } from "@/utils/journalEntryNumbe
 import { formatCurrency } from "@/lib/utils";
 import type { BankDirection } from "./JournalEntryBankSection";
 import { enforceBankLineInvariant } from "./enforceBankLineInvariant";
-import { buildPurchaseLines } from "@/utils/purchaseJournalLinesBuilder";
 import { getFiscalBookStrategy } from "@/services/fiscalBookStrategy";
 import { aggregatePurchaseJournalLines, buildDocTypeMap } from "@/utils/consolidatedJournalLines";
 
