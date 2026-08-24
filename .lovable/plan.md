@@ -1,76 +1,71 @@
-# Hallazgos: doble conteo de saldo inicial (Inventario 1.1.4.1.01, empresa 14)
+# Doble conteo en la Partida de Apertura del Asistente de Cierre — hallazgos
 
-Hipótesis del usuario: **confirmada**. Nada fue modificado.
+## 1. Hipótesis confirmada (cuenta 2.1.2.1.01, empresa Mario Rolando Aguilar Santizo, enterprise_id 14)
 
-## 1. Evidencia SQL
+| Criterio | Saldo 2.1.2.1.01 al 31/12/2022 |
+|---|---|
+| Con piso fiscal (igual que `AccountLedgerDrawer.tsx`, piso = apertura 2022-01-01) | Q1.00 crédito |
+| Sin piso fiscal (cálculo actual de `generateOpeningEntry`) | Q272.00 crédito |
+| Lo que quedó contabilizado en `APER-2023-0001` | Q272.00 crédito |
 
-Cuenta id 591 (`1.1.4.1.01`), enterprise_id 14, movimientos contabilizados:
+Diferencia Q271.00 = monto de la propia apertura 2022 de esa cuenta, contado dos veces. Confirmado también a nivel global: en las 22 cuentas de `APER-2023-0001`, el monto contabilizado coincide **exactamente** con el cálculo sin piso fiscal (0 excepciones), lo que prueba que la partida se construyó con la consulta defectuosa.
 
-```text
-APER-2021-01-0001  2021-01-01  apertura  Debe  19,242.17
-CDV-2021-0001      2021-12-31  diario    Haber 19,242.17
-CDV-2021-0001      2021-12-31  diario    Debe  15,357.16
-APER-2022-0001     2022-01-01  apertura  Debe  15,357.16
-```
+## 2. Alcance en `APER-2023-0001` (id 30684) — 22 de 22 cuentas afectadas, Q1,103,105.78 de error absoluto acumulado
 
-Suma de todo lo anterior a 2022-01-01 = **Q15,357.16** (3 líneas).
-La partida APER-2022-0001 vuelve a declarar **Q15,357.16**.
-15,357.16 (openingBalance calculado) + 15,357.16 (fila mostrada) = **Q30,714.32** = el doble reportado.
+Todas las cuentas de balance de la partida están mal. `diferencia = contabilizado − correcto` (positivo = debe inflado, negativo = haber inflado):
 
-## 2. Mecanismo exacto del doble conteo en `AccountLedgerDrawer.tsx`
+| Cuenta | Nombre | Contabilizado | Correcto (con piso) | Diferencia |
+|---|---|---|---|---|
+| 1.1.1.1.01 | Efectivo | 8,824.30 D | 1,678.00 D | +7,146.30 |
+| 1.1.1.2.02 | Banco Agromercantil 30-3014450-0 | 2,207.98 D | 0.00 | +2,207.98 |
+| 1.1.2.1.01 | Clientes Locales | 34,166.51 D | 0.00 | +34,166.51 |
+| 1.1.3.1.03 | ISO Pagado trimestral | 15,699.67 D | 4,597.23 D | +11,102.44 |
+| 1.1.4.1.01 | Inventario de Mercaderías | 16,602.16 D | 1,245.00 D | +15,357.16 |
+| 1.2.1.1.01 | Mobiliario y Equipo | 55,192.12 D | 27,596.06 D | +27,596.06 |
+| 1.2.1.1.02 | Equipo de Cómputo y Programas | 153,600.06 D | 76,800.03 D | +76,800.03 |
+| 1.2.1.1.03 | Vehículos | 473,130.38 D | 236,565.19 D | +236,565.19 |
+| 1.2.1.1.99 | Otros Activos Fijos | 13,193.02 D | 6,596.51 D | +6,596.51 |
+| 1.2.1.2.01 | Deprec. Ac. Mobiliario y Equipo | 44,771.84 H | 22,385.92 H | −22,385.92 |
+| 1.2.1.2.02 | Deprec. Ac. Equipo de Cómputo | 150,410.04 H | 75,205.02 H | −75,205.02 |
+| 1.2.1.2.03 | Deprec. Ac. Vehículos | 351,278.42 H | 175,639.21 H | −175,639.21 |
+| 1.2.1.2.05 | Deprec. Ac. Planta Telefónica | 2,638.08 H | 1,319.04 H | −1,319.04 |
+| 1.2.1.2.99 | Deprec. Ac. Otros Activos Fijos | 3,267.22 H | 1,633.61 H | −1,633.61 |
+| 2.1.1.1.01 | Proveedores Locales | 11,137.71 H | 0.00 | −11,137.71 |
+| 2.1.1.1.05 | Bonificación Anual (Bono 14) | 6,000.00 H | 3,000.00 H | −3,000.00 |
+| 2.1.1.1.16 | Cuota Patronal IGSS/IRTRA/INTECAP | 760.20 H | 0.00 | −760.20 |
+| 2.1.1.1.17 | Retención Cuota Laboral IGSS | 289.80 H | 0.00 | −289.80 |
+| 2.1.1.2.02 | Provisión para Indemnizaciones | 188,245.88 H | 94,122.94 H | −94,122.94 |
+| 2.1.2.1.01 | IVA por Pagar | 272.00 H | 1.00 H | −271.00 |
+| 3.1.1.1.01 | Rolando Cuenta Capital | 303,110.86 H | 137,322.42 H | −165,788.44 |
+| 3.2.1.1.03 | Resultados Acumulados | 289,565.85 D | 155,551.14 D | +134,014.71 |
 
-- Línea 128: se obtiene `fiscalFloor = getFiscalFloorDate(enterpriseId, startRef)` → devuelve `2022-01-01` (la apertura vigente).
-- Línea 130: `const lowerBound = effectiveStartDate || fiscalFloor || null;` — cuando el llamador pasa `startDate` (caso "Período completo" 2022), **el piso fiscal se descarta**; solo se usa como respaldo cuando no hay `startDate`.
-- Líneas 134-159: la consulta de saldo de apertura filtra únicamente `.lt(entry_date, lowerBound)` **sin `.gte(fiscalFloor)`**, así que arrastra todo 2021 (incluida la apertura de 2021) → Q15,357.16.
-- Líneas 162-210: la consulta del período incluye la propia APER-2022-0001 y el saldo corrido arranca en `openingBalance`, sumando el mismo dinero dos veces.
+Patrón dominante: casi todo está exactamente al doble (los saldos de 2021 quedaron duplicados). Cuentas con movimiento sólo en 2021 (Clientes, Proveedores, Banco Agromercantil, IGSS) aparecen con saldo cuando su saldo real al 31/12/2022 es cero.
 
-El patrón correcto ya existe en el proyecto: `src/pages/MayorGeneral.tsx:409-429` y `src/pages/ConciliacionBancaria.tsx:439-463` sí aplican `.gte(entry_date, fiscalFloor)` al saldo previo. `AccountLedgerDrawer` omitió ese guardarraíl.
+## 3. Otras empresas / otras aperturas del wizard
 
-## 3. Asistente de Cierre — cálculo independiente, mismo bug (pre-existente)
+Sólo 4 partidas en toda la base tienen la descripción generada por el wizard (`Partida de apertura del ejercicio …`):
 
-`src/hooks/useCostOfSalesCalculation.ts` → `calculateInitialInventory` (líneas ~47-97):
+| Partida | Empresa | Fecha | Estado | Resultado de la verificación |
+|---|---|---|---|---|
+| `APER-2023-0001` (30684) | 14 | 2023-01-01 | contabilizado | **Corrupta** — 22/22 cuentas con diferencia |
+| `APER-2022-0001` (30572) | 14 | 2022-01-01 | contabilizado | Correcta: no hay movimientos anteriores al piso, con y sin piso da lo mismo (0/22 diferencias) |
+| `APER-2026-0001` (244) | 26 | 2026-01-01 | contabilizado | Correcta por la misma razón (0/13 diferencias) |
+| `PD-2025-10-0001` (115) | 29 | 2025-10-01 | contabilizado | Apertura semilla de datos demo (es la primera partida de la empresa, sin historia previa); no es salida de un cierre. No aplica |
 
-- Consulta A: todas las partidas contabilizadas con `entry_date < period.start_date` (sin piso fiscal).
-- Consulta B: partidas `entry_type='apertura'` **con `entry_date = period.start_date`**.
-- Suma A + B sobre `inventory_account_id`.
+Conclusión: **una sola partida contabilizada dañada en toda la base** (`APER-2023-0001`, enterprise 14). Las otras se salvaron sólo porque su piso fiscal coincidía con el inicio de la historia contable.
 
-Para 2022 eso da 15,357.16 + 15,357.16 = **Q30,714.32**. Es código propio, **no** usa `AccountLedgerDrawer` ni `getFiscalFloorDate`, y **no** cambió hoy (último cambio del archivo: 2026-04-26). Por lo tanto el bug del Asistente es anterior al cambio de hoy; la coincidencia de cifras es porque ambos cometen el mismo error conceptual.
+## 4. Segundo foco del mismo bug dentro del mismo archivo
 
-Alcance real de cierres ya contabilizados (`tab_period_inventory_closing`): solo **2 registros** en toda la base:
+`loadBalanceVerification()` (líneas 974-989 de `PeriodClosingWizard.tsx`) usa **la misma consulta sin piso fiscal**, por lo que el paso "Verificar" del asistente muestra Activo/Pasivo/Capital también inflados y puede dar por "cuadrado" un balance construido con doble conteo. Además, ninguna de las dos consultas excluye las cadenas de reversión (`reversal_entry_id` / `reversed_by_entry_id`), a diferencia del criterio ya estandarizado en `fiscalFloor.ts` + `AccountLedgerDrawer.tsx`.
 
-```text
-id 5  empresa 14  período 9  inicial 19,242.17  compras 63,181.45  final 15,357.16  costo 67,066.46  contabilizado 2026-07-30
-id 1  empresa 26  período 4  inicial 10,800.00  compras 182,504.33 final 5,000.00   costo 188,304.33 contabilizado 2026-03-14
-```
+## 5. Corrección propuesta (pendiente de tu aprobación, no aplicada)
 
-Ambos con inventario inicial correcto (no duplicado), porque corresponden a períodos cuya apertura no coexistía con historia previa duplicada. **Ningún cierre contabilizado quedó mal**; el riesgo es sobre cierres futuros (ej. el de 2022 de la empresa 14, que hoy propondría 30,714.32).
+**Código** (`src/components/periodos/PeriodClosingWizard.tsx`):
+1. En `generateOpeningEntry()`: resolver el piso con `getFiscalFloorDate(enterpriseId, period.end_date)` **excluyendo la propia apertura que se está generando**, aplicar `applyFiscalFloor` y añadir los filtros de reversión. Sin tocar la lógica de armado de líneas.
+2. Lo mismo en `loadBalanceVerification()`.
 
-## 4. Otros reportes
+**Datos** (`APER-2023-0001`, enterprise 14) — requiere tu decisión entre:
+- **Opción A (recomendada):** reabrir/corregir en sitio las 22 líneas de la partida 30684 con los montos correctos de la tabla del punto 2 (la partida queda cuadrada: los débitos y créditos corregidos suman igual), dejando registro en bitácora.
+- **Opción B:** anular `APER-2023-0001` con su partida de reverso y regenerar la apertura desde el asistente ya corregido.
 
-Sin afectación (usan RPC con piso fiscal en Postgres):
-
-- `get_trial_balance` — tiene CTE `_fiscal_floor` y filtra `entry_date >= floor_date AND < p_start_date`. Lo usan `ReporteSaldos.tsx`, `BalanceSaldos.tsx`, `ReporteFlujoEfectivo.tsx`.
-- `get_balance_sheet` — mismo CTE `_fiscal_floor`. Lo usan `ReporteBalanceGeneral.tsx`, `ReporteVariaciones.tsx`, `useKpis.ts`.
-- `get_account_ledger_as_of` — detecta apertura del año y omite el arrastre previo para evitar doble conteo. Lo usa `AccountBalanceInspector.tsx`.
-- `ReporteLibroMayor.tsx` — usa el `opening_balance` del RPC servidor.
-
-Con el mismo patrón riesgoso (cliente, sin piso fiscal):
-
-- `src/components/reportes/ReporteLibroBancos.tsx:116-132` — saldo inicial sugerido = todo lo anterior a `dateFrom` sin `.gte(fiscalFloor)`. Si la cuenta bancaria tiene línea en la partida de apertura, duplica igual.
-
-## Resumen de impacto
-
-| Lugar | ¿Duplica? | ¿Cambió hoy? |
-|---|---|---|
-| `AccountLedgerDrawer.tsx` | Sí | Sí |
-| `useCostOfSalesCalculation.ts` (Asistente de Cierre) | Sí | No (pre-existente) |
-| `ReporteLibroBancos.tsx` (saldo inicial) | Sí, mismo patrón | No |
-| RPCs (`get_trial_balance`, `get_balance_sheet`, `get_account_ledger_as_of`) y reportes que los usan | No | No |
-| Cierres ya contabilizados en la base (2) | No | — |
-
-## Fix propuesto (pendiente de tu aprobación, aún sin tocar código)
-
-1. `AccountLedgerDrawer.tsx`: acotar la consulta de saldo previo con `.gte(entry_date, fiscalFloor)` cuando exista piso fiscal, replicando `MayorGeneral.tsx`. Si `fiscalFloor === lowerBound`, el saldo previo queda en 0 y la fila de apertura pasa a ser el arranque correcto.
-2. `useCostOfSalesCalculation.ts`: reemplazar "todo lo anterior + apertura del día de inicio" por "movimientos desde el piso fiscal (inclusive) hasta la fecha de inicio (inclusive para la apertura)" — es decir, si existe apertura en `start_date`, usar únicamente esa apertura y descartar la historia previa.
-3. `ReporteLibroBancos.tsx`: aplicar el mismo piso fiscal al saldo inicial sugerido.
-4. Extraer el criterio a un helper compartido en `src/utils/fiscalFloor.ts` para evitar reincidencias.
+Antes de aplicar cualquiera de las dos hay que revisar si el ejercicio 2023 de esa empresa ya tiene movimientos/cierre que dependan de esos saldos.
