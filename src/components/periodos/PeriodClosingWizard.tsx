@@ -983,22 +983,30 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
 
+      const verifyFloor = await getFiscalFloorDate(enterpriseId, period.end_date);
       const entries = await fetchAllRecords(
-        supabase
-          .from('tab_journal_entries')
-          .select(`
-            id,
-            tab_journal_entry_details (
-              account_id,
-              debit_amount,
-              credit_amount
-            )
-          `)
-          .eq('enterprise_id', enterpriseId)
-          .eq('is_posted', true)
-          .is('deleted_at', null)
-          .lte('entry_date', period.end_date)
+        applyFiscalFloor(
+          supabase
+            .from('tab_journal_entries')
+            .select(`
+              id,
+              tab_journal_entry_details (
+                account_id,
+                debit_amount,
+                credit_amount
+              )
+            `)
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .is('reversal_entry_id', null)
+            .is('reversed_by_entry_id', null)
+            .lte('entry_date', period.end_date),
+          'entry_date',
+          verifyFloor
+        )
       );
+
       
       const balanceMap = new Map<number, number>();
       
