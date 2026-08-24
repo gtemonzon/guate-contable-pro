@@ -45,6 +45,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
+import { getFiscalFloorDate, applyFiscalFloor } from '@/utils/fiscalFloor';
+
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -737,23 +739,33 @@ export function PeriodClosingWizard({
 
       if (accountsError) throw accountsError;
 
-      // Calculate cumulative balances up to end of closing period (including closing and transfer entries)
+      // Calculate cumulative balances up to end of closing period (including closing and transfer entries).
+      // Bounded below by the fiscal floor (latest apertura on/before period.end_date) so the prior-year
+      // opening entry is not counted twice; reversal chains are excluded.
+      const openingFloor = await getFiscalFloorDate(enterpriseId, period.end_date);
       const entries = await fetchAllRecords(
-        supabase
-          .from('tab_journal_entries')
-          .select(`
-            id,
-            tab_journal_entry_details (
-              account_id,
-              debit_amount,
-              credit_amount
-            )
-          `)
-          .eq('enterprise_id', enterpriseId)
-          .eq('is_posted', true)
-          .is('deleted_at', null)
-          .lte('entry_date', period.end_date)
+        applyFiscalFloor(
+          supabase
+            .from('tab_journal_entries')
+            .select(`
+              id,
+              tab_journal_entry_details (
+                account_id,
+                debit_amount,
+                credit_amount
+              )
+            `)
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .is('reversal_entry_id', null)
+            .is('reversed_by_entry_id', null)
+            .lte('entry_date', period.end_date),
+          'entry_date',
+          openingFloor
+        )
       );
+
 
       const balanceMap = new Map<number, number>();
       entries.forEach((entry: any) => {
@@ -971,22 +983,30 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
 
+      const verifyFloor = await getFiscalFloorDate(enterpriseId, period.end_date);
       const entries = await fetchAllRecords(
-        supabase
-          .from('tab_journal_entries')
-          .select(`
-            id,
-            tab_journal_entry_details (
-              account_id,
-              debit_amount,
-              credit_amount
-            )
-          `)
-          .eq('enterprise_id', enterpriseId)
-          .eq('is_posted', true)
-          .is('deleted_at', null)
-          .lte('entry_date', period.end_date)
+        applyFiscalFloor(
+          supabase
+            .from('tab_journal_entries')
+            .select(`
+              id,
+              tab_journal_entry_details (
+                account_id,
+                debit_amount,
+                credit_amount
+              )
+            `)
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .is('reversal_entry_id', null)
+            .is('reversed_by_entry_id', null)
+            .lte('entry_date', period.end_date),
+          'entry_date',
+          verifyFloor
+        )
       );
+
       
       const balanceMap = new Map<number, number>();
       
