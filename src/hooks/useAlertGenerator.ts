@@ -48,6 +48,15 @@ interface AlertConfig {
   days_before: number;
 }
 
+/**
+ * Guard global (a nivel de módulo) para evitar que dos componentes
+ * (NotificationCenter + DashboardAlerts) ejecuten la generación en paralelo
+ * para la misma empresa y creen notificaciones duplicadas.
+ */
+const inFlight = new Map<number, Promise<{ success: boolean; count: number }>>();
+const lastRun = new Map<number, number>();
+const COOLDOWN_MS = 60_000;
+
 export function useAlertGenerator() {
   const [generating, setGenerating] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
