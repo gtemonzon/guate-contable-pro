@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit, RefreshCw } from "lucide-react";
+import { Plus, FileText, Edit, CheckCircle, XCircle, Clock, AlertCircle, Eye, RotateCcw, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, PanelRightOpen, PanelRightClose, FileEdit, RefreshCw, MoreHorizontal } from "lucide-react";
 import { FxRevaluationWizard } from "@/components/partidas/FxRevaluationWizard";
 import { ReferenceBadges } from "@/components/partidas/ReferenceBadges";
 import { useToast } from "@/hooks/use-toast";
@@ -62,32 +62,33 @@ interface AccountingPeriod {
 }
 
 const STATUS_CONFIG: Record<EntryStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode; className?: string }> = {
-  borrador: { 
-    label: "Borrador", 
-    variant: "secondary", 
-    icon: <FileText className="h-3 w-3" />,
+  borrador: {
+    label: "Borrador",
+    variant: "outline",
+    icon: <MoreHorizontal className="h-3.5 w-3.5" />,
+    className: "border-orange-500 text-orange-600 bg-orange-50 dark:bg-orange-950/20"
   },
-  pendiente_revision: { 
-    label: "Pendiente", 
-    variant: "outline", 
-    icon: <Clock className="h-3 w-3" />,
+  pendiente_revision: {
+    label: "Pendiente de revisión",
+    variant: "outline",
+    icon: <Clock className="h-3.5 w-3.5" />,
     className: "border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
   },
-  aprobado: { 
-    label: "Aprobado", 
-    variant: "outline", 
-    icon: <CheckCircle className="h-3 w-3" />,
+  aprobado: {
+    label: "Aprobado",
+    variant: "outline",
+    icon: <CheckCircle className="h-3.5 w-3.5" />,
     className: "border-green-500 text-green-600 bg-green-50 dark:bg-green-950/20"
   },
-  contabilizado: { 
-    label: "Contabilizado", 
-    variant: "default", 
-    icon: <CheckCircle className="h-3 w-3" />,
+  contabilizado: {
+    label: "Contabilizado",
+    variant: "default",
+    icon: <CheckCircle className="h-3.5 w-3.5" />,
   },
-  rechazado: { 
-    label: "Rechazado", 
-    variant: "destructive", 
-    icon: <XCircle className="h-3 w-3" />,
+  rechazado: {
+    label: "Rechazado",
+    variant: "destructive",
+    icon: <XCircle className="h-3.5 w-3.5" />,
   },
 };
 
@@ -857,31 +858,39 @@ export default function Partidas() {
                     <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span className="font-semibold text-sm min-w-0 truncate">{entry.entry_number}</span>
-                        <Badge
-                          variant={statusConfig.variant}
-                          className={cn("text-[10px] h-5 px-1.5 shrink-0", statusConfig.className)}
-                        >
-                          {statusConfig.icon}
-                          <span className="ml-1">{statusConfig.label}</span>
-                        </Badge>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant={statusConfig.variant}
+                              className={cn("h-5 w-5 p-0 flex items-center justify-center shrink-0", statusConfig.className)}
+                            >
+                              {statusConfig.icon}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top"><p>{statusConfig.label}</p></TooltipContent>
+                        </Tooltip>
                         <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{entry.entry_type}</Badge>
                         {/* Show "Revertida" tag if a reversal exists */}
                         {entry.reversal_entry_id && (() => {
                           const rev = entries.find(e => e.id === entry.reversal_entry_id);
                           const isRevPosted = rev?.status === 'contabilizado';
                           return (
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-[10px] h-5 px-1.5 shrink-0",
-                                isRevPosted
-                                  ? "border-destructive/50 text-destructive bg-destructive/10"
-                                  : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
-                              )}
-                            >
-                              <RotateCcw className="h-2.5 w-2.5 mr-0.5" />
-                              {isRevPosted ? "Revertida" : "Rev. pendiente"}
-                            </Badge>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "h-5 w-5 p-0 flex items-center justify-center shrink-0",
+                                    isRevPosted
+                                      ? "border-destructive/50 text-destructive bg-destructive/10"
+                                      : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+                                  )}
+                                >
+                                  {isRevPosted ? <XCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent side="top"><p>{isRevPosted ? "Revertida" : "Reversión pendiente"}</p></TooltipContent>
+                            </Tooltip>
                           );
                         })()}
                       </div>
