@@ -220,6 +220,36 @@ export function useAlertGenerator() {
 
       // 2. Check for unclosed accounting periods
       const alertConfigPeriods = getAlertConfig('periodo_pendiente');
+
+      // 2a. Auto-sanado: eliminar alertas de períodos que ya NO están abiertos
+      const { data: allPeriods } = await supabase
+        .from('tab_accounting_periods')
+        .select('year, end_date, status')
+        .eq('enterprise_id', enterpriseId);
+
+      const closedEndDates = (allPeriods || [])
+        .filter((p: any) => p.status !== 'abierto')
+        .map((p: any) => p.end_date)
+        .filter(Boolean);
+
+      if (closedEndDates.length > 0) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', 'periodo_pendiente')
+          .in('event_date', closedEndDates);
+      }
+
+      if (!alertConfigPeriods.is_enabled) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', 'periodo_pendiente')
+          .eq('is_read', false);
+      }
+
       if (alertConfigPeriods.is_enabled) {
         const { data: pendingPeriods } = await supabase
           .from('tab_accounting_periods')
