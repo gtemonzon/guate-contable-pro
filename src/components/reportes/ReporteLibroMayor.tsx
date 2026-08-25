@@ -945,15 +945,15 @@ export default function ReporteLibroMayor() {
                       </TableHeader>
                       <TableBody>
                         {ledger.entries.map((entry) => (
-                          <TableRow key={`${entry.account_id}-${entry.id}`} className="group">
+                          <TableRow
+                            key={`${entry.account_id}-${entry.id}`}
+                            className="group cursor-pointer"
+                            onClick={() => setPanelEntryId(entry.journal_entry_id)}
+                            title="Ver partida"
+                          >
                             <TableCell>{entry.entry_date}</TableCell>
-                            <TableCell className="text-sm">
-                              <EntityLink
-                                type="journal_entry"
-                                label={entry.entry_number}
-                                id={entry.journal_entry_id}
-                                secondaryLabel={entry.description}
-                              />
+                            <TableCell className="text-sm font-mono text-primary underline-offset-2 hover:underline">
+                              {entry.entry_number}
                             </TableCell>
                             {ledger.isConsolidated && (
                               <TableCell className="text-xs font-mono" title={entry.source_account_name}>
