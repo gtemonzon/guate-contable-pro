@@ -428,6 +428,25 @@ export function useAlertGenerator() {
     }
   }, []);
 
+  const generateAlerts = useCallback(async (enterpriseId: number) => {
+    if (!enterpriseId) return { success: false, count: 0 };
+
+    // Si ya hay una generación en curso para esta empresa, reutilizarla
+    const pending = inFlight.get(enterpriseId);
+    if (pending) return pending;
+
+    // Enfriamiento: evita regenerar en cada montaje de componente
+    const last = lastRun.get(enterpriseId) ?? 0;
+    if (Date.now() - last < COOLDOWN_MS) return { success: true, count: 0 };
+
+    const promise = runGenerate(enterpriseId).finally(() => {
+      inFlight.delete(enterpriseId);
+      lastRun.set(enterpriseId, Date.now());
+    });
+    inFlight.set(enterpriseId, promise);
+    return promise;
+  }, [runGenerate]);
+
   return {
     generateAlerts,
     generating,
