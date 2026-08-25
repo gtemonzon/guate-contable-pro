@@ -34,7 +34,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import EntityLink from "@/components/ui/entity-link";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
+import { useNavigate } from "react-router-dom";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
@@ -94,6 +96,8 @@ export default function ReporteLibroMayor() {
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [panelEntryId, setPanelEntryId] = useState<number | null>(null);
+  const navigate = useNavigate();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
@@ -943,15 +947,15 @@ export default function ReporteLibroMayor() {
                       </TableHeader>
                       <TableBody>
                         {ledger.entries.map((entry) => (
-                          <TableRow key={`${entry.account_id}-${entry.id}`} className="group">
+                          <TableRow
+                            key={`${entry.account_id}-${entry.id}`}
+                            className="group cursor-pointer"
+                            onClick={() => setPanelEntryId(entry.journal_entry_id)}
+                            title="Ver partida"
+                          >
                             <TableCell>{entry.entry_date}</TableCell>
-                            <TableCell className="text-sm">
-                              <EntityLink
-                                type="journal_entry"
-                                label={entry.entry_number}
-                                id={entry.journal_entry_id}
-                                secondaryLabel={entry.description}
-                              />
+                            <TableCell className="text-sm font-mono text-primary underline-offset-2 hover:underline">
+                              {entry.entry_number}
                             </TableCell>
                             {ledger.isConsolidated && (
                               <TableCell className="text-xs font-mono" title={entry.source_account_name}>
@@ -1002,6 +1006,19 @@ export default function ReporteLibroMayor() {
           No se encontraron movimientos para los criterios seleccionados
         </div>
       )}
+
+      {/* Panel lateral de detalle de partida (sin acciones de edición) */}
+      <Sheet open={panelEntryId !== null} onOpenChange={(o) => !o && setPanelEntryId(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-hidden [&>button]:hidden">
+          {panelEntryId !== null && (
+            <EntryDetailPanel
+              entryId={panelEntryId}
+              onClose={() => setPanelEntryId(null)}
+              onOpenInJournal={(id) => navigate(`/partidas?viewEntry=${id}`)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
