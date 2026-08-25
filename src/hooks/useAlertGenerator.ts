@@ -61,9 +61,7 @@ export function useAlertGenerator() {
   const [generating, setGenerating] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
-  const generateAlerts = useCallback(async (enterpriseId: number) => {
-    if (!enterpriseId) return { success: false, count: 0 };
-
+  const runGenerate = useCallback(async (enterpriseId: number) => {
     setGenerating(true);
     let alertsGenerated = 0;
 
