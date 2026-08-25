@@ -284,6 +284,18 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
           </Badge>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {onOpenInJournal && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onOpenInJournal(entry.id)}>
+                  <FileEdit className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Ver en libro diario</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {onEdit && (
             <Tooltip>
               <TooltipTrigger asChild>
