@@ -1,73 +1,66 @@
-# Investigación: régimen Pequeño Contribuyente + alertas duplicadas/obsoletas
+# Partidas en período cerrado: hallazgos y plan de corrección
 
-## 1. `pequeño_contribuyente` con `appliesVat: true`
+## Resumen del bug (confirmado)
 
-Búsqueda de referencias literales al régimen fuera de `fiscalBookStrategy.ts`:
+El formulario de partidas solo carga períodos **abiertos**. Cuando la fecha no cae en ninguno de ellos, asigna silenciosamente el **primer período abierto de la lista** (el año más reciente). Por eso una partida fechada 2022-12-31 quedó con `accounting_period_id = 513` (período 2023, abierto) y pudo contabilizarse: el trigger de base de datos valida el estado del período referenciado, no la fecha.
 
-- `src/components/empresas/EnterpriseDialog.tsx:57,391,619` — solo opciones del selector.
-- `src/components/empresas/EnterpriseCard.tsx:48`, `EnterprisesTable.tsx:284` — solo etiquetas de texto.
-- `supabase/migrations/20251003194436_*.sql:23,194` — valores del enum/seed.
+## Evidencia
 
-No existe ninguna rama de lógica de negocio que compare el régimen directamente. Todo el comportamiento pasa por `getFiscalBookStrategy()`, y los consumidores de `appliesVat` son:
+### 1. Dónde se asigna `accounting_period_id`
 
-- `src/pages/LibrosFiscales.tsx:278` (totales de IVA/base, `applyMixedTaxToRow`, generación de póliza).
-- `src/components/partidas/QuickPurchaseForm.tsx:354`, `useJournalEntryForm.ts:701` (cálculo de IVA en captura/partidas).
-- `PurchaseCard.tsx` / `PurchaseInvoiceList.tsx` (mostrar u ocultar columnas IVA/Exento).
-- `ReporteCompras`, `ReporteVentas`, `ReporteComprasVentas` (usan `strategy`, principalmente `combinedBook`).
+`src/components/partidas/useJournalEntryForm.ts` — `loadInitialData()`:
 
-Ningún generador de declaración depende de la estrategia: `useDeclaracionCalculo.ts` y el formulario SAT-2046 no importan `fiscalBookStrategy` ni `useEnterpriseTaxRegime` (grep sin resultados). Es decir, cambiar `appliesVat` a `false` para `pequeño_contribuyente` **no rompe SAT-2046 ni ningún otro formulario**; solo dejaría de calcular/mostrar IVA acreditable en libros y partidas, que es el comportamiento correcto (las facturas FPEQ ya llegan con `vat_amount = 0`).
-
-Riesgo residual a considerar antes del cambio: empresas con régimen `pequeño_contribuyente` que hoy tengan compras con `vat_amount > 0` almacenado — habría que revisar si existen y decidir si se recalculan.
-
-## 2. Alertas duplicadas y período 2022 "pendiente" ya cerrado
-
-Componente responsable: `src/hooks/useAlertGenerator.ts` (consumido por `DashboardAlerts.tsx`, `NotificationCenter.tsx` y `Notificaciones.tsx`); la lectura la hace `src/hooks/useNotifications.ts`.
-
-### a) Duplicación: son dos filas reales en la base, por carrera entre dos generadores
-
-Filas de la empresa 14 (Mario Rolando Aguilar Santizo):
+- Línea 218: los períodos se consultan con `.eq("status", "abierto")` y `order(year, desc)`.
+- Líneas 229-231:
 
 ```text
-id 600  periodo_pendiente  2023  creada 2026-08-22 00:52:24.234
-id 599  periodo_pendiente  2023  creada 2026-08-22 00:52:24.128   <- 106 ms de diferencia
-id 478  periodo_pendiente  2022  creada 2026-07-30 20:35:00.816
-id 477  periodo_pendiente  2022  creada 2026-07-30 20:35:00.645   <- 171 ms
-id 157/156  vencimiento_iva_mensual  creadas con 245 ms de diferencia
+const match = periodsData.find(p => defaultDate >= p.start_date && defaultDate <= p.end_date);
+setPeriodId(match ? match.id : periodsData[0].id);   // <-- fallback silencioso
 ```
 
-No es un render doble ni un query con duplicados: `useNotifications` hace un `select` plano por `enterprise_id`. La causa es que **dos componentes ejecutan `generateAlerts()` al mismo tiempo** en el Dashboard:
+El fallback `periodsData[0].id` es el período abierto más reciente (2023 = id 513). Además **no existe ningún efecto que recalcule `periodId` cuando el usuario cambia `entryDate`** (grep de `entryDate` en el hook: solo se usa para tipo de cambio, referencia bancaria y correlativo). El `periodId` inicial se conserva en los payloads de guardado (líneas 967, 1006, 1045).
 
-- `MainLayout.tsx:260` monta `NotificationCenter`, cuyo `useEffect` (`NotificationCenter.tsx:29-33`) llama `generateAlerts(enterpriseId)`.
-- `Dashboard.tsx:475` monta `DashboardAlerts`, cuyo `useEffect` (`DashboardAlerts.tsx:21-28`) también llama `generateAlerts(enterpriseId)`.
+### 2. Validación al guardar / contabilizar
 
-El guard `notificationExists()` (`useAlertGenerator.ts`) es un `SELECT` seguido de `INSERT` sin atomicidad: ambas ejecuciones consultan antes de que la otra inserte, ambas ven "no existe" y ambas insertan. No hay índice único en `tab_notifications (enterprise_id, notification_type, event_date)` que lo impida.
+- `validateDraft()` (líneas ~759): solo exige que `periodId` no sea nulo.
+- `validateForPosting()` (líneas ~772): igual — exige `periodId` no nulo. **Ninguna de las dos compara `entryDate` contra el rango del período.**
+- Base de datos, trigger `enforce_open_period_on_post` (migración `20260219035623`): al pasar `is_posted = true` consulta `status` de `NEW.accounting_period_id`. Como el período 513 está `abierto`, la validación pasa. No compara la fecha con `start_date`/`end_date`.
 
-### b) Período 2022: la condición sí excluye cerrados; las filas son basura histórica
+Conclusión: **no existe ninguna validación fecha-vs-período** ni en cliente ni en base de datos.
 
-Condición exacta (`useAlertGenerator.ts`, bloque 2):
+### 3. Alcance en otras empresas
 
-```ts
-.from('tab_accounting_periods')
-.select('id, year, end_date')
-.eq('enterprise_id', enterpriseId)
-.eq('status', 'abierto')
-.lt('end_date', today)
+```sql
+select je.enterprise_id, count(*), count(*) filter (where je.is_posted)
+from tab_journal_entries je
+join tab_accounting_periods p on p.id = je.accounting_period_id
+where je.deleted_at is null and (je.entry_date < p.start_date or je.entry_date > p.end_date)
+group by 1;
 ```
 
-El filtro `status = 'abierto'` es correcto. Estado real de la empresa 14:
+Resultado: **solo enterprise 14, 2 partidas** (id 30703 `PART-2022-12-0006`, contabilizada; id 30704 `PART-2022-12-0007`, borrador), ambas creadas el 2026-08-25. Además, 0 partidas con `accounting_period_id` nulo en todo el sistema. El problema de datos está acotado; el problema de código es general.
 
-```text
-2021  cerrado   closed_at 2026-07-30 20:21
-2022  cerrado   closed_at 2026-08-21 20:49
-2023  abierto
-```
+### 4. Comportamiento del selector de fecha
 
-Las alertas de 2022 (ids 477/478) se crearon el 2026-07-30 20:35, cuando 2022 todavía estaba abierto; el cierre ocurrió tres semanas después. Lo mismo con la alerta de 2021 (id 62, del 2026-02-02).
+`src/components/partidas/JournalEntryHeader.tsx` línea 85: es un `<input type="date">` sin `min`/`max` ni validación. El selector de período (líneas 105-120) solo lista períodos abiertos y no indica si el período elegido cubre la fecha. El usuario **no recibe advertencia ni bloqueo alguno**.
 
-El defecto real: `generateAlerts` **solo crea** notificaciones de tipo `periodo_pendiente` y nunca las retira. Existe un helper `clearUnread(type)` que sí se usa para `partida_borrador`, pero no para `periodo_pendiente`, así que al cerrar un período su alerta queda viva para siempre.
+## Plan de corrección propuesto
 
-## Fixes propuestos (pendientes de aprobación)
+### A. Cliente — `useJournalEntryForm.ts`
+1. Cargar **todos** los períodos de la empresa (con su `status`), no solo los abiertos, para poder detectar el período real de una fecha.
+2. Efecto nuevo: al cambiar `entryDate` (solo en partidas nuevas / borradores editables), recalcular `periodId` al período cuyo rango contiene la fecha. Si ese período está cerrado, dejar el `periodId` correcto pero marcar el estado `periodClosed`.
+3. Eliminar el fallback `periodsData[0].id`: si no hay período que cubra la fecha, dejar `periodId` en null y mostrar el error existente "Período requerido".
+4. Validación dura en `validateDraft()` y `validateForPosting()`: bloquear guardado/contabilización si la fecha no cae dentro del rango del período seleccionado, o si ese período no está `abierto`.
 
-1. `fiscalBookStrategy.ts`: `pequeño_contribuyente` → `appliesVat: false` (previa verificación de compras con IVA guardado en empresas de ese régimen).
-2. Duplicados: un solo punto de generación por sesión — dejar que solo `NotificationCenter` (global) dispare `generateAlerts`, y que `DashboardAlerts` solo lea/refresque; además serializar la generación con un guard en memoria por `enterpriseId` dentro de `useAlertGenerator`, y opcionalmente un índice único parcial en `tab_notifications (enterprise_id, notification_type, event_date)`.
-3. Obsoletas: antes de generar `periodo_pendiente`, borrar las no leídas de ese tipo cuyo `event_date` corresponda a períodos ya cerrados (o simplemente `clearUnread('periodo_pendiente')` y regenerar solo las vigentes), más una limpieza puntual de las filas 62, 477 y 478.
+### B. UI — `JournalEntryHeader.tsx`
+5. Mostrar el período detectado junto a la fecha y una alerta en rojo ("El 31/12/2022 pertenece al período 2022, que está cerrado") cuando aplique; el selector de período pasa a mostrar el período derivado de la fecha (períodos cerrados visibles pero no seleccionables como destino válido).
+
+### C. Base de datos — endurecer el trigger
+6. Ampliar `enforce_open_period_on_post` (y añadir validación en INSERT) para exigir que `entry_date` esté dentro de `[start_date, end_date]` del `accounting_period_id`, además de que el período esté `abierto`. Esto cierra el hueco para cualquier otro flujo (importaciones, wizards, pólizas de libros).
+
+### D. Datos existentes (enterprise 14)
+7. Decidir con el usuario: reasignar ambas partidas al período 2022 (id 512) — lo que las dejaría dentro de un período cerrado y exigiría despublicar/anular la contabilizada — o anularlas y volverlas a registrar en 2023. **No se toca nada sin confirmación explícita.**
+
+## Nota
+
+Los pasos A-C cierran la causa raíz. El paso D es una decisión contable que requiere tu criterio antes de ejecutarse.
