@@ -96,6 +96,8 @@ export default function ReporteLibroMayor() {
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [open, setOpen] = useState(false);
   const [reportGenerated, setReportGenerated] = useState(false);
+  const [panelEntryId, setPanelEntryId] = useState<number | null>(null);
+  const navigate = useNavigate();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [expandedAccounts, setExpandedAccounts] = useState<Set<number>>(new Set());
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
