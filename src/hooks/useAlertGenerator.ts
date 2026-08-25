@@ -48,13 +48,20 @@ interface AlertConfig {
   days_before: number;
 }
 
+/**
+ * Guard global (a nivel de módulo) para evitar que dos componentes
+ * (NotificationCenter + DashboardAlerts) ejecuten la generación en paralelo
+ * para la misma empresa y creen notificaciones duplicadas.
+ */
+const inFlight = new Map<number, Promise<{ success: boolean; count: number }>>();
+const lastRun = new Map<number, number>();
+const COOLDOWN_MS = 60_000;
+
 export function useAlertGenerator() {
   const [generating, setGenerating] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
-  const generateAlerts = useCallback(async (enterpriseId: number) => {
-    if (!enterpriseId) return { success: false, count: 0 };
-
+  const runGenerate = useCallback(async (enterpriseId: number) => {
     setGenerating(true);
     let alertsGenerated = 0;
 
@@ -213,6 +220,36 @@ export function useAlertGenerator() {
 
       // 2. Check for unclosed accounting periods
       const alertConfigPeriods = getAlertConfig('periodo_pendiente');
+
+      // 2a. Auto-sanado: eliminar alertas de períodos que ya NO están abiertos
+      const { data: allPeriods } = await supabase
+        .from('tab_accounting_periods')
+        .select('year, end_date, status')
+        .eq('enterprise_id', enterpriseId);
+
+      const closedEndDates = (allPeriods || [])
+        .filter((p: any) => p.status !== 'abierto')
+        .map((p: any) => p.end_date)
+        .filter(Boolean);
+
+      if (closedEndDates.length > 0) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', 'periodo_pendiente')
+          .in('event_date', closedEndDates);
+      }
+
+      if (!alertConfigPeriods.is_enabled) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', 'periodo_pendiente')
+          .eq('is_read', false);
+      }
+
       if (alertConfigPeriods.is_enabled) {
         const { data: pendingPeriods } = await supabase
           .from('tab_accounting_periods')
@@ -420,6 +457,25 @@ export function useAlertGenerator() {
       setGenerating(false);
     }
   }, []);
+
+  const generateAlerts = useCallback(async (enterpriseId: number) => {
+    if (!enterpriseId) return { success: false, count: 0 };
+
+    // Si ya hay una generación en curso para esta empresa, reutilizarla
+    const pending = inFlight.get(enterpriseId);
+    if (pending) return pending;
+
+    // Enfriamiento: evita regenerar en cada montaje de componente
+    const last = lastRun.get(enterpriseId) ?? 0;
+    if (Date.now() - last < COOLDOWN_MS) return { success: true, count: 0 };
+
+    const promise = runGenerate(enterpriseId).finally(() => {
+      inFlight.delete(enterpriseId);
+      lastRun.set(enterpriseId, Date.now());
+    });
+    inFlight.set(enterpriseId, promise);
+    return promise;
+  }, [runGenerate]);
 
   return {
     generateAlerts,

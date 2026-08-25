@@ -54,7 +54,8 @@ const REGIME_REGISTRY: Record<string, FiscalBookStrategy> = {
     combinedBook: true,
     headerNote:
       "Régimen de Pequeño Contribuyente — Libro de Compras y Ventas (formato SAT)",
-    appliesVat: true,
+    // Un Pequeño Contribuyente no acredita ni carga IVA (paga tasa fija sobre ingresos brutos)
+    appliesVat: false,
   },
   exenta_ong: {
     regime: "exenta_ong",
