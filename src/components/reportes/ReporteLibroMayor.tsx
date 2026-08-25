@@ -355,6 +355,35 @@ export default function ReporteLibroMayor() {
         }
       }
 
+      // The RPC only returns rows for accounts WITH movements in the range, so an
+      // account that has an opening balance but no movement would be dropped.
+      // Resolve those opening balances separately (same fiscal-floor guard as the RPC).
+      const missingIds = effectiveAccountIds.filter((id) => !openingByAccount.has(id));
+      if (missingIds.length > 0) {
+        const fiscalFloor = await getFiscalFloorDate(currentEnterpriseId, startDate);
+        const priorRows = await fetchAllRecords<any>(() =>
+          applyFiscalFloor(
+            supabase
+              .from("tab_journal_entry_details")
+              .select("account_id, debit_amount, credit_amount, tab_journal_entries!inner(entry_date, is_posted, deleted_at, enterprise_id)")
+              .in("account_id", missingIds)
+              .is("deleted_at", null)
+              .eq("tab_journal_entries.enterprise_id", parseInt(currentEnterpriseId))
+              .eq("tab_journal_entries.is_posted", true)
+              .is("tab_journal_entries.deleted_at", null)
+              .lt("tab_journal_entries.entry_date", startDate),
+            "tab_journal_entries.entry_date",
+            fiscalFloor
+          )
+        );
+        for (const row of priorRows) {
+          const accId = Number(row.account_id);
+          const delta = (Number(row.debit_amount) || 0) - (Number(row.credit_amount) || 0);
+          openingByAccount.set(accId, (openingByAccount.get(accId) ?? 0) + delta);
+        }
+      }
+
+
       const accountById = new Map<number, Account>(accounts.map(a => [a.id, a]));
 
       // Build ONE consolidated ledger per selected root (instead of one per descendant)
