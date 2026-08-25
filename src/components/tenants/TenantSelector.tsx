@@ -26,17 +26,22 @@ export function TenantSelector() {
           <SelectValue placeholder="Seleccionar Tenant" />
         </SelectTrigger>
         <SelectContent>
-          {allTenants.map((tenant) => (
-            <SelectItem key={tenant.id} value={tenant.id.toString()}>
-              <div className="flex items-center gap-2">
-                <span 
-                  className="w-2 h-2 rounded-full" 
-                  style={{ backgroundColor: tenant.primary_color }}
-                />
-                {tenant.tenant_name}
-              </div>
-            </SelectItem>
-          ))}
+          {allTenants
+            .filter((tenant) => tenant.is_active || tenant.id === currentTenant?.id)
+            .map((tenant) => (
+              <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: tenant.primary_color }}
+                  />
+                  {tenant.tenant_name}
+                  {!tenant.is_active && (
+                    <span className="text-xs text-muted-foreground">(Inactivo)</span>
+                  )}
+                </div>
+              </SelectItem>
+            ))}
         </SelectContent>
       </Select>
     </div>
