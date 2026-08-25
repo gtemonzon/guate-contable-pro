@@ -34,7 +34,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import EntityLink from "@/components/ui/entity-link";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
+import { useNavigate } from "react-router-dom";
 import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrencyState } from "./ReportCurrencySelector";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
