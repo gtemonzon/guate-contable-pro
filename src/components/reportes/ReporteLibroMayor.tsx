@@ -1006,6 +1006,19 @@ export default function ReporteLibroMayor() {
           No se encontraron movimientos para los criterios seleccionados
         </div>
       )}
+
+      {/* Panel lateral de detalle de partida (sin acciones de edición) */}
+      <Sheet open={panelEntryId !== null} onOpenChange={(o) => !o && setPanelEntryId(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 overflow-hidden">
+          {panelEntryId !== null && (
+            <EntryDetailPanel
+              entryId={panelEntryId}
+              onClose={() => setPanelEntryId(null)}
+              onOpenInJournal={(id) => navigate(`/partidas?entryId=${id}`)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
