@@ -39,6 +39,8 @@ import { ReportCurrencySelector, defaultReportCurrencyState, type ReportCurrency
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import { previewPdfDoc } from "@/lib/pdfPreview";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 
 interface Account {
   id: number;
