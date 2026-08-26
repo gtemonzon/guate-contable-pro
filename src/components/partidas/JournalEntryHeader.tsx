@@ -110,14 +110,26 @@ export function JournalEntryHeader({
               {periods.map((period) => {
                 const start = new Date(period.start_date + 'T00:00:00');
                 const end = new Date(period.end_date + 'T00:00:00');
+                const isClosed = period.status !== 'abierto';
                 return (
-                  <SelectItem key={period.id} value={period.id.toString()}>
-                    {period.year} ({start.toLocaleDateString('es-GT')} - {end.toLocaleDateString('es-GT')})
+                  <SelectItem key={period.id} value={period.id.toString()} disabled={isClosed}>
+                    {period.year} ({start.toLocaleDateString('es-GT')} - {end.toLocaleDateString('es-GT')}){isClosed ? ' (cerrado)' : ''}
                   </SelectItem>
                 );
               })}
             </SelectContent>
           </Select>
+          {(() => {
+            const selected = periods.find(p => p.id === periodId);
+            if (selected && selected.status !== 'abierto') {
+              return (
+                <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3 w-3" /> Este período está cerrado.
+                </p>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 
