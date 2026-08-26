@@ -840,6 +840,10 @@ export default function Partidas() {
               {paginatedEntries.map((entry) => {
                 const statusConfig = STATUS_CONFIG[entry.status] || STATUS_CONFIG.borrador;
                 const isSelected = selectedEntryId === entry.id;
+                const reversalEntry = entry.reversal_entry_id
+                  ? entries.find(e => e.id === entry.reversal_entry_id)
+                  : undefined;
+                const isRevPosted = reversalEntry?.status === 'contabilizado';
 
                 return (
                   <div
