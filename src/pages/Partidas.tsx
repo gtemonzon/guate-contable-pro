@@ -862,41 +862,39 @@ export default function Partidas() {
                     <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <span className="font-semibold text-sm min-w-0 truncate">{entry.entry_number}</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge
-                              variant={statusConfig.variant}
-                              className={cn("h-5 w-5 p-0 flex items-center justify-center shrink-0", statusConfig.className)}
-                            >
-                              {statusConfig.icon}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent side="top"><p>{statusConfig.label}</p></TooltipContent>
-                        </Tooltip>
+                        {!isRevPosted && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant={statusConfig.variant}
+                                className={cn("h-5 w-5 p-0 flex items-center justify-center shrink-0", statusConfig.className)}
+                              >
+                                {statusConfig.icon}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><p>{statusConfig.label}</p></TooltipContent>
+                          </Tooltip>
+                        )}
                         <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{entry.entry_type}</Badge>
                         {/* Show "Revertida" tag if a reversal exists */}
-                        {entry.reversal_entry_id && (() => {
-                          const rev = entries.find(e => e.id === entry.reversal_entry_id);
-                          const isRevPosted = rev?.status === 'contabilizado';
-                          return (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    "h-5 w-5 p-0 flex items-center justify-center shrink-0",
-                                    isRevPosted
-                                      ? "border-destructive/50 text-destructive bg-destructive/10"
-                                      : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
-                                  )}
-                                >
-                                  {isRevPosted ? <XCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent side="top"><p>{isRevPosted ? "Revertida" : "Reversión pendiente"}</p></TooltipContent>
-                            </Tooltip>
-                          );
-                        })()}
+                        {entry.reversal_entry_id && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "h-5 w-5 p-0 flex items-center justify-center shrink-0",
+                                  isRevPosted
+                                    ? "border-destructive/50 text-destructive bg-destructive/10"
+                                    : "border-amber-400 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+                                )}
+                              >
+                                {isRevPosted ? <XCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><p>{isRevPosted ? "Revertida" : "Reversión pendiente"}</p></TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{entry.description}</p>
                       {entry.bank_reference && (
