@@ -216,7 +216,7 @@ export function useJournalEntryForm(
           supabase.from("tab_accounts").select("id, account_code, account_name, requires_cost_center, balance_type, account_type, is_bank_account")
             .eq("enterprise_id", parseInt(enterpriseId)).eq("allows_movement", true).eq("is_active", true).order("account_code"),
           supabase.from("tab_accounting_periods").select("*").eq("enterprise_id", parseInt(enterpriseId))
-            .eq("status", "abierto").order("year", { ascending: false }),
+            .order("year", { ascending: false }),
           supabase.from("tab_journal_entries").select("entry_date").eq("enterprise_id", parseInt(enterpriseId))
             .is("deleted_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
@@ -228,7 +228,7 @@ export function useJournalEntryForm(
       setEntryDate(defaultDate);
       if (periodsData && periodsData.length > 0) {
         const match = periodsData.find(p => defaultDate >= p.start_date && defaultDate <= p.end_date);
-        setPeriodId(match ? match.id : periodsData[0].id);
+        setPeriodId(match ? match.id : null);
       }
       // Don't preview/allocate a number on open — show "Sin asignar" until save
       setNextEntryNumber("");
@@ -318,6 +318,16 @@ export function useJournalEntryForm(
       setShowStickyHeader(false);
     }
   }, [open, entryToEdit]);
+
+  // Recalcular el período contable cuando cambia la fecha, para que
+  // accounting_period_id siempre corresponda a la fecha real de la partida.
+  useEffect(() => {
+    if (!open || isLoadingEntry || isReadOnly) return;
+    if (periods.length === 0) return;
+    const match = periods.find(p => entryDate >= p.start_date && entryDate <= p.end_date);
+    setPeriodId(match ? match.id : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryDate, periods, open, isLoadingEntry, isReadOnly]);
 
   useEffect(() => {
     if (!open || !headerRef.current) return;
@@ -762,6 +772,11 @@ export function useJournalEntryForm(
       toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" });
       return false;
     }
+    const selectedPeriod = periods.find(p => p.id === periodId);
+    if (periodId && selectedPeriod && (entryDate < selectedPeriod.start_date || entryDate > selectedPeriod.end_date)) {
+      toast({ title: "Fecha fuera del período", description: `La fecha ${entryDate} no corresponde al período ${selectedPeriod.year} (${selectedPeriod.start_date} a ${selectedPeriod.end_date}).`, variant: "destructive" });
+      return false;
+    }
     if (bankRefDuplicate) {
       toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${bankRefDuplicate.entryNumber} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
       return false;
@@ -773,6 +788,16 @@ export function useJournalEntryForm(
   const validateForPosting = () => {
     if (!headerDescription.trim()) { toast({ title: "Descripción requerida", description: "Debes ingresar una descripción general", variant: "destructive" }); return false; }
     if (!periodId) { toast({ title: "Período requerido", description: "Debes seleccionar un período contable", variant: "destructive" }); return false; }
+
+    const selectedPeriodForPost = periods.find(p => p.id === periodId);
+    if (selectedPeriodForPost && (entryDate < selectedPeriodForPost.start_date || entryDate > selectedPeriodForPost.end_date)) {
+      toast({ title: "Fecha fuera del período", description: `La fecha ${entryDate} no corresponde al período ${selectedPeriodForPost.year} (${selectedPeriodForPost.start_date} a ${selectedPeriodForPost.end_date}).`, variant: "destructive" });
+      return false;
+    }
+    if (selectedPeriodForPost && selectedPeriodForPost.status !== 'abierto') {
+      toast({ title: "Período cerrado", description: `No se puede contabilizar en el período ${selectedPeriodForPost.year}, que está cerrado.`, variant: "destructive" });
+      return false;
+    }
 
     if (bankRefDuplicate) {
       toast({ title: "Referencia bancaria duplicada", description: `Ya existe la partida ${bankRefDuplicate.entryNumber} con esta referencia para esta cuenta bancaria.`, variant: "destructive" });
