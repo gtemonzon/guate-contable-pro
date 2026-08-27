@@ -456,6 +456,15 @@ export function PeriodClosingWizard({
         return;
       }
 
+      if (incomeAccounts.length === 0 && expenseAccounts.length === 0) {
+        setClosingEntryGenerated(true);
+        setClosingEntryId(null);
+        setClosingEntryNumber(null);
+        setClosingEntryStatus('no_requerido');
+        toast.info('No hay actividad en cuentas de ingreso ni gasto — no se requiere partida de cierre.');
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
 
       // Clean up orphaned CIER drafts
@@ -1144,7 +1153,7 @@ export function PeriodClosingWizard({
       case 'cdv':
         return cdvReady;
       case 'generar':
-        return closingEntryGenerated && !!closingEntryId;
+        return closingEntryGenerated && (closingEntryStatus === 'no_requerido' || !!closingEntryId);
       case 'traslado':
         return !transferRequired || transferEntryGenerated;
       case 'apertura':
@@ -1179,7 +1188,7 @@ export function PeriodClosingWizard({
     checks.push({
       key: 'cierre',
       label: 'Partida de cierre de resultados generada',
-      ok: closingEntryGenerated && !!closingEntryId,
+      ok: closingEntryGenerated && (closingEntryStatus === 'no_requerido' || !!closingEntryId),
       required: true,
       stepId: 'generar',
     });
@@ -1935,9 +1944,9 @@ export function PeriodClosingWizard({
                       renderEntryStatusBadge(closingEntryStatus, closingEntryNumber)
                     ) : (
                       <div className="flex justify-center">
-                        <Button 
-                          onClick={generateClosingEntry} 
-                          disabled={loading || (incomeAccounts.length === 0 && expenseAccounts.length === 0)}
+                        <Button
+                          onClick={generateClosingEntry}
+                          disabled={loading}
                           size="lg"
                         >
                           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
