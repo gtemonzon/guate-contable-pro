@@ -36,6 +36,8 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
   const [error, setError] = useState<string | null>(null);
   const [totalSales, setTotalSales] = useState(0);
 
+  const noInventoryActivity = !closingData && initialInventory === 0 && purchasesAmount === 0;
+
   const getPeriodData = async (): Promise<PeriodData | null> => {
     const { data, error } = await supabase
       .from('tab_accounting_periods')
@@ -676,6 +678,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     loading,
     needsRecalculation,
     error,
+    noInventoryActivity,
     calculate,
     saveFinalInventory,
     generateCostOfSalesEntry,

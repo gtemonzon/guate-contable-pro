@@ -436,6 +436,20 @@ export function PeriodClosingWizard({
     }
   }, [period, enterpriseId]);
 
+  // Auto-resolve "generar" (Cierre) proactively when there's no income/expense
+  // activity, without waiting for the user to click the button.
+  useEffect(() => {
+    if (currentStepId !== 'generar') return;
+    if (loading) return;
+    if (closingEntryGenerated) return;
+    if (incomeAccounts.length === 0 && expenseAccounts.length === 0) {
+      setClosingEntryGenerated(true);
+      setClosingEntryId(null);
+      setClosingEntryNumber(null);
+      setClosingEntryStatus('no_requerido');
+    }
+  }, [currentStepId, loading, incomeAccounts, expenseAccounts, closingEntryGenerated]);
+
   // ---- Generate Closing Entry (Results) ----
   const generateClosingEntry = async () => {
     if (!period || !config?.period_result_account_id) {
@@ -1143,8 +1157,20 @@ export function PeriodClosingWizard({
 
   const stepIndexOf = (stepId: string) => steps.findIndex(s => s.id === stepId);
 
-  const cdvReady = cdv.closingData?.status === 'contabilizado' && !!cdv.closingData?.journal_entry_id;
+  const cdvReady = (cdv.closingData?.status === 'contabilizado' && !!cdv.closingData?.journal_entry_id) || cdv.noInventoryActivity;
   const transferRequired = !!config?.retained_earnings_account_id;
+
+  // Auto-resolve "traslado" proactively when the period result is zero,
+  // without waiting for the user to click the button.
+  useEffect(() => {
+    if (currentStepId !== 'traslado') return;
+    if (transferEntryGenerated) return;
+    if (!transferRequired) return;
+    if (Math.abs(periodResult) <= 0.01) {
+      setTransferEntryGenerated(true);
+      setTransferEntryStatus('no_requerido');
+    }
+  }, [currentStepId, transferEntryGenerated, transferRequired, periodResult]);
 
   // Is the entry for a given step already generated / posted?
   const stepEntryReady = (stepId: string): boolean => {
@@ -1562,6 +1588,20 @@ export function PeriodClosingWizard({
             {/* Step: Cost of Sales (CDV) */}
             {currentStepId === 'cdv' && (
               <div className="space-y-4">
+                {cdv.noInventoryActivity ? (
+                  <Card className="border-muted bg-muted/30">
+                    <CardContent className="pt-6">
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <CheckCircle2 className="h-6 w-6" />
+                        <div>
+                          <p className="font-medium">No se requiere Costo de Ventas</p>
+                          <p className="text-sm">No hay inventario inicial ni compras registradas en este período — no hay costo de ventas que calcular.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
                 {cdv.closingData?.status === 'contabilizado' && cdv.closingData?.journal_entry_id && (
                   <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -1828,6 +1868,8 @@ export function PeriodClosingWizard({
                     )}
                   </CardContent>
                 </Card>
+                  </>
+                )}
               </div>
             )}
 
