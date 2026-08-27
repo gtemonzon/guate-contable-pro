@@ -240,8 +240,7 @@ export function PeriodClosingWizard({
       if (nextPeriod) {
         const openEntry = await findExistingEntry('apertura', nextPeriod.id, 'APER');
         if (openEntry) {
-          const isAlreadyPosted = openEntry.status === 'contabilizado';
-          setOpeningEntryGenerated(isAlreadyPosted);
+          setOpeningEntryGenerated(true);
           setOpeningEntryId(openEntry.id);
           setOpeningEntryNumber(openEntry.entry_number);
           setOpeningEntryStatus(openEntry.status);
