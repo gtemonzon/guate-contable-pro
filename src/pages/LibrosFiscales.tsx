@@ -1070,31 +1070,12 @@ export default function LibrosFiscales() {
     }
   };
 
-  const deleteExistingJournalEntry = async (journalEntryId: number, ledgerType: 'purchases' | 'sales') => {
-    // Primero eliminar detalles
-    await supabase
-      .from("tab_journal_entry_details")
-      .delete()
-      .eq("journal_entry_id", journalEntryId);
-
-    // Limpiar referencias en el libro correspondiente
-    if (ledgerType === 'purchases') {
-      await supabase
-        .from("tab_purchase_ledger")
-        .update({ journal_entry_id: null })
-        .eq("journal_entry_id", journalEntryId);
-    } else {
-      await supabase
-        .from("tab_sales_ledger")
-        .update({ journal_entry_id: null })
-        .eq("journal_entry_id", journalEntryId);
-    }
-
-    // Eliminar póliza
-    await supabase
-      .from("tab_journal_entries")
-      .delete()
-      .eq("id", journalEntryId);
+  const deleteExistingJournalEntry = async (journalEntryId: number, enterpriseId: number) => {
+    const { error } = await supabase.rpc("replace_auto_generated_journal_entry", {
+      p_journal_entry_id: journalEntryId,
+      p_enterprise_id: enterpriseId,
+    });
+    if (error) throw error;
   };
 
   const calculateVAT = (total: number, docTypeCode: string) => {
@@ -2333,9 +2314,9 @@ export default function LibrosFiscales() {
 
                     // Eliminar póliza existente primero
                     if (activeTab === "compras" && existingPurchasesJournalEntry.id) {
-                      await deleteExistingJournalEntry(existingPurchasesJournalEntry.id, 'purchases');
+                      await deleteExistingJournalEntry(existingPurchasesJournalEntry.id, parseInt(currentEnterpriseId));
                     } else if (activeTab === "ventas" && existingSalesJournalEntry.id) {
-                      await deleteExistingJournalEntry(existingSalesJournalEntry.id, 'sales');
+                      await deleteExistingJournalEntry(existingSalesJournalEntry.id, parseInt(currentEnterpriseId));
                     }
 
                     // Validar que todas las facturas tengan cuenta asignada
