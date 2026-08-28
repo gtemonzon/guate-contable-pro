@@ -211,6 +211,7 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
     if (!config) return;
 
     setLoading(true);
+    setHasCalculated(false);
     setError(null);
     try {
       const period = await getPeriodData();
