@@ -267,10 +267,12 @@ export function useCostOfSalesCalculation(enterpriseId: number, periodId: number
         setCostOfSales(null);
         setNeedsRecalculation(false);
       }
+      setHasCalculated(true);
     } catch (err: unknown) {
       console.error('Error calculating cost of sales:', err);
       setError((err instanceof Error ? err.message : String(err)) || 'Error en el cálculo');
       toast.error('Error al calcular costo de ventas');
+      setHasCalculated(false);
     } finally {
       setLoading(false);
     }
