@@ -307,9 +307,6 @@ export function JournalEntryLinesTable({
         </Table>
       </div>
 
-      {!isBalanced && totalDebit > 0 && (
-        <p className="text-sm text-destructive mt-2">⚠️ La partida no está balanceada. Diferencia: {formatCurrency(Math.abs(totalDebit - totalCredit))}</p>
-      )}
       {isBalanced && totalDebit > 0 && (
         <p className="text-sm text-success mt-2">✓ Partida balanceada correctamente</p>
       )}
