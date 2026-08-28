@@ -5387,6 +5387,10 @@ export type Database = {
         Args: { p_entry_id: number; p_reason: string }
         Returns: undefined
       }
+      replace_auto_generated_journal_entry: {
+        Args: { p_enterprise_id: number; p_journal_entry_id: number }
+        Returns: undefined
+      }
       reset_legacy_import_data: {
         Args: { p_enterprise_id: number }
         Returns: undefined
