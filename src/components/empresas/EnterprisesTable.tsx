@@ -353,7 +353,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
             return (
               <TableRow 
                 key={enterprise.id}
-                className={`${isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
+                className={`cursor-pointer ${isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
+                onClick={() => onEdit(enterprise)}
               >
                 <TableCell className="font-mono">{enterprise.nit}</TableCell>
                 <TableCell>
@@ -384,7 +385,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
                   ) : "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                     {/* Indicador / Botón Seleccionar */}
                     {isSelected ? (
                       <Tooltip>
