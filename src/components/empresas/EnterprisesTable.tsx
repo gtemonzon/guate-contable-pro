@@ -62,7 +62,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
   useEffect(() => {
     const storedId = localStorage.getItem("currentEnterpriseId");
     if (storedId) {
-      setActiveEnterpriseId(parseInt(storedId));
+      setActiveEnterpriseIdLocal(parseInt(storedId));
     }
   }, []);
 
@@ -177,7 +177,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
   }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
 
   const handleSelect = async (enterprise: Enterprise) => {
-    setActiveEnterpriseId(enterprise.id);
+    setActiveEnterpriseIdLocal(enterprise.id);
     await switchEnterprise(enterprise.id);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -209,7 +209,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
 
       if (activeEnterpriseId === enterprise.id) {
         localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseId(null);
+        setActiveEnterpriseIdLocal(null);
       }
 
       toast({
@@ -238,7 +238,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
 
       if (activeEnterpriseId === enterprise.id) {
         localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseId(null);
+        setActiveEnterpriseIdLocal(null);
       }
 
       toast({
