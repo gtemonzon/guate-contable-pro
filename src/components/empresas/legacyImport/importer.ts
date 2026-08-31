@@ -118,7 +118,7 @@ export async function importLegacyData(
     .select("id, account_code")
     .eq("enterprise_id", enterpriseId);
   const accountIdByCode = new Map<string, number>();
-  accRows?.forEach((r: any) => accountIdByCode.set(r.account_code, r.id));
+  accRows?.forEach((r) => accountIdByCode.set(r.account_code, r.id));
 
   // Mapeo legacyId -> id (para compras, activos fijos, etc.)
   const accountIdByLegacy = new Map<string, number>();
@@ -151,7 +151,7 @@ export async function importLegacyData(
     .select("id, year")
     .eq("enterprise_id", enterpriseId);
   const periodIdByYear = new Map<number, number>();
-  perRows?.forEach((r: any) => periodIdByYear.set(r.year, r.id));
+  perRows?.forEach((r) => periodIdByYear.set(r.year, r.id));
 
   // ---------- 3. Compras ----------
   onProgress({ step: "Importando compras...", current: 0, total: ds.purchases.length });
@@ -162,7 +162,7 @@ export async function importLegacyData(
     .select("id, code")
     .or(`enterprise_id.is.null,enterprise_id.eq.${enterpriseId}`);
   const opTypeIdByCode = new Map<string, number>();
-  opTypes?.forEach((o: any) => opTypeIdByCode.set(o.code, o.id));
+  opTypes?.forEach((o) => opTypeIdByCode.set(o.code, o.id));
 
   const bookKeys = new Set<string>();
   ds.purchases.forEach((p) => {
@@ -227,7 +227,7 @@ export async function importLegacyData(
           continue;
         }
         const isDup =
-          (rowErr as any).code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
+          rowErr.code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
         if (isDup) {
           // Look up the existing record for context
           const { data: existing } = await supabase
@@ -302,7 +302,7 @@ export async function importLegacyData(
           continue;
         }
         const isDup =
-          (rowErr as any).code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
+          rowErr.code === "23505" || /duplicate|duplicad/i.test(rowErr.message);
         if (isDup) {
           const { data: existing } = await supabase
             .from("tab_sales_ledger")
@@ -476,7 +476,7 @@ export async function importLegacyData(
       .select("tenant_id")
       .eq("id", enterpriseId)
       .single();
-    const tenantId = (ent as any)?.tenant_id;
+    const tenantId = ent?.tenant_id;
 
     // Categoría fallback si la fk no existe
     let fallbackCategoryId: number | null =

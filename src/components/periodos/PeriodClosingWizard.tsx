@@ -21,15 +21,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  CheckCircle2, 
-  AlertTriangle, 
-  FileText, 
-  Calculator, 
-  Scale, 
-  Lock, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Calculator,
+  Scale,
+  Lock,
   PartyPopper,
   Loader2,
   ExternalLink,
@@ -38,10 +38,12 @@ import {
   RefreshCw,
   ArrowRightLeft,
   BookOpen,
-  Coins
+  Coins,
+  type LucideIcon
 } from 'lucide-react';
 import { FxRevaluationWizard } from '@/components/partidas/FxRevaluationWizard';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
@@ -84,10 +86,26 @@ interface ExistingEntry {
   is_posted: boolean;
 }
 
+// Shape of the account_id/debit_amount/credit_amount projection used repeatedly
+// to accumulate running balances from tab_journal_entry_details.
+type JournalEntryDetailBalance = Pick<
+  Database['public']['Tables']['tab_journal_entry_details']['Row'],
+  'account_id' | 'debit_amount' | 'credit_amount'
+>;
+
+// Shape of tab_journal_entries queries that embed the details above via the
+// Supabase nested-select syntax (`tab_journal_entry_details (...)`).
+type JournalEntryWithDetailBalances = Pick<
+  Database['public']['Tables']['tab_journal_entries']['Row'],
+  'id'
+> & {
+  tab_journal_entry_details: JournalEntryDetailBalance[] | null;
+};
+
 interface StepDef {
   id: string;
   title: string;
-  icon: any;
+  icon: LucideIcon;
   description: string;
 }
 
@@ -373,7 +391,7 @@ export function PeriodClosingWizard({
       
       if (accountsError) throw accountsError;
       
-      const entries = await fetchAllRecords(
+      const entries = await fetchAllRecords<JournalEntryWithDetailBalances>(
         supabase
           .from('tab_journal_entries')
           .select(`
@@ -388,11 +406,11 @@ export function PeriodClosingWizard({
           .eq('accounting_period_id', period.id)
           .eq('is_posted', true)
       );
-      
+
       const balanceMap = new Map<number, number>();
-      
-      entries.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
+
+      entries.forEach((entry) => {
+        entry.tab_journal_entry_details?.forEach((detail) => {
           const currentBalance = balanceMap.get(detail.account_id) || 0;
           const debit = detail.debit_amount || 0;
           const credit = detail.credit_amount || 0;
@@ -765,7 +783,7 @@ export function PeriodClosingWizard({
       // Bounded below by the fiscal floor (latest apertura on/before period.end_date) so the prior-year
       // opening entry is not counted twice; reversal chains are excluded.
       const openingFloor = await getFiscalFloorDate(enterpriseId, period.end_date);
-      const entries = await fetchAllRecords(
+      const entries = await fetchAllRecords<JournalEntryWithDetailBalances>(
         applyFiscalFloor(
           supabase
             .from('tab_journal_entries')
@@ -790,8 +808,8 @@ export function PeriodClosingWizard({
 
 
       const balanceMap = new Map<number, number>();
-      entries.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
+      entries.forEach((entry) => {
+        entry.tab_journal_entry_details?.forEach((detail) => {
           const currentBalance = balanceMap.get(detail.account_id) || 0;
           balanceMap.set(detail.account_id, currentBalance + (detail.debit_amount || 0) - (detail.credit_amount || 0));
         });
@@ -805,7 +823,7 @@ export function PeriodClosingWizard({
           .select('journal_entry_id, account_id, debit_amount, credit_amount')
           .in('journal_entry_id', draftIds);
 
-        draftDetails?.forEach((detail: any) => {
+        draftDetails?.forEach((detail) => {
           const entryPosted =
             (detail.journal_entry_id === closingEntryId && closingEntryStatus === 'contabilizado') ||
             (detail.journal_entry_id === transferEntryId && transferEntryStatus === 'contabilizado');
@@ -1006,7 +1024,7 @@ export function PeriodClosingWizard({
       if (accountsError) throw accountsError;
 
       const verifyFloor = await getFiscalFloorDate(enterpriseId, period.end_date);
-      const entries = await fetchAllRecords(
+      const entries = await fetchAllRecords<JournalEntryWithDetailBalances>(
         applyFiscalFloor(
           supabase
             .from('tab_journal_entries')
@@ -1029,11 +1047,11 @@ export function PeriodClosingWizard({
         )
       );
 
-      
+
       const balanceMap = new Map<number, number>();
-      
-      entries.forEach((entry: any) => {
-        entry.tab_journal_entry_details?.forEach((detail: any) => {
+
+      entries.forEach((entry) => {
+        entry.tab_journal_entry_details?.forEach((detail) => {
           const currentBalance = balanceMap.get(detail.account_id) || 0;
           const debit = detail.debit_amount || 0;
           const credit = detail.credit_amount || 0;
