@@ -45,15 +45,17 @@ interface EnterprisesTableProps {
   onEdit: (enterprise: Enterprise) => void;
   onDelete: () => void;
   onOpenWizard?: (enterprise: Enterprise) => void;
+  activeEnterpriseId?: number | null;
 }
 
-export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
+export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, activeEnterpriseId: activeEnterpriseIdProp }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
   const { switchEnterprise } = useEnterprise();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
+  const [activeEnterpriseIdLocal, setActiveEnterpriseIdLocal] = useState<number | null>(null);
+  const activeEnterpriseId = activeEnterpriseIdProp ?? activeEnterpriseIdLocal;
   const [activePeriods, setActivePeriods] = useState<Record<number, string>>({});
   const [lastTaxForms, setLastTaxForms] = useState<Record<number, LastTaxFormInfo>>({});
   const [exportingId, setExportingId] = useState<number | null>(null);
