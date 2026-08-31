@@ -329,7 +329,10 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
   };
 
   return (
-    <Card className={`hover:shadow-lg transition-shadow ${isSelected ? "ring-2 ring-primary" : ""}`}>
+    <Card
+      className={`hover:shadow-lg transition-shadow cursor-pointer ${isSelected ? "ring-2 ring-primary" : ""}`}
+      onClick={() => onEdit(enterprise)}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -455,7 +458,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
           </div>
         )}
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex gap-2 pt-2" onClick={(e) => e.stopPropagation()}>
           {!isSelected ? (
             <Button 
               className="flex-1"
