@@ -353,7 +353,7 @@ export async function importLegacyData(
 
     const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
     const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
-    const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
+    const balanced = Math.round((totalDebit - totalCredit) * 100) === 0;
 
     const ymKey = `${y}-${String(m).padStart(2, "0")}`;
     const next = (counterByYM.get(ymKey) ?? 0) + 1;
