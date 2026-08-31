@@ -141,6 +141,10 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
 
   const sortedEnterprises = useMemo(() => {
     return [...enterprises].sort((a, b) => {
+      // La empresa actualmente activa siempre va primero
+      if (a.id === activeEnterpriseId) return -1;
+      if (b.id === activeEnterpriseId) return 1;
+
       let valueA: string;
       let valueB: string;
 
@@ -174,7 +178,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
       }
       return valueB.localeCompare(valueA);
     });
-  }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
+  }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms, activeEnterpriseId]);
 
   const handleSelect = async (enterprise: Enterprise) => {
     setActiveEnterpriseIdLocal(enterprise.id);
