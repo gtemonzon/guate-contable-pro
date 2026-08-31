@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Database } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useTenant } from "@/contexts/TenantContext";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -22,6 +23,7 @@ type ViewMode = "cards" | "table";
 const Empresas = () => {
   const { toast } = useToast();
   const { currentTenant, isSuperAdmin, allTenants, switchTenant } = useTenant();
+  const { selectedEnterpriseId } = useEnterprise();
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,6 +129,13 @@ const Empresas = () => {
     (enterprise.trade_name && enterprise.trade_name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  // La empresa actualmente activa siempre va primero; el resto mantiene su orden
+  const orderedEnterprises = [...filteredEnterprises].sort((a, b) => {
+    if (a.id === selectedEnterpriseId) return -1;
+    if (b.id === selectedEnterpriseId) return 1;
+    return 0;
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -204,7 +213,7 @@ const Empresas = () => {
         </CardContent>
       </Card>
 
-      {filteredEnterprises.length === 0 ? (
+      {orderedEnterprises.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
@@ -220,7 +229,7 @@ const Empresas = () => {
         </Card>
       ) : viewMode === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEnterprises.map((enterprise) => (
+          {orderedEnterprises.map((enterprise) => (
             <EnterpriseCard
               key={enterprise.id}
               enterprise={enterprise}
@@ -232,7 +241,8 @@ const Empresas = () => {
         </div>
       ) : (
         <EnterprisesTable
-          enterprises={filteredEnterprises}
+          enterprises={orderedEnterprises}
+          activeEnterpriseId={selectedEnterpriseId}
           onEdit={handleEdit}
           onDelete={fetchEnterprises}
           onOpenWizard={handleOpenWizard}

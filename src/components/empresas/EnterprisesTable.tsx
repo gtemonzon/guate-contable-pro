@@ -45,22 +45,24 @@ interface EnterprisesTableProps {
   onEdit: (enterprise: Enterprise) => void;
   onDelete: () => void;
   onOpenWizard?: (enterprise: Enterprise) => void;
+  activeEnterpriseId?: number | null;
 }
 
-export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }: EnterprisesTableProps) => {
+export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, activeEnterpriseId: activeEnterpriseIdProp }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
   const { switchEnterprise } = useEnterprise();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [activeEnterpriseId, setActiveEnterpriseId] = useState<number | null>(null);
+  const [activeEnterpriseIdLocal, setActiveEnterpriseIdLocal] = useState<number | null>(null);
+  const activeEnterpriseId = activeEnterpriseIdProp ?? activeEnterpriseIdLocal;
   const [activePeriods, setActivePeriods] = useState<Record<number, string>>({});
   const [lastTaxForms, setLastTaxForms] = useState<Record<number, LastTaxFormInfo>>({});
   const [exportingId, setExportingId] = useState<number | null>(null);
   useEffect(() => {
     const storedId = localStorage.getItem("currentEnterpriseId");
     if (storedId) {
-      setActiveEnterpriseId(parseInt(storedId));
+      setActiveEnterpriseIdLocal(parseInt(storedId));
     }
   }, []);
 
@@ -139,6 +141,10 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
 
   const sortedEnterprises = useMemo(() => {
     return [...enterprises].sort((a, b) => {
+      // La empresa actualmente activa siempre va primero
+      if (a.id === activeEnterpriseId) return -1;
+      if (b.id === activeEnterpriseId) return 1;
+
       let valueA: string;
       let valueB: string;
 
@@ -172,10 +178,10 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
       }
       return valueB.localeCompare(valueA);
     });
-  }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms]);
+  }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms, activeEnterpriseId]);
 
   const handleSelect = async (enterprise: Enterprise) => {
-    setActiveEnterpriseId(enterprise.id);
+    setActiveEnterpriseIdLocal(enterprise.id);
     await switchEnterprise(enterprise.id);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -207,7 +213,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
 
       if (activeEnterpriseId === enterprise.id) {
         localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseId(null);
+        setActiveEnterpriseIdLocal(null);
       }
 
       toast({
@@ -236,7 +242,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
 
       if (activeEnterpriseId === enterprise.id) {
         localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseId(null);
+        setActiveEnterpriseIdLocal(null);
       }
 
       toast({
@@ -347,7 +353,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
             return (
               <TableRow 
                 key={enterprise.id}
-                className={`${isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
+                className={`cursor-pointer ${isSelected ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${isInactive ? "opacity-60" : ""}`}
+                onClick={() => onEdit(enterprise)}
               >
                 <TableCell className="font-mono">{enterprise.nit}</TableCell>
                 <TableCell>
@@ -378,7 +385,7 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard }
                   ) : "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                     {/* Indicador / Botón Seleccionar */}
                     {isSelected ? (
                       <Tooltip>
