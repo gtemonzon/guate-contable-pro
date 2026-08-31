@@ -342,7 +342,7 @@ export default function LibrosFiscales() {
       if (cancelled || !data) return;
       setJournalEntryNumbers((prev) => {
         const next = { ...prev };
-        data.forEach((row: any) => { next[row.id] = row.entry_number; });
+        data.forEach((row) => { next[row.id] = row.entry_number; });
         return next;
       });
     })();
@@ -794,7 +794,7 @@ export default function LibrosFiscales() {
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
           if (freshPurchases) {
-            const normalized = freshPurchases.map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
+            const normalized = freshPurchases.map((row) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
             purchasesRef.current = normalized;
             setPurchases(normalized);
           }
@@ -814,7 +814,7 @@ export default function LibrosFiscales() {
           .order("invoice_date", { ascending: false })
           .order("invoice_number", { ascending: false });
         if (freshSales) {
-          setSales(freshSales.map((row: any) => ({ ...row, client_id: `db-${row.id}` })));
+          setSales(freshSales.map((row) => ({ ...row, client_id: `db-${row.id}` })));
         }
       } catch (_) { /* silent */ }
     };
@@ -994,7 +994,7 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row: any) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
+      const normalized = (data || []).map((row) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
 
@@ -1022,7 +1022,7 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      setSales((data || []).map((row: any) => ({
+      setSales((data || []).map((row) => ({
         ...row,
         client_id: `db-${row.id}`,
       })));
@@ -1303,7 +1303,7 @@ export default function LibrosFiscales() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeTab, addNewPurchase, addNewSale]);
 
-  const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: any) => {
+  const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
     setPurchases((prev) => {
       const updated = [...prev];
       if (!updated[index]) return prev;
@@ -1316,9 +1316,9 @@ export default function LibrosFiscales() {
       ) {
         const current = updated[index];
         const result = calculateMixedTax({
-          totalAmount: field === "total_amount" ? parseFloat(value) || 0 : Number(current.total_amount) || 0,
-          exemptAmount: field === "exempt_amount" ? parseFloat(value) || 0 : Number(current.exempt_amount) || 0,
-          documentType: field === "fel_document_type" ? value : current.fel_document_type,
+          totalAmount: field === "total_amount" ? parseFloat(String(value)) || 0 : Number(current.total_amount) || 0,
+          exemptAmount: field === "exempt_amount" ? parseFloat(String(value)) || 0 : Number(current.exempt_amount) || 0,
+          documentType: field === "fel_document_type" ? String(value) : current.fel_document_type,
           appliesVat,
         });
         updated[index].total_amount = result.total;
@@ -1333,7 +1333,7 @@ export default function LibrosFiscales() {
     });
   };
 
-  const updateSaleRow = (index: number, field: keyof SaleEntry, value: any) => {
+  const updateSaleRow = (index: number, field: keyof SaleEntry, value: SaleEntry[keyof SaleEntry]) => {
     setSales((prev) => {
       const updated = [...prev];
       if (!updated[index]) return prev;
@@ -1341,8 +1341,8 @@ export default function LibrosFiscales() {
 
       if (field === "total_amount" || field === "fel_document_type") {
         const currentTotal = Number(updated[index].total_amount) || 0;
-        const nextTotal = field === "total_amount" ? parseFloat(value) || 0 : currentTotal;
-        const nextDoc = field === "fel_document_type" ? value : updated[index].fel_document_type;
+        const nextTotal = field === "total_amount" ? parseFloat(String(value)) || 0 : currentTotal;
+        const nextDoc = field === "fel_document_type" ? String(value) : updated[index].fel_document_type;
         const { base, vat } = calculateVAT(nextTotal, nextDoc);
         updated[index].net_amount = base;
         updated[index].vat_amount = vat;

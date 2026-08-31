@@ -45,6 +45,37 @@ interface LegacyImportWizardProps {
 
 type Step = 1 | 2 | 3 | 4;
 
+// Shape of tab_legacy_import_jobs.result — a JSONB column whose fields vary by
+// job type: an import job carries the ImportResult counters (see importer.ts),
+// while a "clear" job carries the deleted/verified/table-stats breakdown.
+interface JobResult {
+  cleared?: boolean;
+  deletedTotal?: number;
+  deletedByStep?: Record<string, number>;
+  verifiedEmptyByStep?: Record<string, boolean>;
+  tableStats?: Record<string, number>;
+  accountsCreated?: number;
+  periodsCreated?: number;
+  purchasesCreated?: number;
+  salesCreated?: number;
+  journalEntriesCreated?: number;
+  journalEntriesPosted?: number;
+  journalEntriesAsDraft?: number;
+  assetCategoriesCreated?: number;
+  fixedAssetsCreated?: number;
+}
+
+// Extracts a `.message` string from a caught value without assuming it's an
+// Error instance — Postgrest/Storage errors thrown by this file's Supabase
+// calls are plain objects, not Error subclasses.
+function getErrorMessage(e: unknown): string | undefined {
+  if (e && typeof e === "object" && "message" in e) {
+    const message = (e as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return undefined;
+}
+
 interface JobRow {
   id: string;
   status: string;
@@ -52,7 +83,7 @@ interface JobRow {
   current_count: number;
   total_count: number;
   errors: string[];
-  result: any;
+  result: JobResult | null;
   error_message: string | null;
   finished_at: string | null;
   updated_at?: string | null;
@@ -150,11 +181,11 @@ export function LegacyImportWizard({
         title: "Reanudado",
         description: "Se solicitó al servidor continuar el proceso.",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         variant: "destructive",
         title: "No se pudo reanudar",
-        description: e.message,
+        description: getErrorMessage(e),
       });
     } finally {
       setResuming(false);
@@ -278,7 +309,7 @@ export function LegacyImportWizard({
     if (!job?.id) return;
     const channel = supabase
       .channel(`legacy-job-${job.id}`)
-      .on(
+      .on<JobRow>(
         "postgres_changes",
         {
           event: "UPDATE",
@@ -287,7 +318,7 @@ export function LegacyImportWizard({
           filter: `id=eq.${job.id}`,
         },
         (payload) => {
-          setJob((prev) => ({ ...(prev as JobRow), ...(payload.new as any) }));
+          setJob((prev) => ({ ...(prev as JobRow), ...payload.new }));
         },
       )
       .subscribe();
@@ -312,11 +343,11 @@ export function LegacyImportWizard({
       const ds = await parseLegacyFile(f);
       setDataset(ds);
       setStep(2);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         variant: "destructive",
         title: "Error al leer archivo",
-        description: e.message,
+        description: getErrorMessage(e),
       });
     } finally {
       setParsing(false);
@@ -337,11 +368,11 @@ export function LegacyImportWizard({
         return;
       }
       await startImport(stats);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         variant: "destructive",
         title: "Error al iniciar importación",
-        description: e.message,
+        description: getErrorMessage(e),
       });
     } finally {
       setSubmitting(false);
@@ -382,7 +413,7 @@ export function LegacyImportWizard({
       .from("tab_legacy_import_jobs")
       .insert({
         enterprise_id: enterpriseId,
-        tenant_id: (ent as any).tenant_id,
+        tenant_id: ent.tenant_id,
         created_by: userData.user.id,
         payload_path: payloadPath,
         status: "pending",
@@ -461,7 +492,8 @@ export function LegacyImportWizard({
       if (error) throw error;
 
       // Si el servidor devolvió un jobId de progreso, lo seguimos via realtime
-      const progressJobId = (data as any)?.jobId as string | undefined;
+      const jobIdValue = (data as { jobId?: unknown } | null)?.jobId;
+      const progressJobId = typeof jobIdValue === "string" ? jobIdValue : undefined;
       if (progressJobId) {
         const { data: jobRow } = await supabase
           .from("tab_legacy_import_jobs")
@@ -487,11 +519,11 @@ export function LegacyImportWizard({
             "La empresa quedó limpia para una nueva prueba de importación.",
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         variant: "destructive",
         title: "Error al borrar datos",
-        description: e.message,
+        description: getErrorMessage(e),
       });
     } finally {
       setClearing(false);
@@ -1258,11 +1290,11 @@ export function LegacyImportWizard({
                 try {
                   await startImport(tableStats);
                   setPrecheckOpen(false);
-                } catch (error: any) {
+                } catch (error: unknown) {
                   toast({
                     variant: "destructive",
                     title: "Error al iniciar importación",
-                    description: error.message,
+                    description: getErrorMessage(error),
                   });
                 } finally {
                   setSubmitting(false);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,6 +48,8 @@ interface VoidChequeDialogProps {
   };
   onSuccess: () => void;
 }
+
+type BankDocumentFields = Partial<Database["public"]["Tables"]["tab_bank_documents"]["Update"]>;
 
 /**
  * Find an existing bank document by enterprise + bank_account + document_number.
@@ -99,7 +102,7 @@ export default function VoidChequeDialog({
    */
   async function upsertBankDocument(
     resolvedBankAccountId: number | null,
-    fields: Record<string, any>,
+    fields: BankDocumentFields,
   ) {
     const existing = await findExistingBankDocument(
       enterpriseId!,
@@ -110,19 +113,20 @@ export default function VoidChequeDialog({
     if (existing) {
       const { error } = await supabase
         .from("tab_bank_documents")
-        .update(fields as any)
+        .update(fields)
         .eq("id", existing.id);
       if (error) throw error;
     } else {
-      const insertRow: Record<string, any> = {
+      const insertRow: Database["public"]["Tables"]["tab_bank_documents"]["Insert"] = {
         enterprise_id: enterpriseId!,
         bank_account_id: resolvedBankAccountId,
         document_number: documentNumber,
         ...fields,
+        document_date: fields.document_date ?? new Date().toISOString().split("T")[0],
       };
       const { error } = await supabase
         .from("tab_bank_documents")
-        .insert([insertRow as any]);
+        .insert([insertRow]);
       if (error) throw error;
     }
   }
@@ -213,7 +217,7 @@ export default function VoidChequeDialog({
         if (reversalError) throw reversalError;
 
         // Create reversed detail lines
-        const reversalDetails = details.map((d: any, index: number) => ({
+        const reversalDetails = details.map((d, index: number) => ({
           journal_entry_id: reversalEntry.id,
           line_number: index + 1,
           account_id: d.account_id,
