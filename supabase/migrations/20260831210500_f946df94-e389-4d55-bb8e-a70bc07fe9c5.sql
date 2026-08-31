@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.replace_auto_generated_journal_entry(bigint, bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.replace_auto_generated_journal_entry(bigint, bigint) TO authenticated, service_role;
