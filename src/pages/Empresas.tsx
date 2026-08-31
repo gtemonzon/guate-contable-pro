@@ -213,7 +213,7 @@ const Empresas = () => {
         </CardContent>
       </Card>
 
-      {filteredEnterprises.length === 0 ? (
+      {orderedEnterprises.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
@@ -229,7 +229,7 @@ const Empresas = () => {
         </Card>
       ) : viewMode === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEnterprises.map((enterprise) => (
+          {orderedEnterprises.map((enterprise) => (
             <EnterpriseCard
               key={enterprise.id}
               enterprise={enterprise}
@@ -241,7 +241,8 @@ const Empresas = () => {
         </div>
       ) : (
         <EnterprisesTable
-          enterprises={filteredEnterprises}
+          enterprises={orderedEnterprises}
+          activeEnterpriseId={selectedEnterpriseId}
           onEdit={handleEdit}
           onDelete={fetchEnterprises}
           onOpenWizard={handleOpenWizard}
