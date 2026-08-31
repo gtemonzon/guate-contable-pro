@@ -546,7 +546,10 @@ export function useJournalEntryForm(
 
   const getTotalDebit = () => detailLines.reduce((sum, l) => sum + (l.debit_amount || 0), 0);
   const getTotalCredit = () => detailLines.reduce((sum, l) => sum + (l.credit_amount || 0), 0);
-  const isBalanced = () => { const d = getTotalDebit(), c = getTotalCredit(); return Math.abs(d - c) < 0.01 && d > 0; };
+  const isBalanced = () => {
+    const d = getTotalDebit(), c = getTotalCredit();
+    return Math.round((d - c) * 100) === 0 && d > 0;
+  };
 
   // Imbalance amount for draft warnings
   const getImbalanceAmount = () => {
