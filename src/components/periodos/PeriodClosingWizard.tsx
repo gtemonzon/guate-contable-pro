@@ -1075,8 +1075,8 @@ export function PeriodClosingWizard({
       setTotalLiabilities(Math.round(liabilities * 100) / 100);
       setTotalEquity(Math.round(equity * 100) / 100);
       
-      const diff = Math.abs(assets - (liabilities + equity));
-      setIsBalanced(diff < 0.01);
+      const diff = Math.round((assets - (liabilities + equity)) * 100) / 100;
+      setIsBalanced(diff === 0);
     } catch (error) {
       console.error('Error loading balance verification:', error);
       toast.error('Error al verificar balances');

@@ -787,7 +787,7 @@ export function LegacyImportWizard({
                       {dataset.journalEntries.slice(0, 3).map((e, i) => {
                         const td = e.lines.reduce((s, l) => s + l.debit, 0);
                         const tc = e.lines.reduce((s, l) => s + l.credit, 0);
-                        const balanced = Math.abs(td - tc) < 0.01;
+                        const balanced = Math.round((td - tc) * 100) === 0;
                         return (
                           <div key={i} className="border rounded p-2 mb-1">
                             <div className="flex justify-between mb-1">
