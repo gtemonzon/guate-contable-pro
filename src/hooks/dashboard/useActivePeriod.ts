@@ -32,11 +32,19 @@ export function useActivePeriod(enterpriseId: number | null) {
         if (savedPeriodId) {
           const { data } = await supabase
             .from('tab_accounting_periods')
-            .select('id, year, start_date, end_date, status')
+            .select('id, year, start_date, end_date, status, enterprise_id')
             .eq('id', parseInt(savedPeriodId))
-            .single();
-          if (data) { setActivePeriod(data); return; }
+            .maybeSingle();
+          // Solo es válido si existe, pertenece a la empresa y sigue abierto.
+          if (data && data.enterprise_id === enterpriseId && data.status === 'abierto') {
+            const { enterprise_id: _ignored, ...period } = data;
+            setActivePeriod(period);
+            return;
+          }
+          // Guardado obsoleto (período cerrado o inexistente): limpiar y recalcular.
+          localStorage.removeItem(`currentPeriodId_${enterpriseId}`);
         }
+
 
         // Preferir abierto + default; si no hay abierto, tomar el más reciente
         const { data: openPeriods } = await supabase
