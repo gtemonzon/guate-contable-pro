@@ -19,8 +19,20 @@
  * @param pageSize - Number of records per page (default: 1000)
  * @returns Promise with all records
  */
+// Structural type for what this module actually needs from a Supabase query
+// builder: a `.range()` call that resolves to `{ data, error }`. Describing
+// only that shape (rather than importing PostgrestFilterBuilder's full
+// generic signature) keeps this helper usable with every table's query
+// builder, since they all satisfy this shape structurally.
+interface RangeableQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: T[] | null; error: unknown }>;
+}
+
 export async function fetchAllRecords<T>(
-  queryOrFactory: any,
+  queryOrFactory: RangeableQuery<T> | (() => RangeableQuery<T>),
   pageSize: number = 1000
 ): Promise<T[]> {
   const isFactory = typeof queryOrFactory === "function";
@@ -31,7 +43,7 @@ export async function fetchAllRecords<T>(
     return fetchAllRecordsSequential<T>(queryOrFactory, pageSize);
   }
 
-  const makeQuery = queryOrFactory as () => any;
+  const makeQuery = queryOrFactory;
 
   try {
     const first = await makeQuery().range(0, pageSize - 1);
@@ -74,7 +86,7 @@ export async function fetchAllRecords<T>(
 
 
 async function fetchAllRecordsSequential<T>(
-  query: any,
+  query: RangeableQuery<T>,
   pageSize: number = 1000
 ): Promise<T[]> {
   let allData: T[] = [];
@@ -104,7 +116,7 @@ async function fetchAllRecordsSequential<T>(
  * @param pageSize - Number of records per page (default: 1000)
  */
 export async function fetchRecordsInBatches<T>(
-  query: any,
+  query: RangeableQuery<T>,
   onBatch: (batch: T[], batchNumber: number) => void | Promise<void>,
   pageSize: number = 1000
 ): Promise<void> {
