@@ -16,16 +16,59 @@ jobs:
         uses: actions/checkout@v5
 
       # ── Secret / sensitive-file scanning ──────────────────────────────────
+      # This repo intentionally commits .env: Lovable's build depends on the
+      # file physically existing (removing it has broken production before),
+      # and it only ever holds VITE_-prefixed variables. In Vite, any VITE_
+      # variable is inlined into the public browser bundle at build time —
+      # it's public by design whether or not it's in the repo. So this step
+      # doesn't fail on the mere presence of .env; it fails only if a
+      # committed .env defines a variable WITHOUT the VITE_ prefix, which
+      # would indicate a real private key (service-role key, DB URL, etc.)
+      # sitting in a file meant only for public build-time config.
       - name: Check for committed .env files
         run: |
           echo "🔍 Scanning for committed .env files..."
-          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example'; then
-            echo "❌ FAIL: .env file(s) detected in the repository!"
-            echo "   Remove them and rotate any exposed keys immediately."
-            echo "   See SECURITY.md §1.1 for key rotation instructions."
+          ENV_FILES=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example' || true)
+
+          if [ -z "$ENV_FILES" ]; then
+            echo "✅ No .env files found."
+            exit 0
+          fi
+
+          echo "ℹ️  Committed .env file(s) found:"
+          echo "$ENV_FILES"
+          echo ""
+
+          FAIL=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            [ -f "$file" ] || continue
+            echo "🔎 Checking $file"
+            while IFS= read -r line; do
+              trimmed="$(echo "$line" | sed -E 's/^[[:space:]]*export[[:space:]]+//; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+              [ -z "$trimmed" ] && continue
+              case "$trimmed" in
+                \#*) continue ;;
+              esac
+              if echo "$trimmed" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*='; then
+                varname="$(echo "$trimmed" | sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/')"
+                if [[ "$varname" != VITE_* ]]; then
+                  echo "❌ FAIL: '$file' defines '$varname' without the VITE_ prefix."
+                  echo "   VITE_-prefixed variables are public by design (inlined into the"
+                  echo "   browser bundle), but this one is not — it looks like a real"
+                  echo "   private key or secret. Remove it and rotate it immediately."
+                  echo "   See SECURITY.md §1.1 for key rotation instructions."
+                  FAIL=1
+                fi
+              fi
+            done < "$file"
+          done <<< "$ENV_FILES"
+
+          if [ "$FAIL" -eq 1 ]; then
             exit 1
           fi
-          echo "✅ No .env files found."
+
+          echo "✅ '.env' present with only VITE_ variables (public by design in Vite) — OK."
 
       - name: Scan for secret patterns
         run: |
