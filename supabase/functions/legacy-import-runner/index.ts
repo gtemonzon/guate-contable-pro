@@ -99,6 +99,70 @@ interface ParsedDataset {
   fixedAssets: ParsedFixedAsset[];
 }
 
+// This Edge Function's client is created without a Database generic (this
+// Deno deploy boundary has no access to the frontend's generated types), so
+// every query result is implicitly `any`. The row shapes below describe
+// exactly what this file reads from each table (verified against the
+// generated types.ts on the client side), so query results get a real type
+// instead of a bare `any`.
+interface IdRow {
+  id: number;
+}
+interface AccountTreeRow {
+  id: number;
+  parent_account_id: number | null;
+}
+interface AccountCodeRow {
+  id: number;
+  account_code: string;
+}
+interface PeriodYearRow {
+  id: number;
+  year: number;
+}
+interface OperationTypeRow {
+  id: number;
+  code: string;
+}
+interface PurchaseBookRow {
+  id: number;
+  year: number;
+  month: number;
+}
+interface AssetCategoryCodeRow {
+  id: number;
+  code: string;
+}
+interface PayloadPathRow {
+  payload_path: string | null;
+}
+interface EnterpriseTenantRow {
+  tenant_id: number;
+}
+interface ClearBatchResult {
+  deleted_count?: number;
+  remaining_count?: number;
+  done?: boolean;
+  execution_ms?: number;
+}
+interface ClearJobResult {
+  deletedByStep?: Record<string, number>;
+  verifiedEmptyByStep?: Record<string, boolean>;
+  tableStats?: Record<string, number>;
+  phaseTimings?: Record<string, number>;
+  completedPhases?: string[];
+  deletedTotal?: number;
+  cleared?: boolean;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (message) return String(message);
+  }
+  return String(err);
+}
+
 const CHUNK = 100; // lote de inserción (compras/ventas) — más pequeño para evitar statement timeout
 const JOURNAL_SLICE = 10; // partidas por invocación para evitar timeouts
 const DETAIL_CHUNK = 25;
@@ -233,7 +297,7 @@ async function deleteIdsAdaptiveSimple(
   const { error } = await sb
     .from(table)
     .delete()
-    .in("id", ids as any);
+    .in("id", ids);
   if (!error) return ids.length;
   if (isStatementTimeout(error.message) && ids.length > 1) {
     const mid = Math.floor(ids.length / 2);
@@ -248,7 +312,7 @@ async function deleteIdsAdaptiveSimple(
       const { error: rowError } = await sb
         .from(table)
         .delete()
-        .eq("id", id as any);
+        .eq("id", id);
       if (rowError) throw new Error(`${label}: ${rowError.message}`);
       deleted += 1;
     }
@@ -277,7 +341,7 @@ async function clearSimpleEnterpriseTable(
     deleted += await deleteIdsAdaptiveSimple(
       sb,
       table,
-      data.map((row: any) => row.id),
+      (data as IdRow[]).map((row) => row.id),
       label,
     );
   }
@@ -328,14 +392,14 @@ async function clearRowsByForeignKey(
     const { data, error } = await sb
       .from(table)
       .select("id")
-      .in(foreignKey, values as any)
+      .in(foreignKey, values)
       .limit(100);
     if (error) throw new Error(`${label}: ${error.message}`);
     if (!data?.length) break;
     deleted += await deleteIdsAdaptiveSimple(
       sb,
       table,
-      data.map((row: any) => row.id),
+      (data as IdRow[]).map((row) => row.id),
       label,
     );
   }
@@ -672,25 +736,27 @@ async function runResumablePhaseUntilEmpty(
       throw new Error(`limpieza ${phase.phaseKey}: ${error.message}`);
     }
 
-    const row = Array.isArray(data) ? data[0] : null;
+    const row = (Array.isArray(data) ? data[0] : null) as
+      | ClearBatchResult
+      | null;
     if (!row) {
       throw new Error(`limpieza ${phase.phaseKey}: sin resultado del batch`);
     }
 
-    deletedTotal += Number((row as any).deleted_count ?? 0);
-    remaining = Number((row as any).remaining_count ?? 0);
+    deletedTotal += Number(row.deleted_count ?? 0);
+    remaining = Number(row.remaining_count ?? 0);
 
     if (onProgress) {
       await onProgress(remaining);
     }
 
-    if (Boolean((row as any).done)) {
+    if (row.done) {
       return { deleted_count: deletedTotal, remaining_count: remaining };
     }
   }
 }
 
-async function insertCriticalRows<T>(
+async function insertCriticalRows<T extends Record<string, unknown>>(
   sb: ReturnType<typeof createClient>,
   table: string,
   rows: T[],
@@ -701,7 +767,7 @@ async function insertCriticalRows<T>(
 
   for (let i = 0; i < rows.length; i += batchSize) {
     const part = rows.slice(i, i + batchSize);
-    const { error } = await sb.from(table).insert(part as any);
+    const { error } = await sb.from(table).insert(part);
 
     if (!error) {
       inserted += part.length;
@@ -713,7 +779,7 @@ async function insertCriticalRows<T>(
     }
 
     for (const row of part) {
-      const { error: rowError } = await sb.from(table).insert(row as any);
+      const { error: rowError } = await sb.from(table).insert(row);
       if (rowError) {
         throw new Error(`${label}: ${rowError.message}`);
       }
@@ -856,10 +922,12 @@ async function runClear(clearJobId: string, enterpriseId: number) {
     .eq("id", clearJobId)
     .maybeSingle();
 
-  const previousResult: any =
-    jobRow?.result && typeof jobRow.result === "object" ? jobRow.result : {};
+  const previousResult: ClearJobResult =
+    jobRow?.result && typeof jobRow.result === "object"
+      ? (jobRow.result as ClearJobResult)
+      : {};
 
-  const clearResult: any = {
+  const clearResult: Required<ClearJobResult> = {
     deletedByStep: previousResult.deletedByStep ?? {},
     verifiedEmptyByStep: previousResult.verifiedEmptyByStep ?? {},
     tableStats: previousResult.tableStats ?? {},
@@ -958,19 +1026,19 @@ async function runClear(clearJobId: string, enterpriseId: number) {
           throw new Error(`limpieza ${phase.phaseKey}: ${error.message}`);
         }
 
-        const row = Array.isArray(data) ? data[0] : null;
+        const row = (Array.isArray(data) ? data[0] : null) as
+          | ClearBatchResult
+          | null;
         if (!row) {
           throw new Error(
             `limpieza ${phase.phaseKey}: sin resultado del batch`,
           );
         }
 
-        const deleted = Number((row as any).deleted_count ?? 0);
-        const remaining = Number((row as any).remaining_count ?? 0);
-        const done = Boolean((row as any).done);
-        const execMs = Number(
-          (row as any).execution_ms ?? Date.now() - phaseStart,
-        );
+        const deleted = Number(row.deleted_count ?? 0);
+        const remaining = Number(row.remaining_count ?? 0);
+        const done = Boolean(row.done);
+        const execMs = Number(row.execution_ms ?? Date.now() - phaseStart);
 
         phaseDeleted += deleted;
         phaseMs += execMs;
@@ -1031,9 +1099,9 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         .eq("enterprise_id", enterpriseId)
         .not("payload_path", "is", null);
 
-      const payloadPaths = (payloadRows ?? [])
-        .map((r: any) => r.payload_path)
-        .filter((p: any): p is string => !!p);
+      const payloadPaths = ((payloadRows ?? []) as PayloadPathRow[])
+        .map((r) => r.payload_path)
+        .filter((p): p is string => !!p);
 
       if (payloadPaths.length > 0) {
         await sb.storage.from("legacy-imports").remove(payloadPaths);
@@ -1063,13 +1131,13 @@ async function runClear(clearJobId: string, enterpriseId: number) {
         result: clearResult,
       })
       .eq("id", clearJobId);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("clear_legacy_import_batch failed", err);
     await sb
       .from("tab_legacy_import_jobs")
       .update({
         status: "failed",
-        error_message: String(err?.message ?? err),
+        error_message: getErrorMessage(err),
         finished_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         result: clearResult,
@@ -1453,7 +1521,7 @@ async function runImport(jobId: string) {
         "bulk_insert_accounts",
         {
           p_enterprise_id: enterpriseId,
-          p_accounts: accountRows as any,
+          p_accounts: accountRows,
         },
       );
       if (bulkErr) throw new Error(`Cuentas: ${bulkErr.message}`);
@@ -1484,7 +1552,9 @@ async function runImport(jobId: string) {
       .select("id, account_code")
       .eq("enterprise_id", enterpriseId);
     const accountIdByCode = new Map<string, number>();
-    accRows?.forEach((r: any) => accountIdByCode.set(r.account_code, r.id));
+    (accRows as AccountCodeRow[] | null)?.forEach((r) =>
+      accountIdByCode.set(r.account_code, r.id),
+    );
     const accountIdByLegacy = new Map<string, number>();
     ds.accounts.forEach((a) => {
       if (a.legacyId !== undefined && a.legacyId !== null) {
@@ -1529,7 +1599,9 @@ async function runImport(jobId: string) {
       .select("id, year")
       .eq("enterprise_id", enterpriseId);
     const periodIdByYear = new Map<number, number>();
-    perRows?.forEach((r: any) => periodIdByYear.set(r.year, r.id));
+    (perRows as PeriodYearRow[] | null)?.forEach((r) =>
+      periodIdByYear.set(r.year, r.id),
+    );
 
     // ---------- 3. Compras ----------
     const { data: opTypes } = await sb
@@ -1537,7 +1609,9 @@ async function runImport(jobId: string) {
       .select("id, code")
       .or(`enterprise_id.is.null,enterprise_id.eq.${enterpriseId}`);
     const opTypeIdByCode = new Map<string, number>();
-    opTypes?.forEach((o: any) => opTypeIdByCode.set(o.code, o.id));
+    (opTypes as OperationTypeRow[] | null)?.forEach((o) =>
+      opTypeIdByCode.set(o.code, o.id),
+    );
 
     const bookKeys = new Set<string>();
     ds.purchases.forEach((p) => {
@@ -1551,13 +1625,13 @@ async function runImport(jobId: string) {
     const shouldYield = () => Date.now() - startTs > MAX_RUNTIME_MS;
 
     // Helper: inserta en lotes con fallback fila-por-fila y soporte de reanudación
-    async function insertBatched<T>(
+    async function insertBatched<T extends Record<string, unknown>>(
       table: string,
       rows: T[],
       label: string,
       stepKey: string,
       stepLabel: string,
-      counterKey: keyof ImportResult,
+      counterKey: "purchasesCreated" | "salesCreated",
     ): Promise<"done" | "yield"> {
       if (stepsCompleted.has(stepKey)) return "done";
       // Reanudación: si el job ya tiene current_step igual al nuestro, reusar current_count
@@ -1569,7 +1643,7 @@ async function runImport(jobId: string) {
         startIdx = Math.min(job.current_count, rows.length);
       }
       // Si ya teníamos result.<counter>, usar ese como punto de partida también
-      const alreadyCount = (result as any)[counterKey] as number;
+      const alreadyCount = result[counterKey];
       if (alreadyCount > startIdx)
         startIdx = Math.min(alreadyCount, rows.length);
 
@@ -1577,13 +1651,13 @@ async function runImport(jobId: string) {
 
       for (let i = startIdx; i < rows.length; i += CHUNK) {
         const part = rows.slice(i, i + CHUNK);
-        const { error } = await sb.from(table).insert(part as any);
+        const { error } = await sb.from(table).insert(part);
         if (error) {
           // Fallback fila-por-fila: aísla el problema y deja un error explicativo
           let okCount = 0;
           let firstErr: string | null = null;
           for (const row of part) {
-            const { error: rErr } = await sb.from(table).insert(row as any);
+            const { error: rErr } = await sb.from(table).insert(row);
             if (rErr) {
               if (!firstErr) firstErr = rErr.message;
               errors.push(`${label}: ${rErr.message}`);
@@ -1591,16 +1665,14 @@ async function runImport(jobId: string) {
               okCount++;
             }
           }
-          (result as any)[counterKey] =
-            ((result as any)[counterKey] as number) + okCount;
+          result[counterKey] = result[counterKey] + okCount;
           if (firstErr) {
             console.warn(
               `${label} batch falló, ${okCount}/${part.length} ok. Primer error: ${firstErr}`,
             );
           }
         } else {
-          (result as any)[counterKey] =
-            ((result as any)[counterKey] as number) + part.length;
+          result[counterKey] = result[counterKey] + part.length;
         }
         await sb
           .from("tab_legacy_import_jobs")
@@ -1671,7 +1743,7 @@ async function runImport(jobId: string) {
         .from("tab_purchase_books")
         .select("id, year, month")
         .eq("enterprise_id", enterpriseId);
-      existingBooks?.forEach((bk: any) =>
+      (existingBooks as PurchaseBookRow[] | null)?.forEach((bk) =>
         bookIdByYM.set(`${bk.year}-${bk.month}`, bk.id),
       );
     }
@@ -1701,8 +1773,8 @@ async function runImport(jobId: string) {
         currency_code: "GTQ",
         exchange_rate: 1,
         imported_from_fel: false,
-        exempt_amount: (Number((p as any).exemptAmount) || 0) + (Number((p as any).idpAmount) || 0),
-        tax_category: (p as any).taxCategory ?? (Number((p as any).idpAmount) > 0 ? "IDP" : null),
+        exempt_amount: (Number(p.exemptAmount) || 0) + (Number(p.idpAmount) || 0),
+        tax_category: p.taxCategory ?? (Number(p.idpAmount) > 0 ? "IDP" : null),
         operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
         expense_account_id: expenseAccountId,
       };
@@ -1787,9 +1859,39 @@ async function runImport(jobId: string) {
       const counterByYM = new Map<string, number>();
 
       // Pre-resolver cuentas y armar headers + detalles en memoria
+      type JournalLineWithAccount = ParsedJournalLine & {
+        accountId: number | undefined;
+      };
+      type JournalHeader = {
+        enterprise_id: number;
+        accounting_period_id: number;
+        entry_number: string;
+        entry_date: string;
+        description: string;
+        entry_type: "diario" | "apertura" | "cierre";
+        document_reference: string | null;
+        currency_code: string;
+        exchange_rate: number;
+        total_debit: number;
+        total_credit: number;
+        is_posted: boolean;
+        status: string;
+        created_by: string;
+      };
+      type JournalDetailInsert = {
+        line_number: number;
+        account_id: number;
+        debit_amount: number;
+        credit_amount: number;
+        description: string;
+        currency_code: string;
+        exchange_rate: number;
+        original_debit: number;
+        original_credit: number;
+      };
       type PreparedEntry = {
-        header: any;
-        details: any[];
+        header: JournalHeader;
+        details: JournalDetailInsert[];
         balanced: boolean;
         shouldPost: boolean;
       };
@@ -1800,18 +1902,20 @@ async function runImport(jobId: string) {
         const periodId = periodIdByYear.get(y);
         if (!periodId) continue;
         const lines = entry.lines
-          .map((l: any) => ({
-            ...l,
-            accountId: accountIdByCode.get(l.accountCode),
-          }))
-          .filter((l: any) => l.accountId && (l.debit > 0 || l.credit > 0));
+          .map(
+            (l): JournalLineWithAccount => ({
+              ...l,
+              accountId: accountIdByCode.get(l.accountCode),
+            }),
+          )
+          .filter(
+            (l): l is JournalLineWithAccount & { accountId: number } =>
+              !!l.accountId && (l.debit > 0 || l.credit > 0),
+          );
         if (lines.length === 0) continue;
 
-        const totalDebit = lines.reduce((s: number, l: any) => s + l.debit, 0);
-        const totalCredit = lines.reduce(
-          (s: number, l: any) => s + l.credit,
-          0,
-        );
+        const totalDebit = lines.reduce((s, l) => s + l.debit, 0);
+        const totalCredit = lines.reduce((s, l) => s + l.credit, 0);
         const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
         // Si el archivo trae explícitamente Mayorizada=false → respetar borrador
         // Si Mayorizada=true (o no viene) → contabilizar siempre que esté cuadrada
@@ -1848,9 +1952,9 @@ async function runImport(jobId: string) {
             status: "borrador",
             created_by: userId,
           },
-          details: lines.map((l: any, idx: number) => ({
+          details: lines.map((l, idx) => ({
             line_number: idx + 1,
-            account_id: l.accountId!,
+            account_id: l.accountId,
             debit_amount: l.debit,
             credit_amount: l.credit,
             description: generalDescription,
@@ -2036,16 +2140,18 @@ async function runImport(jobId: string) {
         .eq("id", jobId);
     }
 
-    const { data: existingCategories } = await sb
+    const { data: existingCategoriesData } = await sb
       .from("fixed_asset_categories")
       .select("id, code")
       .eq("enterprise_id", enterpriseId);
-    existingCategories?.forEach((row: any) =>
+    const existingCategories = (existingCategoriesData ??
+      []) as AssetCategoryCodeRow[];
+    existingCategories.forEach((row) =>
       categoryIdByLegacy.set(String(row.code), row.id),
     );
     ds.assetCategories.forEach((cat) => {
-      const byCode = existingCategories?.find(
-        (row: any) => row.code === (cat.code || `LEG-${cat.legacyId}`),
+      const byCode = existingCategories.find(
+        (row) => row.code === (cat.code || `LEG-${cat.legacyId}`),
       );
       if (byCode) categoryIdByLegacy.set(String(cat.legacyId), byCode.id);
     });
@@ -2067,7 +2173,7 @@ async function runImport(jobId: string) {
         .select("tenant_id")
         .eq("id", enterpriseId)
         .single();
-      const tenantId = (ent as any)?.tenant_id;
+      const tenantId = (ent as EnterpriseTenantRow | null)?.tenant_id;
 
       let fallbackCategoryId: number | null =
         categoryIdByLegacy.size > 0
@@ -2092,9 +2198,28 @@ async function runImport(jobId: string) {
         }
       }
 
+      interface FixedAssetInsertRow {
+        enterprise_id: number;
+        tenant_id: number | undefined;
+        asset_code: string;
+        asset_name: string;
+        category_id: number;
+        acquisition_date: string;
+        in_service_date: string;
+        acquisition_cost: number;
+        residual_value: number;
+        useful_life_months: number;
+        currency: string;
+        status: "ACTIVE" | "DISPOSED";
+        notes: string | null;
+        created_by: string;
+        original_acquisition_cost: number;
+        original_residual_value: number;
+        exchange_rate_at_acquisition: number;
+      }
       let assetIdx = 0;
       const usedAssetCodes = new Set<string>();
-      const assetRows: any[] = [];
+      const assetRows: FixedAssetInsertRow[] = [];
       for (const a of ds.fixedAssets) {
         assetIdx++;
         const categoryId =
@@ -2220,13 +2345,13 @@ async function runImport(jobId: string) {
         steps_completed: Array.from(stepsCompleted),
       })
       .eq("id", jobId);
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Error fatal", e);
     await sb
       .from("tab_legacy_import_jobs")
       .update({
         status: "failed",
-        error_message: String(e?.message ?? e),
+        error_message: getErrorMessage(e),
         errors,
         result,
         finished_at: new Date().toISOString(),
@@ -2301,7 +2426,7 @@ Deno.serve(async (req) => {
           .from("tab_legacy_import_jobs")
           .insert({
             enterprise_id: enterpriseId,
-            tenant_id: (enterprise as any).tenant_id,
+            tenant_id: (enterprise as EnterpriseTenantRow).tenant_id,
             created_by: userId,
             status: "running",
             current_step: "Preparando borrado...",
@@ -2405,7 +2530,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, jobId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("legacy-import-runner error:", e);
     return new Response(JSON.stringify({ error: "Error interno al procesar la importación." }), {
       status: 500,
