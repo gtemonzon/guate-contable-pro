@@ -58,8 +58,10 @@ export function useActivePeriod(enterpriseId: number | null) {
 
         if (openPeriods?.[0]) {
           setActivePeriod(openPeriods[0]);
+          localStorage.setItem(`currentPeriodId_${enterpriseId}`, String(openPeriods[0].id));
           return;
         }
+
 
         const { data: anyPeriods } = await supabase
           .from('tab_accounting_periods')
