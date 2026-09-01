@@ -168,6 +168,9 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
           trend:  (liquidity - prevLiquidity) > 0 ? 'up' : (liquidity - prevLiquidity) < 0 ? 'down' : 'neutral',
         },
         asOfDate: effectiveEnd,
+        lastEntryDate,
+        lastEntryOutsidePeriod: !!lastEntryDate && (lastEntryDate > endDate || lastEntryDate < startDate),
+
       };
     },
   });
