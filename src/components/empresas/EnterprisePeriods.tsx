@@ -29,7 +29,6 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
 
   useEffect(() => {
     fetchPeriods();
-    loadActivePeriod();
   }, [enterpriseId]);
 
   const fetchPeriods = async () => {
@@ -42,7 +41,9 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
         .order("start_date", { ascending: false });
 
       if (error) throw error;
-      setPeriods(data || []);
+      const list = data || [];
+      setPeriods(list);
+      resolveActivePeriod(list);
     } catch (error: unknown) {
       toast({
         variant: "destructive",
@@ -54,10 +55,36 @@ export function EnterprisePeriods({ enterpriseId }: EnterprisePeriodsProps) {
     }
   };
 
-  const loadActivePeriod = () => {
-    const saved = localStorage.getItem(`currentPeriodId_${enterpriseId}`);
-    if (saved) setActivePeriodId(parseInt(saved));
+  /**
+   * El "período activo" vive en localStorage. Si apunta a un período que ya no
+   * existe o que fue cerrado, se limpia y se recalcula al abierto más reciente.
+   */
+  const resolveActivePeriod = (list: AccountingPeriod[]) => {
+    const key = `currentPeriodId_${enterpriseId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const match = list.find((p) => p.id === parseInt(saved));
+      if (match && match.status === "abierto") {
+        setActivePeriodId(match.id);
+        return;
+      }
+      localStorage.removeItem(key);
+    }
+
+    const fallback = list.find((p) => p.status === "abierto") || null;
+    if (fallback) {
+      localStorage.setItem(key, fallback.id.toString());
+      setActivePeriodId(fallback.id);
+      window.dispatchEvent(
+        new CustomEvent("periodChanged", {
+          detail: { enterpriseId, periodId: fallback.id },
+        })
+      );
+    } else {
+      setActivePeriodId(null);
+    }
   };
+
 
   const handleSetActivePeriod = async (periodId: number, period: AccountingPeriod) => {
     if (period.status !== "abierto") {

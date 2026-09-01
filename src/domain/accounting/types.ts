@@ -35,7 +35,12 @@ export interface KPIData {
   utilidadPeriodo: KPIMetric;
   liquidez: KPIMetric;
   asOfDate: string | null; // YYYY-MM-DD — date the balances are reported at
+  /** Fecha de la última partida contabilizada de TODA la empresa (sin acotar al período activo) */
+  lastEntryDate: string | null;
+  /** true si esa última partida cae fuera del rango del período activo */
+  lastEntryOutsidePeriod: boolean;
 }
+
 
 export interface KPIMetric {
   value: number;

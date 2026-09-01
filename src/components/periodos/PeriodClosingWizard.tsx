@@ -1145,12 +1145,21 @@ export function PeriodClosingWizard({
       
       if (closeError) throw closeError;
 
-      const activePeriodId = localStorage.getItem('activePeriodId');
-      if (activePeriodId === String(period.id)) {
-        localStorage.removeItem('activePeriodId');
-        localStorage.removeItem('activePeriodData');
-        window.dispatchEvent(new CustomEvent('periodChanged'));
+      // Limpiar el período activo guardado (clave real usada por Dashboard,
+      // Editar Empresa, Mayor General, Libro Mayor y Facturas por Cuenta).
+      const activeKey = `currentPeriodId_${enterpriseId}`;
+      if (localStorage.getItem(activeKey) === String(period.id)) {
+        localStorage.removeItem(activeKey);
       }
+      // Claves legacy
+      localStorage.removeItem('activePeriodId');
+      localStorage.removeItem('activePeriodData');
+      window.dispatchEvent(
+        new CustomEvent('periodChanged', {
+          detail: { enterpriseId, periodId: null },
+        })
+      );
+
       
       setClosingEntryStatus('contabilizado');
       setTransferEntryStatus('contabilizado');

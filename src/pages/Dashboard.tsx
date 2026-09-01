@@ -406,8 +406,16 @@ const Dashboard = () => {
             {new Date(kpiData.asOfDate + "T00:00:00").toLocaleDateString("es-GT", { day: "2-digit", month: "long", year: "numeric" })}
           </span>{" "}
           (fecha de la última partida registrada)
+          {kpiData.lastEntryOutsidePeriod && kpiData.lastEntryDate && (
+            <span className="ml-2 text-warning font-medium">
+              ⚠ Última partida de la empresa:{" "}
+              {new Date(kpiData.lastEntryDate + "T00:00:00").toLocaleDateString("es-GT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+              {activePeriod ? ` — fuera del período activo (${activePeriod.year})` : " — fuera del período activo"}
+            </span>
+          )}
         </p>
       )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
         {kpis.map((kpi) => (

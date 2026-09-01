@@ -203,27 +203,38 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
 
   const fetchActivePeriod = async () => {
     try {
-      const savedPeriodId = localStorage.getItem(`currentPeriodId_${enterprise.id}`);
-      
-      let query = supabase
+      const key = `currentPeriodId_${enterprise.id}`;
+      const savedPeriodId = localStorage.getItem(key);
+
+      if (savedPeriodId) {
+        const { data: saved } = await supabase
+          .from('tab_accounting_periods')
+          .select('*')
+          .eq('id', parseInt(savedPeriodId))
+          .eq('enterprise_id', enterprise.id)
+          .eq('status', 'abierto')
+          .maybeSingle();
+
+        if (saved) {
+          setActivePeriod(saved);
+          return;
+        }
+        // Guardado obsoleto (cerrado o inexistente): limpiar y recalcular.
+        localStorage.removeItem(key);
+      }
+
+      const { data } = await supabase
         .from('tab_accounting_periods')
         .select('*')
         .eq('enterprise_id', enterprise.id)
         .eq('status', 'abierto')
         .order('start_date', { ascending: false })
-        .limit(1);
-      
-      if (savedPeriodId) {
-        query = query.eq('id', parseInt(savedPeriodId));
-      }
-      
-      const { data } = await query.maybeSingle();
-      
+        .limit(1)
+        .maybeSingle();
+
       if (data) {
         setActivePeriod(data);
-        if (!savedPeriodId) {
-          localStorage.setItem(`currentPeriodId_${enterprise.id}`, data.id.toString());
-        }
+        localStorage.setItem(key, data.id.toString());
       } else {
         setActivePeriod(null);
       }
@@ -231,6 +242,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
       console.error('Error fetching active period:', error);
     }
   };
+
 
   useEffect(() => {
     fetchActivePeriod();
