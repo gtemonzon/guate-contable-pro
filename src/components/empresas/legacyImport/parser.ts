@@ -10,14 +10,16 @@ import {
   AccountTypeMap,
 } from "./types";
 
+type ExcelRow = Record<string, unknown>;
+
 /** NIT sin guión, sin espacios, mayúsculas. Sin verificación. */
-export function normalizeNit(raw: any): string {
+export function normalizeNit(raw: unknown): string {
   if (raw === null || raw === undefined) return "CF";
   const s = String(raw).trim().toUpperCase().replace(/[\s-]+/g, "");
   return s || "CF";
 }
 
-function mapClassification(raw: any): AccountTypeMap {
+function mapClassification(raw: unknown): AccountTypeMap {
   if (raw === null || raw === undefined) return "activo";
   const s = String(raw).trim().toLowerCase();
   const map: Record<string, AccountTypeMap> = {
@@ -31,7 +33,7 @@ function mapClassification(raw: any): AccountTypeMap {
   return map[s] ?? "activo";
 }
 
-function mapClaseToFel(raw: any): string {
+function mapClaseToFel(raw: unknown): string {
   const n = parseInt(String(raw).trim());
   switch (n) {
     case 1: return "FACT";
@@ -45,7 +47,7 @@ function mapClaseToFel(raw: any): string {
   }
 }
 
-function toIsoDate(raw: any): string {
+function toIsoDate(raw: unknown): string {
   if (!raw) return "";
   if (raw instanceof Date) return raw.toISOString().slice(0, 10);
   if (typeof raw === "number") {
@@ -61,13 +63,13 @@ function toIsoDate(raw: any): string {
   return "";
 }
 
-function num(v: any): number {
+function num(v: unknown): number {
   if (v === null || v === undefined || v === "") return 0;
-  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+  const n = Number(String(v).replace(/[^0-9.-]/g, ""));
   return isNaN(n) ? 0 : n;
 }
 
-function asBool(v: any): boolean {
+function asBool(v: unknown): boolean {
   if (v === true) return true;
   if (v === 1 || v === "1") return true;
   const s = String(v ?? "").trim().toLowerCase();
@@ -77,7 +79,16 @@ function asBool(v: any): boolean {
 const k = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
-function pickKey(row: any, candidates: string[]): any {
+// Legacy-ID columns (idCuenta, idPoliza, etc.) are always a string or number
+// in practice; anything else from a malformed sheet is stringified, matching
+// how every downstream consumer already treats these values via String(...).
+function asLegacyId(v: unknown): string | number | undefined {
+  if (typeof v === "string" || typeof v === "number") return v;
+  if (v === null || v === undefined) return undefined;
+  return String(v);
+}
+
+function pickKey(row: ExcelRow, candidates: string[]): unknown {
   const keys = Object.keys(row);
   const norm = new Map(keys.map((kk) => [k(kk), kk]));
   for (const c of candidates) {
@@ -91,14 +102,14 @@ function pickKey(row: any, candidates: string[]): any {
 // PARSERS
 // ============================================================
 
-function parseAccounts(rows: any[]): ParsedAccount[] {
+function parseAccounts(rows: ExcelRow[]): ParsedAccount[] {
   return rows
     .map((r) => {
       const code = String(pickKey(r, ["cuenta", "codigo", "account_code"]) ?? "").trim();
       const name = String(pickKey(r, ["descripcion", "nombre", "account_name"]) ?? "").trim();
       const cls = pickKey(r, ["clasificacion", "tipo", "type"]);
       const mov = pickKey(r, ["movimiento", "permite_movimiento", "allows_movement"]);
-      const legacyId = pickKey(r, ["idcuenta", "id_cuenta", "id"]);
+      const legacyId = asLegacyId(pickKey(r, ["idcuenta", "id_cuenta", "id"]));
       const parent = pickKey(r, ["padre", "parent"]);
       return {
         code,
@@ -112,7 +123,7 @@ function parseAccounts(rows: any[]): ParsedAccount[] {
     .filter((a) => a.code && a.name);
 }
 
-function parsePurchases(rows: any[]): ParsedPurchase[] {
+function parsePurchases(rows: ExcelRow[]): ParsedPurchase[] {
   return rows
     .map((r, idx) => {
       const bienes = num(pickKey(r, ["precio", "bienes"]));
@@ -148,7 +159,7 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
       const netAmount = Math.max(0, columnWithVat - ivaRaw);
       const total = columnWithVat + exemptAmount;
 
-      const excelRow = typeof (r as any).__rowNum__ === "number" ? (r as any).__rowNum__ + 1 : idx + 2;
+      const excelRow = typeof r.__rowNum__ === "number" ? r.__rowNum__ + 1 : idx + 2;
 
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
@@ -165,14 +176,14 @@ function parsePurchases(rows: any[]): ParsedPurchase[] {
         operationTypeCode,
         authorizationNumber:
           String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
-        legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
+        legacyAccountId: asLegacyId(pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"])),
         excelRow,
       };
     })
     .filter((p) => p.date && p.totalAmount > 0);
 }
 
-function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } {
+function parseSales(rows: ExcelRow[]): { sales: ParsedSale[]; hasBranches: boolean } {
   let hasBranches = false;
   const sales = rows
     .map((r, idx) => {
@@ -194,7 +205,7 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
 
       const netAmount = Math.max(0, columnWithVat - ivaRaw);
       const total = columnWithVat;
-      const excelRow = typeof (r as any).__rowNum__ === "number" ? (r as any).__rowNum__ + 1 : idx + 2;
+      const excelRow = typeof r.__rowNum__ === "number" ? r.__rowNum__ + 1 : idx + 2;
 
       return {
         date: toIsoDate(pickKey(r, ["fecha", "fecha_factura", "date"])),
@@ -207,7 +218,7 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
         vatAmount: ivaRaw,
         totalAmount: total,
         operationTypeCode,
-        legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"]),
+        legacyAccountId: asLegacyId(pickKey(r, ["idcuenta", "id_cuenta", "cuenta_id"])),
         authorizationNumber:
           String(pickKey(r, ["autorizacion", "numero_autorizacion"]) ?? "").trim() || "IMPORTADO",
         branchCode: branch && branch !== "0" ? branch : undefined,
@@ -219,8 +230,8 @@ function parseSales(rows: any[]): { sales: ParsedSale[]; hasBranches: boolean } 
 }
 
 function parseJournal(
-  headers: any[],
-  details: any[],
+  headers: ExcelRow[],
+  details: ExcelRow[],
   accounts: ParsedAccount[]
 ): ParsedJournalEntry[] {
   // Mapeo idCuenta legacy -> account_code
@@ -232,7 +243,7 @@ function parseJournal(
     codeByLegacyId.set(a.code, a.code);
   });
 
-  const detailsByEntry = new Map<string, any[]>();
+  const detailsByEntry = new Map<string, ExcelRow[]>();
   for (const d of details) {
     const eid = String(pickKey(d, ["npoliza", "id_diario", "iddiario", "id_partida"]) ?? "");
     if (!eid) continue;
@@ -242,7 +253,7 @@ function parseJournal(
 
   return headers
     .map((h) => {
-      const legacyId = pickKey(h, ["idpoliza", "npoliza", "id"]);
+      const legacyId = asLegacyId(pickKey(h, ["idpoliza", "npoliza", "id"]));
       const date = toIsoDate(pickKey(h, ["fecha", "date"]));
       const description = String(
         pickKey(h, ["concepto", "descripcion", "description"]) ?? "Importación legado"
@@ -266,7 +277,7 @@ function parseJournal(
           // En tbl_diarioDetalle la columna "cuenta" contiene el idCuenta legacy (FK a tbl_cuentas).
           // "idcta" / "idctaDetalle" son identificadores internos del detalle, no del catálogo.
           const legacyAccountId =
-            pickKey(d, ["cuenta", "idcuenta", "id_cuenta", "cuenta_id", "idcta"]);
+            asLegacyId(pickKey(d, ["cuenta", "idcuenta", "id_cuenta", "cuenta_id", "idcta"]));
           const accountCode =
             codeByLegacyId.get(String(legacyAccountId)) ?? "";
           return {
@@ -291,18 +302,18 @@ function parseJournal(
     .filter((e) => e.date && e.lines.length > 0);
 }
 
-function parseAssetCategories(rows: any[]): ParsedAssetCategory[] {
+function parseAssetCategories(rows: ExcelRow[]): ParsedAssetCategory[] {
   return rows
     .map((r) => ({
-      legacyId: pickKey(r, ["idregistro", "id"]) ?? "",
+      legacyId: asLegacyId(pickKey(r, ["idregistro", "id"])) ?? "",
       code: String(pickKey(r, ["codigo", "code"]) ?? "").trim(),
       name: String(pickKey(r, ["nombrecuenta", "nombre", "name"]) ?? "").trim(),
-      legacyAccountId: pickKey(r, ["idcuenta", "id_cuenta"]),
+      legacyAccountId: asLegacyId(pickKey(r, ["idcuenta", "id_cuenta"])),
     }))
     .filter((c) => c.legacyId !== "" && c.name);
 }
 
-function parseFixedAssets(rows: any[]): ParsedFixedAsset[] {
+function parseFixedAssets(rows: ExcelRow[]): ParsedFixedAsset[] {
   return rows
     .map((r, idx) => {
       const tiempoVida = num(pickKey(r, ["tiempovida", "vida_util", "useful_life"]));
@@ -313,7 +324,7 @@ function parseFixedAssets(rows: any[]): ParsedFixedAsset[] {
         unidadTiempo.startsWith("a") ? Math.round(tiempoVida * 12) : Math.round(tiempoVida);
       const status = asBool(pickKey(r, ["status"])) ? "ACTIVE" : "DISPOSED";
       const codigo = String(pickKey(r, ["codact", "codigo", "code"]) ?? "").trim();
-      const idEquipo = pickKey(r, ["idequipo", "id"]);
+      const idEquipo = asLegacyId(pickKey(r, ["idequipo", "id"]));
       return {
         code: codigo || `LEG-${idEquipo ?? idx + 1}`,
         name: String(pickKey(r, ["nombre", "name"]) ?? "Activo importado").trim(),
@@ -327,7 +338,7 @@ function parseFixedAssets(rows: any[]): ParsedFixedAsset[] {
         residualValue: num(pickKey(r, ["valor_desecho", "residual"])),
         accumulatedDepreciation: num(pickKey(r, ["depreciacion"])),
         usefulLifeMonths: months > 0 ? months : 60,
-        legacyCategoryId: pickKey(r, ["clasificacion", "category_id"]),
+        legacyCategoryId: asLegacyId(pickKey(r, ["clasificacion", "category_id"])),
         status: status as "ACTIVE" | "DISPOSED",
       };
     })
@@ -342,12 +353,12 @@ export async function parseXlsx(file: File): Promise<ParsedDataset> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
 
-  const findSheet = (...names: string[]) => {
+  const findSheet = (...names: string[]): ExcelRow[] => {
     for (const n of names) {
       const found = wb.SheetNames.find(
         (s) => k(s) === k(n)
       );
-      if (found) return XLSX.utils.sheet_to_json(wb.Sheets[found], { defval: null }) as any[];
+      if (found) return XLSX.utils.sheet_to_json<ExcelRow>(wb.Sheets[found], { defval: null });
     }
     return [];
   };

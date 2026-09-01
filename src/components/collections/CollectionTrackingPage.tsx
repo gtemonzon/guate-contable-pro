@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -92,6 +93,43 @@ interface Props {
   title: string;
 }
 
+// Looks up third-party name + document number for a set of source ledger ids.
+// Split by direction (rather than a dynamic table/column name) because
+// Supabase's typed client can't correlate two separately-computed literal
+// unions (table name + column name) that are only valid in matching pairs —
+// it type-checks every combination, including the invalid ones.
+async function fetchLedgerNamesMap(
+  direction: "cxc" | "cxp",
+  ids: number[],
+): Promise<Map<number, { name: string; doc: string }>> {
+  const map = new Map<number, { name: string; doc: string }>();
+  if (ids.length === 0) return map;
+  if (direction === "cxc") {
+    const { data } = await supabase
+      .from("tab_sales_ledger")
+      .select("id,customer_name,invoice_series,invoice_number")
+      .in("id", ids);
+    (data || []).forEach((l) => {
+      map.set(l.id, {
+        name: l.customer_name || "",
+        doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+      });
+    });
+  } else {
+    const { data } = await supabase
+      .from("tab_purchase_ledger")
+      .select("id,supplier_name,invoice_series,invoice_number")
+      .in("id", ids);
+    (data || []).forEach((l) => {
+      map.set(l.id, {
+        name: l.supplier_name || "",
+        doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+      });
+    });
+  }
+  return map;
+}
+
 function daysBetween(a: string, b: Date) {
   const d = new Date(a + "T00:00:00");
   const diffMs = d.getTime() - new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
@@ -140,13 +178,13 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     (async () => {
       if (!selectedEnterprise || !moduleEnabled) { setEnterpriseModuleEnabled(null); return; }
       const { data } = await supabase
-        .from("tab_enterprise_modules" as any)
+        .from("tab_enterprise_modules")
         .select("is_enabled")
         .eq("enterprise_id", selectedEnterprise.id)
         .eq("module_key", direction)
         .maybeSingle();
       if (cancelled) return;
-      setEnterpriseModuleEnabled(!!(data as any)?.is_enabled);
+      setEnterpriseModuleEnabled(!!data?.is_enabled);
     })();
     return () => { cancelled = true; };
   }, [selectedEnterprise, direction, moduleEnabled]);
@@ -170,19 +208,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     const base = (data || []) as TrackingRow[];
     const ids = base.map((r) => r.source_ledger_id);
     if (ids.length > 0) {
-      const table = direction === "cxc" ? "tab_sales_ledger" : "tab_purchase_ledger";
-      const nameCol = direction === "cxc" ? "customer_name" : "supplier_name";
-      const { data: ledger } = await supabase
-        .from(table as any)
-        .select(`id,${nameCol},invoice_series,invoice_number`)
-        .in("id", ids);
-      const map = new Map<number, { name: string; doc: string }>();
-      (ledger || []).forEach((l: any) => {
-        map.set(l.id, {
-          name: l[nameCol] || "",
-          doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-        });
-      });
+      const map = await fetchLedgerNamesMap(direction, ids);
       base.forEach((r) => {
         const m = map.get(r.source_ledger_id);
         r.third_party_name = m?.name || "—";
@@ -582,6 +608,10 @@ type PaymentMethod = "efectivo" | "cheque" | "transferencia" | "otro";
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   efectivo: "Efectivo", cheque: "Cheque", transferencia: "Transferencia", otro: "Otro",
 };
+// tab_collection_payments.payment_method is a free-text column in the DB,
+// but the only writer (PaymentDialog below) constrains it to PaymentMethod.
+const isPaymentMethod = (v: string | null): v is PaymentMethod =>
+  v === "efectivo" || v === "cheque" || v === "transferencia" || v === "otro";
 
 interface BankAccountOption {
   id: number;
@@ -597,7 +627,7 @@ async function fetchBankAccounts(enterpriseId: number): Promise<BankAccountOptio
     .eq("enterprise_id", enterpriseId)
     .eq("is_active", true)
     .order("bank_name", { ascending: true });
-  return ((data || []) as any[]).map((b) => ({
+  return (data || []).map((b) => ({
     id: Number(b.id), bank_name: b.bank_name, account_number: b.account_number, account_id: b.account_id ?? null,
   }));
 }
@@ -629,7 +659,7 @@ function PaymentDialog({ row, onClose }: { row: TrackingRow; onClose: (r: boolea
       payment_method: method,
       receipt_number: receiptNumber.trim() || null,
       bank_account_id: method === "transferencia" ? Number(bankAccountId) : null,
-    } as any);
+    });
     if (payErr) { setSaving(false); toast({ title: "Error", description: payErr.message, variant: "destructive" }); return; }
 
     const newPaid = Number(row.amount_paid) + amt;
@@ -728,13 +758,13 @@ function PaymentsHistoryDialog({ row, onClose }: { row: TrackingRow; onClose: ()
         .select("id,amount,payment_date,note,created_at,payment_method,receipt_number,bank_account_id,journal_entry_id")
         .eq("tracking_id", row.id)
         .order("payment_date", { ascending: false });
-      const list = (data || []) as any[];
+      const list = (data || []) as PaymentRow[];
       const bankIds = Array.from(new Set(list.map((p) => p.bank_account_id).filter(Boolean)));
       const bankMap = new Map<number, { name: string; number: string }>();
       if (bankIds.length > 0) {
         const { data: banks } = await supabase.from("tab_bank_accounts")
           .select("id,bank_name,account_number").in("id", bankIds);
-        (banks || []).forEach((b: any) => bankMap.set(Number(b.id), { name: b.bank_name, number: b.account_number }));
+        (banks || []).forEach((b) => bankMap.set(Number(b.id), { name: b.bank_name, number: b.account_number }));
       }
       list.forEach((p) => {
         if (p.bank_account_id && bankMap.has(p.bank_account_id)) {
@@ -808,7 +838,7 @@ function StatusChangeDialog({ row, enterpriseId, direction, onClose }: {
         .eq("is_active", true)
         .in("direction", ["both", direction])
         .order("sort_order", { ascending: true });
-      const opts = (data || []).map((r: any) => ({ id: r.id, text: r.reason_text }));
+      const opts = (data || []).map((r) => ({ id: r.id, text: r.reason_text }));
       setReasonOptions(opts);
       if (opts.length > 0) setSelectedReasonId(String(opts[0].id));
     })();
@@ -835,12 +865,12 @@ function StatusChangeDialog({ row, enterpriseId, direction, onClose }: {
     setSaving(true);
     const { id: userId, name: userName } = await getCurrentUserInfo();
 
-    const update: Record<string, unknown> = { status: newStatus };
+    const update: Database['public']['Tables']['tab_collection_tracking']['Update'] = { status: newStatus };
     if (newStatus === "pagada" && markFullyPaid) {
       update.amount_paid = Number(row.amount_total);
     }
 
-    const { error: updErr } = await supabase.from("tab_collection_tracking").update(update as any).eq("id", row.id);
+    const { error: updErr } = await supabase.from("tab_collection_tracking").update(update).eq("id", row.id);
     if (updErr) { setSaving(false); toast({ title: "Error", description: updErr.message, variant: "destructive" }); return; }
 
     await supabase.from("tab_collection_status_history").insert({
@@ -987,7 +1017,7 @@ function InitialBalancesDialog({
         .select("source_ledger_id")
         .eq("enterprise_id", enterpriseId)
         .eq("direction", direction);
-      const existingIds = new Set((existing || []).map((r: any) => Number(r.source_ledger_id)));
+      const existingIds = new Set((existing || []).map((r) => Number(r.source_ledger_id)));
 
       // 2. Get default term days for enterprise
       const { data: term } = await supabase.from("tab_collection_terms")
@@ -995,27 +1025,44 @@ function InitialBalancesDialog({
         .eq("enterprise_id", enterpriseId)
         .eq("is_default", true)
         .maybeSingle();
-      const defaultDays = (term as any)?.days ?? 30;
+      const defaultDays = term?.days ?? 30;
 
-      // 3. Fetch ledger
-      const table = direction === "cxc" ? "tab_sales_ledger" : "tab_purchase_ledger";
-      const nameCol = direction === "cxc" ? "customer_name" : "supplier_name";
-      const { data: ledger } = await supabase
-        .from(table as any)
-        .select(`id,invoice_date,${nameCol},invoice_series,invoice_number,total_amount`)
-        .eq("enterprise_id", enterpriseId)
-        .order("invoice_date", { ascending: false })
-        .limit(2000);
-
-      const rawList = ((ledger || []) as any[])
-        .filter((l) => !existingIds.has(Number(l.id)))
-        .map((l) => ({
-          id: Number(l.id),
-          invoice_date: l.invoice_date as string,
-          third_party_name: l[nameCol] || "",
-          document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-          total_amount: Number(l.total_amount) || 0,
-        }));
+      // 3. Fetch ledger (split by direction — see fetchLedgerNamesMap for why)
+      type RawCandidate = { id: number; invoice_date: string; third_party_name: string; document_number: string; total_amount: number };
+      let rawList: RawCandidate[];
+      if (direction === "cxc") {
+        const { data: ledger } = await supabase
+          .from("tab_sales_ledger")
+          .select("id,invoice_date,customer_name,invoice_series,invoice_number,total_amount")
+          .eq("enterprise_id", enterpriseId)
+          .order("invoice_date", { ascending: false })
+          .limit(2000);
+        rawList = (ledger || [])
+          .filter((l) => !existingIds.has(l.id))
+          .map((l) => ({
+            id: l.id,
+            invoice_date: l.invoice_date,
+            third_party_name: l.customer_name || "",
+            document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+            total_amount: Number(l.total_amount) || 0,
+          }));
+      } else {
+        const { data: ledger } = await supabase
+          .from("tab_purchase_ledger")
+          .select("id,invoice_date,supplier_name,invoice_series,invoice_number,total_amount")
+          .eq("enterprise_id", enterpriseId)
+          .order("invoice_date", { ascending: false })
+          .limit(2000);
+        rawList = (ledger || [])
+          .filter((l) => !existingIds.has(l.id))
+          .map((l) => ({
+            id: l.id,
+            invoice_date: l.invoice_date,
+            third_party_name: l.supplier_name || "",
+            document_number: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
+            total_amount: Number(l.total_amount) || 0,
+          }));
+      }
 
       // Compute suggested_due_date via RPC (respects business-day adjustment).
       const list: LedgerCandidate[] = await Promise.all(
@@ -1207,7 +1254,7 @@ function GeneratePolizaDialog({
     const { data: tr } = await supabase.from("tab_collection_tracking")
       .select("id,source_ledger_id")
       .eq("enterprise_id", enterpriseId).eq("direction", direction);
-    const trList = (tr || []) as any[];
+    const trList = tr || [];
     const trIds = trList.map((t) => Number(t.id));
     if (trIds.length === 0) { setPayments([]); setLoading(false); setStep(2); return; }
 
@@ -1219,31 +1266,20 @@ function GeneratePolizaDialog({
       .gte("payment_date", dateFrom)
       .lte("payment_date", dateTo)
       .order("payment_date", { ascending: true });
-    const payList = (pays || []) as any[];
+    const payList = pays || [];
 
     // 3. enrich third-party from ledger via tracking source_ledger_id
     const trMap = new Map<number, number>();
     trList.forEach((t) => trMap.set(Number(t.id), Number(t.source_ledger_id)));
     const ledgerIds = Array.from(new Set(payList.map((p) => trMap.get(Number(p.tracking_id))).filter(Boolean) as number[]));
-    const ledgerMap = new Map<number, { name: string; doc: string }>();
-    if (ledgerIds.length > 0) {
-      const table = direction === "cxc" ? "tab_sales_ledger" : "tab_purchase_ledger";
-      const nameCol = direction === "cxc" ? "customer_name" : "supplier_name";
-      const { data: ledger } = await supabase.from(table as any)
-        .select(`id,${nameCol},invoice_series,invoice_number`).in("id", ledgerIds);
-      (ledger || []).forEach((l: any) => {
-        ledgerMap.set(Number(l.id), {
-          name: l[nameCol] || "", doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-        });
-      });
-    }
+    const ledgerMap = await fetchLedgerNamesMap(direction, ledgerIds);
 
     const enriched: PendingPayment[] = payList.map((p) => {
       const ledgerId = trMap.get(Number(p.tracking_id)) || 0;
       const info = ledgerMap.get(ledgerId);
       return {
         id: Number(p.id), tracking_id: Number(p.tracking_id), amount: Number(p.amount),
-        payment_date: p.payment_date, payment_method: p.payment_method,
+        payment_date: p.payment_date, payment_method: isPaymentMethod(p.payment_method) ? p.payment_method : null,
         bank_account_id: p.bank_account_id ? Number(p.bank_account_id) : null,
         receipt_number: p.receipt_number, source_ledger_id: ledgerId,
         third_party_name: info?.name || "—", document_number: info?.doc || "—",
@@ -1303,8 +1339,8 @@ function GeneratePolizaDialog({
         .select("customers_account_id,suppliers_account_id")
         .eq("enterprise_id", enterpriseId).maybeSingle();
       const thirdPartyAccId = direction === "cxc"
-        ? (cfg as any)?.customers_account_id
-        : (cfg as any)?.suppliers_account_id;
+        ? cfg?.customers_account_id
+        : cfg?.suppliers_account_id;
       if (!thirdPartyAccId) {
         throw new Error(direction === "cxc"
           ? "Configura la cuenta de Clientes en Configuración de la empresa."
@@ -1364,13 +1400,13 @@ function GeneratePolizaDialog({
             : `${descBase} del mes ${entryDate.slice(0, 7)}`;
 
         const { data: je, error: jeErr } = await supabase.from("tab_journal_entries").insert({
-          enterprise_id: enterpriseId, accounting_period_id: (period as any).id,
+          enterprise_id: enterpriseId, accounting_period_id: period.id,
           entry_number: entryNumber, entry_date: entryDate, entry_type: "diario",
           description, total_debit: groupTotal, total_credit: groupTotal,
           is_posted: false, created_by: userId,
-        } as any).select("id").single();
+        }).select("id").single();
         if (jeErr) throw jeErr;
-        const journalEntryId = Number((je as any).id);
+        const journalEntryId = Number(je.id);
 
         // Build detail lines: aggregate by bank account
         const bankAgg = new Map<number, number>(); // bank_account_id -> total
@@ -1381,7 +1417,7 @@ function GeneratePolizaDialog({
           thirdPartyTotal += p.amount;
         });
 
-        const details: any[] = [];
+        const details: Database['public']['Tables']['tab_journal_entry_details']['Insert'][] = [];
         let lineNumber = 1;
         // Debit/Credit assignment
         if (direction === "cxc") {
@@ -1424,7 +1460,7 @@ function GeneratePolizaDialog({
         // Mark payments with journal_entry_id
         const paymentIds = list.map((p) => p.id);
         await supabase.from("tab_collection_payments")
-          .update({ journal_entry_id: journalEntryId } as any).in("id", paymentIds);
+          .update({ journal_entry_id: journalEntryId }).in("id", paymentIds);
 
         entriesCreated++;
       }
@@ -1434,8 +1470,10 @@ function GeneratePolizaDialog({
         description: `${entriesCreated} póliza(s) creada(s) por un total de ${formatCurrency(totalAmount)}.`,
       });
       onClose(true);
-    } catch (e: any) {
-      toast({ title: "Error al generar póliza", description: e?.message || String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      const rawMessage = e && typeof e === "object" && "message" in e ? (e as { message?: unknown }).message : undefined;
+      const message = rawMessage ? String(rawMessage) : String(e);
+      toast({ title: "Error al generar póliza", description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
