@@ -69,6 +69,8 @@ interface ParsedJournalEntry {
   description: string;
   reference?: string;
   lines: ParsedJournalLine[];
+  isBalancedFlag?: boolean;
+  isPostedFlag?: boolean;
 }
 interface ParsedAssetCategory {
   legacyId: string | number;

@@ -35,12 +35,12 @@ function EnterpriseModulesSection({ enterpriseId }: { enterpriseId: number }) {
     (async () => {
       setLoading(true);
       const { data } = await supabase
-        .from("tab_enterprise_modules" as any)
+        .from("tab_enterprise_modules")
         .select("module_key,is_enabled")
         .eq("enterprise_id", enterpriseId);
       if (cancelled) return;
       const next: Record<string, boolean> = {};
-      (data as any[] | null)?.forEach((r) => { next[r.module_key] = !!r.is_enabled; });
+      data?.forEach((r) => { next[r.module_key] = !!r.is_enabled; });
       setState(next);
       setLoading(false);
     })();
@@ -51,13 +51,13 @@ function EnterpriseModulesSection({ enterpriseId }: { enterpriseId: number }) {
     setSavingKey(moduleKey);
     setState((s) => ({ ...s, [moduleKey]: next }));
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from("tab_enterprise_modules" as any).upsert(
+    const { error } = await supabase.from("tab_enterprise_modules").upsert(
       {
         enterprise_id: enterpriseId,
         module_key: moduleKey,
         is_enabled: next,
         updated_by: user?.id ?? null,
-      } as any,
+      },
       { onConflict: "enterprise_id,module_key" },
     );
     setSavingKey(null);
@@ -119,7 +119,7 @@ export function CollectionSettingsManager() {
         .select("adjust_to_business_days")
         .eq("enterprise_id", enterpriseId)
         .maybeSingle();
-      setAdjust(!!(data as any)?.adjust_to_business_days);
+      setAdjust(!!data?.adjust_to_business_days);
       setLoading(false);
     })();
   }, [enterpriseId]);
@@ -131,7 +131,7 @@ export function CollectionSettingsManager() {
     const { error } = await supabase.from("tab_collection_settings").upsert({
       enterprise_id: enterpriseId,
       adjust_to_business_days: next,
-    } as any, { onConflict: "enterprise_id" });
+    }, { onConflict: "enterprise_id" });
     setSaving(false);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });

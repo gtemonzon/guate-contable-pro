@@ -377,13 +377,35 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           });
         });
 
-        // Search collection tracking (CxC / CxP) — reuse matched purchase/sales IDs
-        const trackingDirs: Array<{ dir: "cxc" | "cxp"; ledgerIds: number[] }> = [];
+        // Search collection tracking (CxC / CxP) — reuse matched purchase/sales IDs.
+        // Third-party label is resolved here (per direction, with its own concrete
+        // row shape) rather than deferred into a union-typed lookup below, since
+        // TypeScript can't statically correlate "dir" with which shape applies.
+        interface TrackingLabel {
+          thirdParty: string;
+          invoiceLabel: string;
+        }
+        const trackingDirs: Array<{
+          dir: "cxc" | "cxp";
+          ledgerIds: number[];
+          labelById: Map<number, TrackingLabel>;
+        }> = [];
         if (hasCxc && sales.data && sales.data.length > 0) {
-          trackingDirs.push({ dir: "cxc", ledgerIds: sales.data.map((s: any) => s.id) });
+          const labelById = new Map<number, TrackingLabel>();
+          sales.data.forEach((s) => {
+            labelById.set(s.id, { thirdParty: s.customer_name, invoiceLabel: s.invoice_number });
+          });
+          trackingDirs.push({ dir: "cxc", ledgerIds: sales.data.map((s) => s.id), labelById });
         }
         if (hasCxp && purchases.data && purchases.data.length > 0) {
-          trackingDirs.push({ dir: "cxp", ledgerIds: purchases.data.map((p: any) => p.id) });
+          const labelById = new Map<number, TrackingLabel>();
+          purchases.data.forEach((p) => {
+            labelById.set(p.id, {
+              thirdParty: p.supplier_name,
+              invoiceLabel: `${p.invoice_series ? `${p.invoice_series}-` : ""}${p.invoice_number}`,
+            });
+          });
+          trackingDirs.push({ dir: "cxp", ledgerIds: purchases.data.map((p) => p.id), labelById });
         }
 
         if (trackingDirs.length > 0) {
@@ -406,17 +428,11 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
           };
 
           trackingResults.forEach((res, idx) => {
-            const { dir } = trackingDirs[idx];
-            const sourceRows: any[] = dir === "cxc" ? sales.data || [] : purchases.data || [];
-            const sourceMap = new Map<number, any>(sourceRows.map((r) => [r.id, r]));
+            const { dir, labelById } = trackingDirs[idx];
 
-            (res.data || []).forEach((t: any) => {
-              const src = sourceMap.get(t.source_ledger_id);
-              if (!src) return;
-              const thirdParty = dir === "cxc" ? src.customer_name : src.supplier_name;
-              const invoiceLabel = dir === "cxc"
-                ? src.invoice_number
-                : `${src.invoice_series ? `${src.invoice_series}-` : ""}${src.invoice_number}`;
+            (res.data || []).forEach((t) => {
+              const label = labelById.get(t.source_ledger_id);
+              if (!label) return;
               const balance = Number(t.amount_total) - Number(t.amount_paid || 0);
               const route = dir === "cxc"
                 ? `/cuentas-por-cobrar?highlight=${t.id}`
@@ -424,7 +440,7 @@ export function GlobalSearchPalette({ enterpriseId }: GlobalSearchPaletteProps) 
               allResults.push({
                 id: `tracking-${dir}-${t.id}`,
                 category: "cobros_pagos",
-                title: `Fact. ${invoiceLabel} - ${thirdParty}`,
+                title: `Fact. ${label.invoiceLabel} - ${label.thirdParty}`,
                 subtitle: `${statusLabel[t.status] || t.status} · Vence ${t.due_date}`,
                 meta: `Saldo ${formatCurrency(balance)}`,
                 route,

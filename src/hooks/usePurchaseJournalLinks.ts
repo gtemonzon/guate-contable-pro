@@ -21,7 +21,7 @@ export function usePurchaseJournalLinks() {
     if (!user) throw new Error("Usuario no autenticado");
 
     const { error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .upsert({
         enterprise_id: enterpriseId,
         purchase_id: purchaseId,
@@ -54,7 +54,7 @@ export function usePurchaseJournalLinks() {
     }));
 
     const { error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .upsert(rows, { onConflict: "enterprise_id,purchase_id" });
 
     if (error) throw error;
@@ -62,7 +62,7 @@ export function usePurchaseJournalLinks() {
 
   const removeLink = useCallback(async (enterpriseId: number, purchaseId: number) => {
     const { error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .delete()
       .eq("enterprise_id", enterpriseId)
       .eq("purchase_id", purchaseId);
@@ -72,7 +72,7 @@ export function usePurchaseJournalLinks() {
 
   const removeLinksForEntry = useCallback(async (enterpriseId: number, journalEntryId: number) => {
     const { error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .delete()
       .eq("enterprise_id", enterpriseId)
       .eq("journal_entry_id", journalEntryId);
@@ -82,7 +82,7 @@ export function usePurchaseJournalLinks() {
 
   const getLinksForEntry = useCallback(async (journalEntryId: number) => {
     const { data, error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .select("*")
       .eq("journal_entry_id", journalEntryId);
 
@@ -98,7 +98,7 @@ export function usePurchaseJournalLinks() {
   ) => {
     // Get all purchase IDs that already have links
     const { data: linked } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .select("purchase_id")
       .eq("enterprise_id", enterpriseId);
 
@@ -134,7 +134,7 @@ export function usePurchaseJournalLinks() {
 
   const getLinkForPurchase = useCallback(async (enterpriseId: number, purchaseId: number) => {
     const { data, error } = await supabase
-      .from("tab_purchase_journal_links" as any)
+      .from("tab_purchase_journal_links")
       .select("*, tab_journal_entries!inner(entry_number, id)")
       .eq("enterprise_id", enterpriseId)
       .eq("purchase_id", purchaseId)

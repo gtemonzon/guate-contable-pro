@@ -31,7 +31,7 @@ export function CollectionTermsManager() {
       .select("*")
       .eq("enterprise_id", enterpriseId)
       .order("days", { ascending: true });
-    setItems((data || []) as any);
+    setItems(data || []);
     setLoading(false);
   };
 
@@ -45,7 +45,7 @@ export function CollectionTermsManager() {
       days,
       is_default: isFirst,
       sort_order: days,
-    } as any);
+    });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     setNewDays("");
     await load();
@@ -59,8 +59,8 @@ export function CollectionTermsManager() {
 
   const markDefault = async (id: number) => {
     if (!enterpriseId) return;
-    await supabase.from("tab_collection_terms").update({ is_default: false } as any).eq("enterprise_id", enterpriseId);
-    await supabase.from("tab_collection_terms").update({ is_default: true } as any).eq("id", id);
+    await supabase.from("tab_collection_terms").update({ is_default: false }).eq("enterprise_id", enterpriseId);
+    await supabase.from("tab_collection_terms").update({ is_default: true }).eq("id", id);
     await load();
   };
 
@@ -70,7 +70,7 @@ export function CollectionTermsManager() {
       { enterprise_id: enterpriseId, days: 30, is_default: true, sort_order: 30 },
       { enterprise_id: enterpriseId, days: 60, is_default: false, sort_order: 60 },
       { enterprise_id: enterpriseId, days: 90, is_default: false, sort_order: 90 },
-    ] as any);
+    ]);
     await load();
   };
 
