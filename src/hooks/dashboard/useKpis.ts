@@ -75,21 +75,34 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
     queryFn: async () => {
       const { startDate, endDate, prevStartDate, prevEndDate } = buildDateRange(activePeriod);
 
-      // Find the date of the last posted entry within the active period (clamped to endDate).
-      // Use it as the effective "as-of" date so KPIs reflect the actual most recent data.
+      // Última partida contabilizada de TODA la empresa (sin acotar al período activo),
+      // para poder avisar cuando hay actividad fuera del período activo.
       let effectiveEnd = endDate;
       let effectivePrevEnd = prevEndDate;
+      let lastEntryDate: string | null = null;
       if (enterpriseId) {
-        const { data: lastRow } = await supabase
-          .from('tab_journal_entries')
-          .select('entry_date')
-          .eq('enterprise_id', enterpriseId)
-          .eq('is_posted', true)
-          .is('deleted_at', null)
-          .lte('entry_date', endDate)
-          .order('entry_date', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const [{ data: globalRow }, { data: lastRow }] = await Promise.all([
+          supabase
+            .from('tab_journal_entries')
+            .select('entry_date')
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .order('entry_date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('tab_journal_entries')
+            .select('entry_date')
+            .eq('enterprise_id', enterpriseId)
+            .eq('is_posted', true)
+            .is('deleted_at', null)
+            .lte('entry_date', endDate)
+            .order('entry_date', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        lastEntryDate = globalRow?.entry_date ?? null;
         if (lastRow?.entry_date) {
           effectiveEnd = lastRow.entry_date;
           const d = new Date(effectiveEnd);
@@ -97,6 +110,7 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
           effectivePrevEnd = d.toISOString().split('T')[0];
         }
       }
+
 
       // Use the same RPCs as the Balance General report so the dashboard KPIs
       // match exactly (excludes closing/transfer/voided entries, applies fiscal floor).
