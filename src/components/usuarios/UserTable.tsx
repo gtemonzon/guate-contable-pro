@@ -97,7 +97,11 @@ const UserTable = ({ users, onEdit }: Props) => {
         </TableHeader>
         <TableBody>
           {sorted.map((user) => (
-            <TableRow key={user.id}>
+            <TableRow
+              key={user.id}
+              onClick={() => onEdit(user)}
+              className="cursor-pointer hover:bg-muted/50 transition-colors"
+            >
               <TableCell>
                 <ActivityIndicator
                   lastActivityAt={user.last_activity_at ?? null}
@@ -126,7 +130,7 @@ const UserTable = ({ users, onEdit }: Props) => {
                 {user.current_enterprise_name || "—"}
               </TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(user)}>
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(user); }}>
                   <Edit className="h-4 w-4" />
                 </Button>
               </TableCell>

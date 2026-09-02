@@ -356,6 +356,24 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     onCancelEdit?.();
   };
 
+  // ESC cierra el modo edición (excepto en registros nuevos)
+  useEffect(() => {
+    if (!inEditMode || isNewRecord) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role="listbox"][data-state="open"]'
+        )
+      ) {
+        return;
+      }
+      handleCancelClick();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [inEditMode, isNewRecord, handleCancelClick]);
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     const date = new Date(dateStr + "T00:00:00");

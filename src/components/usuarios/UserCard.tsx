@@ -35,7 +35,10 @@ const UserCard = ({ user, onEdit }: UserCardProps) => {
   const isAdmin = user.is_super_admin;
   
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card
+      className="hover:shadow-lg transition-shadow cursor-pointer"
+      onClick={() => onEdit(user)}
+    >
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
@@ -115,7 +118,7 @@ const UserCard = ({ user, onEdit }: UserCardProps) => {
         <Button
           variant="outline"
           className="w-full"
-          onClick={() => onEdit(user)}
+          onClick={(e) => { e.stopPropagation(); onEdit(user); }}
         >
           <Edit className="mr-2 h-4 w-4" />
           Editar
