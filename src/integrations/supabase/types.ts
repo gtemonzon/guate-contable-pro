@@ -1808,6 +1808,50 @@ export type Database = {
           },
         ]
       }
+      tab_declaration_calculations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          enterprise_id: number
+          form_type: string
+          id: number
+          inputs: Json
+          period_month: number | null
+          period_year: number
+          result: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          enterprise_id: number
+          form_type: string
+          id?: number
+          inputs?: Json
+          period_month?: number | null
+          period_year: number
+          result?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          enterprise_id?: number
+          form_type?: string
+          id?: number
+          inputs?: Json
+          period_month?: number | null
+          period_year?: number
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_declaration_calculations_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_enterprise_config: {
         Row: {
           account_isr_retained_payable_id: number | null
@@ -4572,6 +4616,7 @@ export type Database = {
           amount_paid: number
           created_at: string | null
           created_by: string | null
+          declaration_calculation_id: number | null
           enterprise_id: number
           file_name: string | null
           file_path: string | null
@@ -4591,6 +4636,7 @@ export type Database = {
           amount_paid?: number
           created_at?: string | null
           created_by?: string | null
+          declaration_calculation_id?: number | null
           enterprise_id: number
           file_name?: string | null
           file_path?: string | null
@@ -4610,6 +4656,7 @@ export type Database = {
           amount_paid?: number
           created_at?: string | null
           created_by?: string | null
+          declaration_calculation_id?: number | null
           enterprise_id?: number
           file_name?: string | null
           file_path?: string | null
@@ -4625,6 +4672,13 @@ export type Database = {
           tax_type?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tab_tax_forms_declaration_calculation_id_fkey"
+            columns: ["declaration_calculation_id"]
+            isOneToOne: false
+            referencedRelation: "tab_declaration_calculations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tab_tax_forms_enterprise_id_fkey"
             columns: ["enterprise_id"]
