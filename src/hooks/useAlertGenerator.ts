@@ -190,11 +190,12 @@ export function useAlertGenerator() {
 
       // Pre-fetch presented tax forms (active) for this enterprise to skip
       // alerts whose underlying tax form has already been filed.
-      const { data: presentedForms } = await supabase
+      const { data: presentedForms, error: presentedFormsError } = await supabase
         .from('tab_tax_forms')
         .select('tax_type, period_month, period_year')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
+      if (presentedFormsError) console.error('[alerts] error cargando tab_tax_forms:', presentedFormsError);
 
       const isFormAlreadyPresented = (
         configTaxType: string,
