@@ -98,7 +98,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       setSaving(true);
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) throw new Error("Usuario no autenticado");
-      const update: Record<string, string | number | null> = {
+      const update: Database["public"]["Tables"]["fixed_assets"]["Update"] = {
         asset_name: form.asset_name.trim(),
         category_id: form.category_id,
         location_id: form.location_id,
