@@ -524,22 +524,7 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
         await supabase.from('tab_journal_entries').delete().in('id', orphanIds);
       }
 
-      const year = period.year;
-      const { data: lastEntry } = await supabase
-        .from('tab_journal_entries')
-        .select('entry_number')
-        .eq('enterprise_id', enterpriseId)
-        .ilike('entry_number', `CIER-${year}%`)
-        .order('entry_number', { ascending: false })
-        .limit(1);
-      
-      let nextNumber = 1;
-      if (lastEntry && lastEntry.length > 0) {
-        const lastNum = lastEntry[0].entry_number.split('-').pop();
-        nextNumber = parseInt(lastNum || '0') + 1;
-      }
-      
-      const entryNumber = `CIER-${year}-${String(nextNumber).padStart(4, '0')}`;
+      const entryNumber = await allocateEntryNumber(String(enterpriseId), 'cierre', period.end_date);
 
       type DraftLine = {
         line_number: number;
