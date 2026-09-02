@@ -68,8 +68,10 @@ export async function compressPdf(
       return { file, originalSize, compressedSize: originalSize, compressed: false };
     }
 
+    const compressedBuffer = new ArrayBuffer(compressedBytes.byteLength);
+    new Uint8Array(compressedBuffer).set(compressedBytes);
     const compressedFile = new File(
-      [new Blob([compressedBytes], { type: "application/pdf" })],
+      [new Blob([compressedBuffer], { type: "application/pdf" })],
       file.name,
       { type: "application/pdf", lastModified: Date.now() },
     );

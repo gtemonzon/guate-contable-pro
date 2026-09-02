@@ -94,6 +94,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <PdfPreviewHost />
+        <ImagePreviewHost />
 
         <BrowserRouter>
           <Routes>

@@ -26,7 +26,9 @@ export default function ImagePreviewHost() {
       setRequest(nextRequest);
     };
     listeners.add(listener);
-    return () => listeners.delete(listener);
+    return () => {
+      listeners.delete(listener);
+    };
   }, []);
 
   const close = () => {
