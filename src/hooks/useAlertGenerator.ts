@@ -86,23 +86,27 @@ export function useAlertGenerator() {
 
     try {
       // Load alert configuration
-      const { data: alertConfigs } = await supabase
+      const { data: alertConfigs, error: alertConfigsError } = await supabase
         .from('tab_alert_config')
         .select('*')
         .eq('enterprise_id', enterpriseId);
+      if (alertConfigsError) console.error('[alerts] error cargando tab_alert_config:', alertConfigsError);
 
       // Load tax due date configuration
-      const { data: taxConfigs } = await supabase
+      const { data: taxConfigs, error: taxConfigsError } = await supabase
         .from('tab_tax_due_date_config')
         .select('*')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
+      if (taxConfigsError) console.error('[alerts] error cargando tab_tax_due_date_config:', taxConfigsError);
 
       // Load holidays
-      const { data: holidays } = await supabase
+      const { data: holidays, error: holidaysError } = await supabase
         .from('tab_holidays')
         .select('*')
         .or(`enterprise_id.eq.${enterpriseId},enterprise_id.is.null`);
+      if (holidaysError) console.error('[alerts] error cargando tab_holidays:', holidaysError);
+
 
       const parsedHolidays = parseHolidays((holidays || []) as Holiday[]);
       const today = new Date();
@@ -114,15 +118,21 @@ export function useAlertGenerator() {
         return config || { alert_type: type, is_enabled: true, days_before: 5 };
       };
 
-      // Helper to check if notification already exists
+      // Helper to check if notification already exists.
+      // Fail-safe: si la consulta falla, asumimos que SÍ existe para no
+      // arriesgar la creación de un duplicado.
       const notificationExists = async (type: string, eventDate: string): Promise<boolean> => {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('tab_notifications')
           .select('id')
           .eq('enterprise_id', enterpriseId)
           .eq('notification_type', type)
           .eq('event_date', eventDate)
           .limit(1);
+        if (error) {
+          console.error('[alerts] error verificando notificación existente:', error);
+          return true;
+        }
         return (data || []).length > 0;
       };
 
@@ -156,8 +166,14 @@ export function useAlertGenerator() {
           alertsGenerated++;
           return true;
         }
+        // 23505 = unique_violation: el índice parcial
+        // idx_notifications_dedupe_unread bloqueó un duplicado (condición de
+        // carrera). Se ignora silenciosamente: la BD hizo su trabajo.
+        if (error.code === '23505') return false;
+        console.error('[alerts] error creando notificación:', error);
         return false;
       };
+
 
       // 1. Generate tax due date alerts
       const effectiveTaxConfigs: TaxDueDateConfig[] = (taxConfigs && taxConfigs.length > 0)
@@ -174,11 +190,12 @@ export function useAlertGenerator() {
 
       // Pre-fetch presented tax forms (active) for this enterprise to skip
       // alerts whose underlying tax form has already been filed.
-      const { data: presentedForms } = await supabase
+      const { data: presentedForms, error: presentedFormsError } = await supabase
         .from('tab_tax_forms')
         .select('tax_type, period_month, period_year')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
+      if (presentedFormsError) console.error('[alerts] error cargando tab_tax_forms:', presentedFormsError);
 
       const isFormAlreadyPresented = (
         configTaxType: string,
@@ -241,10 +258,11 @@ export function useAlertGenerator() {
       const alertConfigPeriods = getAlertConfig('periodo_pendiente');
 
       // 2a. Auto-sanado: eliminar alertas de períodos que ya NO están abiertos
-      const { data: allPeriods } = await supabase
+      const { data: allPeriods, error: allPeriodsError } = await supabase
         .from('tab_accounting_periods')
         .select('year, end_date, status')
         .eq('enterprise_id', enterpriseId);
+      if (allPeriodsError) console.error('[alerts] error cargando períodos contables:', allPeriodsError);
 
       const closedEndDates = (allPeriods || [])
         .filter((p) => p.status !== 'abierto')
@@ -270,12 +288,13 @@ export function useAlertGenerator() {
       }
 
       if (alertConfigPeriods.is_enabled) {
-        const { data: pendingPeriods } = await supabase
+        const { data: pendingPeriods, error: pendingPeriodsError } = await supabase
           .from('tab_accounting_periods')
           .select('id, year, end_date')
           .eq('enterprise_id', enterpriseId)
           .eq('status', 'abierto')
           .lt('end_date', today.toISOString().split('T')[0]);
+        if (pendingPeriodsError) console.error('[alerts] error cargando períodos pendientes:', pendingPeriodsError);
 
         for (const period of (pendingPeriods || [])) {
           const endDate = new Date(period.end_date);
@@ -310,13 +329,14 @@ export function useAlertGenerator() {
         const draftDays = alertConfigDrafts.days_before || 7;
         const sevenDaysAgo = subDays(today, draftDays);
 
-        const { data: draftEntries, count } = await supabase
+        const { data: draftEntries, count, error: draftEntriesError } = await supabase
           .from('tab_journal_entries')
           .select('id, entry_number', { count: 'exact' })
           .eq('enterprise_id', enterpriseId)
           .in('status', ['borrador', 'pendiente_revision'])
           .lt('created_at', sevenDaysAgo.toISOString())
           .order('entry_date', { ascending: false });
+        if (draftEntriesError) console.error('[alerts] error cargando partidas en borrador:', draftEntriesError);
 
         // Siempre reemplazar/limpiar las pendientes previas no leídas
         await clearUnread('partida_borrador');
@@ -346,12 +366,13 @@ export function useAlertGenerator() {
         const reconDays = alertConfigConciliacion.days_before || 30;
         const thirtyDaysAgo = subDays(today, reconDays);
 
-        const { count: movCount } = await supabase
+        const { count: movCount, error: movCountError } = await supabase
           .from('tab_bank_movements')
           .select('id', { count: 'exact', head: true })
           .eq('enterprise_id', enterpriseId)
           .eq('is_reconciled', false)
           .lt('movement_date', thirtyDaysAgo.toISOString().split('T')[0]);
+        if (movCountError) console.error('[alerts] error contando movimientos bancarios:', movCountError);
 
         await clearUnread('conciliacion_pendiente');
 
@@ -370,24 +391,27 @@ export function useAlertGenerator() {
 
       // 4b. Collections tracking (CxC / CxP) — aggregated notification per direction
       // Module must be enabled at BOTH levels: enterprise and tenant.
-      const { data: enterpriseRow } = await supabase
+      const { data: enterpriseRow, error: enterpriseRowError } = await supabase
         .from('tab_enterprises')
         .select('tenant_id')
         .eq('id', enterpriseId)
         .maybeSingle();
+      if (enterpriseRowError) console.error('[alerts] error cargando la empresa:', enterpriseRowError);
 
-      const { data: entModules } = await supabase
+      const { data: entModules, error: entModulesError } = await supabase
         .from('tab_enterprise_modules')
         .select('module_key, is_enabled')
         .eq('enterprise_id', enterpriseId);
+      if (entModulesError) console.error('[alerts] error cargando módulos de empresa:', entModulesError);
 
       const tenantId = enterpriseRow?.tenant_id ?? null;
-      const { data: tenantModules } = tenantId
+      const { data: tenantModules, error: tenantModulesError } = tenantId
         ? await supabase
             .from('tab_tenant_modules')
             .select('module_key, is_enabled')
             .eq('tenant_id', tenantId)
-        : { data: [] as ModuleFlag[] };
+        : { data: [] as ModuleFlag[], error: null };
+      if (tenantModulesError) console.error('[alerts] error cargando módulos del tenant:', tenantModulesError);
 
       const moduleEnabled = (key: string) =>
         (entModules || []).some((m) => m.module_key === key && m.is_enabled) &&
@@ -403,13 +427,14 @@ export function useAlertGenerator() {
         horizon.setDate(horizon.getDate() + (cfg.days_before || 5));
         const horizonStr = horizon.toISOString().split('T')[0];
 
-        const { data: dueRows } = await supabase
+        const { data: dueRows, error: dueRowsError } = await supabase
           .from('tab_collection_tracking')
           .select('due_date, amount_total, amount_paid, status')
           .eq('enterprise_id', enterpriseId)
           .eq('direction', dir)
           .neq('status', 'pagada')
           .lte('due_date', horizonStr);
+        if (dueRowsError) console.error('[alerts] error cargando seguimiento de cobros:', dueRowsError);
 
         const rows = dueRows || [];
         if (rows.length === 0) { await clearUnread(alertType); continue; }
@@ -444,12 +469,13 @@ export function useAlertGenerator() {
 
 
       // 5. Check for custom reminders due soon
-      const { data: reminders } = await supabase
+      const { data: reminders, error: remindersError } = await supabase
         .from('tab_custom_reminders')
         .select('*')
         .eq('is_completed', false)
         .or(`enterprise_id.eq.${enterpriseId},enterprise_id.is.null`)
         .lte('reminder_date', addMonths(today, 1).toISOString().split('T')[0]);
+      if (remindersError) console.error('[alerts] error cargando recordatorios:', remindersError);
 
       for (const reminder of (reminders || [])) {
         const reminderDate = new Date(reminder.reminder_date);
