@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
@@ -77,6 +78,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const { data: locations = [] } = useAssetLocations(asset.enterprise_id);
   const { data: custodians = [] } = useAssetCustodians(asset.enterprise_id);
   const { data: suppliers = [] } = useAssetSuppliers(asset.enterprise_id);
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<AssetForm>(() => formFromAsset(asset));
   const [saving, setSaving] = useState(false);
 
@@ -126,6 +128,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
         metadata_json: { updated_fields: Object.keys(update).filter((key) => key !== "updated_at") },
       });
       if (eventError) throw eventError;
+      await queryClient.invalidateQueries({ queryKey: ["fixed_assets", asset.enterprise_id] });
 
       toast({ title: "Datos del activo actualizados" });
       onClose();

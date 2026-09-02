@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -27,7 +28,8 @@ interface Props {
   enterpriseId: number;
 }
 
-const attachmentTable = () => supabase.from("fixed_asset_attachments" as never);
+type AssetAttachmentInsert = Database["public"]["Tables"]["fixed_asset_attachments"]["Insert"];
+const attachmentTable = () => supabase.from("fixed_asset_attachments");
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
@@ -89,7 +91,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
       const { error: uploadError } = await supabase.storage.from("fixed-asset-attachments").upload(path, result.file, { contentType: result.file.type || "application/octet-stream" });
       if (uploadError) throw uploadError;
 
-      const { error: insertError } = await attachmentTable().insert({
+      const attachment: AssetAttachmentInsert = {
         asset_id: assetId,
         enterprise_id: enterpriseId,
         file_name: result.file.name,
@@ -98,7 +100,8 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
         file_size: result.file.size,
         original_size: result.originalSize,
         uploaded_by: authData.user.id,
-      } as never);
+      };
+      const { error: insertError } = await attachmentTable().insert(attachment);
       if (insertError) throw insertError;
 
       setProgress(100);
@@ -135,7 +138,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   };
 
   const removeAttachment = async (attachment: AssetAttachment) => {
-    const { error } = await attachmentTable().update({ is_active: false } as never).eq("id", attachment.id);
+    const { error } = await attachmentTable().update({ is_active: false }).eq("id", attachment.id);
     if (error) {
       toast({ title: "Error al eliminar adjunto", description: error.message, variant: "destructive" });
       return;
