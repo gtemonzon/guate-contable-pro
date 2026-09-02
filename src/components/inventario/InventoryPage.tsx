@@ -852,7 +852,14 @@ export default function InventoryPage() {
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)}>
                   {showInactive ? "Ocultar inactivos" : "Ver inactivos"}
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowImportWizard(true)}>
+                  <Upload className="h-4 w-4 mr-1" /> Importar desde Excel
+                </Button>
+                <Button size="sm" onClick={() => { setEditItem(null); setShowItemDialog(true); }}>
+                  <Plus className="h-4 w-4 mr-1" /> Nuevo Producto
+                </Button>
               </div>
+
             </CardHeader>
             <CardContent>
               <div className="rounded-md border overflow-x-auto">
