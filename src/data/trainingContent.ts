@@ -216,7 +216,7 @@ export const TRAINING_PHASES: Phase[] = [
           "Concilie certificados mensualmente para detectar retenciones faltantes antes de la declaración.",
           "Los certificados de retención afectan el cálculo de IVA a pagar en la declaración mensual.",
         ],
-},
+      },
       {
         id: "2.8-inventario",
         title: "Inventario",

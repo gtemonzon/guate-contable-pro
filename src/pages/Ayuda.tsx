@@ -65,7 +65,7 @@ const helpSections: HelpSection[] = [
     icon: Lightbulb,
     description: "Mejoras y nuevas funcionalidades incorporadas recientemente al sistema.",
     isNew: true,
-steps: [
+    steps: [
       { publishedAt: "2026-09-02", requiredModule: "inventario", title: "Módulo de Inventario", description: "Nuevo módulo ERP para controlar bodegas y productos: catálogo de bodegas (todo producto pertenece a una), catálogo de productos con costo promedio ponderado calculado automáticamente, movimientos tipo kardex (entradas, salidas y ajustes con validación de existencia), saldos actuales en vivo, importación masiva desde Excel y reportes listos para el Reporte Semestral de Inventarios ante la SAT. Se activa por oficina contable (tenant) y, además, por empresa individual desde Empresas → editar empresa → pestaña Módulos." },
       { publishedAt: "2026-09-02", title: "Activos Fijos — edición de datos y adjuntos", description: "El detalle de cada activo ahora tiene dos pestañas. 'Datos' permite editar la información del activo (ubicación, custodio, proveedor, centro de costo y notas) incluso después de registrado. 'Adjuntos' permite subir cualquier archivo con compresión automática de imágenes y PDF, verlo en un visor integrado y descargarlo o imprimirlo." },
       { publishedAt: "2026-09-02", title: "Personalización de marca por oficina contable", description: "En Mi Oficina, al subir el logo, el sistema detecta automáticamente un color sugerido que puede aplicar con un clic. El color elegido para la oficina ya se refleja en el menú lateral de todos sus usuarios." },
@@ -577,7 +577,7 @@ steps: [
       { title: "Reporte de antigüedad de saldos", description: "Con 'Ver reporte de antigüedad' se despliega el resumen por cliente o proveedor con cortes de 0-30, 31-60, 61-90 y más de 90 días. Al hacer clic en un nombre o en una celda de saldo, se filtra la lista principal de documentos. El botón 'Exportar a Excel' descarga el reporte." },
       { title: "Configuración por empresa", description: "En Configuración → Cobros y Pagos defina los plazos de pago por defecto, los motivos predefinidos de cambio de estatus, el ajuste de vencimientos a días hábiles y las alertas de vencimiento." },
     ],
-tips: [
+    tips: [
       "El módulo se activa por oficina contable (tenant) desde el administrador del sistema: si no aparece en su menú, solicítelo.",
       "Los totales del reporte de antigüedad se calculan sobre el saldo pendiente (total del documento menos los abonos aplicados).",
       "Las facturas históricas no entran automáticamente al seguimiento: se incorporan de forma selectiva desde 'Cargar saldos iniciales'.",
