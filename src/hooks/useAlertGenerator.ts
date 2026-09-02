@@ -118,15 +118,21 @@ export function useAlertGenerator() {
         return config || { alert_type: type, is_enabled: true, days_before: 5 };
       };
 
-      // Helper to check if notification already exists
+      // Helper to check if notification already exists.
+      // Fail-safe: si la consulta falla, asumimos que SÍ existe para no
+      // arriesgar la creación de un duplicado.
       const notificationExists = async (type: string, eventDate: string): Promise<boolean> => {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('tab_notifications')
           .select('id')
           .eq('enterprise_id', enterpriseId)
           .eq('notification_type', type)
           .eq('event_date', eventDate)
           .limit(1);
+        if (error) {
+          console.error('[alerts] error verificando notificación existente:', error);
+          return true;
+        }
         return (data || []).length > 0;
       };
 
@@ -160,8 +166,14 @@ export function useAlertGenerator() {
           alertsGenerated++;
           return true;
         }
+        // 23505 = unique_violation: el índice parcial
+        // idx_notifications_dedupe_unread bloqueó un duplicado (condición de
+        // carrera). Se ignora silenciosamente: la BD hizo su trabajo.
+        if (error.code === '23505') return false;
+        console.error('[alerts] error creando notificación:', error);
         return false;
       };
+
 
       // 1. Generate tax due date alerts
       const effectiveTaxConfigs: TaxDueDateConfig[] = (taxConfigs && taxConfigs.length > 0)
