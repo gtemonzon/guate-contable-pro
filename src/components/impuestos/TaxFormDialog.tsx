@@ -23,6 +23,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import {
+  DeclarationCalculationRow,
+  getCalculationTotal,
+  mapTaxTypeToFormType,
+} from "@/utils/declarationCalculations";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
@@ -126,6 +131,9 @@ export default function TaxFormDialog({
   const [enterpriseNit, setEnterpriseNit] = useState<string>("");
   const [enterpriseName, setEnterpriseName] = useState<string>("");
   const [nitCheck, setNitCheck] = useState<NitCheck>({ status: "idle" });
+  const [suggestedCalc, setSuggestedCalc] = useState<DeclarationCalculationRow | null>(null);
+  const [calcSuggestionDismissed, setCalcSuggestionDismissed] = useState(false);
+  const [linkedCalcId, setLinkedCalcId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -165,6 +173,45 @@ export default function TaxFormDialog({
       }
     }
   }, [open, editingForm]);
+
+  // Busca un cálculo guardado que corresponda al tipo de impuesto + período seleccionado
+  useEffect(() => {
+    if (!open || editingForm) {
+      setSuggestedCalc(null);
+      return;
+    }
+    const formType = mapTaxTypeToFormType(taxType);
+    const month = periodMonth ? parseInt(periodMonth, 10) : null;
+    const year = periodYear ? parseInt(periodYear, 10) : null;
+    if (!formType || !year || !month) {
+      setSuggestedCalc(null);
+      return;
+    }
+    let cancelled = false;
+    const lookup = async () => {
+      const { data, error } = await supabase
+        .from("tab_declaration_calculations")
+        .select("*")
+        .eq("enterprise_id", enterpriseId)
+        .eq("form_type", formType)
+        .eq("period_year", year)
+        .eq("period_month", month)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      if (error) {
+        console.error("Error buscando cálculo guardado:", error);
+        setSuggestedCalc(null);
+        return;
+      }
+      const rows = (data ?? []) as DeclarationCalculationRow[];
+      setSuggestedCalc(rows[0] ?? null);
+    };
+    lookup();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, editingForm, enterpriseId, taxType, periodMonth, periodYear]);
 
   const fetchEnterpriseInfo = async () => {
     try {
@@ -216,6 +263,9 @@ export default function TaxFormDialog({
     setExistingFileName(null);
     setShowSuggestions(false);
     setNitCheck({ status: "idle" });
+    setSuggestedCalc(null);
+    setCalcSuggestionDismissed(false);
+    setLinkedCalcId(null);
   };
 
   // NIT verification helpers
@@ -481,6 +531,7 @@ export default function TaxFormDialog({
         file_name: fileName,
         file_size: fileSize,
         notes: notes.trim() || null,
+        declaration_calculation_id: editingForm ? undefined : linkedCalcId,
       };
 
       if (editingForm) {
