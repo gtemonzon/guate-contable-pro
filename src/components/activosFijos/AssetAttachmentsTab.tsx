@@ -120,9 +120,18 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
       toast({ title: "No se pudo abrir el archivo", description: error?.message, variant: "destructive" });
       return;
     }
-    if (attachment.file_type === "application/pdf") showPdfPreview({ url: data.signedUrl, fileName: attachment.file_name });
-    else if (attachment.file_type?.startsWith("image/")) showImagePreview({ url: data.signedUrl, fileName: attachment.file_name });
-    else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    if (attachment.file_type === "application/pdf") {
+      showPdfPreview({ url: data.signedUrl, fileName: attachment.file_name });
+    } else if (attachment.file_type?.startsWith("image/")) {
+      showImagePreview({ url: data.signedUrl, fileName: attachment.file_name });
+    } else {
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.download = attachment.file_name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
   };
 
   const removeAttachment = async (attachment: AssetAttachment) => {
