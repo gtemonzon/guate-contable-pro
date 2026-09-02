@@ -1,4 +1,4 @@
-import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, ShieldCheck, LucideIcon } from "lucide-react";
+import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, ShieldCheck, Boxes, LucideIcon } from "lucide-react";
 
 export interface Lesson {
   id: string;
@@ -195,7 +195,8 @@ export const TRAINING_PHASES: Phase[] = [
           "Catálogos: categorías (con cuentas contables predefinidas), ubicaciones, custodios y proveedores.",
           "Al activar un activo, el sistema genera el cronograma de depreciación según la política configurada.",
           "Contabilización mensual: ejecuta la depreciación del período. El sistema marca cada activo como Pendiente o Ya Contabilizado.",
-          "Disposición: usa el asistente para baja de activos (venta, robo, descarte) que genera la partida con ganancia/pérdida automáticamente.",
+"Disposición: usa el asistente para baja de activos (venta, robo, descarte) que genera la partida con ganancia/pérdida automáticamente.",
+          "Edición y adjuntos: cada activo tiene pestaña 'Datos' (edita ubicación, custodio, proveedor, centro de costo y notas) y pestaña 'Adjuntos' (sube cualquier archivo con compresión automática de imágenes/PDF, visor integrado, descarga e impresión).",
         ],
       },
       {
@@ -214,6 +215,26 @@ export const TRAINING_PHASES: Phase[] = [
         tips: [
           "Concilie certificados mensualmente para detectar retenciones faltantes antes de la declaración.",
           "Los certificados de retención afectan el cálculo de IVA a pagar en la declaración mensual.",
+        ],
+      },
+      {
+        id: "2.8-inventario",
+        title: "Inventario",
+        description: "Bodegas, productos, kardex y reportes con costo promedio ponderado.",
+        icon: Boxes,
+        route: "/inventario",
+        content: [
+          "El módulo se activa en dos niveles: por oficina contable (tenant) y por empresa individual desde Empresas → editar empresa → pestaña Módulos.",
+          "Bodegas: crea, edita o desactiva bodegas en el catálogo. Todo producto pertenece obligatoriamente a una bodega.",
+          "Productos: código, nombre, unidad de medida, categoría, precio sugerido y bodega. El sistema calcula solo el costo promedio ponderado con cada movimiento.",
+          "Movimientos (kardex): entradas, salidas y ajustes. Las salidas validan que exista existencia suficiente; cada movimiento queda registrado en el kardex del producto.",
+          "Saldos actuales: cantidad y valorización en vivo por producto y bodega.",
+          "Importación masiva: wizard de 3 pasos (descargar plantilla, subir y validar, confirmar) para cargar productos desde Excel, con validación de SKU y bodegas.",
+          "Reportes: saldos a fecha de corte con método Promedio Ponderado (pensado para el Reporte Semestral de Inventarios ante la SAT), kardex por producto y entradas/salidas/saldo por período, exportables a PDF.",
+        ],
+        tips: [
+          "Usa Alt+N para crear un nuevo registro en Bodegas o Catálogo, y Ctrl+Enter para guardar dentro de los diálogos.",
+          "Registra el movimiento de entrada al recibir mercadería para que el costo promedio se actualice antes de emitir salidas.",
         ],
       },
     ],
