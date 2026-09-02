@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Search, Building2, Plus, Users, Briefcase, Settings } from "lucide-react";
+import { Loader2, Search, Building2, Plus, Users, Briefcase, Settings, LayoutGrid, List } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { TenantDialog } from "@/components/tenants/TenantDialog";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import TenantTable from "@/components/tenants/TenantTable";
 
-interface Tenant {
+export interface Tenant {
   id: number;
   tenant_code: string;
   tenant_name: string;
@@ -30,8 +32,15 @@ const Tenants = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "table">(
+    () => (localStorage.getItem("tenants-view-mode") as "cards" | "table") || "table",
+  );
   const { isSuperAdmin } = useTenant();
+
+  useEffect(() => {
+    localStorage.setItem("tenants-view-mode", viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     if (isSuperAdmin) {
@@ -144,10 +153,25 @@ const Tenants = () => {
             Administra las oficinas contables y sus límites
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Tenant
-        </Button>
+<div className="flex items-center gap-2">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as "cards" | "table")}
+            variant="outline"
+          >
+            <ToggleGroupItem value="table" aria-label="Vista tabla">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="cards" aria-label="Vista tarjetas">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Tenant
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -175,6 +199,8 @@ const Tenants = () => {
             </p>
           </CardContent>
         </Card>
+) : viewMode === "table" ? (
+        <TenantTable tenants={filteredTenants} onEdit={handleEdit} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredTenants.map((tenant) => (
