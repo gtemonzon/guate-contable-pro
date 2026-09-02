@@ -51,13 +51,13 @@ All colors MUST be HSL.
     --radius: 0.5rem;
 
     /* Sidebar colors - Azul Marino Corporativo */
-    --sidebar-background: 220 60% 20%;
+    --sidebar-background: var(--tenant-sidebar-bg, 220 60% 20%);
     --sidebar-foreground: 220 20% 95%;
-    --sidebar-primary: 220 20% 98%;
+    --sidebar-primary: var(--tenant-sidebar-primary, 220 20% 98%);
     --sidebar-primary-foreground: 220 60% 15%;
-    --sidebar-accent: 220 50% 30%;
+    --sidebar-accent: var(--tenant-sidebar-accent, 220 50% 30%);
     --sidebar-accent-foreground: 220 20% 98%;
-    --sidebar-border: 220 40% 30%;
+    --sidebar-border: var(--tenant-sidebar-accent, 220 40% 30%);
     --sidebar-ring: 220 20% 95%;
 
     /* Gradients */
@@ -119,13 +119,13 @@ All colors MUST be HSL.
     --input: 240 5% 33%;
     --ring: 255 91% 76%;
 
-    --sidebar-background: 220 60% 20%;
+    --sidebar-background: var(--tenant-sidebar-bg, 220 60% 20%);
     --sidebar-foreground: 220 20% 95%;
-    --sidebar-primary: 220 20% 98%;
+    --sidebar-primary: var(--tenant-sidebar-primary, 220 20% 98%);
     --sidebar-primary-foreground: 220 60% 15%;
-    --sidebar-accent: 220 50% 30%;
+    --sidebar-accent: var(--tenant-sidebar-accent, 220 50% 30%);
     --sidebar-accent-foreground: 220 20% 98%;
-    --sidebar-border: 220 40% 30%;
+    --sidebar-border: var(--tenant-sidebar-accent, 220 40% 30%);
     --sidebar-ring: 220 20% 95%;
     --chart-1: 252 94% 85%;
     --chart-2: 269 97% 85%;
