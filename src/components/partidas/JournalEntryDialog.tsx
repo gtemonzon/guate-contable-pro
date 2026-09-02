@@ -33,6 +33,7 @@ import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 interface JournalEntryDialogProps {
   open: boolean;
