@@ -40,6 +40,7 @@ import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
+import { EnterpriseModules } from "./EnterpriseModules";
 const LegacyImportWizard = lazy(() => import("./legacyImport/LegacyImportWizard").then(m => ({ default: m.LegacyImportWizard })));
 import { DatabaseBackup, Loader2 } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
@@ -335,13 +336,14 @@ export function EnterpriseDialog({
 
         {enterprise ? (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="currencies">Monedas</TabsTrigger>
               <TabsTrigger value="taxes">Impuestos</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
               <TabsTrigger value="periods">Períodos</TabsTrigger>
               <TabsTrigger value="books">Libros SAT</TabsTrigger>
+              <TabsTrigger value="modules">Módulos</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="mt-4">
