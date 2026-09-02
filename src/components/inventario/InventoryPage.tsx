@@ -54,6 +54,30 @@ export interface InventoryMovement {
   notes: string | null;
 }
 
+interface RawMovementRow {
+  id: number;
+  item_id: number;
+  movement_type: string;
+  adjustment_direction: string | null;
+  quantity: number;
+  unit_cost: number;
+  movement_date: string;
+  reference: string | null;
+  notes: string | null;
+}
+
+function toMovement(r: RawMovementRow): InventoryMovement {
+  const type: MovementType =
+    r.movement_type === "entrada" || r.movement_type === "salida" || r.movement_type === "ajuste"
+      ? r.movement_type
+      : "ajuste";
+  const dir: AdjustmentDirection | null =
+    r.adjustment_direction === "positivo" || r.adjustment_direction === "negativo"
+      ? r.adjustment_direction
+      : null;
+  return { ...r, movement_type: type, adjustment_direction: dir };
+}
+
 const MOVEMENT_LABEL: Record<MovementType, string> = {
   entrada: "Entrada",
   salida: "Salida",
