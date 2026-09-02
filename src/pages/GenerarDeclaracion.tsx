@@ -51,6 +51,10 @@ export default function GenerarDeclaracion() {
   const [otrosValores, setOtrosValores] = useState<OtroValorISR[]>([]);
   const [isrPagadoAnterior, setIsrPagadoAnterior] = useState<number>(0);
   const [periodYears, setPeriodYears] = useState<number[]>([]);
+  const [pendingSave, setPendingSave] = useState(false);
+  const [savedCalculations, setSavedCalculations] = useState<DeclarationCalculationRow[]>([]);
+  const { toast } = useToast();
+
 
   const {
     loading,
