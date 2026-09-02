@@ -44,6 +44,7 @@ interface TaxForm {
   file_name: string | null;
   file_size: number | null;
   notes: string | null;
+  declaration_calculation_id: number | null;
   created_at: string;
   is_active: boolean;
 }
@@ -350,6 +351,11 @@ export default function FormulariosImpuestos() {
                         {form.period_type && (
                           <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
                             {formatPeriod(form)}
+                          </span>
+                        )}
+                        {form.declaration_calculation_id && (
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                            Basado en cálculo guardado
                           </span>
                         )}
                       </div>

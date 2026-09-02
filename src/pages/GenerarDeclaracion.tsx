@@ -1,15 +1,24 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Calculator, AlertCircle } from "lucide-react";
+import { Loader2, Calculator, AlertCircle, History, RotateCcw } from "lucide-react";
 import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { useCertificatePeriodTotals } from "@/hooks/useTaxCertificates";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DeclarationCalculationRow,
+  getCalculationTotal,
+  parseCalculationInputs,
+} from "@/utils/declarationCalculations";
+
 
 const MONTHS = [
   { value: 1, label: "Enero" },
@@ -43,6 +52,10 @@ export default function GenerarDeclaracion() {
   const [otrosValores, setOtrosValores] = useState<OtroValorISR[]>([]);
   const [isrPagadoAnterior, setIsrPagadoAnterior] = useState<number>(0);
   const [periodYears, setPeriodYears] = useState<number[]>([]);
+  const [pendingSave, setPendingSave] = useState(false);
+  const [savedCalculations, setSavedCalculations] = useState<DeclarationCalculationRow[]>([]);
+  const { toast } = useToast();
+
 
   const {
     loading,
@@ -106,10 +119,109 @@ export default function GenerarDeclaracion() {
     }
   }, [taxConfigs, selectedFormType]);
 
+  const currentResult = useMemo((): Record<string, unknown> | null => {
+    switch (selectedFormType) {
+      case 'IVA_GENERAL': return { ...ivaGeneralCalculo };
+      case 'IVA_PEQUENO': return { ...ivaPequenoCalculo };
+      case 'ISR_MENSUAL': return { ...isrMensualCalculo };
+      case 'ISO_TRIMESTRAL': return { ...isoCalculo };
+      case 'ISR_TRIMESTRAL': return { ...isrTrimestralCalculo };
+      default: return null;
+    }
+  }, [selectedFormType, ivaGeneralCalculo, ivaPequenoCalculo, isrMensualCalculo, isoCalculo, isrTrimestralCalculo]);
+
+  const fetchSavedCalculations = useCallback(async () => {
+    if (!enterpriseId || !selectedFormType) {
+      setSavedCalculations([]);
+      return;
+    }
+    const { data, error: fetchError } = await supabase
+      .from("tab_declaration_calculations")
+      .select("*")
+      .eq("enterprise_id", enterpriseId)
+      .eq("form_type", selectedFormType)
+      .eq("period_year", selectedYear)
+      .eq("period_month", selectedMonth)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (fetchError) {
+      console.error("Error cargando cálculos guardados:", fetchError);
+      return;
+    }
+    setSavedCalculations((data ?? []) as DeclarationCalculationRow[]);
+  }, [enterpriseId, selectedFormType, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    fetchSavedCalculations();
+  }, [fetchSavedCalculations]);
+
   const handleGenerate = () => {
     fetchData();
     setHasGenerated(true);
+    setPendingSave(true);
   };
+
+  // Guarda el snapshot automáticamente al terminar el cálculo
+  useEffect(() => {
+    if (!pendingSave || loading || !enterpriseId || !selectedFormType || !currentResult) return;
+    if (error) {
+      setPendingSave(false);
+      return;
+    }
+    setPendingSave(false);
+
+    const save = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { error: insertError } = await supabase
+        .from("tab_declaration_calculations")
+        .insert({
+          enterprise_id: enterpriseId,
+          form_type: selectedFormType,
+          period_month: selectedMonth,
+          period_year: selectedYear,
+          inputs: JSON.parse(JSON.stringify({
+            credito_remanente: creditoRemanente,
+            exencion_iva: exencionIVA,
+            retencion_isr: retencionISR,
+            retencion_iva_pequeno: retencionIVAPequeno,
+            inventario_final_estimado: inventarioFinalEstimado,
+            otros_valores: otrosValores,
+            isr_pagado_anterior: isrPagadoAnterior,
+          })) as Json,
+          result: JSON.parse(JSON.stringify(currentResult)) as Json,
+          created_by: userData.user?.id ?? null,
+        });
+      if (insertError) {
+        console.error("Error guardando cálculo:", insertError);
+        toast({
+          title: "No se pudo guardar el cálculo",
+          description: insertError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Cálculo guardado" });
+      fetchSavedCalculations();
+    };
+    save();
+  }, [pendingSave, loading, error, enterpriseId, selectedFormType, currentResult,
+      selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR,
+      retencionIVAPequeno, inventarioFinalEstimado, otrosValores, isrPagadoAnterior,
+      toast, fetchSavedCalculations]);
+
+  const handleLoadSaved = (row: DeclarationCalculationRow) => {
+    const inputs = parseCalculationInputs(row.inputs);
+    setCreditoRemanente(inputs.credito_remanente);
+    setExencionIVA(inputs.exencion_iva);
+    setRetencionISR(inputs.retencion_isr);
+    setRetencionIVAPequeno(inputs.retencion_iva_pequeno);
+    setInventarioFinalEstimado(inputs.inventario_final_estimado);
+    setOtrosValores(inputs.otros_valores);
+    setIsrPagadoAnterior(inputs.isr_pagado_anterior);
+    setHasGenerated(true);
+    toast({ title: "Cálculo cargado" });
+  };
+
 
   const getFormTypeLabel = (type: TaxFormType): string => {
     const labels: Record<TaxFormType, string> = {
@@ -323,7 +435,59 @@ export default function GenerarDeclaracion() {
         </Card>
       )}
 
+      {/* Cálculos anteriores de este período */}
+      {selectedFormType && savedCalculations.length > 0 && (
+        <Card>
+          <CardContent className="pt-4">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="saved" className="border-none">
+                <AccordionTrigger className="py-2">
+                  <span className="flex items-center gap-2 text-base font-medium">
+                    <History className="h-4 w-4" />
+                    Cálculos anteriores de este período ({savedCalculations.length})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2">
+                    {savedCalculations.map((row) => {
+                      const total = getCalculationTotal(row.form_type, row.result);
+                      return (
+                        <div
+                          key={row.id}
+                          className="flex items-center justify-between gap-4 rounded-md border p-3"
+                        >
+                          <div className="text-sm">
+                            <p className="font-medium">
+                              {new Date(row.created_at).toLocaleString("es-GT")}
+                            </p>
+                            {total !== null && (
+                              <p className="text-muted-foreground">
+                                Total a pagar: Q{total.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleLoadSaved(row)}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Cargar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Resumen de datos */}
+
       {hasGenerated && selectedFormType !== 'ISR_TRIMESTRAL' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
