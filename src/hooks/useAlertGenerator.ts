@@ -86,23 +86,27 @@ export function useAlertGenerator() {
 
     try {
       // Load alert configuration
-      const { data: alertConfigs } = await supabase
+      const { data: alertConfigs, error: alertConfigsError } = await supabase
         .from('tab_alert_config')
         .select('*')
         .eq('enterprise_id', enterpriseId);
+      if (alertConfigsError) console.error('[alerts] error cargando tab_alert_config:', alertConfigsError);
 
       // Load tax due date configuration
-      const { data: taxConfigs } = await supabase
+      const { data: taxConfigs, error: taxConfigsError } = await supabase
         .from('tab_tax_due_date_config')
         .select('*')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
+      if (taxConfigsError) console.error('[alerts] error cargando tab_tax_due_date_config:', taxConfigsError);
 
       // Load holidays
-      const { data: holidays } = await supabase
+      const { data: holidays, error: holidaysError } = await supabase
         .from('tab_holidays')
         .select('*')
         .or(`enterprise_id.eq.${enterpriseId},enterprise_id.is.null`);
+      if (holidaysError) console.error('[alerts] error cargando tab_holidays:', holidaysError);
+
 
       const parsedHolidays = parseHolidays((holidays || []) as Holiday[]);
       const today = new Date();
