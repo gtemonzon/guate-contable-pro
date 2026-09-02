@@ -329,13 +329,14 @@ export function useAlertGenerator() {
         const draftDays = alertConfigDrafts.days_before || 7;
         const sevenDaysAgo = subDays(today, draftDays);
 
-        const { data: draftEntries, count } = await supabase
+        const { data: draftEntries, count, error: draftEntriesError } = await supabase
           .from('tab_journal_entries')
           .select('id, entry_number', { count: 'exact' })
           .eq('enterprise_id', enterpriseId)
           .in('status', ['borrador', 'pendiente_revision'])
           .lt('created_at', sevenDaysAgo.toISOString())
           .order('entry_date', { ascending: false });
+        if (draftEntriesError) console.error('[alerts] error cargando partidas en borrador:', draftEntriesError);
 
         // Siempre reemplazar/limpiar las pendientes previas no leídas
         await clearUnread('partida_borrador');
