@@ -1,15 +1,23 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Calculator, AlertCircle } from "lucide-react";
+import { Loader2, Calculator, AlertCircle, History, RotateCcw } from "lucide-react";
 import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { useCertificatePeriodTotals } from "@/hooks/useTaxCertificates";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DeclarationCalculationRow,
+  getCalculationTotal,
+  parseCalculationInputs,
+} from "@/utils/declarationCalculations";
+
 
 const MONTHS = [
   { value: 1, label: "Enero" },
