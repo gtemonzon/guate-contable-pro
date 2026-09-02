@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -178,7 +179,7 @@ export default function GenerarDeclaracion() {
           form_type: selectedFormType,
           period_month: selectedMonth,
           period_year: selectedYear,
-          inputs: {
+          inputs: JSON.parse(JSON.stringify({
             credito_remanente: creditoRemanente,
             exencion_iva: exencionIVA,
             retencion_isr: retencionISR,
@@ -186,8 +187,8 @@ export default function GenerarDeclaracion() {
             inventario_final_estimado: inventarioFinalEstimado,
             otros_valores: otrosValores,
             isr_pagado_anterior: isrPagadoAnterior,
-          },
-          result: currentResult,
+          })) as Json,
+          result: JSON.parse(JSON.stringify(currentResult)) as Json,
           created_by: userData.user?.id ?? null,
         });
       if (insertError) {
