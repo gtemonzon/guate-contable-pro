@@ -258,10 +258,11 @@ export function useAlertGenerator() {
       const alertConfigPeriods = getAlertConfig('periodo_pendiente');
 
       // 2a. Auto-sanado: eliminar alertas de períodos que ya NO están abiertos
-      const { data: allPeriods } = await supabase
+      const { data: allPeriods, error: allPeriodsError } = await supabase
         .from('tab_accounting_periods')
         .select('year, end_date, status')
         .eq('enterprise_id', enterpriseId);
+      if (allPeriodsError) console.error('[alerts] error cargando períodos contables:', allPeriodsError);
 
       const closedEndDates = (allPeriods || [])
         .filter((p) => p.status !== 'abierto')
