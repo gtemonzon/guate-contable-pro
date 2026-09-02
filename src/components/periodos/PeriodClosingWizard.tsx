@@ -662,7 +662,7 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
         return;
       }
 
-      const entryNumber = `TRAS-${year}-0001`;
+      const entryNumber = await allocateEntryNumber(String(enterpriseId), 'traslado', period.end_date);
       const isProfit = periodResult >= 0;
 
       // If profit: Resultado del ejercicio (debit) → Utilidades acumuladas (credit)
