@@ -366,12 +366,13 @@ export function useAlertGenerator() {
         const reconDays = alertConfigConciliacion.days_before || 30;
         const thirtyDaysAgo = subDays(today, reconDays);
 
-        const { count: movCount } = await supabase
+        const { count: movCount, error: movCountError } = await supabase
           .from('tab_bank_movements')
           .select('id', { count: 'exact', head: true })
           .eq('enterprise_id', enterpriseId)
           .eq('is_reconciled', false)
           .lt('movement_date', thirtyDaysAgo.toISOString().split('T')[0]);
+        if (movCountError) console.error('[alerts] error contando movimientos bancarios:', movCountError);
 
         await clearUnread('conciliacion_pendiente');
 
