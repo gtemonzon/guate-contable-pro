@@ -22,7 +22,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse } from "lucide-react";
+import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse, Upload } from "lucide-react";
+import { ImportItemsWizard } from "./ImportItemsWizard";
+
 
 // ---------- Types ----------
 
@@ -502,7 +504,9 @@ export default function InventoryPage() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showMovementDialog, setShowMovementDialog] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [editWarehouse, setEditWarehouse] = useState<InventoryWarehouse | null>(null);
+
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
 
   const [filterItemId, setFilterItemId] = useState<string>("all");
@@ -852,7 +856,14 @@ export default function InventoryPage() {
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)}>
                   {showInactive ? "Ocultar inactivos" : "Ver inactivos"}
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowImportWizard(true)}>
+                  <Upload className="h-4 w-4 mr-1" /> Importar desde Excel
+                </Button>
+                <Button size="sm" onClick={() => { setEditItem(null); setShowItemDialog(true); }}>
+                  <Plus className="h-4 w-4 mr-1" /> Nuevo Producto
+                </Button>
               </div>
+
             </CardHeader>
             <CardContent>
               <div className="rounded-md border overflow-x-auto">
@@ -1065,6 +1076,14 @@ export default function InventoryPage() {
           onClose={(saved) => { setShowItemDialog(false); setEditItem(null); if (saved) load(); }}
         />
       )}
+      {showImportWizard && selectedEnterprise && (
+        <ImportItemsWizard
+          enterpriseId={selectedEnterprise.id}
+          warehouses={warehouses}
+          onClose={(imported) => { setShowImportWizard(false); if (imported) load(); }}
+        />
+      )}
+
       {showMovementDialog && selectedEnterprise && (
         <MovementDialog
           enterpriseId={selectedEnterprise.id}
