@@ -299,27 +299,38 @@ export default function JournalEntryDialog({
               {/* Descripción General */}
               <div>
                 <label htmlFor="headerDesc" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Descripción General</label>
-                <textarea
-                  id="headerDesc"
-                  placeholder="Descripción de la partida..."
-                  value={form.headerDescription}
-                  onChange={(e) => form.setHeaderDescription(e.target.value)}
-                  onBlur={form.propagateDescriptionToLines}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      form.propagateDescriptionToLines();
-                      const hasNonBankLines = form.detailLines.some(l => !l.is_bank_line);
-                      if (hasNonBankLines) {
-                        focusFirstDetailLine();
-                      } else {
-                        addLineAndFocus();
+                {form.isReadOnly ? (
+                  <div className="mt-1.5 w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm">
+                    <TruncatedText
+                      text={form.headerDescription || "—"}
+                      maxLength={120}
+                      expandable
+                      className="whitespace-pre-wrap"
+                    />
+                  </div>
+                ) : (
+                  <textarea
+                    id="headerDesc"
+                    placeholder="Descripción de la partida..."
+                    value={form.headerDescription}
+                    onChange={(e) => form.setHeaderDescription(e.target.value)}
+                    onBlur={form.propagateDescriptionToLines}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        form.propagateDescriptionToLines();
+                        const hasNonBankLines = form.detailLines.some(l => !l.is_bank_line);
+                        if (hasNonBankLines) {
+                          focusFirstDetailLine();
+                        } else {
+                          addLineAndFocus();
+                        }
                       }
-                    }
-                  }}
-                  rows={2}
-                  className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 mt-1.5"
-                />
+                    }}
+                    rows={2}
+                    className="flex min-h-[60px] max-h-[240px] resize-y w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 mt-1.5"
+                  />
+                )}
                 {form.documentReferences.length > 0 && (
                   <div className="mt-2">
                     <ReferenceBadges references={form.documentReferences} maxVisible={5} />
