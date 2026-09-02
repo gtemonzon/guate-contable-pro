@@ -888,7 +888,8 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
       }
 
       const entryId = existingEntry?.id ?? null;
-      const entryNumber = existingEntry?.entry_number ?? `APER-${nextYear}-0001`;
+      const entryNumber = existingEntry?.entry_number
+        ?? await allocateEntryNumber(String(enterpriseId), 'apertura', `${nextYear}-01-01`);
 
       if (openingLines.length === 0) {
         if (entryId) {
