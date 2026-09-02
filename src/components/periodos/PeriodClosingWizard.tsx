@@ -48,6 +48,7 @@ import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
 import { getFiscalFloorDate, applyFiscalFloor } from '@/utils/fiscalFloor';
+import { allocateEntryNumber } from '@/utils/journalEntryNumbering';
 
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -523,22 +524,7 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
         await supabase.from('tab_journal_entries').delete().in('id', orphanIds);
       }
 
-      const year = period.year;
-      const { data: lastEntry } = await supabase
-        .from('tab_journal_entries')
-        .select('entry_number')
-        .eq('enterprise_id', enterpriseId)
-        .ilike('entry_number', `CIER-${year}%`)
-        .order('entry_number', { ascending: false })
-        .limit(1);
-      
-      let nextNumber = 1;
-      if (lastEntry && lastEntry.length > 0) {
-        const lastNum = lastEntry[0].entry_number.split('-').pop();
-        nextNumber = parseInt(lastNum || '0') + 1;
-      }
-      
-      const entryNumber = `CIER-${year}-${String(nextNumber).padStart(4, '0')}`;
+      const entryNumber = await allocateEntryNumber(String(enterpriseId), 'cierre', period.end_date);
 
       type DraftLine = {
         line_number: number;
@@ -676,7 +662,7 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
         return;
       }
 
-      const entryNumber = `TRAS-${year}-0001`;
+      const entryNumber = await allocateEntryNumber(String(enterpriseId), 'traslado', period.end_date);
       const isProfit = periodResult >= 0;
 
       // If profit: Resultado del ejercicio (debit) → Utilidades acumuladas (credit)
@@ -902,7 +888,8 @@ const findExistingEntry = useCallback(async (entryType: string, periodId: number
       }
 
       const entryId = existingEntry?.id ?? null;
-      const entryNumber = existingEntry?.entry_number ?? `APER-${nextYear}-0001`;
+      const entryNumber = existingEntry?.entry_number
+        ?? await allocateEntryNumber(String(enterpriseId), 'apertura', `${nextYear}-01-01`);
 
       if (openingLines.length === 0) {
         if (entryId) {
