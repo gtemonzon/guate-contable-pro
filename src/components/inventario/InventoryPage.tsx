@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -490,7 +491,8 @@ function MovementDialog({
 
 export default function InventoryPage() {
   const { selectedEnterprise } = useEnterprise();
-  const { hasModule, isLoading: tenantLoading } = useTenant();
+const { hasModule, isLoading: tenantLoading } = useTenant();
+  const navigate = useNavigate();
   const pdfConfig = usePdfConfig();
 
   const moduleEnabled = hasModule("inventario");
@@ -755,11 +757,21 @@ export default function InventoryPage() {
       </div>
 
       {enterpriseModuleEnabled === false && (
-        <Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+<Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Módulo desactivado para esta empresa</AlertTitle>
-          <AlertDescription>
-            Actívalo en Editar Empresa → Módulos para usar el inventario en esta empresa.
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span>
+              El módulo de inventario está desactivado para esta empresa. Actívalo en
+              Editar Empresa → Módulos para usarlo.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(`/empresas?edit=${selectedEnterprise?.id}&tab=modules`)}
+            >
+              Ir a Ajustes
+            </Button>
           </AlertDescription>
         </Alert>
       )}

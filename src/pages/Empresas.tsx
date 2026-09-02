@@ -15,6 +15,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { useTenant } from "@/contexts/TenantContext";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSearchParams } from "react-router-dom";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
 
@@ -36,7 +37,8 @@ const Empresas = () => {
     return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
   });
 
-  const [tenantFilter, setTenantFilter] = useState<string>("current");
+const [tenantFilter, setTenantFilter] = useState<string>("current");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchEnterprises = async () => {
     try {
@@ -110,6 +112,24 @@ const Empresas = () => {
       setDialogOpen(true);
     }
   };
+
+// Deep-link: ?edit=<id>&tab=<tab> abre el diálogo de empresa directo en una pestaña
+  useEffect(() => {
+    if (enterprises.length === 0) return;
+    const editParam = searchParams.get("edit");
+    if (!editParam) return;
+    const editId = parseInt(editParam, 10);
+    if (Number.isNaN(editId)) return;
+    const match = enterprises.find((e) => e.id === editId);
+    if (!match) return;
+    setSelectedEnterprise(match);
+    setDialogDefaultTab(searchParams.get("tab") ?? undefined);
+    setDialogOpen(true);
+    const params = new URLSearchParams(searchParams);
+    params.delete("edit");
+    params.delete("tab");
+    setSearchParams(params, { replace: true });
+  }, [enterprises, searchParams, setSearchParams]);
 
   useEffect(() => {
     const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
