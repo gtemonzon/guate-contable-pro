@@ -1076,6 +1076,14 @@ export default function InventoryPage() {
           onClose={(saved) => { setShowItemDialog(false); setEditItem(null); if (saved) load(); }}
         />
       )}
+      {showImportWizard && selectedEnterprise && (
+        <ImportItemsWizard
+          enterpriseId={selectedEnterprise.id}
+          warehouses={warehouses}
+          onClose={(imported) => { setShowImportWizard(false); if (imported) load(); }}
+        />
+      )}
+
       {showMovementDialog && selectedEnterprise && (
         <MovementDialog
           enterpriseId={selectedEnterprise.id}
