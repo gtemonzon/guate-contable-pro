@@ -427,13 +427,14 @@ export function useAlertGenerator() {
         horizon.setDate(horizon.getDate() + (cfg.days_before || 5));
         const horizonStr = horizon.toISOString().split('T')[0];
 
-        const { data: dueRows } = await supabase
+        const { data: dueRows, error: dueRowsError } = await supabase
           .from('tab_collection_tracking')
           .select('due_date, amount_total, amount_paid, status')
           .eq('enterprise_id', enterpriseId)
           .eq('direction', dir)
           .neq('status', 'pagada')
           .lte('due_date', horizonStr);
+        if (dueRowsError) console.error('[alerts] error cargando seguimiento de cobros:', dueRowsError);
 
         const rows = dueRows || [];
         if (rows.length === 0) { await clearUnread(alertType); continue; }
