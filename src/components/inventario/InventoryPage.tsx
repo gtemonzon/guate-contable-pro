@@ -411,7 +411,7 @@ export default function InventoryPage() {
             .eq("enterprise_id", enterpriseId)
             .order("sku", { ascending: true })
         ),
-        fetchAllRecords<InventoryMovement>(() =>
+        fetchAllRecords<RawMovementRow>(() =>
           supabase
             .from("tab_inventory_movements")
             .select("id,item_id,movement_type,adjustment_direction,quantity,unit_cost,movement_date,reference,notes")
@@ -421,7 +421,7 @@ export default function InventoryPage() {
         ),
       ]);
       setItems(itemRows);
-      setMovements(movementRows);
+      setMovements(movementRows.map(toMovement));
     } catch (err) {
       toast({ title: "Error al cargar inventario", description: errorMessage(err), variant: "destructive" });
     } finally {
