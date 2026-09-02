@@ -763,18 +763,6 @@ return () => { cancelled = true; };
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-<Button
-              variant="outline"
-              size={isCompact ? "sm" : "default"}
-              onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}
-            >
-              <Plus className="h-4 w-4 mr-1" /> Nueva Bodega
-              {!isCompact && (
-                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-muted rounded border text-muted-foreground font-mono">
-                  Alt+N
-                </kbd>
-              )}
-            </Button>
             <Button
               variant="outline"
               size={isCompact ? "sm" : "default"}
@@ -782,17 +770,6 @@ return () => { cancelled = true; };
               disabled={items.length === 0}
             >
               <Plus className="h-4 w-4 mr-1" /> Movimiento
-            </Button>
-<Button
-              size={isCompact ? "sm" : "default"}
-              onClick={() => { setEditItem(null); setShowItemDialog(true); }}
-            >
-              <Plus className="h-4 w-4 mr-1" /> Nuevo Producto
-              {!isCompact && (
-                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
-                  Alt+N
-                </kbd>
-              )}
             </Button>
           </div>
         </div>
@@ -835,8 +812,11 @@ return () => { cancelled = true; };
               <CardTitle className="text-base flex items-center gap-2">
                 <Warehouse className="h-4 w-4" /> Bodegas ({warehouses.length})
               </CardTitle>
-              <Button size="sm" onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}>
-                <Plus className="h-4 w-4 mr-1" /> Nueva Bodega
+<Button size="sm" onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}>
+                <Plus className="h-4 w-4 mr-1" /> Nuevo
+                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                  Alt+N
+                </kbd>
               </Button>
             </CardHeader>
             <CardContent>
@@ -917,8 +897,11 @@ return () => { cancelled = true; };
                 <Button variant="outline" size="sm" onClick={() => setShowImportWizard(true)}>
                   <Upload className="h-4 w-4 mr-1" /> Importar desde Excel
                 </Button>
-                <Button size="sm" onClick={() => { setEditItem(null); setShowItemDialog(true); }}>
-                  <Plus className="h-4 w-4 mr-1" /> Nuevo Producto
+<Button size="sm" onClick={() => { setEditItem(null); setShowItemDialog(true); }}>
+                  <Plus className="h-4 w-4 mr-1" /> Nuevo
+                  <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                    Alt+N
+                  </kbd>
                 </Button>
               </div>
 
