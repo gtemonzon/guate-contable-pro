@@ -768,6 +768,8 @@ export default function InventoryPage() {
           <TabsTrigger value="catalogo">Catálogo de Productos</TabsTrigger>
           <TabsTrigger value="kardex">Movimientos (Kardex)</TabsTrigger>
           <TabsTrigger value="saldos">Saldos Actuales</TabsTrigger>
+          <TabsTrigger value="reportes">Reportes</TabsTrigger>
+
         </TabsList>
 
         {/* --- Bodegas --- */}
