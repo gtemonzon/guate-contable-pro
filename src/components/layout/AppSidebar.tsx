@@ -76,7 +76,7 @@ const allMenuItems: MenuItemOrSection[] = [
     items: [
       { title: "Cuentas por Cobrar", url: "/cuentas-por-cobrar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxc" },
       { title: "Cuentas por Pagar", url: "/cuentas-por-pagar", icon: Boxes, requiredPermission: "canViewAccounts", requiredModule: "cxp" },
-      { title: "Inventario", url: "#inv", icon: Store, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
+      { title: "Inventario", url: "/inventario", icon: Store, requiredPermission: "canViewAccounts", requiredModule: "inventario" },
       { title: "Gestión Tributaria Avanzada", url: "#tax-mgmt", icon: ShieldCheck, requiredPermission: "isSuperAdmin", disabled: true, badge: "Próximamente" },
     ],
   },
