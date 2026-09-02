@@ -118,10 +118,109 @@ export default function GenerarDeclaracion() {
     }
   }, [taxConfigs, selectedFormType]);
 
+  const currentResult = useMemo((): Record<string, unknown> | null => {
+    switch (selectedFormType) {
+      case 'IVA_GENERAL': return { ...ivaGeneralCalculo };
+      case 'IVA_PEQUENO': return { ...ivaPequenoCalculo };
+      case 'ISR_MENSUAL': return { ...isrMensualCalculo };
+      case 'ISO_TRIMESTRAL': return { ...isoCalculo };
+      case 'ISR_TRIMESTRAL': return { ...isrTrimestralCalculo };
+      default: return null;
+    }
+  }, [selectedFormType, ivaGeneralCalculo, ivaPequenoCalculo, isrMensualCalculo, isoCalculo, isrTrimestralCalculo]);
+
+  const fetchSavedCalculations = useCallback(async () => {
+    if (!enterpriseId || !selectedFormType) {
+      setSavedCalculations([]);
+      return;
+    }
+    const { data, error: fetchError } = await supabase
+      .from("tab_declaration_calculations")
+      .select("*")
+      .eq("enterprise_id", enterpriseId)
+      .eq("form_type", selectedFormType)
+      .eq("period_year", selectedYear)
+      .eq("period_month", selectedMonth)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (fetchError) {
+      console.error("Error cargando cálculos guardados:", fetchError);
+      return;
+    }
+    setSavedCalculations((data ?? []) as DeclarationCalculationRow[]);
+  }, [enterpriseId, selectedFormType, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    fetchSavedCalculations();
+  }, [fetchSavedCalculations]);
+
   const handleGenerate = () => {
     fetchData();
     setHasGenerated(true);
+    setPendingSave(true);
   };
+
+  // Guarda el snapshot automáticamente al terminar el cálculo
+  useEffect(() => {
+    if (!pendingSave || loading || !enterpriseId || !selectedFormType || !currentResult) return;
+    if (error) {
+      setPendingSave(false);
+      return;
+    }
+    setPendingSave(false);
+
+    const save = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const { error: insertError } = await supabase
+        .from("tab_declaration_calculations")
+        .insert({
+          enterprise_id: enterpriseId,
+          form_type: selectedFormType,
+          period_month: selectedMonth,
+          period_year: selectedYear,
+          inputs: {
+            credito_remanente: creditoRemanente,
+            exencion_iva: exencionIVA,
+            retencion_isr: retencionISR,
+            retencion_iva_pequeno: retencionIVAPequeno,
+            inventario_final_estimado: inventarioFinalEstimado,
+            otros_valores: otrosValores,
+            isr_pagado_anterior: isrPagadoAnterior,
+          },
+          result: currentResult,
+          created_by: userData.user?.id ?? null,
+        });
+      if (insertError) {
+        console.error("Error guardando cálculo:", insertError);
+        toast({
+          title: "No se pudo guardar el cálculo",
+          description: insertError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Cálculo guardado" });
+      fetchSavedCalculations();
+    };
+    save();
+  }, [pendingSave, loading, error, enterpriseId, selectedFormType, currentResult,
+      selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR,
+      retencionIVAPequeno, inventarioFinalEstimado, otrosValores, isrPagadoAnterior,
+      toast, fetchSavedCalculations]);
+
+  const handleLoadSaved = (row: DeclarationCalculationRow) => {
+    const inputs = parseCalculationInputs(row.inputs);
+    setCreditoRemanente(inputs.credito_remanente);
+    setExencionIVA(inputs.exencion_iva);
+    setRetencionISR(inputs.retencion_isr);
+    setRetencionIVAPequeno(inputs.retencion_iva_pequeno);
+    setInventarioFinalEstimado(inputs.inventario_final_estimado);
+    setOtrosValores(inputs.otros_valores);
+    setIsrPagadoAnterior(inputs.isr_pagado_anterior);
+    setHasGenerated(true);
+    toast({ title: "Cálculo cargado" });
+  };
+
 
   const getFormTypeLabel = (type: TaxFormType): string => {
     const labels: Record<TaxFormType, string> = {
