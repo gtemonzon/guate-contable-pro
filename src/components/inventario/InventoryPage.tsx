@@ -504,7 +504,9 @@ export default function InventoryPage() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showMovementDialog, setShowMovementDialog] = useState(false);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [editWarehouse, setEditWarehouse] = useState<InventoryWarehouse | null>(null);
+
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
 
   const [filterItemId, setFilterItemId] = useState<string>("all");
