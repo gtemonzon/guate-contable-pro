@@ -469,12 +469,13 @@ export function useAlertGenerator() {
 
 
       // 5. Check for custom reminders due soon
-      const { data: reminders } = await supabase
+      const { data: reminders, error: remindersError } = await supabase
         .from('tab_custom_reminders')
         .select('*')
         .eq('is_completed', false)
         .or(`enterprise_id.eq.${enterpriseId},enterprise_id.is.null`)
         .lte('reminder_date', addMonths(today, 1).toISOString().split('T')[0]);
+      if (remindersError) console.error('[alerts] error cargando recordatorios:', remindersError);
 
       for (const reminder of (reminders || [])) {
         const reminderDate = new Date(reminder.reminder_date);
