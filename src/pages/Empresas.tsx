@@ -37,7 +37,7 @@ const Empresas = () => {
     return (localStorage.getItem("empresasViewMode") as ViewMode) || "cards";
   });
 
-const [tenantFilter, setTenantFilter] = useState<string>("current");
+  const [tenantFilter, setTenantFilter] = useState<string>("current");
   const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchEnterprises = async () => {
@@ -113,7 +113,7 @@ const [tenantFilter, setTenantFilter] = useState<string>("current");
     }
   };
 
-// Deep-link: ?edit=<id>&tab=<tab> abre el diálogo de empresa directo en una pestaña
+  // Deep-link: ?edit=<id>&tab=<tab> abre el diálogo de empresa directo en una pestaña
   useEffect(() => {
     if (enterprises.length === 0) return;
     const editParam = searchParams.get("edit");

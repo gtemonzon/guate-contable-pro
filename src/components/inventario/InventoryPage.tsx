@@ -491,7 +491,7 @@ function MovementDialog({
 
 export default function InventoryPage() {
   const { selectedEnterprise } = useEnterprise();
-const { hasModule, isLoading: tenantLoading } = useTenant();
+  const { hasModule, isLoading: tenantLoading } = useTenant();
   const navigate = useNavigate();
   const pdfConfig = usePdfConfig();
 
@@ -757,7 +757,7 @@ const { hasModule, isLoading: tenantLoading } = useTenant();
       </div>
 
       {enterpriseModuleEnabled === false && (
-<Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <Alert className="border-amber-500/50 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
           <ShieldAlert className="h-4 w-4" />
           <AlertTitle>Módulo desactivado para esta empresa</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center gap-2">
