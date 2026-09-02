@@ -22,13 +22,23 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power } from "lucide-react";
+import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse } from "lucide-react";
 
 // ---------- Types ----------
+
+export interface InventoryWarehouse {
+  id: number;
+  enterprise_id: number;
+  code: string;
+  name: string;
+  address: string | null;
+  is_active: boolean;
+}
 
 export interface InventoryItem {
   id: number;
   enterprise_id: number;
+  warehouse_id: number;
   sku: string;
   name: string;
   unit_of_measure: string;
@@ -103,6 +113,7 @@ function errorMessage(err: unknown): string {
 // ---------- Item dialog ----------
 
 interface ItemFormState {
+  warehouse_id: string;
   sku: string;
   name: string;
   unit_of_measure: string;
@@ -111,9 +122,17 @@ interface ItemFormState {
 }
 
 function ItemDialog({
-  enterpriseId, item, onClose,
-}: { enterpriseId: number; item: InventoryItem | null; onClose: (saved: boolean) => void }) {
+  enterpriseId, item, warehouses, onClose,
+}: {
+  enterpriseId: number;
+  item: InventoryItem | null;
+  warehouses: InventoryWarehouse[];
+  onClose: (saved: boolean) => void;
+}) {
+  const activeWarehouses = warehouses.filter((w) => w.is_active || w.id === item?.warehouse_id);
+  const noWarehouses = activeWarehouses.length === 0;
   const [form, setForm] = useState<ItemFormState>({
+    warehouse_id: item ? String(item.warehouse_id) : "",
     sku: item?.sku ?? "",
     name: item?.name ?? "",
     unit_of_measure: item?.unit_of_measure ?? "unidad",
@@ -127,9 +146,15 @@ function ItemDialog({
       toast({ title: "Datos incompletos", description: "El código y el nombre son obligatorios.", variant: "destructive" });
       return;
     }
+    const warehouseId = Number(form.warehouse_id);
+    if (!warehouseId) {
+      toast({ title: "Bodega requerida", description: "Selecciona la bodega a la que pertenece el producto.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     const payload = {
       enterprise_id: enterpriseId,
+      warehouse_id: warehouseId,
       sku: form.sku.trim(),
       name: form.name.trim(),
       unit_of_measure: form.unit_of_measure.trim() || "unidad",
@@ -158,6 +183,30 @@ function ItemDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          {noWarehouses && (
+            <Alert variant="destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>No hay bodegas creadas</AlertTitle>
+              <AlertDescription>
+                Crea al menos una bodega en la pestaña “Bodegas” antes de registrar productos.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div>
+            <Label>Bodega</Label>
+            <Select
+              value={form.warehouse_id}
+              onValueChange={(v) => setForm({ ...form, warehouse_id: v })}
+              disabled={noWarehouses}
+            >
+              <SelectTrigger><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+              <SelectContent>
+                {activeWarehouses.map((w) => (
+                  <SelectItem key={w.id} value={String(w.id)}>{w.code} — {w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Código (SKU)</Label>
@@ -202,6 +251,72 @@ function ItemDialog({
               </div>
             </div>
           )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
+          <Button onClick={save} disabled={saving || noWarehouses}>{saving ? "Guardando…" : "Guardar"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Warehouse dialog ----------
+
+function WarehouseDialog({
+  enterpriseId, warehouse, onClose,
+}: { enterpriseId: number; warehouse: InventoryWarehouse | null; onClose: (saved: boolean) => void }) {
+  const [code, setCode] = useState(warehouse?.code ?? "");
+  const [name, setName] = useState(warehouse?.name ?? "");
+  const [address, setAddress] = useState(warehouse?.address ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!code.trim() || !name.trim()) {
+      toast({ title: "Datos incompletos", description: "El código y el nombre son obligatorios.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      enterprise_id: enterpriseId,
+      code: code.trim(),
+      name: name.trim(),
+      address: address.trim() || null,
+    };
+    const { error } = warehouse
+      ? await supabase.from("tab_inventory_warehouses").update(payload).eq("id", warehouse.id)
+      : await supabase.from("tab_inventory_warehouses").insert(payload);
+    setSaving(false);
+    if (error) {
+      toast({ title: "No se pudo guardar", description: errorMessage(error), variant: "destructive" });
+      return;
+    }
+    toast({ title: warehouse ? "Bodega actualizada" : "Bodega creada" });
+    onClose(true);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{warehouse ? "Editar bodega" : "Nueva bodega"}</DialogTitle>
+          <DialogDescription>Cada producto pertenece a una sola bodega.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Código</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BOD-01" />
+            </div>
+            <div>
+              <Label>Nombre</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bodega central" />
+            </div>
+          </div>
+          <div>
+            <Label>Dirección (opcional)</Label>
+            <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
