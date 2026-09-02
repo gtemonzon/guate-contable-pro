@@ -178,7 +178,7 @@ export default function AssetList() {
                 </TableRow>
               )}
               {filtered.map((asset) => (
-                <TableRow key={asset.id} className="group">
+                <TableRow key={asset.id} className="group cursor-pointer hover:bg-muted/50" onClick={() => setDetailAsset(asset)}>
                   <TableCell className="font-mono font-medium">{asset.asset_code}</TableCell>
                   <TableCell>{asset.asset_name}</TableCell>
                   <TableCell className="text-muted-foreground">{asset.category?.name ?? "—"}</TableCell>
@@ -192,14 +192,14 @@ export default function AssetList() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" onClick={() => setDetailAsset(asset)}>
+<Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDetailAsset(asset); }}>
                         <Eye className="h-4 w-4" />
                       </Button>
                       {asset.status === "DRAFT" && (
-                        <Button
+<Button
                           variant="ghost" size="icon"
                           title="Activar activo"
-                          onClick={() => handleActivate(asset)}
+                          onClick={(e) => { e.stopPropagation(); handleActivate(asset); }}
                           disabled={activate.isPending}
                         >
                           {activate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 text-amber-500" />}
