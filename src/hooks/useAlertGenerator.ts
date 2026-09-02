@@ -288,12 +288,13 @@ export function useAlertGenerator() {
       }
 
       if (alertConfigPeriods.is_enabled) {
-        const { data: pendingPeriods } = await supabase
+        const { data: pendingPeriods, error: pendingPeriodsError } = await supabase
           .from('tab_accounting_periods')
           .select('id, year, end_date')
           .eq('enterprise_id', enterpriseId)
           .eq('status', 'abierto')
           .lt('end_date', today.toISOString().split('T')[0]);
+        if (pendingPeriodsError) console.error('[alerts] error cargando períodos pendientes:', pendingPeriodsError);
 
         for (const period of (pendingPeriods || [])) {
           const endDate = new Date(period.end_date);
