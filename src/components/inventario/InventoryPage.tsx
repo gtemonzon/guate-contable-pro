@@ -6,6 +6,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { exportToPDF } from "@/utils/reportExport";
 import { usePdfConfig } from "@/hooks/usePdfConfig";
+import { useFormShortcuts } from "@/hooks/useFormShortcuts";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -174,9 +175,16 @@ function ItemDialog({
       toast({ title: "No se pudo guardar", description: errorMessage(error), variant: "destructive" });
       return;
     }
-    toast({ title: item ? "Producto actualizado" : "Producto creado" });
+toast({ title: item ? "Producto actualizado" : "Producto creado" });
     onClose(true);
   };
+
+  useFormShortcuts({
+    isEnabled: true,
+    onSave: save,
+    onCancel: () => onClose(false),
+    isDirty: false,
+  });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose(false)}>
@@ -296,9 +304,16 @@ function WarehouseDialog({
       toast({ title: "No se pudo guardar", description: errorMessage(error), variant: "destructive" });
       return;
     }
-    toast({ title: warehouse ? "Bodega actualizada" : "Bodega creada" });
+toast({ title: warehouse ? "Bodega actualizada" : "Bodega creada" });
     onClose(true);
   };
+
+  useFormShortcuts({
+    isEnabled: true,
+    onSave: save,
+    onCancel: () => onClose(false),
+    isDirty: false,
+  });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose(false)}>
@@ -509,9 +524,11 @@ export default function InventoryPage() {
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showMovementDialog, setShowMovementDialog] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
-  const [editWarehouse, setEditWarehouse] = useState<InventoryWarehouse | null>(null);
+const [editWarehouse, setEditWarehouse] = useState<InventoryWarehouse | null>(null);
 
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"bodegas" | "catalogo" | "kardex" | "saldos" | "reportes">("bodegas");
 
   const [filterItemId, setFilterItemId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -542,8 +559,26 @@ export default function InventoryPage() {
       if (cancelled) return;
       setEnterpriseModuleEnabled(!!data?.is_enabled);
     })();
-    return () => { cancelled = true; };
+return () => { cancelled = true; };
   }, [selectedEnterprise, moduleEnabled]);
+
+  // Alt+N shortcut — new warehouse or product according to the active tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.altKey && e.key.toLowerCase() === "n")) return;
+      if (showWarehouseDialog || showItemDialog || showMovementDialog || showImportWizard) return;
+      e.preventDefault();
+      if (activeTab === "bodegas") {
+        setEditWarehouse(null);
+        setShowWarehouseDialog(true);
+      } else if (activeTab === "catalogo") {
+        setEditItem(null);
+        setShowItemDialog(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, showWarehouseDialog, showItemDialog, showMovementDialog, showImportWizard]);
 
   const load = useCallback(async () => {
     if (!selectedEnterprise || !moduleEnabled) {
@@ -728,12 +763,17 @@ export default function InventoryPage() {
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button
+<Button
               variant="outline"
               size={isCompact ? "sm" : "default"}
               onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}
             >
               <Plus className="h-4 w-4 mr-1" /> Nueva Bodega
+              {!isCompact && (
+                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-muted rounded border text-muted-foreground font-mono">
+                  Alt+N
+                </kbd>
+              )}
             </Button>
             <Button
               variant="outline"
@@ -743,11 +783,16 @@ export default function InventoryPage() {
             >
               <Plus className="h-4 w-4 mr-1" /> Movimiento
             </Button>
-            <Button
+<Button
               size={isCompact ? "sm" : "default"}
               onClick={() => { setEditItem(null); setShowItemDialog(true); }}
             >
               <Plus className="h-4 w-4 mr-1" /> Nuevo Producto
+              {!isCompact && (
+                <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
+                  Alt+N
+                </kbd>
+              )}
             </Button>
           </div>
         </div>
@@ -773,7 +818,7 @@ export default function InventoryPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="bodegas">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList>
           <TabsTrigger value="bodegas">Bodegas</TabsTrigger>
           <TabsTrigger value="catalogo">Catálogo de Productos</TabsTrigger>
