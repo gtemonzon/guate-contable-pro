@@ -391,24 +391,27 @@ export function useAlertGenerator() {
 
       // 4b. Collections tracking (CxC / CxP) — aggregated notification per direction
       // Module must be enabled at BOTH levels: enterprise and tenant.
-      const { data: enterpriseRow } = await supabase
+      const { data: enterpriseRow, error: enterpriseRowError } = await supabase
         .from('tab_enterprises')
         .select('tenant_id')
         .eq('id', enterpriseId)
         .maybeSingle();
+      if (enterpriseRowError) console.error('[alerts] error cargando la empresa:', enterpriseRowError);
 
-      const { data: entModules } = await supabase
+      const { data: entModules, error: entModulesError } = await supabase
         .from('tab_enterprise_modules')
         .select('module_key, is_enabled')
         .eq('enterprise_id', enterpriseId);
+      if (entModulesError) console.error('[alerts] error cargando módulos de empresa:', entModulesError);
 
       const tenantId = enterpriseRow?.tenant_id ?? null;
-      const { data: tenantModules } = tenantId
+      const { data: tenantModules, error: tenantModulesError } = tenantId
         ? await supabase
             .from('tab_tenant_modules')
             .select('module_key, is_enabled')
             .eq('tenant_id', tenantId)
-        : { data: [] as ModuleFlag[] };
+        : { data: [] as ModuleFlag[], error: null };
+      if (tenantModulesError) console.error('[alerts] error cargando módulos del tenant:', tenantModulesError);
 
       const moduleEnabled = (key: string) =>
         (entModules || []).some((m) => m.module_key === key && m.is_enabled) &&
