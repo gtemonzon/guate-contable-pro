@@ -726,9 +726,6 @@ export default function InventoryPage() {
             <h1 className={cn("font-bold flex items-center gap-2 transition-all", isCompact ? "text-lg" : "text-2xl")}>
               <Package className={isCompact ? "h-4 w-4" : "h-5 w-5"} /> Inventario
             </h1>
-            {!isCompact && (
-              <p className="text-muted-foreground text-sm">{selectedEnterprise?.business_name}</p>
-            )}
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button
