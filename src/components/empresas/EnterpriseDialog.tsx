@@ -573,6 +573,10 @@ export function EnterpriseDialog({
             <TabsContent value="books" className="mt-4">
               <EnterpriseBookAuthorizations enterpriseId={enterprise.id} />
             </TabsContent>
+
+            <TabsContent value="modules" className="mt-4">
+              <EnterpriseModules enterpriseId={enterprise.id} />
+            </TabsContent>
           </Tabs>
         ) : (
           <Form {...form}>
