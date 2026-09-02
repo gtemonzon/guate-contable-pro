@@ -435,7 +435,59 @@ export default function GenerarDeclaracion() {
         </Card>
       )}
 
+      {/* Cálculos anteriores de este período */}
+      {selectedFormType && savedCalculations.length > 0 && (
+        <Card>
+          <CardContent className="pt-4">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="saved" className="border-none">
+                <AccordionTrigger className="py-2">
+                  <span className="flex items-center gap-2 text-base font-medium">
+                    <History className="h-4 w-4" />
+                    Cálculos anteriores de este período ({savedCalculations.length})
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-2">
+                    {savedCalculations.map((row) => {
+                      const total = getCalculationTotal(row.form_type, row.result);
+                      return (
+                        <div
+                          key={row.id}
+                          className="flex items-center justify-between gap-4 rounded-md border p-3"
+                        >
+                          <div className="text-sm">
+                            <p className="font-medium">
+                              {new Date(row.created_at).toLocaleString("es-GT")}
+                            </p>
+                            {total !== null && (
+                              <p className="text-muted-foreground">
+                                Total a pagar: Q{total.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handleLoadSaved(row)}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Cargar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Resumen de datos */}
+
       {hasGenerated && selectedFormType !== 'ISR_TRIMESTRAL' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
