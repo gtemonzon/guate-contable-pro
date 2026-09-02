@@ -2832,6 +2832,119 @@ export type Database = {
           },
         ]
       }
+      tab_inventory_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          current_quantity: number
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          name: string
+          sku: string
+          suggested_price: number
+          unit_cost: number
+          unit_of_measure: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          current_quantity?: number
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          name: string
+          sku: string
+          suggested_price?: number
+          unit_cost?: number
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          current_quantity?: number
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          name?: string
+          sku?: string
+          suggested_price?: number
+          unit_cost?: number
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_inventory_items_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_inventory_movements: {
+        Row: {
+          adjustment_direction: string | null
+          created_at: string
+          created_by: string | null
+          enterprise_id: number
+          id: number
+          item_id: number
+          movement_date: string
+          movement_type: string
+          notes: string | null
+          quantity: number
+          reference: string | null
+          unit_cost: number
+        }
+        Insert: {
+          adjustment_direction?: string | null
+          created_at?: string
+          created_by?: string | null
+          enterprise_id: number
+          id?: number
+          item_id: number
+          movement_date?: string
+          movement_type: string
+          notes?: string | null
+          quantity: number
+          reference?: string | null
+          unit_cost?: number
+        }
+        Update: {
+          adjustment_direction?: string | null
+          created_at?: string
+          created_by?: string | null
+          enterprise_id?: number
+          id?: number
+          item_id?: number
+          movement_date?: string
+          movement_type?: string
+          notes?: string | null
+          quantity?: number
+          reference?: string | null
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_inventory_movements_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_inventory_movements_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "tab_inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tab_isr_income_categories: {
         Row: {
           created_at: string
