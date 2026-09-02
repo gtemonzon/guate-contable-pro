@@ -48,6 +48,7 @@ import { useEnterpriseConfig } from '@/hooks/useEnterpriseConfig';
 import { useCostOfSalesCalculation } from '@/hooks/useCostOfSalesCalculation';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
 import { getFiscalFloorDate, applyFiscalFloor } from '@/utils/fiscalFloor';
+import { allocateEntryNumber } from '@/utils/journalEntryNumbering';
 
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
