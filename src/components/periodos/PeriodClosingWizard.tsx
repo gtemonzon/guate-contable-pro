@@ -205,21 +205,30 @@ export function PeriodClosingWizard({
   const periodResult = totalIncome - totalExpenses;
 
   // ---- Find existing entries ----
-  const findExistingEntry = useCallback(async (entryType: string, periodId: number, prefix: string): Promise<ExistingEntry | null> => {
-    const { data, error } = await supabase
+const findExistingEntry = useCallback(async (entryType: string, periodId: number, prefix?: string): Promise<ExistingEntry | null> => {
+    let query = supabase
       .from('tab_journal_entries')
       .select('id, entry_number, status, is_posted')
       .eq('enterprise_id', enterpriseId)
       .eq('accounting_period_id', periodId)
       .eq('entry_type', entryType)
-      .ilike('entry_number', `${prefix}-%`)
       .is('deleted_at', null)
       .is('reversal_entry_id', null)
       .is('reversed_by_entry_id', null)
       .order('is_posted', { ascending: false })
       .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    // Only restrict by number prefix when one is provided. Opening entries
+    // ('apertura') may have been created manually or via legacy import with
+    // non-standard prefixes (e.g. PD-2025-01-0001), so for that type the
+    // search must rely solely on entry_type + period to avoid both a false
+    // "pending" state and a duplicated opening entry.
+    if (prefix) {
+      query = query.ilike('entry_number', `${prefix}-%`);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw error;
     return (data as ExistingEntry | null) ?? null;
@@ -256,7 +265,7 @@ export function PeriodClosingWizard({
         .maybeSingle();
 
       if (nextPeriod) {
-        const openEntry = await findExistingEntry('apertura', nextPeriod.id, 'APER');
+        const openEntry = await findExistingEntry('apertura', nextPeriod.id);
         if (openEntry) {
           setOpeningEntryGenerated(true);
           setOpeningEntryId(openEntry.id);
@@ -767,7 +776,7 @@ export function PeriodClosingWizard({
         toast.success(`Período ${nextYear} creado automáticamente`);
       }
 
-      const existingEntry = await findExistingEntry('apertura', nextPeriodId, 'APER');
+      const existingEntry = await findExistingEntry('apertura', nextPeriodId);
       const { data: { user } } = await supabase.auth.getUser();
 
       // Get all accounts
