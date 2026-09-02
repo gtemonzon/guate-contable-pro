@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { DEFAULT_TENANT_PRIMARY, hexToHsl, hslToCssTriplet, normalizeHex } from "@/utils/colorUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Tenant {
@@ -148,18 +149,35 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Apply tenant branding via CSS variables
+  // Apply tenant branding to the sidebar tokens (fallbacks in index.css apply when unset)
   useEffect(() => {
-    if (currentTenant) {
-      document.documentElement.style.setProperty(
-        "--tenant-primary", 
-        currentTenant.primary_color
-      );
-      document.documentElement.style.setProperty(
-        "--tenant-secondary", 
-        currentTenant.secondary_color
-      );
+    const root = document.documentElement;
+    const clear = () => {
+      root.style.removeProperty("--tenant-sidebar-bg");
+      root.style.removeProperty("--tenant-sidebar-accent");
+    };
+
+    const hex = currentTenant?.primary_color ?? null;
+    const normalized = hex ? normalizeHex(hex) : null;
+
+    // Sin color personalizado (o con el color por defecto del sistema): no forzamos nada.
+    if (!normalized || normalized === normalizeHex(DEFAULT_TENANT_PRIMARY)) {
+      clear();
+      return;
     }
+
+    const hsl = hexToHsl(normalized);
+    if (!hsl) {
+      clear();
+      return;
+    }
+
+    // Fondo oscuro (~22% de luminosidad) para mantener legible el texto claro,
+    // y un acento algo más claro (~32%) para hover/activo.
+    root.style.setProperty("--tenant-sidebar-bg", hslToCssTriplet({ ...hsl, l: 22 }));
+    root.style.setProperty("--tenant-sidebar-accent", hslToCssTriplet({ ...hsl, l: 32 }));
+
+    return clear;
   }, [currentTenant]);
 
   // Load enabled modules whenever the active tenant changes

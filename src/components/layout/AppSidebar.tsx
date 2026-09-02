@@ -84,7 +84,7 @@ const allMenuItems: MenuItemOrSection[] = [
     title: "Mi Organización",
     icon: Network,
     items: [
-      { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin", hideIfSuperAdmin: true },
+      { title: "Mi Oficina", url: "/tenant-settings", icon: Building, requiredPermission: "isTenantAdmin" },
       { title: "Tenants", url: "/tenants", icon: Building, requiredPermission: "isSuperAdmin" },
       { title: "Empresas", url: "/empresas", icon: Building2, requiredPermission: "canManageEnterprises" },
       { title: "Usuarios", url: "/usuarios", icon: Users, requiredPermission: "canManageUsers" },
