@@ -4,7 +4,7 @@ import {
   Search, Home, Building2, Users, Settings, BookOpen, FileText, ShoppingCart, Receipt,
   Calculator, FileBarChart, HelpCircle, ChevronRight, ExternalLink, Lightbulb, AlertCircle,
   FileDown, Bell, Banknote, CalendarDays, ClipboardList, Building, Keyboard, Download,
-  MessageCircle, Package, Inbox, Wand2, Key, Wrench, Lock, HandCoins,
+  MessageCircle, Package, Inbox, Wand2, Key, Wrench, Lock, HandCoins, Boxes,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from "jspdf";
@@ -65,7 +65,12 @@ const helpSections: HelpSection[] = [
     icon: Lightbulb,
     description: "Mejoras y nuevas funcionalidades incorporadas recientemente al sistema.",
     isNew: true,
-    steps: [
+steps: [
+      { publishedAt: "2026-09-02", requiredModule: "inventario", title: "Módulo de Inventario", description: "Nuevo módulo ERP para controlar bodegas y productos: catálogo de bodegas (todo producto pertenece a una), catálogo de productos con costo promedio ponderado calculado automáticamente, movimientos tipo kardex (entradas, salidas y ajustes con validación de existencia), saldos actuales en vivo, importación masiva desde Excel y reportes listos para el Reporte Semestral de Inventarios ante la SAT. Se activa por oficina contable (tenant) y, además, por empresa individual desde Empresas → editar empresa → pestaña Módulos." },
+      { publishedAt: "2026-09-02", title: "Activos Fijos — edición de datos y adjuntos", description: "El detalle de cada activo ahora tiene dos pestañas. 'Datos' permite editar la información del activo (ubicación, custodio, proveedor, centro de costo y notas) incluso después de registrado. 'Adjuntos' permite subir cualquier archivo con compresión automática de imágenes y PDF, verlo en un visor integrado y descargarlo o imprimirlo." },
+      { publishedAt: "2026-09-02", title: "Personalización de marca por oficina contable", description: "En Mi Oficina, al subir el logo, el sistema detecta automáticamente un color sugerido que puede aplicar con un clic. El color elegido para la oficina ya se refleja en el menú lateral de todos sus usuarios." },
+      { publishedAt: "2026-09-02", title: "Numeración estándar en partidas de Apertura, Cierre y Traslado", description: "Las partidas de apertura (APER), cierre (CIER) y traslado (TRAS) que genera el Asistente de Cierre ahora usan la misma numeración que el resto del sistema: PREFIJO-AÑO-MES-CORRELATIVO (ej. APER-2026-12-0001). Las partidas históricas generadas con otro formato se actualizaron automáticamente al estándar." },
+      { publishedAt: "2026-09-02", title: "Vista de tabla en Gestión de Tenants", description: "La página Gestión de Tenants (solo super administrador) ahora permite alternar entre la vista de tarjetas y una vista de tabla con columnas de logo, nombre, código, empresas, usuarios, email de contacto y estado. La preferencia se recuerda entre sesiones, igual que en Usuarios." },
       { publishedAt: "2026-07-30", requiredModule: ["cxc", "cxp"], title: "Módulo de Cuentas por Cobrar y por Pagar", description: "Nuevo módulo ERP para dar seguimiento de cobro y de pago a las facturas registradas en los libros fiscales. Permite registrar abonos, consultar el reporte de antigüedad de saldos y generar las pólizas contables de los abonos. Se activa por oficina contable (tenant): si no lo ve en su menú, contacte al administrador del sistema." },
       { publishedAt: "2026-07-30", title: "IVA Retenido por Terceros en declaración de Pequeño Contribuyente", description: "El formulario SAT-2046 ahora permite restar el IVA retenido por operadoras de tarjeta de crédito u otros agentes de retención, con un botón de sugerencia automática que toma el total de las constancias registradas en Gestión Tributaria → Retenciones y Exenciones del período." },
       { publishedAt: "2026-05-15", title: "Régimen Fiscal en Libros SAT", description: "Los libros de Compras y Ventas ahora se adaptan automáticamente al régimen fiscal de la empresa. Contribuyente General y Profesional Liberal usan libros separados con columnas completas de IVA. Pequeño Contribuyente usa un libro combinado (Compras a la izquierda, Ventas a la derecha). ONG Exenta usa formatos simplificados sin columna de IVA. Verifique el régimen en Empresas → editar empresa → Impuestos." },
@@ -572,10 +577,34 @@ const helpSections: HelpSection[] = [
       { title: "Reporte de antigüedad de saldos", description: "Con 'Ver reporte de antigüedad' se despliega el resumen por cliente o proveedor con cortes de 0-30, 31-60, 61-90 y más de 90 días. Al hacer clic en un nombre o en una celda de saldo, se filtra la lista principal de documentos. El botón 'Exportar a Excel' descarga el reporte." },
       { title: "Configuración por empresa", description: "En Configuración → Cobros y Pagos defina los plazos de pago por defecto, los motivos predefinidos de cambio de estatus, el ajuste de vencimientos a días hábiles y las alertas de vencimiento." },
     ],
-    tips: [
+tips: [
       "El módulo se activa por oficina contable (tenant) desde el administrador del sistema: si no aparece en su menú, solicítelo.",
       "Los totales del reporte de antigüedad se calculan sobre el saldo pendiente (total del documento menos los abonos aplicados).",
       "Las facturas históricas no entran automáticamente al seguimiento: se incorporan de forma selectiva desde 'Cargar saldos iniciales'.",
+    ],
+  },
+  {
+    id: "inventario",
+    title: "Inventario",
+    icon: Boxes,
+    description: "Catálogo de bodegas y productos, movimientos tipo kardex, saldos y reportes con costo promedio ponderado.",
+    route: "/inventario",
+    isNew: true,
+    requiredModule: "inventario",
+    steps: [
+      { title: "Catálogo de Bodegas", description: "Administre las bodegas donde se almacenan los productos: puede crearlas, editarlas o desactivarlas desde la pestaña Bodegas. Todo producto pertenece obligatoriamente a una bodega, así que registre las bodegas antes de crear productos." },
+      { title: "Catálogo de Productos", description: "En la pestaña Catálogo registre cada producto con su código, nombre, unidad de medida, categoría, precio sugerido y bodega asignada. El sistema calcula automáticamente el costo promedio ponderado del producto con cada movimiento: usted no lo digita." },
+      { title: "Movimientos y Kardex", description: "Registre entradas (compras), salidas (ventas, consumo) y ajustes (sobrantes o faltantes). Las salidas validan que exista existencia suficiente en la bodega; cada movimiento queda registrado en el kardex del producto con su efecto sobre el costo promedio." },
+      { title: "Saldos Actuales", description: "La pestaña de saldos muestra la cantidad y la valorización (costo promedio × existencia) en vivo, por producto y por bodega, actualizándose con cada movimiento registrado." },
+      { title: "Importación masiva desde Excel", description: "En Catálogo de Productos use el botón de importación masiva. El wizard de 3 pasos: (1) descargue la plantilla, (2) suba su archivo y revise la validación fila por fila (código duplicado, bodega inexistente, etc.), (3) confirme la importación. El sistema crea los productos y sus movimientos iniciales." },
+      { title: "Reportes", description: "En la pestaña Reportes genere: saldos a fecha de corte con método de valuación Promedio Ponderado (pensado para el Reporte Semestral de Inventarios que exige la SAT), kardex por producto, y entradas/salidas/saldo por período. Todos exportables a PDF." },
+      { title: "Atajos de teclado", description: "Alt+N crea un nuevo registro en las pestañas Bodegas y Catálogo de Productos; dentro de los diálogos, Ctrl+Enter (⌘+Enter en Mac) guarda el registro." },
+    ],
+    tips: [
+      "El módulo se activa en dos niveles: por oficina contable (tenant) y por empresa individual desde Empresas → editar empresa → pestaña Módulos. Si no lo ve en su menú, verifique ambos.",
+      "Registre el movimiento de entrada al recibir mercadería para que el costo promedio ponderado se actualice antes de emitir salidas.",
+      "Las salidas no pueden superar la existencia disponible: si necesita vender más de lo que hay, primero registre el ingreso de mercadería.",
+      "Para el Reporte Semestral de Inventarios ante la SAT, genere el reporte de saldos a fecha de corte con el método Promedio Ponderado y exporte a PDF.",
     ],
   },
 ];
@@ -695,9 +724,19 @@ const faqItems: FaqItem[] = [
     answer: "Entre a Cuentas por Cobrar (clientes) o Cuentas por Pagar (proveedores), ubique el documento en la lista y presione el botón 'Registrar abono'. Capture el monto, la fecha, la forma de pago (Efectivo, Cheque, Transferencia u Otro), el número de recibo emitido si aplica y la cuenta bancaria cuando el pago sea por transferencia o cheque. Luego puede contabilizarlos con 'Generar Póliza'.",
     requiredModule: ["cxc", "cxp"],
   },
-  {
+{
     question: "¿Por qué no veo Cuentas por Cobrar / por Pagar en mi menú?",
     answer: "Cuentas por Cobrar y Cuentas por Pagar son un módulo que se habilita por oficina contable (tenant). Si no aparece en su menú lateral, significa que su oficina aún no lo tiene activado: contacte al administrador del sistema para solicitar su activación.",
+  },
+  {
+    question: "¿Por qué no veo Inventario en mi menú?",
+    answer: "Inventario es un módulo que se habilita en dos niveles: por oficina contable (tenant) y por empresa individual. Si no aparece en su menú lateral, primero verifique que su oficina lo tenga activado (contacte al administrador del sistema) y luego que la empresa seleccionada lo tenga habilitado en Empresas → editar empresa → pestaña Módulos.",
+    requiredModule: "inventario",
+  },
+  {
+    question: "¿Qué método de valuación usa el Inventario y cómo preparo el Reporte Semestral ante la SAT?",
+    answer: "El sistema calcula automáticamente el costo promedio ponderado de cada producto con cada movimiento (entradas y salidas). En la pestaña Reportes del módulo encontrará el reporte de saldos a fecha de corte con el método Promedio Ponderado, pensado para el Reporte Semestral de Inventarios que exige la SAT, además del kardex por producto y el reporte de entradas/salidas/saldo por período, exportables a PDF.",
+    requiredModule: "inventario",
   },
 ];
 
