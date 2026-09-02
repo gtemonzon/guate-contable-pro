@@ -22,7 +22,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse } from "lucide-react";
+import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse, Upload } from "lucide-react";
+import { ImportItemsWizard } from "./ImportItemsWizard";
+
 
 // ---------- Types ----------
 
