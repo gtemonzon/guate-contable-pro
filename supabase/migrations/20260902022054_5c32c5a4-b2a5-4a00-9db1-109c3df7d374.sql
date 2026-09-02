@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.inventory_movement_before_insert() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.inventory_movement_after_insert() FROM PUBLIC, anon, authenticated;
