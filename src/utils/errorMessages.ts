@@ -56,6 +56,10 @@ export function getSafeErrorMessage(error: unknown): string {
   if (errorCode === '22P02') return 'Formato de datos inválido';
   if (errorCode === '23514') return errorMessage ? `Valor inválido: ${errorMessage}` : 'Valor inválido para uno de los campos';
   if (errorCode === '42501') return 'Sin permisos para realizar esta operación';
+  if (errorCode === 'P0004') {
+    // P0004 is a business-rule RAISE EXCEPTION meant to be shown verbatim
+    return errorMessage || 'Operación no permitida';
+  }
   if (errorCode === 'P0001') {
     // P0001 is RAISE EXCEPTION from triggers - show the message
     return errorMessage || 'Error de validación en la base de datos';
