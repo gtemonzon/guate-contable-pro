@@ -1061,7 +1061,22 @@ export default function InventoryPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* --- Reportes --- */}
+        <TabsContent value="reportes" className="mt-4">
+          {selectedEnterprise && (
+            <InventoryReportsTab
+              enterpriseId={selectedEnterprise.id}
+              enterpriseName={selectedEnterprise.business_name ?? ""}
+              items={items}
+              movements={movements}
+              warehouses={warehouses}
+              pdfTypography={{ fontFamily: pdfConfig.fontFamily, fontSize: pdfConfig.fontSize }}
+            />
+          )}
+        </TabsContent>
       </Tabs>
+
 
       {showWarehouseDialog && selectedEnterprise && (
         <WarehouseDialog
