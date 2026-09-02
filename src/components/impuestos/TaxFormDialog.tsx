@@ -882,6 +882,45 @@ export default function TaxFormDialog({
                   placeholder="0.00"
                   disabled={isAnalyzing}
                 />
+                {(() => {
+                  if (editingForm || calcSuggestionDismissed || !suggestedCalc) return null;
+                  const total = getCalculationTotal(suggestedCalc.form_type, suggestedCalc.result);
+                  if (total === null) return null;
+                  return (
+                    <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-2">
+                      <p>
+                        Se encontró un cálculo guardado del{" "}
+                        {format(new Date(suggestedCalc.created_at), "dd/MM/yyyy")} con total a pagar de{" "}
+                        <span className="font-semibold">
+                          Q{total.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>{" "}
+                        — ¿usar este monto?
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setAmountPaid(total.toFixed(2));
+                            setLinkedCalcId(suggestedCalc.id);
+                            setCalcSuggestionDismissed(true);
+                          }}
+                        >
+                          Usar monto
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setCalcSuggestionDismissed(true)}
+                        >
+                          Ignorar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
