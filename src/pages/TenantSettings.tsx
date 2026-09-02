@@ -13,6 +13,49 @@ import { Separator } from "@/components/ui/separator";
 import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
 import { Building2, Upload, X, ImageIcon, Loader2, Save, Lock, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { rgbToHex } from "@/utils/colorUtils";
+
+/**
+ * Extrae el color dominante "vibrante" de una imagen usando Canvas API.
+ * Ignora píxeles casi blancos, casi negros y transparentes.
+ * Retorna null si no hay suficientes píxeles válidos.
+ */
+async function detectDominantColor(dataUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onerror = () => resolve(null);
+    img.onload = () => {
+      try {
+        const size = 50;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0, size, size);
+        const { data } = ctx.getImageData(0, 0, size, size);
+
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3];
+          if (alpha < 128) continue;
+          const pr = data[i], pg = data[i + 1], pb = data[i + 2];
+          if (pr > 240 && pg > 240 && pb > 240) continue; // casi blanco
+          if (pr < 15 && pg < 15 && pb < 15) continue; // casi negro
+          r += pr; g += pg; b += pb; count++;
+        }
+
+        const minPixels = Math.round(size * size * 0.02);
+        if (count < Math.max(20, minPixels)) return resolve(null);
+        resolve(rgbToHex(r / count, g / count, b / count));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.src = dataUrl;
+  });
+}
 
 export default function TenantSettings() {
   const { currentTenant, isSuperAdmin, isTenantAdmin, refreshTenants } = useTenant();
@@ -29,6 +72,7 @@ export default function TenantSettings() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [detectedColor, setDetectedColor] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentTenant) return;
@@ -90,8 +134,15 @@ export default function TenantSettings() {
       return;
     }
 
+    setDetectedColor(null);
     const reader = new FileReader();
-    reader.onloadend = () => setLogoPreview(reader.result as string);
+    reader.onloadend = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : null;
+      setLogoPreview(dataUrl);
+      if (dataUrl) {
+        detectDominantColor(dataUrl).then((color) => setDetectedColor(color));
+      }
+    };
     reader.readAsDataURL(file);
 
     try {
@@ -120,6 +171,7 @@ export default function TenantSettings() {
   const handleRemoveLogo = () => {
     setLogoUrl(null);
     setLogoPreview(null);
+    setDetectedColor(null);
     setDirty(true);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -268,6 +320,30 @@ export default function TenantSettings() {
                   className="flex-1"
                 />
               </div>
+              {detectedColor && (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
+                  <span
+                    className="h-5 w-5 rounded border"
+                    style={{ backgroundColor: detectedColor }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Color detectado del logo ({detectedColor})
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto h-7 text-xs"
+                    onClick={() => {
+                      setPrimaryColor(detectedColor);
+                      setDirty(true);
+                    }}
+                  >
+                    Usar este color
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="secondary_color">Color secundario</Label>
