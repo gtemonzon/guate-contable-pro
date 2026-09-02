@@ -24,6 +24,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse, Upload } from "lucide-react";
 import { ImportItemsWizard } from "./ImportItemsWizard";
+import { InventoryReportsTab } from "./InventoryReportsTab";
+
 
 
 // ---------- Types ----------
