@@ -22,13 +22,23 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power } from "lucide-react";
+import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse } from "lucide-react";
 
 // ---------- Types ----------
+
+export interface InventoryWarehouse {
+  id: number;
+  enterprise_id: number;
+  code: string;
+  name: string;
+  address: string | null;
+  is_active: boolean;
+}
 
 export interface InventoryItem {
   id: number;
   enterprise_id: number;
+  warehouse_id: number;
   sku: string;
   name: string;
   unit_of_measure: string;
@@ -103,6 +113,7 @@ function errorMessage(err: unknown): string {
 // ---------- Item dialog ----------
 
 interface ItemFormState {
+  warehouse_id: string;
   sku: string;
   name: string;
   unit_of_measure: string;
@@ -111,9 +122,17 @@ interface ItemFormState {
 }
 
 function ItemDialog({
-  enterpriseId, item, onClose,
-}: { enterpriseId: number; item: InventoryItem | null; onClose: (saved: boolean) => void }) {
+  enterpriseId, item, warehouses, onClose,
+}: {
+  enterpriseId: number;
+  item: InventoryItem | null;
+  warehouses: InventoryWarehouse[];
+  onClose: (saved: boolean) => void;
+}) {
+  const activeWarehouses = warehouses.filter((w) => w.is_active || w.id === item?.warehouse_id);
+  const noWarehouses = activeWarehouses.length === 0;
   const [form, setForm] = useState<ItemFormState>({
+    warehouse_id: item ? String(item.warehouse_id) : "",
     sku: item?.sku ?? "",
     name: item?.name ?? "",
     unit_of_measure: item?.unit_of_measure ?? "unidad",
@@ -127,9 +146,15 @@ function ItemDialog({
       toast({ title: "Datos incompletos", description: "El código y el nombre son obligatorios.", variant: "destructive" });
       return;
     }
+    const warehouseId = Number(form.warehouse_id);
+    if (!warehouseId) {
+      toast({ title: "Bodega requerida", description: "Selecciona la bodega a la que pertenece el producto.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     const payload = {
       enterprise_id: enterpriseId,
+      warehouse_id: warehouseId,
       sku: form.sku.trim(),
       name: form.name.trim(),
       unit_of_measure: form.unit_of_measure.trim() || "unidad",
@@ -158,6 +183,30 @@ function ItemDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          {noWarehouses && (
+            <Alert variant="destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>No hay bodegas creadas</AlertTitle>
+              <AlertDescription>
+                Crea al menos una bodega en la pestaña “Bodegas” antes de registrar productos.
+              </AlertDescription>
+            </Alert>
+          )}
+          <div>
+            <Label>Bodega</Label>
+            <Select
+              value={form.warehouse_id}
+              onValueChange={(v) => setForm({ ...form, warehouse_id: v })}
+              disabled={noWarehouses}
+            >
+              <SelectTrigger><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+              <SelectContent>
+                {activeWarehouses.map((w) => (
+                  <SelectItem key={w.id} value={String(w.id)}>{w.code} — {w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Código (SKU)</Label>
@@ -202,6 +251,72 @@ function ItemDialog({
               </div>
             </div>
           )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
+          <Button onClick={save} disabled={saving || noWarehouses}>{saving ? "Guardando…" : "Guardar"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------- Warehouse dialog ----------
+
+function WarehouseDialog({
+  enterpriseId, warehouse, onClose,
+}: { enterpriseId: number; warehouse: InventoryWarehouse | null; onClose: (saved: boolean) => void }) {
+  const [code, setCode] = useState(warehouse?.code ?? "");
+  const [name, setName] = useState(warehouse?.name ?? "");
+  const [address, setAddress] = useState(warehouse?.address ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!code.trim() || !name.trim()) {
+      toast({ title: "Datos incompletos", description: "El código y el nombre son obligatorios.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      enterprise_id: enterpriseId,
+      code: code.trim(),
+      name: name.trim(),
+      address: address.trim() || null,
+    };
+    const { error } = warehouse
+      ? await supabase.from("tab_inventory_warehouses").update(payload).eq("id", warehouse.id)
+      : await supabase.from("tab_inventory_warehouses").insert(payload);
+    setSaving(false);
+    if (error) {
+      toast({ title: "No se pudo guardar", description: errorMessage(error), variant: "destructive" });
+      return;
+    }
+    toast({ title: warehouse ? "Bodega actualizada" : "Bodega creada" });
+    onClose(true);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{warehouse ? "Editar bodega" : "Nueva bodega"}</DialogTitle>
+          <DialogDescription>Cada producto pertenece a una sola bodega.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Código</Label>
+              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="BOD-01" />
+            </div>
+            <div>
+              <Label>Nombre</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bodega central" />
+            </div>
+          </div>
+          <div>
+            <Label>Dirección (opcional)</Label>
+            <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
@@ -377,6 +492,7 @@ export default function InventoryPage() {
   const moduleEnabled = hasModule("inventario");
   const [enterpriseModuleEnabled, setEnterpriseModuleEnabled] = useState<boolean | null>(null);
 
+  const [warehouses, setWarehouses] = useState<InventoryWarehouse[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -386,6 +502,8 @@ export default function InventoryPage() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showMovementDialog, setShowMovementDialog] = useState(false);
+  const [editWarehouse, setEditWarehouse] = useState<InventoryWarehouse | null>(null);
+  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
 
   const [filterItemId, setFilterItemId] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -421,17 +539,24 @@ export default function InventoryPage() {
 
   const load = useCallback(async () => {
     if (!selectedEnterprise || !moduleEnabled) {
-      setItems([]); setMovements([]);
+      setItems([]); setMovements([]); setWarehouses([]);
       return;
     }
     setLoading(true);
     try {
       const enterpriseId = selectedEnterprise.id;
-      const [itemRows, movementRows] = await Promise.all([
+      const [warehouseRows, itemRows, movementRows] = await Promise.all([
+        fetchAllRecords<InventoryWarehouse>(() =>
+          supabase
+            .from("tab_inventory_warehouses")
+            .select("id,enterprise_id,code,name,address,is_active")
+            .eq("enterprise_id", enterpriseId)
+            .order("code", { ascending: true })
+        ),
         fetchAllRecords<InventoryItem>(() =>
           supabase
             .from("tab_inventory_items")
-            .select("id,enterprise_id,sku,name,unit_of_measure,unit_cost,suggested_price,category,current_quantity,is_active")
+            .select("id,enterprise_id,warehouse_id,sku,name,unit_of_measure,unit_cost,suggested_price,category,current_quantity,is_active")
             .eq("enterprise_id", enterpriseId)
             .order("sku", { ascending: true })
         ),
@@ -444,6 +569,7 @@ export default function InventoryPage() {
             .order("id", { ascending: true })
         ),
       ]);
+      setWarehouses(warehouseRows);
       setItems(itemRows);
       setMovements(movementRows.map(toMovement));
     } catch (err) {
@@ -456,6 +582,17 @@ export default function InventoryPage() {
   useEffect(() => { load(); }, [load]);
 
   const itemsById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const warehousesById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
+  const warehouseName = useCallback(
+    (id: number) => warehousesById.get(id)?.name ?? "—",
+    [warehousesById]
+  );
+
+  const itemCountByWarehouse = useMemo(() => {
+    const m = new Map<number, number>();
+    items.forEach((i) => m.set(i.warehouse_id, (m.get(i.warehouse_id) ?? 0) + 1));
+    return m;
+  }, [items]);
 
   const movementCountByItem = useMemo(() => {
     const m = new Map<number, number>();
@@ -509,10 +646,11 @@ export default function InventoryPage() {
       filename: `saldos_inventario_${todayISO()}`,
       title: "Saldos de Inventario",
       enterpriseName: selectedEnterprise?.business_name ?? "",
-      headers: ["Código", "Producto", "Unidad", "Existencia", "Costo promedio", "Valorización"],
+      headers: ["Código", "Producto", "Bodega", "Unidad", "Existencia", "Costo promedio", "Valorización"],
       data: balances.list.map((r) => [
         r.item.sku,
         r.item.name,
+        warehouseName(r.item.warehouse_id),
         r.item.unit_of_measure,
         formatQty(Number(r.item.current_quantity)),
         formatCurrency(Number(r.item.unit_cost)),
@@ -535,6 +673,19 @@ export default function InventoryPage() {
       return;
     }
     toast({ title: item.is_active ? "Producto desactivado" : "Producto activado" });
+    load();
+  };
+
+  const toggleWarehouseActive = async (w: InventoryWarehouse) => {
+    const { error } = await supabase
+      .from("tab_inventory_warehouses")
+      .update({ is_active: !w.is_active })
+      .eq("id", w.id);
+    if (error) {
+      toast({ title: "No se pudo actualizar", description: errorMessage(error), variant: "destructive" });
+      return;
+    }
+    toast({ title: w.is_active ? "Bodega desactivada" : "Bodega activada" });
     load();
   };
 
@@ -575,6 +726,13 @@ export default function InventoryPage() {
             <Button
               variant="outline"
               size={isCompact ? "sm" : "default"}
+              onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Nueva Bodega
+            </Button>
+            <Button
+              variant="outline"
+              size={isCompact ? "sm" : "default"}
               onClick={() => setShowMovementDialog(true)}
               disabled={items.length === 0}
             >
@@ -600,12 +758,81 @@ export default function InventoryPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="catalogo">
+      <Tabs defaultValue="bodegas">
         <TabsList>
+          <TabsTrigger value="bodegas">Bodegas</TabsTrigger>
           <TabsTrigger value="catalogo">Catálogo de Productos</TabsTrigger>
           <TabsTrigger value="kardex">Movimientos (Kardex)</TabsTrigger>
           <TabsTrigger value="saldos">Saldos Actuales</TabsTrigger>
         </TabsList>
+
+        {/* --- Bodegas --- */}
+        <TabsContent value="bodegas" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Warehouse className="h-4 w-4" /> Bodegas ({warehouses.length})
+              </CardTitle>
+              <Button size="sm" onClick={() => { setEditWarehouse(null); setShowWarehouseDialog(true); }}>
+                <Plus className="h-4 w-4 mr-1" /> Nueva Bodega
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Dirección</TableHead>
+                      <TableHead className="text-right">Productos</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading && (
+                      <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>
+                    )}
+                    {!loading && warehouses.length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Sin bodegas registradas.</TableCell></TableRow>
+                    )}
+                    {warehouses.map((w) => (
+                      <TableRow key={w.id} className={w.is_active ? "" : "opacity-60"}>
+                        <TableCell className="font-mono text-xs">{w.code}</TableCell>
+                        <TableCell className="font-medium">
+                          {w.name}
+                          {!w.is_active && <Badge variant="secondary" className="ml-2">Inactiva</Badge>}
+                        </TableCell>
+                        <TableCell className="max-w-[280px] truncate">{w.address || "—"}</TableCell>
+                        <TableCell className="text-right">{itemCountByWarehouse.get(w.id) ?? 0}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button variant="ghost" size="sm" onClick={() => { setEditWarehouse(w); setShowWarehouseDialog(true); }}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleWarehouseActive(w)}
+                            title={
+                              (itemCountByWarehouse.get(w.id) ?? 0) > 0
+                                ? "Tiene productos asignados: solo puede desactivarse"
+                                : w.is_active ? "Desactivar" : "Activar"
+                            }
+                          >
+                            <Power className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Las bodegas no se eliminan: se desactivan para conservar la trazabilidad de los productos.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* --- Catálogo --- */}
         <TabsContent value="catalogo" className="mt-4">
@@ -634,6 +861,7 @@ export default function InventoryPage() {
                     <TableRow>
                       <TableHead>Código</TableHead>
                       <TableHead>Producto</TableHead>
+                      <TableHead>Bodega</TableHead>
                       <TableHead>Unidad</TableHead>
                       <TableHead>Categoría</TableHead>
                       <TableHead className="text-right">Existencia</TableHead>
@@ -644,10 +872,10 @@ export default function InventoryPage() {
                   </TableHeader>
                   <TableBody>
                     {loading && (
-                      <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Cargando…</TableCell></TableRow>
                     )}
                     {!loading && filteredItems.length === 0 && (
-                      <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Sin productos registrados.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Sin productos registrados.</TableCell></TableRow>
                     )}
                     {filteredItems.map((i) => (
                       <TableRow key={i.id} className={i.is_active ? "" : "opacity-60"}>
@@ -656,6 +884,7 @@ export default function InventoryPage() {
                           {i.name}
                           {!i.is_active && <Badge variant="secondary" className="ml-2">Inactivo</Badge>}
                         </TableCell>
+                        <TableCell>{warehouseName(i.warehouse_id)}</TableCell>
                         <TableCell>{i.unit_of_measure}</TableCell>
                         <TableCell>{i.category || "—"}</TableCell>
                         <TableCell className="text-right">{formatQty(Number(i.current_quantity))}</TableCell>
@@ -785,6 +1014,7 @@ export default function InventoryPage() {
                     <TableRow>
                       <TableHead>Código</TableHead>
                       <TableHead>Producto</TableHead>
+                      <TableHead>Bodega</TableHead>
                       <TableHead>Unidad</TableHead>
                       <TableHead className="text-right">Existencia</TableHead>
                       <TableHead className="text-right">Costo promedio</TableHead>
@@ -793,12 +1023,13 @@ export default function InventoryPage() {
                   </TableHeader>
                   <TableBody>
                     {balances.list.length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Sin existencias.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Sin existencias.</TableCell></TableRow>
                     )}
                     {balances.list.map((r) => (
                       <TableRow key={r.item.id}>
                         <TableCell className="font-mono text-xs">{r.item.sku}</TableCell>
                         <TableCell className="font-medium">{r.item.name}</TableCell>
+                        <TableCell>{warehouseName(r.item.warehouse_id)}</TableCell>
                         <TableCell>{r.item.unit_of_measure}</TableCell>
                         <TableCell className="text-right">{formatQty(Number(r.item.current_quantity))}</TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(r.item.unit_cost))}</TableCell>
@@ -807,7 +1038,7 @@ export default function InventoryPage() {
                     ))}
                     {balances.list.length > 0 && (
                       <TableRow className="bg-muted/50 font-semibold">
-                        <TableCell colSpan={5}>TOTAL</TableCell>
+                        <TableCell colSpan={6}>TOTAL</TableCell>
                         <TableCell className="text-right">{formatCurrency(balances.total)}</TableCell>
                       </TableRow>
                     )}
@@ -819,10 +1050,18 @@ export default function InventoryPage() {
         </TabsContent>
       </Tabs>
 
+      {showWarehouseDialog && selectedEnterprise && (
+        <WarehouseDialog
+          enterpriseId={selectedEnterprise.id}
+          warehouse={editWarehouse}
+          onClose={(saved) => { setShowWarehouseDialog(false); setEditWarehouse(null); if (saved) load(); }}
+        />
+      )}
       {showItemDialog && selectedEnterprise && (
         <ItemDialog
           enterpriseId={selectedEnterprise.id}
           item={editItem}
+          warehouses={warehouses}
           onClose={(saved) => { setShowItemDialog(false); setEditItem(null); if (saved) load(); }}
         />
       )}
