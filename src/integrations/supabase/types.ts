@@ -2890,6 +2890,7 @@ export type Database = {
           unit_cost: number
           unit_of_measure: string
           updated_at: string
+          warehouse_id: number
         }
         Insert: {
           category?: string | null
@@ -2904,6 +2905,7 @@ export type Database = {
           unit_cost?: number
           unit_of_measure?: string
           updated_at?: string
+          warehouse_id: number
         }
         Update: {
           category?: string | null
@@ -2918,6 +2920,7 @@ export type Database = {
           unit_cost?: number
           unit_of_measure?: string
           updated_at?: string
+          warehouse_id?: number
         }
         Relationships: [
           {
@@ -2925,6 +2928,13 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_inventory_items_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "tab_inventory_warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -2985,6 +2995,47 @@ export type Database = {
             columns: ["item_id"]
             isOneToOne: false
             referencedRelation: "tab_inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tab_inventory_warehouses: {
+        Row: {
+          address: string | null
+          code: string
+          created_at: string
+          enterprise_id: number
+          id: number
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          created_at?: string
+          enterprise_id: number
+          id?: number
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          created_at?: string
+          enterprise_id?: number
+          id?: number
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_inventory_warehouses_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
             referencedColumns: ["id"]
           },
         ]
