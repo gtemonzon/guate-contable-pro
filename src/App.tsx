@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster"; // v2
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import PdfPreviewHost from "@/components/pdf/PdfPreviewHost";
+import ImagePreviewHost from "@/components/ui/image-preview-host";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -94,6 +95,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <PdfPreviewHost />
+        <ImagePreviewHost />
 
         <BrowserRouter>
           <Routes>

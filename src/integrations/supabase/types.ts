@@ -65,6 +65,63 @@ export type Database = {
         }
         Relationships: []
       }
+      fixed_asset_attachments: {
+        Row: {
+          asset_id: number
+          enterprise_id: number
+          file_name: string
+          file_path: string
+          file_size: number | null
+          file_type: string | null
+          id: number
+          is_active: boolean
+          original_size: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          asset_id: number
+          enterprise_id: number
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: number
+          is_active?: boolean
+          original_size?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          asset_id?: number
+          enterprise_id?: number
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: number
+          is_active?: boolean
+          original_size?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_attachments_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_attachments_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fixed_asset_categories: {
         Row: {
           accumulated_depreciation_account_id: number | null
