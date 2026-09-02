@@ -97,7 +97,11 @@ const UserTable = ({ users, onEdit }: Props) => {
         </TableHeader>
         <TableBody>
           {sorted.map((user) => (
-            <TableRow key={user.id}>
+            <TableRow
+              key={user.id}
+              onClick={() => onEdit(user)}
+              className="cursor-pointer hover:bg-muted/50 transition-colors"
+            >
               <TableCell>
                 <ActivityIndicator
                   lastActivityAt={user.last_activity_at ?? null}
