@@ -463,6 +463,73 @@ export function useDepreciationSchedule(assetId: number | null) {
   });
 }
 
+// ─── Historical depreciation detection ───────────────────────────────────────
+// fixed_assets / fixed_asset_depreciation_schedule are now in the generated
+// Database types, so this hook queries the real typed client instead of the
+// `db()` any-cast helper above (kept only for tables still not generated).
+
+export interface HistoricalPendingAsset {
+  asset_id: number;
+  asset_name: string;
+  asset_code: string;
+  months_count: number;
+  earliest: { year: number; month: number };
+}
+
+export function useHistoricalPendingDepreciation(enterpriseId: number | null) {
+  return useQuery<HistoricalPendingAsset[]>({
+    queryKey: ["historical_pending_depreciation", enterpriseId],
+    enabled: !!enterpriseId,
+    queryFn: async () => {
+      const now = new Date();
+      const currentPeriodKey = now.getFullYear() * 12 + (now.getMonth() + 1);
+
+      const { data: activeAssets, error: assetsError } = await supabase
+        .from("fixed_assets")
+        .select("id, asset_name, asset_code")
+        .eq("enterprise_id", enterpriseId!)
+        .eq("status", "ACTIVE");
+      if (assetsError) throw assetsError;
+      if (!activeAssets || activeAssets.length === 0) return [];
+
+      const assetIds = activeAssets.map((a) => a.id);
+      const { data: plannedRows, error: scheduleError } = await supabase
+        .from("fixed_asset_depreciation_schedule")
+        .select("asset_id, year, month")
+        .eq("enterprise_id", enterpriseId!)
+        .eq("status", "PLANNED")
+        .in("asset_id", assetIds);
+      if (scheduleError) throw scheduleError;
+
+      const assetById = new Map(activeAssets.map((a) => [a.id, a]));
+      const grouped = new Map<number, HistoricalPendingAsset>();
+      for (const row of plannedRows ?? []) {
+        const rowPeriodKey = row.year * 12 + row.month;
+        if (rowPeriodKey >= currentPeriodKey) continue;
+        const asset = assetById.get(row.asset_id);
+        if (!asset) continue;
+
+        const existing = grouped.get(row.asset_id);
+        if (existing) {
+          existing.months_count += 1;
+          if (rowPeriodKey < existing.earliest.year * 12 + existing.earliest.month) {
+            existing.earliest = { year: row.year, month: row.month };
+          }
+        } else {
+          grouped.set(row.asset_id, {
+            asset_id: row.asset_id,
+            asset_name: asset.asset_name,
+            asset_code: asset.asset_code,
+            months_count: 1,
+            earliest: { year: row.year, month: row.month },
+          });
+        }
+      }
+      return Array.from(grouped.values()).sort((a, b) => a.asset_name.localeCompare(b.asset_name));
+    },
+  });
+}
+
 export function useDisposalReasons() {
   return useQuery<Array<{ id: number; code: string; name: string }>>({
     queryKey: ["fixed_asset_disposal_reasons"],

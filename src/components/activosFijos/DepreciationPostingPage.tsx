@@ -4,16 +4,35 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAssetCategories, useAssetPolicy, useFixedAssets, useDepreciationSchedule, type FixedAsset, type DepreciationScheduleRow } from "@/hooks/useFixedAssets";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  useAssetCategories,
+  useAssetPolicy,
+  useFixedAssets,
+  useDepreciationSchedule,
+  useHistoricalPendingDepreciation,
+  type FixedAsset,
+  type DepreciationScheduleRow,
+} from "@/hooks/useFixedAssets";
 import { sumDepreciationForPeriod } from "@/domain/fixedAssets/calculations";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Clock, History } from "lucide-react";
 import DepreciationHistoryCard from "./DepreciationHistoryCard";
 
 const fmt = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -34,6 +53,14 @@ interface PostingPreviewRow {
 
 function lastDayOfMonth(year: number, month: number) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function periodKey(year: number, month: number) {
+  return year * 12 + month - 1;
+}
+
+function formatDateInput(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function AssetScheduleFetcher({
@@ -87,12 +114,18 @@ export default function DepreciationPostingPage() {
   const { data: policy } = useAssetPolicy(enterpriseId);
   const { data: assets = [] } = useFixedAssets(enterpriseId);
   const { data: categories = [] } = useAssetCategories(enterpriseId);
+  const { data: historicalPending = [] } = useHistoricalPendingDepreciation(enterpriseId);
 
   const now = new Date();
   const [targetYear, setTargetYear] = useState(now.getFullYear());
   const [targetMonth, setTargetMonth] = useState(now.getMonth() + 1);
   const [previewRows, setPreviewRows] = useState<Map<number, PostingPreviewRow>>(new Map());
   const [posting, setPosting] = useState(false);
+  const [bulkSkipDialogOpen, setBulkSkipDialogOpen] = useState(false);
+  const [bulkSkipCutoff, setBulkSkipCutoff] = useState(() =>
+    formatDateInput(new Date(now.getFullYear(), now.getMonth(), 0)),
+  );
+  const [bulkSkipping, setBulkSkipping] = useState(false);
 
   const activeAssets = assets.filter((a) => a.status === "ACTIVE");
   const frequency = policy?.posting_frequency ?? "MONTHLY";
@@ -241,6 +274,102 @@ export default function DepreciationPostingPage() {
     }
   };
 
+  const handleBulkSkipHistorical = async () => {
+    if (!enterpriseId || historicalPending.length === 0) return;
+
+    const [cutoffYear, cutoffMonth] = bulkSkipCutoff.split("-").map(Number);
+    if (!cutoffYear || !cutoffMonth) {
+      toast.error("Selecciona una fecha de corte válida.");
+      return;
+    }
+    const currentPeriodKey = periodKey(now.getFullYear(), now.getMonth() + 1);
+    if (periodKey(cutoffYear, cutoffMonth) >= currentPeriodKey) {
+      toast.error("La fecha de corte debe corresponder a un mes anterior al actual.");
+      return;
+    }
+
+    setBulkSkipping(true);
+    let assetsSkipped = 0;
+    let monthsSkippedTotal = 0;
+    const errors: string[] = [];
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("Usuario no autenticado");
+
+      const assetIds = historicalPending.map((item) => item.asset_id);
+      const { data: plannedRows, error: scheduleError } = await supabase
+        .from("fixed_asset_depreciation_schedule")
+        .select("id, asset_id, year, month")
+        .eq("enterprise_id", enterpriseId)
+        .eq("status", "PLANNED")
+        .in("asset_id", assetIds);
+      if (scheduleError) throw scheduleError;
+
+      const rowsByAsset = new Map<number, Array<{ id: number; year: number; month: number }>>();
+      for (const row of plannedRows ?? []) {
+        if (periodKey(row.year, row.month) > periodKey(cutoffYear, cutoffMonth)) continue;
+        const list = rowsByAsset.get(row.asset_id) ?? [];
+        list.push(row);
+        rowsByAsset.set(row.asset_id, list);
+      }
+
+      for (const item of historicalPending) {
+        const rowsToSkip = rowsByAsset.get(item.asset_id) ?? [];
+        if (rowsToSkip.length === 0) continue;
+        const rowIds = rowsToSkip.map((row) => row.id);
+
+        try {
+          const { data: updatedRows, error: updateError } = await supabase
+            .from("fixed_asset_depreciation_schedule")
+            .update({ status: "SKIPPED", journal_entry_id: null, posted_depreciation_amount: null })
+            .eq("asset_id", item.asset_id)
+            .eq("enterprise_id", enterpriseId)
+            .eq("status", "PLANNED")
+            .in("id", rowIds)
+            .select("id");
+          if (updateError) throw updateError;
+          if (!updatedRows || updatedRows.length !== rowIds.length) {
+            throw new Error("El calendario cambió mientras se procesaba; no se omitieron todos los meses de este activo");
+          }
+
+          const { error: eventError } = await supabase.from("fixed_asset_event_log").insert({
+            asset_id: item.asset_id,
+            enterprise_id: enterpriseId,
+            actor_user_id: authData.user.id,
+            event_type: "SKIP_HISTORICAL_DEPRECIATION",
+            metadata_json: { months_skipped: rowIds.length, cutoff_date: bulkSkipCutoff },
+          });
+          if (eventError) throw eventError;
+
+          assetsSkipped += 1;
+          monthsSkippedTotal += rowIds.length;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Error al procesar el activo";
+          errors.push(`${item.asset_name}: ${message}`);
+        }
+      }
+
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "depreciation_schedule" });
+      qc.invalidateQueries({ queryKey: ["historical_pending_depreciation", enterpriseId] });
+
+      if (assetsSkipped > 0) {
+        toast.success(
+          `Depreciación histórica actualizada — ${assetsSkipped} activo(s), ${monthsSkippedTotal} mes(es) en total marcados sin partida.`,
+        );
+      }
+      errors.forEach((message) => toast.error(message));
+      if (assetsSkipped === 0 && errors.length === 0) {
+        toast.error("No había meses históricos pendientes hasta la fecha de corte seleccionada.");
+      }
+      setBulkSkipDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al procesar la depreciación histórica");
+    } finally {
+      setBulkSkipping(false);
+    }
+  };
+
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
 
   if (!enterpriseId) {
@@ -263,6 +392,40 @@ export default function DepreciationPostingPage() {
         </CardContent>
       </Card>
 
+      {historicalPending.length > 0 && (
+        <Card className="border-amber-300">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-400">
+              <History className="h-5 w-5" />
+              Depreciación histórica pendiente
+            </CardTitle>
+            <CardDescription>
+              {historicalPending.length} activo(s) tienen depreciación de meses ya transcurridos sin contabilizar
+              (ej. activos registrados con fecha de adquisición antigua). Puedes marcarla como aplicada sin generar
+              partidas contables — útil cuando esa depreciación ya se refleja en tus libros por otro medio.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ul className="space-y-1 text-sm">
+              {historicalPending.map((item) => (
+                <li key={item.asset_id} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{item.asset_name}</span>
+                  <span className="font-mono text-muted-foreground">{item.asset_code}</span>
+                  <span className="text-muted-foreground">
+                    — {item.months_count} mes(es) desde {MONTHS[item.earliest.month]} {item.earliest.year}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setBulkSkipDialogOpen(true)}>
+                Correr depreciación histórica (sin partida)
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {activeAssets.map((asset) => <AssetScheduleFetcher key={asset.id} asset={asset} targetYear={targetYear} targetMonth={targetMonth} frequency={frequency} onResult={handleResult} />)}
 
       {rows.length > 0 && <div className="grid gap-4 sm:grid-cols-2"><Card><CardContent className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Clock className="h-4 w-4" />Pendientes de contabilizar</div><div className="mt-2 text-2xl font-bold">{pendingRows.length}</div><div className="text-sm text-muted-foreground">Q {fmt(totalPending)}</div></CardContent></Card><Card><CardContent className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle className="h-4 w-4 text-green-600" />Ya contabilizados</div><div className="mt-2 text-2xl font-bold">{postedOnlyRows.length}</div><div className="text-sm text-muted-foreground">Q {fmt(totalPosted)}</div></CardContent></Card></div>}
@@ -274,6 +437,42 @@ export default function DepreciationPostingPage() {
       {rows.length > 0 && <div className="flex items-center justify-end gap-3">{pendingRows.length === 0 && <Alert className="flex-1"><CheckCircle className="h-4 w-4 text-green-600" /><AlertDescription>Este período ya fue contabilizado completamente. No hay nada pendiente.</AlertDescription></Alert>}<Button onClick={handlePost} disabled={posting || pendingRows.length === 0} size="lg">{posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{pendingRows.length === 0 ? "Período contabilizado" : `Contabilizar Q ${fmt(totalPending)}`}</Button></div>}
 
       <DepreciationHistoryCard enterpriseId={enterpriseId} />
+
+      <AlertDialog open={bulkSkipDialogOpen} onOpenChange={setBulkSkipDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Marcar depreciación histórica como aplicada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esto marcará como aplicadas las depreciaciones de meses ya transcurridos de todos los activos afectados
+              SIN generar ninguna partida contable — útil para activos históricos cuya depreciación de años
+              anteriores ya fue registrada por otro medio. El calendario y el valor en libros de cada activo se
+              actualizarán, pero no se creará ningún asiento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="bulk-historical-cutoff">Fecha de corte</Label>
+            <Input
+              id="bulk-historical-cutoff"
+              type="date"
+              value={bulkSkipCutoff}
+              onChange={(e) => setBulkSkipCutoff(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkSkipping}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkSkipping}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleBulkSkipHistorical();
+              }}
+            >
+              {bulkSkipping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
