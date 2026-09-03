@@ -13,36 +13,38 @@ export default function ActivosFijos() {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Activos Fijos</h1>
-        <p className="text-muted-foreground">
-          Gestión de activos fijos, depreciación y disposición
-        </p>
-      </div>
-
       <Tabs
         defaultValue={defaultTab}
         onValueChange={(v) => setSearchParams({ tab: v })}
         className="w-full"
       >
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="assets" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Activos
-          </TabsTrigger>
-          <TabsTrigger value="depreciation" className="flex items-center gap-2">
-            <TrendingDown className="h-4 w-4" />
-            Contabilizar Depreciación
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-2">
-            <FileBarChart className="h-4 w-4" />
-            Reportes
-          </TabsTrigger>
-          <TabsTrigger value="config" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Configuración
-          </TabsTrigger>
-        </TabsList>
+        <div className="sticky top-0 z-10 bg-background pb-4">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold">Activos Fijos</h1>
+            <p className="text-muted-foreground">
+              Gestión de activos fijos, depreciación y disposición
+            </p>
+          </div>
+
+          <TabsList className="flex-wrap h-auto gap-1">
+            <TabsTrigger value="assets" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Activos
+            </TabsTrigger>
+            <TabsTrigger value="depreciation" className="flex items-center gap-2">
+              <TrendingDown className="h-4 w-4" />
+              Depreciación
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <FileBarChart className="h-4 w-4" />
+              Reportes
+            </TabsTrigger>
+            <TabsTrigger value="config" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Configuración
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="assets" className="mt-6">
           <AssetList />
