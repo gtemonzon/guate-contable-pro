@@ -88,6 +88,7 @@ export default function AdditionsDisposalsReport({ enterpriseId, enterpriseName,
   const [endDate, setEndDate] = useState(today);
 
   const { data: assets = [], isLoading: assetsLoading } = useFixedAssets(enterpriseId);
+  const eligibleAssets = useMemo(() => assets.filter((a) => a.status !== "DRAFT"), [assets]);
   const { data: categories = [], isLoading: categoriesLoading } = useAssetCategories(enterpriseId);
   const { data: disposalReasons = [] } = useDisposalReasons();
   const isLoading = assetsLoading || categoriesLoading;
@@ -96,9 +97,9 @@ export default function AdditionsDisposalsReport({ enterpriseId, enterpriseName,
     id ? disposalReasons.find((r) => r.id === id)?.name : undefined;
 
   const sections = useMemo(
-    () => buildSections(assets, categories, startDate, endDate, disposalReasonName),
+    () => buildSections(eligibleAssets, categories, startDate, endDate, disposalReasonName),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [assets, categories, startDate, endDate, disposalReasons],
+    [eligibleAssets, categories, startDate, endDate, disposalReasons],
   );
 
   const totals = sections.reduce(

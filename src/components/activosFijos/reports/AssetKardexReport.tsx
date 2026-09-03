@@ -118,7 +118,7 @@ export default function AssetKardexReport({ enterpriseId, enterpriseName, enterp
   }, [scheduleRows]);
 
   const assetsWithSchedule = useMemo(
-    () => assets.filter((a) => (scheduleByAsset.get(a.id) ?? []).length > 0),
+    () => assets.filter((a) => a.status !== "DRAFT" && (scheduleByAsset.get(a.id) ?? []).length > 0),
     [assets, scheduleByAsset],
   );
 
