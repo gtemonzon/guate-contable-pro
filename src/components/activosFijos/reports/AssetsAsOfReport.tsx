@@ -32,6 +32,7 @@ export default function AssetsAsOfReport({ enterpriseId, enterpriseName, enterpr
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split("T")[0]);
 
   const { data: assets = [], isLoading: assetsLoading } = useFixedAssets(enterpriseId);
+  const eligibleAssets = useMemo(() => assets.filter((a) => a.status !== "DRAFT"), [assets]);
   const { data: scheduleRows = [], isLoading: scheduleLoading } = useAllDepreciationSchedule(enterpriseId);
   const isLoading = assetsLoading || scheduleLoading;
 
@@ -45,7 +46,7 @@ export default function AssetsAsOfReport({ enterpriseId, enterpriseName, enterpr
       scheduleByAsset.set(row.asset_id, list);
     }
 
-    return assets
+    return eligibleAssets
       .filter((asset) => isPresentAsOf(asset, asOfDate))
       .map((asset) => {
         const accumulatedDepreciation = sumDepreciationUpTo(
@@ -60,7 +61,7 @@ export default function AssetsAsOfReport({ enterpriseId, enterpriseName, enterpr
         };
       })
       .sort((a, b) => a.asset.asset_code.localeCompare(b.asset.asset_code));
-  }, [assets, scheduleRows, asOfDate]);
+  }, [eligibleAssets, scheduleRows, asOfDate]);
 
   const totalCost = rows.reduce((sum, r) => sum + r.asset.acquisition_cost, 0);
   const totalDepreciation = rows.reduce((sum, r) => sum + r.accumulatedDepreciation, 0);

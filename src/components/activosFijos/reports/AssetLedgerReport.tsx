@@ -20,6 +20,7 @@ import {
   fmt,
   formatDateEs,
   parseDateParts,
+  periodKey,
   isPresentAtStart,
   disposalDateOnly,
   sumDepreciationBefore,
@@ -78,11 +79,24 @@ function buildSections(
       }, 0);
       // "TODOS los activos de la categoría": no se filtra por presencia — incluye
       // altas y bajas del mismo período, cada uno aportando solo sus meses reales.
-      const depCredit = categoryAssets.reduce(
-        (sum, a) =>
-          sum + sumDepreciationWithin(scheduleByAsset.get(a.id) ?? [], startYear, startMonth, endYear, endMonth),
-        0,
-      );
+      // Un activo dado de baja NUNCA aporta depreciación de meses posteriores a su
+      // propia fecha de baja, sin importar el rango de fechas consultado — sus filas
+      // de calendario después de la baja quedan SKIPPED (no se borran) y contarlas
+      // como Haber en un período posterior sería depreciación fantasma.
+      const depCredit = categoryAssets.reduce((sum, a) => {
+        const rows = scheduleByAsset.get(a.id) ?? [];
+        let cappedEndYear = endYear;
+        let cappedEndMonth = endMonth;
+        if (a.disposed_at) {
+          const { year: disposalYear, month: disposalMonth } = parseDateParts(disposalDateOnly(a.disposed_at));
+          if (periodKey(disposalYear, disposalMonth) < periodKey(startYear, startMonth)) return sum;
+          if (periodKey(disposalYear, disposalMonth) < periodKey(cappedEndYear, cappedEndMonth)) {
+            cappedEndYear = disposalYear;
+            cappedEndMonth = disposalMonth;
+          }
+        }
+        return sum + sumDepreciationWithin(rows, startYear, startMonth, cappedEndYear, cappedEndMonth);
+      }, 0);
       const depClosing = depOpening - depDebit + depCredit;
 
       return {
@@ -108,6 +122,7 @@ export default function AssetLedgerReport({ enterpriseId, enterpriseName, enterp
   const [endDate, setEndDate] = useState(today);
 
   const { data: assets = [], isLoading: assetsLoading } = useFixedAssets(enterpriseId);
+  const eligibleAssets = useMemo(() => assets.filter((a) => a.status !== "DRAFT"), [assets]);
   const { data: categories = [], isLoading: categoriesLoading } = useAssetCategories(enterpriseId);
   const { data: scheduleRows = [], isLoading: scheduleLoading } = useAllDepreciationSchedule(enterpriseId);
   const isLoading = assetsLoading || categoriesLoading || scheduleLoading;
@@ -123,8 +138,8 @@ export default function AssetLedgerReport({ enterpriseId, enterpriseName, enterp
   }, [scheduleRows]);
 
   const sections = useMemo(
-    () => buildSections(assets, categories, scheduleByAsset, startDate, endDate),
-    [assets, categories, scheduleByAsset, startDate, endDate],
+    () => buildSections(eligibleAssets, categories, scheduleByAsset, startDate, endDate),
+    [eligibleAssets, categories, scheduleByAsset, startDate, endDate],
   );
 
   const costTotals = sections.reduce(
