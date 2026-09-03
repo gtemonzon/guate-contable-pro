@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generateDepreciationSchedule } from "@/domain/fixedAssets/calculations";
+import { fetchAllRecords } from "@/utils/supabaseHelpers";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -526,6 +527,39 @@ export function useHistoricalPendingDepreciation(enterpriseId: number | null) {
         }
       }
       return Array.from(grouped.values()).sort((a, b) => a.asset_name.localeCompare(b.asset_name));
+    },
+  });
+}
+
+// ─── Reports: full depreciation schedule for an enterprise ───────────────────
+
+export interface DepreciationScheduleForReports {
+  asset_id: number;
+  year: number;
+  month: number;
+  planned_depreciation_amount: number;
+  posted_depreciation_amount: number | null;
+  status: string;
+}
+
+/**
+ * Trae TODAS las filas de fixed_asset_depreciation_schedule de la empresa
+ * (todos los activos), usada por los reportes de Activos Fijos que necesitan
+ * agregar depreciación por categoría/período en vez de por un solo activo.
+ * Un activo con vida útil larga puede generar cientos de filas y una empresa
+ * con muchos activos puede superar el límite de 1000 filas de Supabase, así
+ * que se pagina con fetchAllRecords en vez de un select directo.
+ */
+export function useAllDepreciationSchedule(enterpriseId: number | null) {
+  return useQuery<DepreciationScheduleForReports[]>({
+    queryKey: ["all_depreciation_schedule", enterpriseId],
+    enabled: !!enterpriseId,
+    queryFn: async () => {
+      const query = supabase
+        .from("fixed_asset_depreciation_schedule")
+        .select("asset_id, year, month, planned_depreciation_amount, posted_depreciation_amount, status")
+        .eq("enterprise_id", enterpriseId!);
+      return fetchAllRecords<DepreciationScheduleForReports>(query);
     },
   });
 }
