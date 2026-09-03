@@ -16,9 +16,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import DepreciationHistoryCard from "./DepreciationHistoryCard";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = (t: string) => (supabase as any).from(t);
-
 const fmt = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const MONTHS = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const FREQ_LABELS: Record<string, string> = {
@@ -135,10 +132,12 @@ export default function DepreciationPostingPage() {
         .from("tab_accounting_periods")
         .select("id")
         .eq("enterprise_id", enterpriseId)
+        .eq("status", "abierto")
         .lte("start_date", entryDate)
         .gte("end_date", entryDate)
         .maybeSingle();
       if (periodError) throw periodError;
+      if (!period) throw new Error(`No existe un período contable abierto para ${MONTHS[targetMonth]} ${targetYear}`);
 
       for (const row of pendingRows) {
         const category = categories.find((item) => item.id === row.asset.category_id);
@@ -155,15 +154,16 @@ export default function DepreciationPostingPage() {
         try {
           const entryNumber = await allocateEntryNumber(String(enterpriseId), "depreciacion", entryDate);
           const description = `Depreciación ${MONTHS[targetMonth]} ${targetYear} — ${row.asset.asset_name} (${row.asset.asset_code})`;
-          const { data: entry, error: entryError } = await db("tab_journal_entries").insert({
+          const { data: entry, error: entryError } = await supabase.from("tab_journal_entries").insert({
             enterprise_id: enterpriseId,
-            accounting_period_id: period?.id ?? null,
+            accounting_period_id: period.id,
             entry_number: entryNumber,
             entry_date: entryDate,
             description,
-            entry_type: "diario",
+            entry_type: "depreciacion",
             total_debit: row.amountPlanned,
             total_credit: row.amountPlanned,
+            is_balanced: true,
             is_posted: true,
             posted_at: new Date().toISOString(),
             status: "contabilizado",
@@ -173,7 +173,7 @@ export default function DepreciationPostingPage() {
           }).select("id").single();
           if (entryError || !entry?.id) throw entryError ?? new Error("No se pudo crear la partida de depreciación");
 
-          const { error: detailsError } = await db("tab_journal_entry_details").insert([
+          const { error: detailsError } = await supabase.from("tab_journal_entry_details").insert([
             {
               journal_entry_id: entry.id,
               line_number: 1,
@@ -193,7 +193,20 @@ export default function DepreciationPostingPage() {
           ]);
           if (detailsError) throw detailsError;
 
-          const { error: eventError } = await db("fixed_asset_event_log").insert({
+          const { data: updatedSchedule, error: scheduleError } = await supabase
+            .from("fixed_asset_depreciation_schedule")
+            .update({ status: "POSTED", journal_entry_id: entry.id, posted_depreciation_amount: row.amountPlanned, posting_run_id: runId, posted_at: new Date().toISOString() })
+            .eq("asset_id", row.asset.id)
+            .eq("enterprise_id", enterpriseId)
+            .eq("status", "PLANNED")
+            .in("id", scheduleIds)
+            .select("id");
+          if (scheduleError) throw scheduleError;
+          if (!updatedSchedule || updatedSchedule.length !== scheduleIds.length) {
+            throw new Error(`El calendario de ${row.asset.asset_name} cambió mientras se contabilizaba; la partida no se vinculó al calendario completo`);
+          }
+
+          const { error: eventError } = await supabase.from("fixed_asset_event_log").insert({
             asset_id: row.asset.id,
             enterprise_id: enterpriseId,
             actor_user_id: authData.user.id,
@@ -201,11 +214,6 @@ export default function DepreciationPostingPage() {
             metadata_json: { run_id: runId, amount: row.amountPlanned, year: targetYear, month: targetMonth, frequency, journal_entry_id: entry.id, entry_number: entryNumber },
           });
           if (eventError) throw eventError;
-
-          const { error: scheduleError } = await db("fixed_asset_depreciation_schedule")
-            .update({ status: "POSTED", journal_entry_id: entry.id, posted_depreciation_amount: row.amountPlanned, posting_run_id: runId, posted_at: new Date().toISOString() })
-            .in("id", scheduleIds);
-          if (scheduleError) throw scheduleError;
 
           generatedCount += 1;
           generatedTotal += row.amountPlanned;

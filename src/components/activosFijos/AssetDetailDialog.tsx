@@ -109,7 +109,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const now = new Date();
   const currentPeriodKey = periodKey(now.getFullYear(), now.getMonth() + 1);
   const historicalPlannedRows = schedule.filter(
-    (row) => row.status === "PLANNED" && periodKey(row.year, row.month) <= currentPeriodKey,
+    (row) => row.status === "PLANNED" && periodKey(row.year, row.month) < currentPeriodKey,
   );
 
   const saveChanges = async () => {
@@ -167,6 +167,10 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       toast({ title: "Fecha de corte requerida", description: "Selecciona una fecha de corte válida.", variant: "destructive" });
       return;
     }
+    if (periodKey(cutoffYear, cutoffMonth) >= currentPeriodKey) {
+      toast({ title: "Fecha de corte inválida", description: "La fecha de corte debe corresponder a un mes anterior al actual.", variant: "destructive" });
+      return;
+    }
 
     const rowsToSkip = schedule.filter(
       (row) => row.status === "PLANNED" && periodKey(row.year, row.month) <= periodKey(cutoffYear, cutoffMonth),
@@ -181,11 +185,18 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) throw new Error("Usuario no autenticado");
       const rowIds = rowsToSkip.map((row) => row.id);
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("fixed_asset_depreciation_schedule")
         .update({ status: "SKIPPED", journal_entry_id: null, posted_depreciation_amount: null })
-        .in("id", rowIds);
+        .eq("asset_id", asset.id)
+        .eq("enterprise_id", asset.enterprise_id)
+        .eq("status", "PLANNED")
+        .in("id", rowIds)
+        .select("id");
       if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length !== rowIds.length) {
+        throw new Error("El calendario cambió mientras se procesaba; no se omitieron todos los meses seleccionados");
+      }
 
       const { error: eventError } = await supabase.from("fixed_asset_event_log").insert({
         asset_id: asset.id,
