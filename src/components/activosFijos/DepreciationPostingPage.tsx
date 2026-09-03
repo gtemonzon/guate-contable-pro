@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAssetPolicy, useFixedAssets, useDepreciationSchedule, type FixedAsset, type DepreciationScheduleRow } from "@/hooks/useFixedAssets";
+import { useAssetCategories, useAssetPolicy, useFixedAssets, useDepreciationSchedule, type FixedAsset, type DepreciationScheduleRow } from "@/hooks/useFixedAssets";
 import { sumDepreciationForPeriod } from "@/domain/fixedAssets/calculations";
+import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,9 +20,7 @@ import DepreciationHistoryCard from "./DepreciationHistoryCard";
 const db = (t: string) => (supabase as any).from(t);
 
 const fmt = (n: number) => n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const MONTHS = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
 const FREQ_LABELS: Record<string, string> = {
   MONTHLY: "Mensual", QUARTERLY: "Trimestral", SEMIANNUAL: "Semestral", ANNUAL: "Anual",
 };
@@ -34,6 +33,10 @@ interface PostingPreviewRow {
   hasPosted: boolean;
   months: Array<{ year: number; month: number }>;
   scheduleRows: DepreciationScheduleRow[];
+}
+
+function lastDayOfMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 function AssetScheduleFetcher({
@@ -67,27 +70,14 @@ function AssetScheduleFetcher({
       })),
       targetYear,
       targetMonth,
-      frequency
+      frequency,
     );
-    const relevantRows = schedule.filter((r) =>
-      result.months.some((m) => m.year === r.year && m.month === r.month)
-    );
+    const relevantRows = schedule.filter((r) => result.months.some((m) => m.year === r.year && m.month === r.month));
     if (relevantRows.length === 0) {
       onResult(null, asset.id);
       return;
     }
-    onResult(
-      {
-        asset,
-        amountPlanned: result.amountPlanned,
-        amountPosted: result.amountPosted,
-        hasPlanned: result.hasPlanned,
-        hasPosted: result.hasPosted,
-        months: result.months,
-        scheduleRows: relevantRows,
-      },
-      asset.id
-    );
+    onResult({ asset, amountPlanned: result.amountPlanned, amountPosted: result.amountPosted, hasPlanned: result.hasPlanned, hasPosted: result.hasPosted, months: result.months, scheduleRows: relevantRows }, asset.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule, targetYear, targetMonth, frequency]);
 
@@ -97,9 +87,9 @@ function AssetScheduleFetcher({
 export default function DepreciationPostingPage() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
   const qc = useQueryClient();
-
   const { data: policy } = useAssetPolicy(enterpriseId);
   const { data: assets = [] } = useFixedAssets(enterpriseId);
+  const { data: categories = [] } = useAssetCategories(enterpriseId);
 
   const now = new Date();
   const [targetYear, setTargetYear] = useState(now.getFullYear());
@@ -110,7 +100,6 @@ export default function DepreciationPostingPage() {
   const activeAssets = assets.filter((a) => a.status === "ACTIVE");
   const frequency = policy?.posting_frequency ?? "MONTHLY";
 
-  // Reset preview when period or enterprise changes
   useEffect(() => {
     setPreviewRows(new Map());
   }, [targetYear, targetMonth, enterpriseId, frequency]);
@@ -133,52 +122,112 @@ export default function DepreciationPostingPage() {
   const handlePost = async () => {
     if (!enterpriseId || pendingRows.length === 0) return;
     setPosting(true);
+    let generatedCount = 0;
+    let generatedTotal = 0;
+    const processingErrors: string[] = [];
+
     try {
       const runId = `DEP-${targetYear}${String(targetMonth).padStart(2, "0")}-${Date.now()}`;
+      const entryDate = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(lastDayOfMonth(targetYear, targetMonth)).padStart(2, "0")}`;
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("Usuario no autenticado");
+      const { data: period, error: periodError } = await supabase
+        .from("tab_accounting_periods")
+        .select("id")
+        .eq("enterprise_id", enterpriseId)
+        .lte("start_date", entryDate)
+        .gte("end_date", entryDate)
+        .maybeSingle();
+      if (periodError) throw periodError;
 
       for (const row of pendingRows) {
-        const scheduleIds = row.scheduleRows
-          .filter((r) => r.status === "PLANNED")
-          .map((r) => r.id);
+        const category = categories.find((item) => item.id === row.asset.category_id);
+        if (!category?.depreciation_expense_account_id || !category.accumulated_depreciation_account_id) {
+          const message = `La categoría ${category?.name ?? "sin categoría"} no tiene cuentas de depreciación configuradas`;
+          processingErrors.push(`${row.asset.asset_name}: ${message}`);
+          toast.error(message);
+          continue;
+        }
+
+        const scheduleIds = row.scheduleRows.filter((scheduleRow) => scheduleRow.status === "PLANNED").map((scheduleRow) => scheduleRow.id);
         if (scheduleIds.length === 0) continue;
 
-        const { error } = await db("fixed_asset_depreciation_schedule")
-          .update({
-            status: "POSTED",
-            posted_depreciation_amount: row.amountPlanned,
-            posting_run_id: runId,
+        try {
+          const entryNumber = await allocateEntryNumber(String(enterpriseId), "depreciacion", entryDate);
+          const description = `Depreciación ${MONTHS[targetMonth]} ${targetYear} — ${row.asset.asset_name} (${row.asset.asset_code})`;
+          const { data: entry, error: entryError } = await db("tab_journal_entries").insert({
+            enterprise_id: enterpriseId,
+            accounting_period_id: period?.id ?? null,
+            entry_number: entryNumber,
+            entry_date: entryDate,
+            description,
+            entry_type: "diario",
+            total_debit: row.amountPlanned,
+            total_credit: row.amountPlanned,
+            is_posted: true,
             posted_at: new Date().toISOString(),
-          })
-          .in("id", scheduleIds);
-        if (error) throw error;
+            status: "contabilizado",
+            currency_code: row.asset.currency || "GTQ",
+            exchange_rate: 1,
+            created_by: authData.user.id,
+          }).select("id").single();
+          if (entryError || !entry?.id) throw entryError ?? new Error("No se pudo crear la partida de depreciación");
 
-        await db("fixed_asset_event_log").insert({
-          asset_id: row.asset.id,
-          enterprise_id: enterpriseId,
-          event_type: "POST_DEPRECIATION",
-          metadata_json: {
-            run_id: runId,
-            amount: row.amountPlanned,
-            year: targetYear,
-            month: targetMonth,
-            frequency,
-          },
-        });
+          const { error: detailsError } = await db("tab_journal_entry_details").insert([
+            {
+              journal_entry_id: entry.id,
+              line_number: 1,
+              account_id: category.depreciation_expense_account_id,
+              description,
+              debit_amount: row.amountPlanned,
+              credit_amount: 0,
+            },
+            {
+              journal_entry_id: entry.id,
+              line_number: 2,
+              account_id: category.accumulated_depreciation_account_id,
+              description,
+              debit_amount: 0,
+              credit_amount: row.amountPlanned,
+            },
+          ]);
+          if (detailsError) throw detailsError;
+
+          const { error: eventError } = await db("fixed_asset_event_log").insert({
+            asset_id: row.asset.id,
+            enterprise_id: enterpriseId,
+            actor_user_id: authData.user.id,
+            event_type: "POST_DEPRECIATION",
+            metadata_json: { run_id: runId, amount: row.amountPlanned, year: targetYear, month: targetMonth, frequency, journal_entry_id: entry.id, entry_number: entryNumber },
+          });
+          if (eventError) throw eventError;
+
+          const { error: scheduleError } = await db("fixed_asset_depreciation_schedule")
+            .update({ status: "POSTED", journal_entry_id: entry.id, posted_depreciation_amount: row.amountPlanned, posting_run_id: runId, posted_at: new Date().toISOString() })
+            .in("id", scheduleIds);
+          if (scheduleError) throw scheduleError;
+
+          generatedCount += 1;
+          generatedTotal += row.amountPlanned;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Error al crear la partida";
+          processingErrors.push(`${row.asset.asset_name}: ${message}`);
+          toast.error(`No se pudo contabilizar ${row.asset.asset_name}: ${message}`);
+        }
       }
 
-      // Invalidate ALL depreciation_schedule queries (per-asset cache)
-      qc.invalidateQueries({
-        predicate: (q) => q.queryKey[0] === "depreciation_schedule",
-      });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "depreciation_schedule" });
       qc.invalidateQueries({ queryKey: ["fixed_assets", enterpriseId] });
       qc.invalidateQueries({ queryKey: ["depreciation_runs", enterpriseId] });
 
-      toast.success(
-        `Depreciación contabilizada: Q ${fmt(totalPending)} — ${pendingRows.length} activos`
-      );
+      if (generatedCount > 0) {
+        toast.success(`Depreciación contabilizada: Q ${fmt(generatedTotal)} — ${generatedCount} partidas generadas`);
+      } else if (processingErrors.length === 0) {
+        toast.error("No se generaron partidas de depreciación");
+      }
       setPreviewRows(new Map());
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error al contabilizar");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al contabilizar");
     } finally {
       setPosting(false);
     }
@@ -187,180 +236,35 @@ export default function DepreciationPostingPage() {
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
 
   if (!enterpriseId) {
-    return (
-      <div className="rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground">
-        Selecciona una empresa para contabilizar depreciación.
-      </div>
-    );
+    return <div className="rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground">Selecciona una empresa para contabilizar depreciación.</div>;
   }
 
   return (
     <div className="space-y-6">
-      {/* Config card */}
       <Card>
         <CardHeader>
           <CardTitle>Contabilizar Depreciación</CardTitle>
-          <CardDescription>
-            Frecuencia configurada: <strong>{FREQ_LABELS[frequency]}</strong>. Selecciona el período de destino.
-          </CardDescription>
+          <CardDescription>Frecuencia configurada: <strong>{FREQ_LABELS[frequency]}</strong>. Selecciona el período de destino.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <Label>Año</Label>
-              <Select value={String(targetYear)} onValueChange={(v) => setTargetYear(Number(v))}>
-                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {years.map((y) => (<SelectItem key={y} value={String(y)}>{y}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Mes</Label>
-              <Select value={String(targetMonth)} onValueChange={(v) => setTargetMonth(Number(v))}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTHS.slice(1).map((name, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 text-sm text-muted-foreground">
-              {frequency !== "MONTHLY" && (
-                <p>Se agregarán los meses correspondientes al período {FREQ_LABELS[frequency].toLowerCase()}.</p>
-              )}
-            </div>
+          <div className="flex flex-wrap items-end gap-4">
+            <div><Label>Año</Label><Select value={String(targetYear)} onValueChange={(v) => setTargetYear(Number(v))}><SelectTrigger className="w-28"><SelectValue /></SelectTrigger><SelectContent>{years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>Mes</Label><Select value={String(targetMonth)} onValueChange={(v) => setTargetMonth(Number(v))}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{MONTHS.slice(1).map((name, i) => <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>)}</SelectContent></Select></div>
+            <div className="flex-1 text-sm text-muted-foreground">{frequency !== "MONTHLY" && <p>Se agregarán los meses correspondientes al período {FREQ_LABELS[frequency].toLowerCase()}.</p>}</div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Fetch schedule for each active asset (invisible components) */}
-      {activeAssets.map((asset) => (
-        <AssetScheduleFetcher
-          key={asset.id}
-          asset={asset}
-          targetYear={targetYear}
-          targetMonth={targetMonth}
-          frequency={frequency}
-          onResult={handleResult}
-        />
-      ))}
+      {activeAssets.map((asset) => <AssetScheduleFetcher key={asset.id} asset={asset} targetYear={targetYear} targetMonth={targetMonth} frequency={frequency} onResult={handleResult} />)}
 
-      {/* Summary */}
-      {rows.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                Pendientes de contabilizar
-              </div>
-              <div className="mt-2 text-2xl font-bold">{pendingRows.length}</div>
-              <div className="text-sm text-muted-foreground">
-                Q {fmt(totalPending)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                Ya contabilizados
-              </div>
-              <div className="mt-2 text-2xl font-bold">{postedOnlyRows.length}</div>
-              <div className="text-sm text-muted-foreground">
-                Q {fmt(totalPosted)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {rows.length > 0 && <div className="grid gap-4 sm:grid-cols-2"><Card><CardContent className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><Clock className="h-4 w-4" />Pendientes de contabilizar</div><div className="mt-2 text-2xl font-bold">{pendingRows.length}</div><div className="text-sm text-muted-foreground">Q {fmt(totalPending)}</div></CardContent></Card><Card><CardContent className="p-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle className="h-4 w-4 text-green-600" />Ya contabilizados</div><div className="mt-2 text-2xl font-bold">{postedOnlyRows.length}</div><div className="text-sm text-muted-foreground">Q {fmt(totalPosted)}</div></CardContent></Card></div>}
 
-      {/* Preview table */}
-      {rows.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Detalle por activo</CardTitle>
-            <CardDescription>
-              Estado de la depreciación de cada activo para el período seleccionado.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Activo</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const isPosted = !row.hasPlanned && row.hasPosted;
-                  const amount = isPosted ? row.amountPosted : row.amountPlanned;
-                  return (
-                    <TableRow key={row.asset.id}>
-                      <TableCell>{row.asset.asset_name}</TableCell>
-                      <TableCell className="font-mono text-muted-foreground">{row.asset.asset_code}</TableCell>
-                      <TableCell className="text-right font-mono">Q {fmt(amount)}</TableCell>
-                      <TableCell>
-                        {isPosted ? (
-                          <Badge variant="secondary" className="flex items-center gap-1 w-fit">
-                            <CheckCircle className="h-3 w-3 text-green-600" /> Ya contabilizado
-                          </Badge>
-                        ) : row.hasPosted ? (
-                          <Badge variant="outline" className="flex items-center gap-1 w-fit text-amber-700 border-amber-300">
-                            <Clock className="h-3 w-3" /> Parcial
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="flex items-center gap-1 w-fit text-amber-700 border-amber-300">
-                            <Clock className="h-3 w-3" /> Pendiente
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      {rows.length > 0 && <Card><CardHeader><CardTitle>Detalle por activo</CardTitle><CardDescription>Estado de la depreciación de cada activo para el período seleccionado.</CardDescription></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Activo</TableHead><TableHead>Código</TableHead><TableHead className="text-right">Monto</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => { const isPosted = !row.hasPlanned && row.hasPosted; const amount = isPosted ? row.amountPosted : row.amountPlanned; return <TableRow key={row.asset.id}><TableCell>{row.asset.asset_name}</TableCell><TableCell className="font-mono text-muted-foreground">{row.asset.asset_code}</TableCell><TableCell className="text-right font-mono">Q {fmt(amount)}</TableCell><TableCell>{isPosted ? <Badge variant="secondary" className="flex w-fit items-center gap-1"><CheckCircle className="h-3 w-3 text-green-600" /> Ya contabilizado</Badge> : row.hasPosted ? <Badge variant="outline" className="flex w-fit items-center gap-1 text-amber-700 border-amber-300"><Clock className="h-3 w-3" /> Parcial</Badge> : <Badge variant="outline" className="flex w-fit items-center gap-1 text-amber-700 border-amber-300"><Clock className="h-3 w-3" /> Pendiente</Badge>}</TableCell></TableRow>; })}</TableBody></Table></CardContent></Card>}
 
-      {activeAssets.length === 0 && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>No hay activos activos. Activa activos primero para poder contabilizar depreciación.</AlertDescription>
-        </Alert>
-      )}
+      {activeAssets.length === 0 && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>No hay activos activos. Activa activos primero para poder contabilizar depreciación.</AlertDescription></Alert>}
 
-      {/* Action button */}
-      {rows.length > 0 && (
-        <div className="flex justify-end items-center gap-3">
-          {pendingRows.length === 0 && (
-            <Alert className="flex-1">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription>
-                Este período ya fue contabilizado completamente. No hay nada pendiente.
-              </AlertDescription>
-            </Alert>
-          )}
-          <Button
-            onClick={handlePost}
-            disabled={posting || pendingRows.length === 0}
-            size="lg"
-          >
-            {posting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            {pendingRows.length === 0
-              ? "Período contabilizado"
-              : `Contabilizar Q ${fmt(totalPending)}`}
-          </Button>
-        </div>
-      )}
+      {rows.length > 0 && <div className="flex items-center justify-end gap-3">{pendingRows.length === 0 && <Alert className="flex-1"><CheckCircle className="h-4 w-4 text-green-600" /><AlertDescription>Este período ya fue contabilizado completamente. No hay nada pendiente.</AlertDescription></Alert>}<Button onClick={handlePost} disabled={posting || pendingRows.length === 0} size="lg">{posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{pendingRows.length === 0 ? "Período contabilizado" : `Contabilizar Q ${fmt(totalPending)}`}</Button></div>}
 
-      {/* History */}
       <DepreciationHistoryCard enterpriseId={enterpriseId} />
     </div>
   );
