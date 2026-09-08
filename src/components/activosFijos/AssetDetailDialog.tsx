@@ -6,12 +6,12 @@ import {
   useAssetCategories,
   useAssetCustodians,
   useAssetLocations,
-  useAssetSuppliers,
   useDepreciationSchedule,
   useAssetEventLog,
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
 import { useToast } from "@/hooks/use-toast";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,7 +39,8 @@ interface AssetForm {
   category_id: number;
   location_id: number | null;
   custodian_id: number | null;
-  supplier_id: number | null;
+  supplier_nit: string;
+  supplier_name: string;
   cost_center: string;
   notes: string;
   acquisition_date: string;
@@ -60,7 +62,8 @@ function formFromAsset(asset: FixedAsset): AssetForm {
     category_id: asset.category_id,
     location_id: asset.location_id,
     custodian_id: asset.custodian_id,
-    supplier_id: asset.supplier_id,
+    supplier_nit: asset.supplier_nit ?? "",
+    supplier_name: asset.supplier_name ?? "",
     cost_center: asset.cost_center ?? "",
     notes: asset.notes ?? "",
     acquisition_date: asset.acquisition_date,
@@ -86,7 +89,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const { data: categories = [] } = useAssetCategories(asset.enterprise_id);
   const { data: locations = [] } = useAssetLocations(asset.enterprise_id);
   const { data: custodians = [] } = useAssetCustodians(asset.enterprise_id);
-  const { data: suppliers = [] } = useAssetSuppliers(asset.enterprise_id);
+  const { lookupNit } = useNitLookup();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AssetForm>(() => formFromAsset(asset));
   const [saving, setSaving] = useState(false);
@@ -127,7 +130,8 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
         category_id: form.category_id,
         location_id: form.location_id,
         custodian_id: form.custodian_id,
-        supplier_id: form.supplier_id,
+        supplier_nit: form.supplier_nit.trim() || null,
+        supplier_name: form.supplier_name.trim() || null,
         cost_center: form.cost_center.trim() || null,
         notes: form.notes.trim() || null,
         acquisition_date: form.acquisition_date,
@@ -280,7 +284,34 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                 <div><Label>Categoría</Label><Select value={String(form.category_id)} onValueChange={(value) => updateForm("category_id", Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.code} — {category.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>Ubicación</Label><Select value={form.location_id ? String(form.location_id) : "none"} onValueChange={(value) => updateForm("location_id", value === "none" ? null : Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Ninguna</SelectItem>{locations.map((location) => <SelectItem key={location.id} value={String(location.id)}>{location.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>Custodio</Label><Select value={form.custodian_id ? String(form.custodian_id) : "none"} onValueChange={(value) => updateForm("custodian_id", value === "none" ? null : Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Ninguno</SelectItem>{custodians.map((custodian) => <SelectItem key={custodian.id} value={String(custodian.id)}>{custodian.name}</SelectItem>)}</SelectContent></Select></div>
-                <div><Label>Proveedor</Label><Select value={form.supplier_id ? String(form.supplier_id) : "none"} onValueChange={(value) => updateForm("supplier_id", value === "none" ? null : Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Ninguno</SelectItem>{suppliers.map((supplier) => <SelectItem key={supplier.id} value={String(supplier.id)}>{supplier.name}</SelectItem>)}</SelectContent></Select></div>
+                <div>
+                  <Label>NIT del proveedor</Label>
+                  <NitAutocomplete
+                    value={form.supplier_nit}
+                    onChange={(event) => updateForm("supplier_nit", event.target.value.replace(/-/g, ""))}
+                    onBlur={async (event) => {
+                      const nit = event.target.value.trim();
+                      if (!nit || form.supplier_name.trim()) return;
+                      const result = await lookupNit(nit);
+                      if (result?.found && result.name) {
+                        updateForm("supplier_name", result.name);
+                      }
+                    }}
+                    onSelectTaxpayer={(nit, name) => {
+                      updateForm("supplier_nit", nit);
+                      updateForm("supplier_name", name);
+                    }}
+                    placeholder="NIT del proveedor"
+                  />
+                </div>
+                <div>
+                  <Label>Nombre del proveedor</Label>
+                  <Input
+                    value={form.supplier_name}
+                    onChange={(event) => updateForm("supplier_name", event.target.value)}
+                    placeholder="Nombre del proveedor"
+                  />
+                </div>
                 <div><Label>Centro de costo</Label><Input value={form.cost_center} onChange={(event) => updateForm("cost_center", event.target.value)} /></div>
                 <div><Label>Fecha de adquisición</Label><Input type="date" value={form.acquisition_date} onChange={(event) => updateForm("acquisition_date", event.target.value)} /></div>
                 <div><Label>Fecha de puesta en servicio</Label><Input type="date" value={form.in_service_date} onChange={(event) => updateForm("in_service_date", event.target.value)} /></div>

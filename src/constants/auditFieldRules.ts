@@ -154,7 +154,6 @@ export const TABLE_LABELS: Record<string, string> = {
   fixed_asset_categories: "Categorías de Activos",
   fixed_asset_locations: "Ubicaciones de Activos",
   fixed_asset_custodians: "Custodios de Activos",
-  fixed_asset_suppliers: "Proveedores de Activos",
   fixed_asset_policy: "Política de Depreciación",
 };
 

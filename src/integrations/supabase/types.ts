@@ -468,50 +468,6 @@ export type Database = {
           },
         ]
       }
-      fixed_asset_suppliers: {
-        Row: {
-          address: string | null
-          created_at: string
-          email: string | null
-          enterprise_id: number
-          id: number
-          is_active: boolean
-          name: string
-          phone: string | null
-          tax_id: string | null
-        }
-        Insert: {
-          address?: string | null
-          created_at?: string
-          email?: string | null
-          enterprise_id: number
-          id?: number
-          is_active?: boolean
-          name: string
-          phone?: string | null
-          tax_id?: string | null
-        }
-        Update: {
-          address?: string | null
-          created_at?: string
-          email?: string | null
-          enterprise_id?: number
-          id?: number
-          is_active?: boolean
-          name?: string
-          phone?: string | null
-          tax_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fixed_asset_suppliers_enterprise_id_fkey"
-            columns: ["enterprise_id"]
-            isOneToOne: false
-            referencedRelation: "tab_enterprises"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fixed_assets: {
         Row: {
           acquisition_cost: number
@@ -541,7 +497,8 @@ export type Database = {
           purchase_reference_id: number | null
           residual_value: number
           status: string
-          supplier_id: number | null
+          supplier_name: string | null
+          supplier_nit: string | null
           tenant_id: number
           updated_at: string
           useful_life_months: number
@@ -574,7 +531,8 @@ export type Database = {
           purchase_reference_id?: number | null
           residual_value?: number
           status?: string
-          supplier_id?: number | null
+          supplier_name?: string | null
+          supplier_nit?: string | null
           tenant_id: number
           updated_at?: string
           useful_life_months: number
@@ -607,7 +565,8 @@ export type Database = {
           purchase_reference_id?: number | null
           residual_value?: number
           status?: string
-          supplier_id?: number | null
+          supplier_name?: string | null
+          supplier_nit?: string | null
           tenant_id?: number
           updated_at?: string
           useful_life_months?: number
@@ -653,13 +612,6 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "fixed_asset_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fixed_assets_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "fixed_asset_suppliers"
             referencedColumns: ["id"]
           },
         ]

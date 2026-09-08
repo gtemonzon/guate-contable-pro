@@ -1,17 +1,19 @@
 import { useState } from "react";
 import {
   useFixedAssets, useAssetPolicy, useActivateAsset, useUpsertFixedAsset,
-  useAssetCategories, useAssetLocations, useAssetCustodians, useAssetSuppliers,
+  useAssetCategories, useAssetLocations, useAssetCustodians,
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
+import { useNitLookup } from "@/hooks/useNitLookup";
 import { CurrencyAmountInput } from "@/components/shared/CurrencyAmountInput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -53,7 +55,7 @@ export default function AssetList() {
   const { data: categories = [] } = useAssetCategories(enterpriseId);
   const { data: locations = [] } = useAssetLocations(enterpriseId);
   const { data: custodians = [] } = useAssetCustodians(enterpriseId);
-  const { data: suppliers = [] } = useAssetSuppliers(enterpriseId);
+  const { lookupNit } = useNitLookup();
   const upsert = useUpsertFixedAsset();
   const activate = useActivateAsset();
 
@@ -322,14 +324,29 @@ export default function AssetList() {
               </Select>
             </div>
             <div>
-              <Label>Proveedor</Label>
-              <Select value={form.supplier_id ? String(form.supplier_id) : "none"} onValueChange={(v) => setForm((f) => ({ ...f, supplier_id: v === "none" ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder="Ninguno" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ninguno</SelectItem>
-                  {suppliers.filter((s) => s.is_active).map((s) => (<SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <Label>NIT del proveedor</Label>
+              <NitAutocomplete
+                value={form.supplier_nit || ""}
+                onChange={(e) => setForm((f) => ({ ...f, supplier_nit: e.target.value.replace(/-/g, "") }))}
+                onBlur={async (e) => {
+                  const nit = e.target.value.trim();
+                  if (!nit || form.supplier_name?.trim()) return;
+                  const result = await lookupNit(nit);
+                  if (result?.found && result.name) {
+                    setForm((f) => ({ ...f, supplier_name: result.name }));
+                  }
+                }}
+                onSelectTaxpayer={(nit, name) => setForm((f) => ({ ...f, supplier_nit: nit, supplier_name: name }))}
+                placeholder="NIT del proveedor"
+              />
+            </div>
+            <div>
+              <Label>Nombre del proveedor</Label>
+              <Input
+                value={form.supplier_name || ""}
+                onChange={(e) => setForm((f) => ({ ...f, supplier_name: e.target.value }))}
+                placeholder="Nombre del proveedor"
+              />
             </div>
             {/* Moneda integrada en CurrencyAmountInput de Costo y Valor residual */}
           </div>

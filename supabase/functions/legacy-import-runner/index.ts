@@ -647,7 +647,6 @@ const RESUMABLE_CLEAR_PHASES = [
   { phaseKey: "fixed_asset_categories", label: "categorías de activos", progressKey: "assetCategories", batchSize: 100 },
   { phaseKey: "fixed_asset_locations", label: "ubicaciones de activos", progressKey: "assetLocations", batchSize: 100 },
   { phaseKey: "fixed_asset_custodians", label: "custodios de activos", progressKey: "assetCustodians", batchSize: 100 },
-  { phaseKey: "fixed_asset_suppliers", label: "proveedores de activos", progressKey: "assetSuppliers", batchSize: 100 },
   { phaseKey: "fixed_asset_policy", label: "políticas de activos", progressKey: "assetPolicy", batchSize: 50 },
   { phaseKey: "tab_fx_settlements", label: "liquidaciones cambiarias", progressKey: "fxSettlements", batchSize: 250 },
   { phaseKey: "tab_fx_open_balances", label: "saldos abiertos en moneda extranjera", progressKey: "fxOpenBalances", batchSize: 250 },

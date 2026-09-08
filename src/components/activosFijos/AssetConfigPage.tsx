@@ -4,7 +4,6 @@ import DepreciationPolicyForm from "./config/DepreciationPolicyForm";
 import AssetCategoriesManager from "./config/AssetCategoriesManager";
 import AssetLocationsManager from "./config/AssetLocationsManager";
 import AssetCustodiansManager from "./config/AssetCustodiansManager";
-import AssetSuppliersManager from "./config/AssetSuppliersManager";
 
 export default function AssetConfigPage() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
@@ -24,7 +23,6 @@ export default function AssetConfigPage() {
         <TabsTrigger value="categories">Categorías</TabsTrigger>
         <TabsTrigger value="locations">Ubicaciones</TabsTrigger>
         <TabsTrigger value="custodians">Custodios</TabsTrigger>
-        <TabsTrigger value="suppliers">Proveedores</TabsTrigger>
       </TabsList>
 
       <TabsContent value="policy" className="mt-6">
@@ -38,9 +36,6 @@ export default function AssetConfigPage() {
       </TabsContent>
       <TabsContent value="custodians" className="mt-6">
         <AssetCustodiansManager enterpriseId={enterpriseId} />
-      </TabsContent>
-      <TabsContent value="suppliers" className="mt-6">
-        <AssetSuppliersManager enterpriseId={enterpriseId} />
       </TabsContent>
     </Tabs>
   );
