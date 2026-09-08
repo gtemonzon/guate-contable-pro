@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AccountCombobox } from "@/components/ui/account-combobox";
 import { useAssetCategories, useUpsertAssetCategory, useDeleteAssetCategory, type FixedAssetCategory } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -39,33 +39,6 @@ function useEnterpriseAccounts(enterpriseId: number) {
   });
 }
 
-interface AccountSelectProps {
-  accounts: Array<{ id: number; account_code: string; account_name: string }>;
-  value: number | null;
-  onChange: (v: number | null) => void;
-  placeholder?: string;
-}
-
-function AccountSelect({ accounts, value, onChange, placeholder = "Seleccionar cuenta..." }: AccountSelectProps) {
-  return (
-    <Select
-      value={value ? String(value) : ""}
-      onValueChange={(v) => onChange(v ? Number(v) : null)}
-    >
-      <SelectTrigger className="h-8 text-xs">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {accounts.map((a) => (
-          <SelectItem key={a.id} value={String(a.id)} className="text-xs">
-            {a.account_code} - {a.account_name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 export default function AssetCategoriesManager({ enterpriseId }: Props) {
   const { data: categories = [], isLoading } = useAssetCategories(enterpriseId);
   const { data: accounts = [] } = useEnterpriseAccounts(enterpriseId);
@@ -87,7 +60,7 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
   );
 
   const save = () => {
-    upsert.mutate({ ...form, enterprise_id: enterpriseId } as any, {
+    upsert.mutate({ ...form, enterprise_id: enterpriseId }, {
       onSuccess: () => setOpen(false),
     });
   };
@@ -210,10 +183,10 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
               ].map(({ label, key }) => (
                 <div key={key}>
                   <Label>{label}</Label>
-                  <AccountSelect
+                  <AccountCombobox
                     accounts={accounts}
                     value={form[key] ?? null}
-                    onChange={(v) => setForm((f) => ({ ...f, [key]: v }))}
+                    onValueChange={(v) => setForm((f) => ({ ...f, [key]: v }))}
                     placeholder="Seleccionar cuenta..."
                   />
                 </div>
@@ -222,7 +195,7 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
             {!hasAllAccounts && (
               <p className="text-xs text-amber-600 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" />
-                La categoría no se puede usar en activos activos hasta completar todas las cuentas.
+                La categoría no se puede usar en activos fijos hasta completar todas las cuentas.
               </p>
             )}
           </div>
