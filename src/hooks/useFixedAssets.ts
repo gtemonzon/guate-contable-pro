@@ -21,7 +21,8 @@ export interface FixedAsset {
   category_id: number;
   location_id: number | null;
   custodian_id: number | null;
-  supplier_id: number | null;
+  supplier_nit: string | null;
+  supplier_name: string | null;
   cost_center: string | null;
   acquisition_date: string;
   in_service_date: string | null;
@@ -48,7 +49,6 @@ export interface FixedAsset {
   category?: { name: string; code: string };
   location?: { name: string } | null;
   custodian?: { name: string } | null;
-  supplier?: { name: string } | null;
 }
 
 export interface FixedAssetCategory {
@@ -81,17 +81,6 @@ export interface FixedAssetCustodian {
   identifier: string | null;
   contact: string | null;
   notes: string | null;
-  is_active: boolean;
-}
-
-export interface FixedAssetSupplier {
-  id: number;
-  enterprise_id: number;
-  name: string;
-  tax_id: string | null;
-  address: string | null;
-  email: string | null;
-  phone: string | null;
   is_active: boolean;
 }
 
@@ -301,52 +290,6 @@ export function useDeleteAssetCustodian() {
   });
 }
 
-// ─── Suppliers ───────────────────────────────────────────────────────────────
-
-export function useAssetSuppliers(enterpriseId: number | null) {
-  return useQuery<FixedAssetSupplier[]>({
-    queryKey: ["fixed_asset_suppliers", enterpriseId],
-    enabled: !!enterpriseId,
-    queryFn: async () => {
-      const { data, error } = await db("fixed_asset_suppliers")
-        .select("*").eq("enterprise_id", enterpriseId!).order("name");
-      if (error) throw error;
-      return (data ?? []) as FixedAssetSupplier[];
-    },
-  });
-}
-
-export function useUpsertAssetSupplier() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (s: Partial<FixedAssetSupplier> & { enterprise_id: number }) => {
-      const { id, ...payload } = s;
-      const { error } = id
-        ? await db("fixed_asset_suppliers").update(payload).eq("id", id)
-        : await db("fixed_asset_suppliers").insert(payload);
-      if (error) throw error;
-    },
-    onSuccess: (_, s) => {
-      qc.invalidateQueries({ queryKey: ["fixed_asset_suppliers", s.enterprise_id] });
-      toast.success("Proveedor guardado");
-    },
-    onError: onErr,
-  });
-}
-
-export function useDeleteAssetSupplier() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, enterprise_id }: { id: number; enterprise_id: number }) => {
-      const { error } = await db("fixed_asset_suppliers").delete().eq("id", id);
-      if (error) throw error;
-      return enterprise_id;
-    },
-    onSuccess: (eid) => { qc.invalidateQueries({ queryKey: ["fixed_asset_suppliers", eid] }); toast.success("Proveedor eliminado"); },
-    onError: onErr,
-  });
-}
-
 // ─── Fixed Assets ────────────────────────────────────────────────────────────
 
 export function useFixedAssets(enterpriseId: number | null) {
@@ -359,8 +302,7 @@ export function useFixedAssets(enterpriseId: number | null) {
           *,
           category:fixed_asset_categories(name, code),
           location:fixed_asset_locations(name),
-          custodian:fixed_asset_custodians(name),
-          supplier:fixed_asset_suppliers(name)
+          custodian:fixed_asset_custodians(name)
         `)
         .eq("enterprise_id", enterpriseId!)
         .order("asset_code");
@@ -374,8 +316,8 @@ export function useUpsertFixedAsset() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (asset: Partial<FixedAsset> & { enterprise_id: number; tenant_id: number }) => {
-      const { id, category, location, custodian, supplier, ...payload } = asset as FixedAsset & { [key: string]: unknown };
-      void category; void location; void custodian; void supplier;
+      const { id, category, location, custodian, ...payload } = asset as FixedAsset & { [key: string]: unknown };
+      void category; void location; void custodian;
       if (id) {
         const { data, error } = await db("fixed_assets")
           .update({ ...payload, updated_at: new Date().toISOString() })
