@@ -1908,6 +1908,7 @@ export type Database = {
           realized_fx_loss_account_id: number | null
           retained_earnings_account_id: number | null
           sales_account_id: number | null
+          small_taxpayer_tax_expense_account_id: number | null
           suppliers_account_id: number | null
           unrealized_fx_gain_account_id: number | null
           unrealized_fx_loss_account_id: number | null
@@ -1960,6 +1961,7 @@ export type Database = {
           realized_fx_loss_account_id?: number | null
           retained_earnings_account_id?: number | null
           sales_account_id?: number | null
+          small_taxpayer_tax_expense_account_id?: number | null
           suppliers_account_id?: number | null
           unrealized_fx_gain_account_id?: number | null
           unrealized_fx_loss_account_id?: number | null
@@ -2012,6 +2014,7 @@ export type Database = {
           realized_fx_loss_account_id?: number | null
           retained_earnings_account_id?: number | null
           sales_account_id?: number | null
+          small_taxpayer_tax_expense_account_id?: number | null
           suppliers_account_id?: number | null
           unrealized_fx_gain_account_id?: number | null
           unrealized_fx_loss_account_id?: number | null
@@ -2240,6 +2243,41 @@ export type Database = {
           tax_rate?: number | null
         }
         Relationships: []
+      }
+      tab_enterprise_tax_regime_history: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          enterprise_id: number
+          id: number
+          tax_regime: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          enterprise_id: number
+          id?: number
+          tax_regime: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          enterprise_id?: number
+          id?: number
+          tax_regime?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tab_enterprise_tax_regime_history_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tab_enterprises: {
         Row: {

@@ -12,8 +12,17 @@ interface UseEnterpriseTaxRegimeResult {
  * Reads the active enterprise's VAT tax regime and returns the matching
  * fiscal book strategy. Listens to enterprise switches via the existing
  * `enterpriseChanged` + `storage` events.
+ *
+ * When `asOfDate` (YYYY-MM-DD) is provided, resolves the regime that was
+ * effective on that date from `tab_enterprise_tax_regime_history` instead of
+ * the enterprise's current regime — needed because a company can change tax
+ * regime over its lifetime, and viewing a past month must reflect the regime
+ * that applied back then, not the one it has today.
  */
-export function useEnterpriseTaxRegime(enterpriseIdOverride?: number | string | null): UseEnterpriseTaxRegimeResult {
+export function useEnterpriseTaxRegime(
+  enterpriseIdOverride?: number | string | null,
+  asOfDate?: string
+): UseEnterpriseTaxRegimeResult {
   const [regime, setRegime] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,10 +44,30 @@ export function useEnterpriseTaxRegime(enterpriseIdOverride?: number | string | 
       }
 
       setLoading(true);
+      const enterpriseId = parseInt(id);
+
+      if (asOfDate) {
+        const { data: historyRows } = await supabase
+          .from("tab_enterprise_tax_regime_history")
+          .select("tax_regime")
+          .eq("enterprise_id", enterpriseId)
+          .lte("effective_from", asOfDate)
+          .order("effective_from", { ascending: false })
+          .limit(1);
+
+        if (historyRows && historyRows.length > 0) {
+          if (!cancelled) {
+            setRegime(historyRows[0].tax_regime);
+            setLoading(false);
+          }
+          return;
+        }
+      }
+
       const { data } = await supabase
         .from("tab_enterprises")
         .select("tax_regime")
-        .eq("id", parseInt(id))
+        .eq("id", enterpriseId)
         .maybeSingle();
 
       if (!cancelled) {
@@ -64,7 +93,7 @@ export function useEnterpriseTaxRegime(enterpriseIdOverride?: number | string | 
       window.removeEventListener("storage", handler);
       window.removeEventListener("enterpriseChanged", handler);
     };
-  }, [enterpriseIdOverride]);
+  }, [enterpriseIdOverride, asOfDate]);
 
   return {
     regime,

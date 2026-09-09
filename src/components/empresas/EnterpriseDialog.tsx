@@ -38,6 +38,7 @@ import { Switch } from "@/components/ui/switch";
 import { EnterpriseDocuments } from "./EnterpriseDocuments";
 import { EnterprisePeriods } from "./EnterprisePeriods";
 import { EnterpriseTaxes } from "./EnterpriseTaxes";
+import { EnterpriseTaxRegimeHistory } from "./EnterpriseTaxRegimeHistory";
 import { EnterpriseBookAuthorizations } from "./EnterpriseBookAuthorizations";
 import { EnterpriseCurrencies } from "./EnterpriseCurrencies";
 import { EnterpriseModules } from "./EnterpriseModules";
@@ -336,10 +337,11 @@ export function EnterpriseDialog({
 
         {enterprise ? (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="currencies">Monedas</TabsTrigger>
               <TabsTrigger value="taxes">Impuestos</TabsTrigger>
+              <TabsTrigger value="tax-regime">Régimen Fiscal</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
               <TabsTrigger value="periods">Períodos</TabsTrigger>
               <TabsTrigger value="books">Libros SAT</TabsTrigger>
@@ -560,6 +562,10 @@ export function EnterpriseDialog({
 
             <TabsContent value="taxes" className="mt-4">
               <EnterpriseTaxes enterpriseId={enterprise.id} />
+            </TabsContent>
+
+            <TabsContent value="tax-regime" className="mt-4">
+              <EnterpriseTaxRegimeHistory enterpriseId={enterprise.id} onSuccess={onSuccess} />
             </TabsContent>
 
             <TabsContent value="documents" className="mt-4">

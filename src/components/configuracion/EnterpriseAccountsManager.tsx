@@ -15,7 +15,8 @@ export function EnterpriseAccountsManager() {
   const [currentEnterpriseId, setCurrentEnterpriseId] = useState<number | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
-  
+  const [currentTaxRegime, setCurrentTaxRegime] = useState<string | null>(null);
+
   const { config, loading, saveConfig } = useEnterpriseConfig(currentEnterpriseId);
 
   const [formData, setFormData] = useState({
@@ -28,6 +29,7 @@ export function EnterpriseAccountsManager() {
     customers_account_id: null as number | null,
     suppliers_account_id: null as number | null,
     inventory_account_id: null as number | null,
+    small_taxpayer_tax_expense_account_id: null as number | null,
     cost_of_sales_method: 'manual' as 'manual' | 'coeficiente',
     cost_of_sales_account_id: null as number | null,
     unrealized_fx_gain_account_id: null as number | null,
@@ -65,6 +67,25 @@ export function EnterpriseAccountsManager() {
   }, []);
 
   useEffect(() => {
+    if (!currentEnterpriseId) {
+      setCurrentTaxRegime(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('tab_enterprises')
+      .select('tax_regime')
+      .eq('id', currentEnterpriseId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setCurrentTaxRegime(data?.tax_regime ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentEnterpriseId]);
+
+  useEffect(() => {
     if (config) {
       setFormData({
         vat_credit_account_id: config.vat_credit_account_id,
@@ -76,6 +97,7 @@ export function EnterpriseAccountsManager() {
         customers_account_id: config.customers_account_id,
         suppliers_account_id: config.suppliers_account_id,
         inventory_account_id: config.inventory_account_id,
+        small_taxpayer_tax_expense_account_id: config.small_taxpayer_tax_expense_account_id ?? null,
         cost_of_sales_method: config.cost_of_sales_method || 'manual',
         cost_of_sales_account_id: config.cost_of_sales_account_id,
         unrealized_fx_gain_account_id: config.unrealized_fx_gain_account_id ?? null,
@@ -148,6 +170,7 @@ export function EnterpriseAccountsManager() {
       customers_account_id: formData.customers_account_id,
       suppliers_account_id: formData.suppliers_account_id,
       inventory_account_id: formData.inventory_account_id,
+      small_taxpayer_tax_expense_account_id: formData.small_taxpayer_tax_expense_account_id,
       cost_of_sales_method: formData.cost_of_sales_method,
       cost_of_sales_account_id: formData.cost_of_sales_account_id,
       unrealized_fx_gain_account_id: formData.unrealized_fx_gain_account_id,
@@ -200,6 +223,13 @@ export function EnterpriseAccountsManager() {
     { key: 'sales_account_id', label: 'Ventas', description: 'Cuenta para registrar las ventas' },
     { key: 'customers_account_id', label: 'Clientes', description: 'Cuenta de cuentas por cobrar' },
     { key: 'suppliers_account_id', label: 'Proveedores', description: 'Cuenta de cuentas por pagar' },
+    ...(currentTaxRegime === 'pequeño_contribuyente'
+      ? [{
+          key: 'small_taxpayer_tax_expense_account_id',
+          label: 'Cuenta de gasto — Impuesto Pequeño Contribuyente',
+          description: 'Cuenta de gasto para el impuesto fijo (5% sobre ingresos brutos) al contabilizar el Libro de Ventas',
+        }]
+      : []),
   ];
 
   return (

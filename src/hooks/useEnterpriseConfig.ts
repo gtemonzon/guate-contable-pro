@@ -16,6 +16,8 @@ export interface EnterpriseConfig {
   customers_account_id: number | null;
   suppliers_account_id: number | null;
   inventory_account_id: number | null;
+  // Pequeño Contribuyente: gasto del impuesto fijo (5% sobre ingresos brutos)
+  small_taxpayer_tax_expense_account_id: number | null;
   cost_of_sales_method: 'manual' | 'coeficiente';
   cost_of_sales_account_id: number | null;
   // Diferencial cambiario
@@ -63,6 +65,7 @@ const defaultConfig = (enterpriseId: number): EnterpriseConfig => ({
   customers_account_id: null,
   suppliers_account_id: null,
   inventory_account_id: null,
+  small_taxpayer_tax_expense_account_id: null,
   cost_of_sales_method: 'manual',
   cost_of_sales_account_id: null,
   unrealized_fx_gain_account_id: null,
@@ -140,6 +143,7 @@ export function useEnterpriseConfig(enterpriseId: number | null) {
         customers_account_id: newConfig.customers_account_id,
         suppliers_account_id: newConfig.suppliers_account_id,
         inventory_account_id: newConfig.inventory_account_id,
+        small_taxpayer_tax_expense_account_id: newConfig.small_taxpayer_tax_expense_account_id,
         cost_of_sales_method: newConfig.cost_of_sales_method,
         cost_of_sales_account_id: newConfig.cost_of_sales_account_id,
         unrealized_fx_gain_account_id: newConfig.unrealized_fx_gain_account_id,
