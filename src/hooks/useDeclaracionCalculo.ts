@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 
 export type TaxFormType = 'IVA_PEQUENO' | 'IVA_GENERAL' | 'ISR_MENSUAL' | 'ISR_TRIMESTRAL' | 'ISO_TRIMESTRAL';
 
@@ -271,8 +272,9 @@ export function useDeclaracionCalculo(
   };
 
   // Calculate suggested crédito remanente = saldo final de la cuenta IVA Crédito al cierre
-  // del mes inmediato anterior, EXCLUYENDO partidas de apertura/cierre/traslado
-  // (APER, CIER, TRAS) para evitar arrastres de años previos no declarados.
+  // del mes inmediato anterior. Usa el piso fiscal (última 'apertura' vigente) como cota
+  // inferior: una partida de apertura YA restablece el saldo acumulado de años anteriores,
+  // así que sumar todo el historial desde el inicio de los tiempos la contaría dos veces.
   const calcularCreditoRemanenteSugerido = async () => {
     if (!enterpriseId) return;
 
@@ -294,7 +296,9 @@ export function useDeclaracionCalculo(
       const prevMonthEnd = new Date(year, month - 1, 0); // last day of prev month
       const prevEnd = prevMonthEnd.toISOString().split('T')[0];
 
-      const { data: journalDetails } = await supabase
+      const fiscalFloor = await getFiscalFloorDate(enterpriseId, prevEnd);
+
+      let query = supabase
         .from("tab_journal_entry_details")
         .select(`
           debit_amount,
@@ -302,7 +306,6 @@ export function useDeclaracionCalculo(
           tab_journal_entries!inner (
             enterprise_id,
             entry_date,
-            entry_number,
             is_posted
           )
         `)
@@ -311,20 +314,19 @@ export function useDeclaracionCalculo(
         .eq("tab_journal_entries.is_posted", true)
         .lte("tab_journal_entries.entry_date", prevEnd);
 
+      query = applyFiscalFloor(query, "tab_journal_entries.entry_date", fiscalFloor);
+
+      const { data: journalDetails } = await query;
+
       if (!journalDetails || journalDetails.length === 0) {
         setCreditoRemanenteSugerido(0);
         return;
       }
 
-      // Exclude opening/closing/transfer entries from the running balance
-      const EXCLUDED_PREFIXES = ["APER", "CIER", "TRAS"];
-
       let totalDebit = 0;
       let totalCredit = 0;
 
-      journalDetails.forEach((detail: any) => {
-        const entryNumber: string = detail.tab_journal_entries?.entry_number || "";
-        if (EXCLUDED_PREFIXES.some((p) => entryNumber.startsWith(p))) return;
+      journalDetails.forEach((detail) => {
         totalDebit += Number(detail.debit_amount) || 0;
         totalCredit += Number(detail.credit_amount) || 0;
       });
