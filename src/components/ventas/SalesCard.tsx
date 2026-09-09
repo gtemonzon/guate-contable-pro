@@ -54,6 +54,10 @@ interface SalesCardProps {
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   incomeAccounts: { id: number; account_code: string; account_name: string }[];
+  /** Pequeño Contribuyente: shows the fixed-rate tax column instead of relying on VAT */
+  showSmallTaxpayerTax?: boolean;
+  /** Configured Pequeño Contribuyente rate (e.g. 5 for 5%) */
+  smallTaxpayerRate?: number;
   onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
   onSave: (rowId: string) => void;
   onDelete: (index: number) => void;
@@ -84,6 +88,8 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   felDocTypes,
   operationTypes,
   incomeAccounts,
+  showSmallTaxpayerTax = false,
+  smallTaxpayerRate = 5,
   onUpdate,
   onSave,
   onDelete,
@@ -311,7 +317,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         onClick={() => onStartEdit?.(index)}
       >
         <CardContent className="p-3">
-          <div className="grid grid-cols-12 gap-2 items-center text-sm">
+          <div className={cn(
+            "grid gap-2 items-center text-sm",
+            showSmallTaxpayerTax ? "grid-cols-[repeat(13,minmax(0,1fr))]" : "grid-cols-12"
+          )}>
             <div className="col-span-1 text-muted-foreground flex items-center gap-1">
               {sale.is_annulled && <Ban className="h-3 w-3 text-destructive" />}
               {formatDate(sale.invoice_date)}
@@ -336,6 +345,11 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             <div className="col-span-1 text-right font-mono text-muted-foreground">
               {formatCurrency(sale.vat_amount)}
             </div>
+            {showSmallTaxpayerTax && (
+              <div className="col-span-1 text-right font-mono text-muted-foreground">
+                {formatCurrency((Number(sale.total_amount) || 0) * (smallTaxpayerRate / 100))}
+              </div>
+            )}
             <div className="col-span-1 text-center">
               {getOperationTypeName(sale.operation_type_id)}
             </div>
@@ -503,7 +517,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
           </div>
 
           {/* Segunda fila: Montos, tipo operación y cuenta con botones */}
-          <div className="grid grid-cols-12 gap-2">
+          <div className={cn(
+            "grid gap-2",
+            showSmallTaxpayerTax ? "grid-cols-[repeat(14,minmax(0,1fr))]" : "grid-cols-12"
+          )}>
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Total c/IVA</label>
               <Input
@@ -524,6 +541,20 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 className="h-8 bg-muted"
               />
             </div>
+            {showSmallTaxpayerTax && (
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">
+                  Impuesto ({smallTaxpayerRate}%)
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={((Number(sale.total_amount) || 0) * (smallTaxpayerRate / 100)).toFixed(2)}
+                  readOnly
+                  className="h-8 bg-muted"
+                />
+              </div>
+            )}
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground whitespace-nowrap">
                 Tipo Op.

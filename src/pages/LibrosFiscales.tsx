@@ -23,6 +23,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
+import { useSmallTaxpayerRate } from "@/hooks/useSmallTaxpayerRate";
 import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
@@ -45,8 +46,15 @@ function buildGenericSalesLines(options: {
   vatDebitAccountId?: number | null;
   contraAccountId?: number | null;
   description: string;
+  /** Pequeño Contribuyente: tasa fija configurada (ej. 5 para 5%) */
+  smallTaxpayerRate?: number | null;
+  /** Pequeño Contribuyente: cuenta de gasto del impuesto fijo */
+  smallTaxpayerExpenseAccountId?: number | null;
 }) {
-  const { sales, docTypeMap, vatDebitAccountId, contraAccountId, description } = options;
+  const {
+    sales, docTypeMap, vatDebitAccountId, contraAccountId, description,
+    smallTaxpayerRate, smallTaxpayerExpenseAccountId,
+  } = options;
   const byAccount = new Map<number, number>();
   let totalAmount = 0;
   let totalVAT = 0;
@@ -101,7 +109,30 @@ function buildGenericSalesLines(options: {
     });
   }
 
-  return { lines };
+  // Pequeño Contribuyente: impuesto fijo sobre ingresos brutos. Gasto (debe) y
+  // contrapartida de impuesto pendiente de liquidar a la SAT (haber), reutilizando
+  // la cuenta de IVA Débito para ese fin. Ambas líneas solo se agregan si están
+  // configuradas las dos cuentas necesarias.
+  let smallTaxpayerTax = 0;
+  if (smallTaxpayerExpenseAccountId && vatDebitAccountId && smallTaxpayerRate && smallTaxpayerRate > 0) {
+    smallTaxpayerTax = Number((totalAmount * (smallTaxpayerRate / 100)).toFixed(2));
+    if (smallTaxpayerTax !== 0) {
+      lines.push({
+        account_id: Number(smallTaxpayerExpenseAccountId),
+        description,
+        debit_amount: smallTaxpayerTax > 0 ? smallTaxpayerTax : 0,
+        credit_amount: smallTaxpayerTax < 0 ? Math.abs(smallTaxpayerTax) : 0,
+      });
+      lines.push({
+        account_id: Number(vatDebitAccountId),
+        description,
+        debit_amount: smallTaxpayerTax < 0 ? Math.abs(smallTaxpayerTax) : 0,
+        credit_amount: smallTaxpayerTax > 0 ? smallTaxpayerTax : 0,
+      });
+    }
+  }
+
+  return { lines, smallTaxpayerTax };
 }
 
 
@@ -274,8 +305,31 @@ export default function LibrosFiscales() {
   const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { toast } = useToast();
-  const { strategy } = useEnterpriseTaxRegime();
+  // Fecha de referencia para resolver el régimen fiscal vigente en el mes que
+  // se está viendo (no necesariamente el régimen actual de la empresa) — usa
+  // el último día del mes seleccionado, igual que entryDateStr más abajo.
+  const regimeAsOfDate = useMemo(
+    () => `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
+    [selectedYear, selectedMonth]
+  );
+  const { strategy } = useEnterpriseTaxRegime(undefined, regimeAsOfDate);
   const appliesVat = strategy.appliesVat;
+  const isSmallTaxpayer = strategy.regime === "pequeño_contribuyente";
+  const { rate: smallTaxpayerRate } = useSmallTaxpayerRate(
+    currentEnterpriseId ? parseInt(currentEnterpriseId) : null
+  );
+  // Mismo criterio usado dentro de buildGenericSalesLines: solo hay impuesto de
+  // Pequeño Contribuyente que contabilizar si el régimen del mes es ese, la tasa
+  // es positiva, y AMBAS cuentas (gasto + IVA débito reutilizada) están configuradas.
+  const calcSmallTaxpayerTax = useCallback((
+    totalAmount: number,
+    expenseAccountId?: number | null,
+    vatAccountId?: number | null
+  ): number => {
+    if (!isSmallTaxpayer || !smallTaxpayerRate || smallTaxpayerRate <= 0) return 0;
+    if (!expenseAccountId || !vatAccountId) return 0;
+    return Number((totalAmount * (smallTaxpayerRate / 100)).toFixed(2));
+  }, [isSmallTaxpayer, smallTaxpayerRate]);
   // Mapa de tipos de documento FEL (multiplicador + aplica IVA) para el motor compartido
   const docTypeMap = useMemo(() => buildDocTypeMap(felDocTypes), [felDocTypes]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -449,16 +503,26 @@ export default function LibrosFiscales() {
       const multiplier = docType?.affects_total ?? 1;
       return sum + ((Number(s.net_amount) || 0) * multiplier);
     }, 0);
-    
+
+    // Pequeño Contribuyente: tasa fija sobre ingresos brutos (no aplica IVA)
+    const totalTax5 = isSmallTaxpayer
+      ? activeSales.reduce((sum, s) => {
+          const docType = felDocTypes.find(dt => dt.code === s.fel_document_type);
+          const multiplier = docType?.affects_total ?? 1;
+          return sum + ((Number(s.total_amount) || 0) * multiplier) * (smallTaxpayerRate / 100);
+        }, 0)
+      : 0;
+
     return {
       totalWithVAT: formatCurrency(totalWithVAT),
       totalVAT: formatCurrency(totalVAT),
       totalNet: formatCurrency(totalNet),
+      totalTax5: formatCurrency(totalTax5),
       documentCount: sales.length,
       activeCount: activeSales.length,
       annulledCount: annulledSales.length,
     };
-  }, [sales, felDocTypes]);
+  }, [sales, felDocTypes, isSmallTaxpayer, smallTaxpayerRate]);
 
   // Resumen de compras por Tipo de Operación (aplicando affects_total)
   const purchasesByOperationType = useMemo(() => {
@@ -2035,6 +2099,12 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">IVA: </span>
                     <span className="font-semibold">Q {salesTotals.totalVAT}</span>
                   </div>
+                  {isSmallTaxpayer && (
+                    <div>
+                      <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%): </span>
+                      <span className="font-semibold">Q {salesTotals.totalTax5}</span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-muted-foreground">Total c/IVA: </span>
                     <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
@@ -2218,6 +2288,8 @@ export default function LibrosFiscales() {
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       incomeAccounts={incomeAccounts}
+                      showSmallTaxpayerTax={isSmallTaxpayer}
+                      smallTaxpayerRate={smallTaxpayerRate}
                       journalEntryLabel={sale.journal_entry_id ? formatShortEntryLabel(journalEntryNumbers[sale.journal_entry_id]) : undefined}
                       onUpdate={updateSaleRow}
                       onSave={saveSaleRow}
@@ -2289,6 +2361,9 @@ export default function LibrosFiscales() {
                   )}
                   <p><strong>Neto:</strong> Q {salesTotals.totalNet}</p>
                   <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>
+                  {isSmallTaxpayer && (
+                    <p><strong>Impuesto ({smallTaxpayerRate}%):</strong> Q {salesTotals.totalTax5}</p>
+                  )}
                   <p><strong>Total:</strong> Q {salesTotals.totalWithVAT}</p>
                 </>
               )}
@@ -2431,12 +2506,13 @@ export default function LibrosFiscales() {
                       // Generar póliza de ventas consolidada
                       const { data: enterpriseConfig } = await supabase
                         .from("tab_enterprise_config")
-                        .select("vat_debit_account_id, customers_account_id")
+                        .select("vat_debit_account_id, customers_account_id, small_taxpayer_tax_expense_account_id")
                         .eq("enterprise_id", parseInt(currentEnterpriseId))
                         .maybeSingle();
 
                       const vatDebitAccountId = enterpriseConfig?.vat_debit_account_id;
                       const customersAccountId = enterpriseConfig?.customers_account_id;
+                      const smallTaxpayerExpenseAccountId = enterpriseConfig?.small_taxpayer_tax_expense_account_id ?? null;
 
                       const { data: cashAccounts } = await supabase
                         .from("tab_accounts")
@@ -2462,6 +2538,14 @@ export default function LibrosFiscales() {
                         return sum + ((Number(s.total_amount) || 0) * multiplier);
                       }, 0);
 
+                      const smallTaxpayerTaxAmount = calcSmallTaxpayerTax(totalAmount, smallTaxpayerExpenseAccountId, vatDebitAccountId);
+                      if (isSmallTaxpayer && smallTaxpayerRate > 0 && (!smallTaxpayerExpenseAccountId || !vatDebitAccountId)) {
+                        toast({
+                          title: "Impuesto de Pequeño Contribuyente no contabilizado",
+                          description: "Configura la cuenta de gasto de Impuesto Pequeño Contribuyente y la cuenta de IVA Débito en Configuración > Cuentas Contables para incluirlo automáticamente en la póliza.",
+                        });
+                      }
+
                       const { data: journalEntry, error: journalError } = await supabase
                         .from("tab_journal_entries")
                         .insert({
@@ -2471,8 +2555,8 @@ export default function LibrosFiscales() {
                           entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
                           entry_type: "diario",
                           description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                          total_debit: totalAmount,
-                          total_credit: totalAmount,
+                          total_debit: totalAmount + smallTaxpayerTaxAmount,
+                          total_credit: totalAmount + smallTaxpayerTaxAmount,
                           is_posted: false,
                           created_by: user.id,
                         })
@@ -2488,6 +2572,8 @@ export default function LibrosFiscales() {
                         vatDebitAccountId,
                         contraAccountId: cashAccountId,
                         description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                        smallTaxpayerRate: isSmallTaxpayer ? smallTaxpayerRate : null,
+                        smallTaxpayerExpenseAccountId,
                       });
                       const detailLines = aggregatedLines.map((l, idx) => ({
                         journal_entry_id: journalEntry.id,
@@ -2792,12 +2878,20 @@ export default function LibrosFiscales() {
                       // Obtener configuración de empresa para cuenta de IVA Débito
                       const { data: enterpriseConfig } = await supabase
                         .from("tab_enterprise_config")
-                        .select("vat_debit_account_id, customers_account_id")
+                        .select("vat_debit_account_id, customers_account_id, small_taxpayer_tax_expense_account_id")
                         .eq("enterprise_id", parseInt(currentEnterpriseId))
                         .maybeSingle();
 
                       const vatDebitAccountId = enterpriseConfig?.vat_debit_account_id;
                       const customersAccountId = enterpriseConfig?.customers_account_id;
+                      const smallTaxpayerExpenseAccountId = enterpriseConfig?.small_taxpayer_tax_expense_account_id ?? null;
+
+                      if (isSmallTaxpayer && smallTaxpayerRate > 0 && (!smallTaxpayerExpenseAccountId || !vatDebitAccountId)) {
+                        toast({
+                          title: "Impuesto de Pequeño Contribuyente no contabilizado",
+                          description: "Configura la cuenta de gasto de Impuesto Pequeño Contribuyente y la cuenta de IVA Débito en Configuración > Cuentas Contables para incluirlo automáticamente en la póliza.",
+                        });
+                      }
 
                       // Cuenta de Caja/Bancos (activo, código 1xx) como fallback
                       const { data: cashAccounts, error: cashError } = await supabase
@@ -2847,6 +2941,8 @@ export default function LibrosFiscales() {
                           }
                         }
 
+                        const smallTaxpayerTaxAmount = calcSmallTaxpayerTax(totalAmount, smallTaxpayerExpenseAccountId, vatDebitAccountId);
+
                         const { data: journalEntry, error: journalError } = await supabase
                           .from("tab_journal_entries")
                           .insert({
@@ -2856,8 +2952,8 @@ export default function LibrosFiscales() {
                             entry_date: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`,
                             entry_type: "diario",
                             description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
-                            total_debit: parseFloat(totalAmount.toFixed(2)),
-                            total_credit: parseFloat(totalAmount.toFixed(2)),
+                            total_debit: parseFloat((totalAmount + smallTaxpayerTaxAmount).toFixed(2)),
+                            total_credit: parseFloat((totalAmount + smallTaxpayerTaxAmount).toFixed(2)),
                             is_posted: false,
                             created_by: user.id,
                           })
@@ -2873,6 +2969,8 @@ export default function LibrosFiscales() {
                           vatDebitAccountId,
                           contraAccountId: cashAccountId,
                           description: `Libro de Ventas ${monthNames[selectedMonth - 1]} ${selectedYear}`,
+                          smallTaxpayerRate: isSmallTaxpayer ? smallTaxpayerRate : null,
+                          smallTaxpayerExpenseAccountId,
                         });
                         const detailLines = aggregatedLines.map((l, idx) => ({
                           journal_entry_id: journalEntry.id,
@@ -2916,6 +3014,8 @@ export default function LibrosFiscales() {
                           const vat = (Number(s.vat_amount) || 0) * multiplier;
                           const net = (Number(s.net_amount) || 0) * multiplier;
 
+                          const smallTaxpayerTaxAmount = calcSmallTaxpayerTax(total, smallTaxpayerExpenseAccountId, vatDebitAccountId);
+
                           const entryNumber = `VENT-DOC-${s.invoice_series || 'S'}-${s.invoice_number}`;
                           const { data: journalEntry, error: journalError } = await supabase
                             .from("tab_journal_entries")
@@ -2926,8 +3026,8 @@ export default function LibrosFiscales() {
                               entry_date: s.invoice_date,
                               entry_type: "diario",
                               description: `Venta ${s.customer_name}`,
-                              total_debit: parseFloat(Math.abs(total).toFixed(2)),
-                              total_credit: parseFloat(Math.abs(total).toFixed(2)),
+                              total_debit: parseFloat((Math.abs(total) + Math.abs(smallTaxpayerTaxAmount)).toFixed(2)),
+                              total_credit: parseFloat((Math.abs(total) + Math.abs(smallTaxpayerTaxAmount)).toFixed(2)),
                               is_posted: false,
                               created_by: user.id,
                             })
@@ -2943,6 +3043,8 @@ export default function LibrosFiscales() {
                             vatDebitAccountId,
                             contraAccountId: cashAccountId,
                             description: `Venta ${s.customer_name}`,
+                            smallTaxpayerRate: isSmallTaxpayer ? smallTaxpayerRate : null,
+                            smallTaxpayerExpenseAccountId,
                           });
                           const detailLines = aggregatedLines.map((l, idx) => ({
                             journal_entry_id: journalEntry.id,
