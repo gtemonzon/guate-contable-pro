@@ -341,7 +341,7 @@ export function EnterpriseDialog({
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="currencies">Monedas</TabsTrigger>
               <TabsTrigger value="taxes">Impuestos</TabsTrigger>
-              <TabsTrigger value="tax-regime">Régimen Fiscal</TabsTrigger>
+              <TabsTrigger value="tax-regime">Reg. Fiscal</TabsTrigger>
               <TabsTrigger value="documents">Documentos</TabsTrigger>
               <TabsTrigger value="periods">Períodos</TabsTrigger>
               <TabsTrigger value="books">Libros SAT</TabsTrigger>
