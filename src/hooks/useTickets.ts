@@ -198,6 +198,7 @@ async function uploadAttachments(
     await supabase.from("ticket_attachments").insert({
       ticket_message_id: messageId,
       file_url: urlData.publicUrl,
+      storage_path: path,
       file_name: file.name,
     });
   }

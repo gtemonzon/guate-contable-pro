@@ -2258,7 +2258,7 @@ export type Database = {
           created_by?: string | null
           effective_from: string
           enterprise_id: number
-          id?: number
+          id?: never
           tax_regime: string
         }
         Update: {
@@ -2266,7 +2266,7 @@ export type Database = {
           created_by?: string | null
           effective_from?: string
           enterprise_id?: number
-          id?: number
+          id?: never
           tax_regime?: string
         }
         Relationships: [
@@ -5025,6 +5025,7 @@ export type Database = {
           file_name: string
           file_url: string
           id: number
+          storage_path: string | null
           ticket_message_id: number
         }
         Insert: {
@@ -5032,6 +5033,7 @@ export type Database = {
           file_name: string
           file_url: string
           id?: never
+          storage_path?: string | null
           ticket_message_id: number
         }
         Update: {
@@ -5039,6 +5041,7 @@ export type Database = {
           file_name?: string
           file_url?: string
           id?: never
+          storage_path?: string | null
           ticket_message_id?: number
         }
         Relationships: [
