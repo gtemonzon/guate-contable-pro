@@ -472,7 +472,6 @@ export default function JournalEntryViewDialog({
                   entityType="tab_journal_entries"
                   entityId={entryId}
                   visible={activeTab === "auditoria"}
-                  showHashChain={true}
                 />
               </TabsContent>
             </Tabs>
