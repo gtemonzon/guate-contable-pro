@@ -39,26 +39,34 @@ No toques TenantContext.tsx ni ningún otro archivo — el fetch ya trae is_acti
 
 ## Mantenimiento de Base de Datos
 
-### Purga de `tab_audit_log` — ejecución manual requerida (sin pg_cron)
+### Purga de `tab_audit_log` — automatizada con pg_cron (retención de 36 meses)
 
 `tab_audit_log` es el log de auditoría convencional (mutable, sin hash encadenado) que registra cambios en `tab_enterprises`, `tab_accounts`, `tab_accounting_periods`, `tab_journal_entries`, `tab_users` y `tab_user_enterprises`. Deliberadamente NO audita `tab_purchase_ledger` ni `tab_sales_ledger` (alto volumen, sin valor de auditoría real — esos libros ya tienen su propio rastro vía las partidas contables y `tab_journal_entry_history`).
 
-Para evitar que vuelva a crecer sin control, existe la función `public.purge_old_audit_log(p_batch_size integer DEFAULT 50000)`, que borra en un solo lote las filas de `tab_audit_log` con más de 12 meses de antigüedad y devuelve cuántas borró y cuántas quedan pendientes:
+Retiene **36 meses** (3 ejercicios fiscales completos) — subido desde 12 meses una vez que `tab_audit_log` quedó en ~110 MB / ~84,000 filas tras la optimización de auditoría y dejó de recibir los eventos de alto volumen de los libros fiscales.
+
+La purga corre **automáticamente vía pg_cron**, ya no requiere ejecución manual:
+
+* Extensión `pg_cron` habilitada en este proyecto (versión 1.6.4, esquema `cron`).
+* Job `purge-audit-log-monthly`, corre el día 1 de cada mes a las 3:00 am (hora del servidor): `0 3 1 * *`.
+* Llama a `public.run_audit_log_purge()`, que invoca `public.purge_old_audit_log(50000)` en bucle (hasta 50 iteraciones de seguridad) hasta drenar todo lo purgable en esa corrida — así un backlog mayor a 50,000 filas no se queda a medias con una sola ejecución mensual de un solo lote.
+* `public.purge_old_audit_log(p_batch_size integer DEFAULT 50000)` sigue disponible para ejecución manual puntual si hace falta (por lotes de `ctid`, retorna `deleted_count` y `remaining_older_than_36mo`):
 
 ```sql
 SELECT * FROM public.purge_old_audit_log();
+-- o para drenar todo lo pendiente de una vez, igual que hace el cron:
+SELECT public.run_audit_log_purge();
 ```
 
-**Esta extensión de Postgres `pg_cron` NO está instalada en este proyecto de Supabase** (verificado con `SELECT * FROM pg_extension WHERE extname = 'pg_cron'` — sin resultados), así que esta función NO está programada automáticamente. Debe ejecutarse manualmente cada cierto tiempo (sugerido: una vez al mes) llamando a la función repetidamente hasta que `remaining_older_than_12mo` sea `0`:
+Para revisar que el job esté corriendo bien (columnas reales de `cron.job_run_details` en esta versión: no tiene `jobname`, solo `jobid` — hay que unir contra `cron.job`):
 
 ```sql
--- Repetir hasta que remaining_older_than_12mo = 0
-SELECT * FROM public.purge_old_audit_log();
+SELECT jrd.* FROM cron.job_run_details jrd
+JOIN cron.job j ON j.jobid = jrd.jobid
+WHERE j.jobname = 'purge-audit-log-monthly'
+ORDER BY jrd.start_time DESC LIMIT 10;
 ```
 
-Después de una purga grande, ejecutar `VACUUM FULL tab_audit_log;` para devolver el espacio en disco al sistema operativo (un `DELETE` normal no lo hace).
+Después de una purga grande (backlog acumulado, no la operación mensual normal con volumen bajo), ejecutar `VACUUM FULL tab_audit_log;` para devolver el espacio en disco al sistema operativo (un `DELETE` normal no lo hace) — el cron mensual no lo hace automáticamente.
 
-Si en algún momento se habilita `pg_cron` en este proyecto, se puede programar con:
-```sql
-SELECT cron.schedule('purge-audit-log-monthly', '0 3 1 * *', $$SELECT public.purge_old_audit_log()$$);
-```
+**Qué se pierde al purgar y qué NO:** al purgar filas de `tab_audit_log` de más de 36 meses se vacía la pestaña "Auditoría" del detalle de partida para esos registros (`EntityAuditLog` con `entityType="tab_journal_entries"`, lee de `tab_audit_log`). NO se pierde la autoría básica (`created_by`/`updated_by`, mostrados en la pestaña "Detalle" y almacenados en la partida misma) ni el historial completo de cambios de partidas (`tab_journal_entry_history`, que nunca se purga y no tiene límite de retención).
