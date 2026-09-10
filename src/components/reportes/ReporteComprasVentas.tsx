@@ -198,7 +198,7 @@ export default function ReporteComprasVentas() {
       ]),
       foot: [[
         { content: "Subtotal Compras", colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
-        { content: `Q ${formatCurrency(totals.totalPurchases)}`, styles: { fontStyle: "bold" } },
+        { content: `Q ${formatCurrency(totals.totalPurchases)}`, styles: { halign: "right", fontStyle: "bold" } },
       ]],
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
       headStyles: noFillTableStyle,
@@ -229,7 +229,7 @@ export default function ReporteComprasVentas() {
       body: salesBody,
       foot: [[
         { content: "Subtotal Ventas", colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
-        { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
+        { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { halign: "right", fontStyle: "bold" } },
       ]],
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
       headStyles: noFillTableStyle,
@@ -243,8 +243,8 @@ export default function ReporteComprasVentas() {
     const pageHeight = doc.internal.pageSize.getHeight();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text(`Total Compras: Q ${formatCurrency(totals.totalPurchases)}`, leftX, pageHeight - 10);
-    doc.text(`Total Ventas: Q ${formatCurrency(totals.totalSales)}`, rightX, pageHeight - 10);
+    doc.text(`Total Compras: Q ${formatCurrency(totals.totalPurchases)}`, leftX + half, pageHeight - 10, { align: "right" });
+    doc.text(`Total Ventas: Q ${formatCurrency(totals.totalSales)}`, rightX + half, pageHeight - 10, { align: "right" });
 
     previewPdfDoc(doc, `${filenameBase}.pdf`);
     toast({ title: "Exportado", description: "PDF generado correctamente" });
