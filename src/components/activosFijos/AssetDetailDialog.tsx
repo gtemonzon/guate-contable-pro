@@ -41,6 +41,7 @@ interface Props {
 }
 
 interface AssetForm {
+  asset_code: string;
   asset_name: string;
   category_id: number;
   location_id: number | null;
@@ -66,6 +67,7 @@ const STATUS_LABEL: Record<string, string> = { PLANNED: "Planificado", POSTED: "
 
 function formFromAsset(asset: FixedAsset): AssetForm {
   return {
+    asset_code: asset.asset_code,
     asset_name: asset.asset_name,
     category_id: asset.category_id,
     location_id: asset.location_id,
@@ -152,6 +154,10 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const pagedAssignments = assignments.slice(custodianStartIndex, custodianStartIndex + CUSTODIAN_PAGE_SIZE);
 
   const saveChanges = async () => {
+    if (!form.asset_code.trim()) {
+      toast({ title: "Código requerido", description: "Ingresa un código para el activo.", variant: "destructive" });
+      return;
+    }
     if (!form.asset_name.trim()) {
       toast({ title: "Nombre requerido", description: "Ingresa un nombre para el activo.", variant: "destructive" });
       return;
@@ -161,9 +167,24 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
 
     try {
       setSaving(true);
+      if (form.asset_code.trim() !== asset.asset_code) {
+        const { data: dup } = await supabase
+          .from("fixed_assets")
+          .select("id")
+          .eq("enterprise_id", asset.enterprise_id)
+          .eq("asset_code", form.asset_code.trim())
+          .neq("id", asset.id)
+          .maybeSingle();
+        if (dup) {
+          toast({ title: "Ya existe otro activo con ese código", description: "Usa un código distinto.", variant: "destructive" });
+          setSaving(false);
+          return;
+        }
+      }
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) throw new Error("Usuario no autenticado");
       const update: Database["public"]["Tables"]["fixed_assets"]["Update"] = {
+        asset_code: form.asset_code.trim(),
         asset_name: form.asset_name.trim(),
         category_id: form.category_id,
         location_id: form.location_id,
@@ -241,7 +262,12 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       setFinancialConfirmOpen(false);
       onClose();
     } catch (error) {
-      toast({ title: "No se pudieron guardar los cambios", description: error instanceof Error ? error.message : "Intenta nuevamente.", variant: "destructive" });
+      const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
+      if (code === "23505") {
+        toast({ title: "Ya existe otro activo con ese código", description: "Usa un código distinto.", variant: "destructive" });
+      } else {
+        toast({ title: "No se pudieron guardar los cambios", description: error instanceof Error ? error.message : "Intenta nuevamente.", variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
@@ -373,7 +399,8 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
 
             <TabsContent value="data" className="mt-4 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="md:col-span-2"><Label>Nombre *</Label><Input value={form.asset_name} onChange={(event) => updateForm("asset_name", event.target.value)} /></div>
+                <div><Label>Código *</Label><Input value={form.asset_code} onChange={(event) => updateForm("asset_code", event.target.value)} /></div>
+                <div><Label>Nombre *</Label><Input value={form.asset_name} onChange={(event) => updateForm("asset_name", event.target.value)} /></div>
                 <div><Label>Categoría</Label><Select value={String(form.category_id)} onValueChange={(value) => updateForm("category_id", Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.code} — {category.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>Ubicación</Label><Select value={form.location_id ? String(form.location_id) : "none"} onValueChange={(value) => updateForm("location_id", value === "none" ? null : Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Ninguna</SelectItem>{locations.map((location) => <SelectItem key={location.id} value={String(location.id)}>{location.name}</SelectItem>)}</SelectContent></Select></div>
                 <div>
