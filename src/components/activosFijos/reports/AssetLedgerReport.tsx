@@ -27,7 +27,7 @@ import {
   sumDepreciationUpTo,
   sumDepreciationWithin,
 } from "./reportShared";
-import { drawAssetReportHeader } from "./reportPdfHelpers";
+import { drawAssetReportHeader, noFillTableStyle } from "./reportPdfHelpers";
 
 interface Props {
   enterpriseId: number;
@@ -208,8 +208,8 @@ export default function AssetLedgerReport({ enterpriseId, enterpriseName, enterp
         ],
       ],
       styles: { font: "helvetica", fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-      footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold" },
+      headStyles: noFillTableStyle,
+      footStyles: noFillTableStyle,
       columnStyles: {
         1: { halign: "right" },
         2: { halign: "right" },

@@ -19,7 +19,7 @@ import {
   type DepreciationScheduleForReports,
 } from "@/hooks/useFixedAssets";
 import { fmt, formatDateEs, MONTH_NAMES, parseDateParts, periodKey, sumDepreciationUpTo } from "./reportShared";
-import { drawAssetReportHeader } from "./reportPdfHelpers";
+import { drawAssetReportHeader, noFillTableStyle } from "./reportPdfHelpers";
 
 interface Props {
   enterpriseId: number;
@@ -180,8 +180,8 @@ export default function AssetKardexReport({ enterpriseId, enterpriseName, enterp
         foot: [totalsRow],
         styles: { font: "helvetica", fontSize: 8, cellPadding: 1.5, halign: "right" },
         columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-        footStyles: { fillColor: [230, 230, 230], textColor: 0, fontStyle: "bold" },
+        headStyles: noFillTableStyle,
+        footStyles: noFillTableStyle,
       });
     });
 

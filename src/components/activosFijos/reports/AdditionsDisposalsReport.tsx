@@ -16,7 +16,7 @@ import {
   type FixedAssetCategory,
 } from "@/hooks/useFixedAssets";
 import { fmt, formatDateEs, isPresentAtStart, disposalDateOnly } from "./reportShared";
-import { drawAssetReportHeader, getAutoTableFinalY } from "./reportPdfHelpers";
+import { drawAssetReportHeader, getAutoTableFinalY, noFillTableStyle } from "./reportPdfHelpers";
 
 interface Props {
   enterpriseId: number;
@@ -123,7 +123,7 @@ export default function AdditionsDisposalsReport({ enterpriseId, enterpriseName,
     const body: RowInput[] = [];
     sections.forEach((s) => {
       body.push([
-        { content: s.category.name, colSpan: 4, styles: { fontStyle: "bold", fillColor: [230, 230, 230] } },
+        { content: s.category.name, colSpan: 4, styles: { fontStyle: "bold" } },
       ]);
       body.push([
         { content: "Saldo Inicial de Categoría", colSpan: 3, styles: { fontStyle: "bold" } },
@@ -163,7 +163,7 @@ export default function AdditionsDisposalsReport({ enterpriseId, enterpriseName,
       head: [["Descripción", "Código", "Fecha", "Monto"]],
       body,
       styles: { font: "helvetica", fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255 },
+      headStyles: noFillTableStyle,
       columnStyles: { 3: { halign: "right" } },
     });
 

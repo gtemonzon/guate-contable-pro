@@ -17,7 +17,7 @@ import {
   type OpenCustodianAssignmentForReport,
 } from "@/hooks/useFixedAssets";
 import { formatDateEs } from "./reportShared";
-import { drawAssetReportHeader, getAutoTableFinalY } from "./reportPdfHelpers";
+import { drawAssetReportHeader, getAutoTableFinalY, noFillTableStyle } from "./reportPdfHelpers";
 
 interface Props {
   enterpriseId: number;
@@ -121,7 +121,7 @@ export default function ResponsibilityCardReport({ enterpriseId, enterpriseName,
           formatDateEs(a.assigned_date),
         ]),
         styles: { font: "helvetica", fontSize: 9, cellPadding: 2 },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255 },
+        headStyles: noFillTableStyle,
       });
 
       const tableEndY = getAutoTableFinalY(doc);
