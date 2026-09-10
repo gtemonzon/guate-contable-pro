@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -7,17 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileDown, FileSpreadsheet, ChevronsUpDown } from "lucide-react";
+import { Loader2, FileDown, FileSpreadsheet, ChevronsUpDown, ChevronRight } from "lucide-react";
 import { previewPdfDoc } from "@/lib/pdfPreview";
 import {
   useAssetCustodians,
   useOpenCustodianAssignmentsByEnterprise,
+  useFixedAssets,
+  type FixedAsset,
   type FixedAssetCustodian,
   type OpenCustodianAssignmentForReport,
 } from "@/hooks/useFixedAssets";
 import { formatDateEs } from "./reportShared";
 import { drawAssetReportHeader, getAutoTableFinalY, noFillTableStyle } from "./reportPdfHelpers";
+import AssetDetailDialog from "../AssetDetailDialog";
 
 interface Props {
   enterpriseId: number;
@@ -49,11 +54,17 @@ function sanitizeSheetName(name: string, used: Set<string>): string {
 }
 
 export default function ResponsibilityCardReport({ enterpriseId, enterpriseName, enterpriseNit }: Props) {
+  const queryClient = useQueryClient();
   const [selectedCustodianIds, setSelectedCustodianIds] = useState<number[]>([]);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [detailAsset, setDetailAsset] = useState<FixedAsset | null>(null);
 
   const { data: custodians = [], isLoading: custodiansLoading } = useAssetCustodians(enterpriseId);
   const { data: openAssignments = [], isLoading: assignmentsLoading } = useOpenCustodianAssignmentsByEnterprise(enterpriseId);
+  // Ya se pide en otros reportes de esta carpeta (Kardex, Mayor, etc.) para la
+  // misma empresa, así que normalmente ya está en caché de React Query.
+  const { data: allAssets = [] } = useFixedAssets(enterpriseId);
   const isLoading = custodiansLoading || assignmentsLoading;
 
   const assignmentsByCustodian = useMemo(() => {
@@ -89,6 +100,41 @@ export default function ResponsibilityCardReport({ enterpriseId, enterpriseName,
       .map((c) => ({ custodian: c, assignments: assignmentsByCustodian.get(c.id) ?? [] }))
       .sort((a, b) => a.custodian.name.localeCompare(b.custodian.name));
   }, [custodiansWithAssignments, selectedCustodianIds, assignmentsByCustodian]);
+
+  // Un solo custodio seleccionado: arranca expandido. Dos o más: todos
+  // colapsados, para que el usuario vea de un vistazo la lista y sus
+  // conteos antes de abrir el que le interese. Se recalcula en cada cambio
+  // de selección (no al reordenar/actualizar los datos de los ya elegidos).
+  useEffect(() => {
+    setExpandedIds(selectedCustodianIds.length === 1 ? new Set(selectedCustodianIds) : new Set());
+  }, [selectedCustodianIds]);
+
+  const toggleExpanded = (custodianId: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(custodianId)) next.delete(custodianId);
+      else next.add(custodianId);
+      return next;
+    });
+  };
+
+  const allExpanded = selectedCards.length > 0 && selectedCards.every((c) => expandedIds.has(c.custodian.id));
+  const toggleExpandAll = () => {
+    setExpandedIds(allExpanded ? new Set() : new Set(selectedCards.map((c) => c.custodian.id)));
+  };
+
+  const openAssetDetail = (assetId: number) => {
+    const full = allAssets.find((a) => a.id === assetId);
+    if (full) setDetailAsset(full);
+  };
+
+  const closeAssetDetail = () => {
+    setDetailAsset(null);
+    // El diálogo permite editar datos del activo y gestionar custodios
+    // (asignar/entregar) — invalidar aquí evita que el reporte quede
+    // mostrando datos obsoletos sin importar qué se haya cambiado adentro.
+    queryClient.invalidateQueries({ queryKey: ["open_custodian_assignments", enterpriseId] });
+  };
 
   const exportPdf = () => {
     if (selectedCards.length === 0) return;
@@ -252,38 +298,67 @@ export default function ResponsibilityCardReport({ enterpriseId, enterpriseName,
           Selecciona uno o varios custodios para ver sus activos asignados.
         </div>
       ) : (
-        <div className="space-y-6">
-          {selectedCards.map((card) => (
-            <Card key={card.custodian.id}>
-              <CardHeader>
-                <CardTitle className="text-base">{card.custodian.name}</CardTitle>
-                <CardDescription>{card.assignments.length} activo(s) actualmente a su cargo</CardDescription>
-              </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Fecha de Asignación</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {card.assignments.map((a) => (
-                      <TableRow key={a.id}>
-                        <TableCell className="font-mono">{a.asset?.asset_code ?? "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{a.asset?.category?.name ?? "—"}</TableCell>
-                        <TableCell>{a.asset?.asset_name ?? "—"}</TableCell>
-                        <TableCell>{formatDateEs(a.assigned_date)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-4">
+          {selectedCards.length > 1 && (
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={toggleExpandAll}>
+                {allExpanded ? "Colapsar todo" : "Expandir todo"}
+              </Button>
+            </div>
+          )}
+          <div className="space-y-6">
+            {selectedCards.map((card) => {
+              const isExpanded = expandedIds.has(card.custodian.id);
+              return (
+                <Collapsible key={card.custodian.id} open={isExpanded} onOpenChange={() => toggleExpanded(card.custodian.id)} asChild>
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer select-none flex-row items-center justify-between space-y-0">
+                        <div>
+                          <CardTitle className="text-base">{card.custodian.name}</CardTitle>
+                          <CardDescription>{card.assignments.length} activo(s) actualmente a su cargo</CardDescription>
+                        </div>
+                        <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="p-0 overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Código</TableHead>
+                              <TableHead>Categoría</TableHead>
+                              <TableHead>Nombre</TableHead>
+                              <TableHead>Fecha de Asignación</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {card.assignments.map((a) => (
+                              <TableRow
+                                key={a.id}
+                                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => openAssetDetail(a.asset_id)}
+                              >
+                                <TableCell className="font-mono">{a.asset?.asset_code ?? "—"}</TableCell>
+                                <TableCell className="text-muted-foreground">{a.asset?.category?.name ?? "—"}</TableCell>
+                                <TableCell>{a.asset?.asset_name ?? "—"}</TableCell>
+                                <TableCell>{formatDateEs(a.assigned_date)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              );
+            })}
+          </div>
         </div>
+      )}
+
+      {detailAsset && (
+        <AssetDetailDialog asset={detailAsset} open={!!detailAsset} onClose={closeAssetDetail} />
       )}
     </div>
   );
