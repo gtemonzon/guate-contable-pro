@@ -5025,6 +5025,7 @@ export type Database = {
           file_name: string
           file_url: string
           id: number
+          storage_path: string | null
           ticket_message_id: number
         }
         Insert: {
@@ -5032,6 +5033,7 @@ export type Database = {
           file_name: string
           file_url: string
           id?: never
+          storage_path?: string | null
           ticket_message_id: number
         }
         Update: {
@@ -5039,6 +5041,7 @@ export type Database = {
           file_name?: string
           file_url?: string
           id?: never
+          storage_path?: string | null
           ticket_message_id?: number
         }
         Relationships: [
