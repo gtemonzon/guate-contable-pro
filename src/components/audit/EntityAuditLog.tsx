@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Shield, Clock, User, ChevronDown, ChevronRight,
-  ArrowRight, Link2,
+  ArrowRight,
 } from "lucide-react";
 
 // ──────────────────────────────────────────────
@@ -17,27 +17,22 @@ import {
 interface AuditEvent {
   id: number;
   created_at: string;
-  actor_user_id: string | null;
+  user_id: string | null;
   actor_name?: string;
-  entity_type: string;
-  entity_id: number | null;
+  table_name: string;
+  record_id: number | null;
   action: string;
-  before_json: Record<string, unknown> | null;
-  after_json: Record<string, unknown> | null;
-  metadata_json: Record<string, unknown> | null;
-  prev_row_hash: string | null;
-  row_hash: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
 }
 
 export interface EntityAuditLogProps {
-  /** Table name as stored in audit_event_log.entity_type */
+  /** Table name as stored in tab_audit_log.table_name */
   entityType: string;
   /** Row primary key */
   entityId: number | null;
   /** Whether the tab/panel is currently visible (avoids fetching when hidden) */
   visible?: boolean;
-  /** Optional: show hash chain status column */
-  showHashChain?: boolean;
 }
 
 // ──────────────────────────────────────────────
@@ -86,19 +81,14 @@ function computeDiffs(
   return diffs;
 }
 
-function hashShort(hash: string | null): string {
-  if (!hash) return "—";
-  return `${hash.slice(0, 8)}…`;
-}
-
 // ──────────────────────────────────────────────
 // Sub-component: single event row
 // ──────────────────────────────────────────────
-function AuditEventRow({ event, showHashChain }: { event: AuditEvent; showHashChain: boolean }) {
+function AuditEventRow({ event }: { event: AuditEvent }) {
   const [open, setOpen] = useState(false);
   const cfg = ACTION_CONFIG[event.action] ?? { label: event.action, color: "bg-muted text-muted-foreground border-border" };
-  const diffs = computeDiffs(event.before_json, event.after_json);
-  const snapshot = event.action === "INSERT" ? event.after_json : event.before_json;
+  const diffs = computeDiffs(event.old_values, event.new_values);
+  const snapshot = event.action === "INSERT" ? event.new_values : event.old_values;
 
   return (
     <div className="relative">
@@ -114,15 +104,6 @@ function AuditEventRow({ event, showHashChain }: { event: AuditEvent; showHashCh
                   <Badge variant="outline" className={`text-xs shrink-0 ${cfg.color}`}>
                     {cfg.label}
                   </Badge>
-                  {showHashChain && (
-                    <span
-                      className="flex items-center gap-1 text-xs text-muted-foreground font-mono"
-                      title={`Hash: ${event.row_hash ?? "—"}`}
-                    >
-                      <Link2 className="h-3 w-3 text-muted-foreground" />
-                      {hashShort(event.row_hash)}
-                    </span>
-                  )}
                   {diffs.length > 0 && (
                     <span className="text-xs text-muted-foreground">
                       {diffs.length} campo{diffs.length !== 1 ? "s" : ""} modificado{diffs.length !== 1 ? "s" : ""}
@@ -189,14 +170,6 @@ function AuditEventRow({ event, showHashChain }: { event: AuditEvent; showHashCh
               </div>
             )}
 
-            {/* Hash chain info */}
-            {showHashChain && event.row_hash && (
-              <div className="text-xs text-muted-foreground font-mono space-y-0.5 border-t pt-2">
-                <div className="flex gap-2"><span className="w-28 shrink-0">prev_hash:</span><span>{hashShort(event.prev_row_hash)}</span></div>
-                <div className="flex gap-2"><span className="w-28 shrink-0">row_hash:</span><span>{hashShort(event.row_hash)}</span></div>
-              </div>
-            )}
-
             {diffs.length === 0 && event.action !== "INSERT" && (
               <p className="text-xs text-muted-foreground italic p-2">Sin diferencias detalladas registradas.</p>
             )}
@@ -214,7 +187,6 @@ export default function EntityAuditLog({
   entityType,
   entityId,
   visible = true,
-  showHashChain = true,
 }: EntityAuditLogProps) {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -231,16 +203,16 @@ export default function EntityAuditLog({
       setLoading(true);
 
       const { data, error } = await supabase
-        .from("audit_event_log")
+        .from("tab_audit_log")
         .select("*")
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
+        .eq("table_name", entityType)
+        .eq("record_id", entityId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
       // Fetch actor names
-      const userIds = [...new Set((data ?? []).map((e) => e.actor_user_id).filter(Boolean))] as string[];
+      const userIds = [...new Set((data ?? []).map((e) => e.user_id).filter(Boolean))] as string[];
       let userMap: Record<string, string> = {};
       if (userIds.length > 0) {
         const { data: users } = await supabase
@@ -252,10 +224,9 @@ export default function EntityAuditLog({
 
       const enriched: AuditEvent[] = (data ?? []).map((e) => ({
         ...e,
-        before_json: e.before_json as Record<string, unknown> | null,
-        after_json:  e.after_json  as Record<string, unknown> | null,
-        metadata_json: e.metadata_json as Record<string, unknown> | null,
-        actor_name: e.actor_user_id ? (userMap[e.actor_user_id] ?? "Usuario") : "Sistema",
+        old_values: e.old_values as Record<string, unknown> | null,
+        new_values: e.new_values as Record<string, unknown> | null,
+        actor_name: e.user_id ? (userMap[e.user_id] ?? "Usuario") : "Sistema",
       }));
 
       setEvents(enriched);
@@ -301,16 +272,11 @@ export default function EntityAuditLog({
           <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border" />
           <div className="space-y-4">
             {events.map((ev) => (
-              <AuditEventRow key={ev.id} event={ev} showHashChain={showHashChain} />
+              <AuditEventRow key={ev.id} event={ev} />
             ))}
           </div>
         </div>
       </ScrollArea>
-
-      <p className="text-[11px] text-muted-foreground leading-snug pt-1">
-        La integridad global de la cadena de auditoría se verifica a nivel de todo el sistema en
-        Configuración → Sistema → Integridad.
-      </p>
     </div>
   );
 }
