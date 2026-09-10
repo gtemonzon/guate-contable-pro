@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  useFixedAssets, useAssetPolicy, useActivateAsset, useUpsertFixedAsset,
-  useAssetCategories, useAssetLocations, useAssetCustodians,
+  useFixedAssets, useAssetPolicy, useActivateAsset, useUpsertFixedAsset, useCreateAndActivateAsset,
+  useAssetCategories, useAssetLocations,
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
@@ -40,6 +40,7 @@ const EMPTY_ASSET: Partial<FixedAsset> = {
   asset_code: "", asset_name: "", acquisition_cost: 0, residual_value: 0,
   useful_life_months: 60, currency: "GTQ", acquisition_date: "", status: "DRAFT",
   exchange_rate_at_acquisition: 1, original_acquisition_cost: 0, original_residual_value: 0,
+  serial_number: "", model: "", manufacture_year: null,
 };
 
 export default function AssetList() {
@@ -54,9 +55,9 @@ export default function AssetList() {
   const { data: policy } = useAssetPolicy(enterpriseId);
   const { data: categories = [] } = useAssetCategories(enterpriseId);
   const { data: locations = [] } = useAssetLocations(enterpriseId);
-  const { data: custodians = [] } = useAssetCustodians(enterpriseId);
   const { lookupNit } = useNitLookup();
   const upsert = useUpsertFixedAsset();
+  const createAndActivate = useCreateAndActivateAsset();
   const activate = useActivateAsset();
 
   const [search, setSearch] = useState("");
@@ -97,9 +98,16 @@ export default function AssetList() {
       exchange_rate_at_acquisition: rate,
       currency: form.currency || baseCurrency,
     };
-    upsert.mutate(payload as FixedAsset & { enterprise_id: number; tenant_id: number },
-      { onSuccess: () => setFormOpen(false) }
-    );
+    if (form.id) {
+      upsert.mutate(payload as FixedAsset & { enterprise_id: number; tenant_id: number },
+        { onSuccess: () => setFormOpen(false) }
+      );
+    } else {
+      createAndActivate.mutate({
+        asset: payload,
+        depreciation_start_rule: policy?.depreciation_start_rule ?? "ACQUISITION_DATE",
+      }, { onSuccess: () => setFormOpen(false) });
+    }
   };
 
   const handleActivate = (asset: FixedAsset) => {
@@ -314,14 +322,17 @@ export default function AssetList() {
               </Select>
             </div>
             <div>
-              <Label>Custodio</Label>
-              <Select value={form.custodian_id ? String(form.custodian_id) : "none"} onValueChange={(v) => setForm((f) => ({ ...f, custodian_id: v === "none" ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder="Ninguno" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ninguno</SelectItem>
-                  {custodians.filter((c) => c.is_active).map((c) => (<SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <Label>Serie</Label>
+              <Input value={form.serial_number || ""} onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Modelo</Label>
+              <Input value={form.model || ""} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Año de fabricación</Label>
+              <Input type="number" min={1900} value={form.manufacture_year ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, manufacture_year: e.target.value ? parseInt(e.target.value) : null }))} />
             </div>
             <div>
               <Label>NIT del proveedor</Label>
@@ -356,8 +367,8 @@ export default function AssetList() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={!form.asset_code || !form.asset_name || !form.category_id || !form.acquisition_date || upsert.isPending}>
-              {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Guardar
+            <Button onClick={save} disabled={!form.asset_code || !form.asset_name || !form.category_id || !form.acquisition_date || upsert.isPending || createAndActivate.isPending}>
+              {(upsert.isPending || createAndActivate.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -24,6 +24,9 @@ export interface FixedAsset {
   supplier_nit: string | null;
   supplier_name: string | null;
   cost_center: string | null;
+  serial_number: string | null;
+  model: string | null;
+  manufacture_year: number | null;
   acquisition_date: string;
   in_service_date: string | null;
   acquisition_cost: number;
@@ -393,6 +396,87 @@ export function useActivateAsset() {
   });
 }
 
+/**
+ * Crea un activo y lo activa (genera calendario de depreciación) en un solo
+ * paso, para que el flujo normal de "Nuevo activo" no deje activos en DRAFT.
+ * Si el insert falla, la mutación falla completa (nada se crea). Si el
+ * insert funciona pero la activación falla, NO se revierte el insert — el
+ * activo queda en DRAFT (estado válido y recuperable) y se reporta el error
+ * claramente para que el usuario use el botón "Activar" existente.
+ */
+export function useCreateAndActivateAsset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      asset,
+      depreciation_start_rule,
+    }: {
+      asset: Partial<FixedAsset> & { enterprise_id: number; tenant_id: number };
+      depreciation_start_rule: "IN_SERVICE_DATE" | "ACQUISITION_DATE";
+    }) => {
+      const { id, category, location, custodian, ...payload } = asset as FixedAsset & { [key: string]: unknown };
+      void id; void category; void location; void custodian;
+
+      const { data: created, error: insertError } = await db("fixed_assets").insert(payload).select().single();
+      if (insertError) throw insertError;
+      const createdAsset = created as FixedAsset;
+
+      const schedule = generateDepreciationSchedule({
+        acquisition_cost: createdAsset.acquisition_cost,
+        residual_value: createdAsset.residual_value,
+        useful_life_months: createdAsset.useful_life_months,
+        acquisition_date: createdAsset.acquisition_date,
+        in_service_date: createdAsset.in_service_date,
+        depreciation_start_rule,
+      });
+
+      try {
+        if (schedule.length > 0) {
+          const rows = schedule.map((r) => ({
+            asset_id: createdAsset.id,
+            enterprise_id: createdAsset.enterprise_id,
+            year: r.year,
+            month: r.month,
+            planned_depreciation_amount: r.planned_depreciation_amount,
+            accumulated_depreciation: r.accumulated_depreciation,
+            net_book_value: r.net_book_value,
+            status: "PLANNED",
+          }));
+          const { error } = await db("fixed_asset_depreciation_schedule").insert(rows);
+          if (error) throw error;
+        }
+
+        const { error: activateError } = await db("fixed_assets")
+          .update({ status: "ACTIVE", activated_at: new Date().toISOString() })
+          .eq("id", createdAsset.id);
+        if (activateError) throw activateError;
+
+        await db("fixed_asset_event_log").insert({
+          asset_id: createdAsset.id,
+          enterprise_id: createdAsset.enterprise_id,
+          event_type: "ACTIVATE",
+          metadata_json: { useful_life_months: createdAsset.useful_life_months, schedule_rows: schedule.length },
+        });
+
+        return { asset: { ...createdAsset, status: "ACTIVE" as AssetStatus }, activated: true, activationError: null as unknown };
+      } catch (activationError) {
+        return { asset: createdAsset, activated: false, activationError };
+      }
+    },
+    onSuccess: ({ asset, activated, activationError }) => {
+      qc.invalidateQueries({ queryKey: ["fixed_assets", asset.enterprise_id] });
+      qc.invalidateQueries({ queryKey: ["depreciation_schedule", asset.id] });
+      if (activated) {
+        toast.success("Activo creado y activado — calendario de depreciación generado");
+      } else {
+        const message = activationError instanceof Error ? activationError.message : String(activationError);
+        toast.error(`El activo ${asset.asset_code} se creó pero no se pudo activar automáticamente (${message}). Usa el botón "Activar" para reintentar.`);
+      }
+    },
+    onError: onErr,
+  });
+}
+
 export function useDepreciationSchedule(assetId: number | null) {
   return useQuery<DepreciationScheduleRow[]>({
     queryKey: ["depreciation_schedule", assetId],
@@ -527,6 +611,138 @@ export function useAssetEventLog(assetId: number | null) {
       if (error) throw error;
       return (data ?? []) as Array<{ id: number; event_type: string; actor_user_id: string | null; metadata_json: Record<string, unknown> | null; created_at: string }>;
     },
+  });
+}
+
+// ─── Custodian assignment history ────────────────────────────────────────────
+// fixed_assets.custodian_id sigue siendo el "custodio actual" (usado en la
+// lista y en el join de useFixedAssets) — se sincroniza aquí, pero el
+// historial real de quién tuvo el activo y cuándo vive en esta tabla.
+
+export interface CustodianAssignment {
+  id: number;
+  asset_id: number;
+  enterprise_id: number;
+  custodian_id: number;
+  assigned_date: string;
+  returned_date: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  custodian?: { name: string } | null;
+}
+
+export function useCustodianAssignments(assetId: number | null) {
+  return useQuery<CustodianAssignment[]>({
+    queryKey: ["custodian_assignments", assetId],
+    enabled: !!assetId,
+    queryFn: async () => {
+      const { data, error } = await db("fixed_asset_custodian_assignments")
+        .select("*, custodian:fixed_asset_custodians(name)")
+        .eq("asset_id", assetId!);
+      if (error) throw error;
+      const rows = (data ?? []) as CustodianAssignment[];
+      // La asignación abierta (sin returned_date) siempre primero; el resto
+      // de la más reciente a la más antigua por fecha de asignación.
+      return rows.sort((a, b) => {
+        if (!a.returned_date && b.returned_date) return -1;
+        if (a.returned_date && !b.returned_date) return 1;
+        return b.assigned_date.localeCompare(a.assigned_date);
+      });
+    },
+  });
+}
+
+export function useAssignCustodian() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      asset_id,
+      enterprise_id,
+      custodian_id,
+      assigned_date,
+      notes,
+    }: {
+      asset_id: number;
+      enterprise_id: number;
+      custodian_id: number;
+      assigned_date: string;
+      notes?: string;
+    }) => {
+      const { data: authData } = await supabase.auth.getUser();
+      const { error: insertError } = await db("fixed_asset_custodian_assignments").insert({
+        asset_id,
+        enterprise_id,
+        custodian_id,
+        assigned_date,
+        notes: notes?.trim() || null,
+        created_by: authData.user?.id ?? null,
+      });
+      if (insertError) throw insertError;
+
+      const { error: updateError } = await db("fixed_assets").update({ custodian_id }).eq("id", asset_id);
+      if (updateError) throw updateError;
+
+      await db("fixed_asset_event_log").insert({
+        asset_id,
+        enterprise_id,
+        actor_user_id: authData.user?.id ?? null,
+        event_type: "CUSTODIAN_ASSIGNED",
+        metadata_json: { custodian_id, assigned_date },
+      });
+    },
+    onSuccess: (_, { asset_id, enterprise_id }) => {
+      qc.invalidateQueries({ queryKey: ["custodian_assignments", asset_id] });
+      qc.invalidateQueries({ queryKey: ["fixed_assets", enterprise_id] });
+      qc.invalidateQueries({ queryKey: ["asset_event_log", asset_id] });
+      toast.success("Custodio asignado");
+    },
+    onError: onErr,
+  });
+}
+
+export function useReturnCustodian() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      assignment_id,
+      asset_id,
+      enterprise_id,
+      custodian_id,
+      returned_date,
+      notes,
+    }: {
+      assignment_id: number;
+      asset_id: number;
+      enterprise_id: number;
+      custodian_id: number;
+      returned_date: string;
+      notes?: string;
+    }) => {
+      const { data: authData } = await supabase.auth.getUser();
+      const { error: updateError } = await db("fixed_asset_custodian_assignments")
+        .update({ returned_date, notes: notes?.trim() || null })
+        .eq("id", assignment_id);
+      if (updateError) throw updateError;
+
+      const { error: clearError } = await db("fixed_assets").update({ custodian_id: null }).eq("id", asset_id);
+      if (clearError) throw clearError;
+
+      await db("fixed_asset_event_log").insert({
+        asset_id,
+        enterprise_id,
+        actor_user_id: authData.user?.id ?? null,
+        event_type: "CUSTODIAN_RETURNED",
+        metadata_json: { custodian_id, returned_date },
+      });
+    },
+    onSuccess: (_, { asset_id, enterprise_id }) => {
+      qc.invalidateQueries({ queryKey: ["custodian_assignments", asset_id] });
+      qc.invalidateQueries({ queryKey: ["fixed_assets", enterprise_id] });
+      qc.invalidateQueries({ queryKey: ["asset_event_log", asset_id] });
+      toast.success("Entrega registrada");
+    },
+    onError: onErr,
   });
 }
 

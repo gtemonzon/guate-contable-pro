@@ -440,11 +440,14 @@ export type Database = {
           id: number
           in_service_date: string | null
           location_id: number | null
+          manufacture_year: number | null
+          model: string | null
           notes: string | null
           original_acquisition_cost: number | null
           original_residual_value: number | null
           purchase_reference_id: number | null
           residual_value: number
+          serial_number: string | null
           status: string
           supplier_name: string | null
           supplier_nit: string | null
@@ -474,11 +477,14 @@ export type Database = {
           id?: number
           in_service_date?: string | null
           location_id?: number | null
+          manufacture_year?: number | null
+          model?: string | null
           notes?: string | null
           original_acquisition_cost?: number | null
           original_residual_value?: number | null
           purchase_reference_id?: number | null
           residual_value?: number
+          serial_number?: string | null
           status?: string
           supplier_name?: string | null
           supplier_nit?: string | null
@@ -508,11 +514,14 @@ export type Database = {
           id?: number
           in_service_date?: string | null
           location_id?: number | null
+          manufacture_year?: number | null
+          model?: string | null
           notes?: string | null
           original_acquisition_cost?: number | null
           original_residual_value?: number | null
           purchase_reference_id?: number | null
           residual_value?: number
+          serial_number?: string | null
           status?: string
           supplier_name?: string | null
           supplier_nit?: string | null
