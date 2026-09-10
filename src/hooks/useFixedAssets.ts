@@ -695,6 +695,7 @@ export function useAssignCustodian() {
       qc.invalidateQueries({ queryKey: ["custodian_assignments", asset_id] });
       qc.invalidateQueries({ queryKey: ["fixed_assets", enterprise_id] });
       qc.invalidateQueries({ queryKey: ["asset_event_log", asset_id] });
+      qc.invalidateQueries({ queryKey: ["open_custodian_assignments", enterprise_id] });
       toast.success("Custodio asignado");
     },
     onError: onErr,
@@ -740,6 +741,7 @@ export function useReturnCustodian() {
       qc.invalidateQueries({ queryKey: ["custodian_assignments", asset_id] });
       qc.invalidateQueries({ queryKey: ["fixed_assets", enterprise_id] });
       qc.invalidateQueries({ queryKey: ["asset_event_log", asset_id] });
+      qc.invalidateQueries({ queryKey: ["open_custodian_assignments", enterprise_id] });
       toast.success("Entrega registrada");
     },
     onError: onErr,
@@ -753,6 +755,7 @@ export function useReturnCustodian() {
 
 export interface OpenCustodianAssignmentForReport {
   id: number;
+  asset_id: number;
   custodian_id: number;
   assigned_date: string;
   asset: {
@@ -768,7 +771,7 @@ export function useOpenCustodianAssignmentsByEnterprise(enterpriseId: number | n
     enabled: !!enterpriseId,
     queryFn: async () => {
       const { data, error } = await db("fixed_asset_custodian_assignments")
-        .select("id, custodian_id, assigned_date, asset:fixed_assets(asset_code, asset_name, category:fixed_asset_categories(name))")
+        .select("id, asset_id, custodian_id, assigned_date, asset:fixed_assets(asset_code, asset_name, category:fixed_asset_categories(name))")
         .eq("enterprise_id", enterpriseId!)
         .is("returned_date", null)
         .order("assigned_date", { ascending: true });
