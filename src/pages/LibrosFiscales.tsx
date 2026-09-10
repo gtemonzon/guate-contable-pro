@@ -2095,10 +2095,12 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">Neto: </span>
                     <span className="font-semibold">Q {salesTotals.totalNet}</span>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">IVA: </span>
-                    <span className="font-semibold">Q {salesTotals.totalVAT}</span>
-                  </div>
+                  {!isSmallTaxpayer && (
+                    <div>
+                      <span className="text-muted-foreground">IVA: </span>
+                      <span className="font-semibold">Q {salesTotals.totalVAT}</span>
+                    </div>
+                  )}
                   {isSmallTaxpayer && (
                     <div>
                       <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%): </span>
@@ -2360,7 +2362,7 @@ export default function LibrosFiscales() {
                     <p><strong>Documentos anulados:</strong> {salesTotals.annulledCount}</p>
                   )}
                   <p><strong>Neto:</strong> Q {salesTotals.totalNet}</p>
-                  <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>
+                  {!isSmallTaxpayer && <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>}
                   {isSmallTaxpayer && (
                     <p><strong>Impuesto ({smallTaxpayerRate}%):</strong> Q {salesTotals.totalTax5}</p>
                   )}
