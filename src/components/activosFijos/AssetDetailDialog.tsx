@@ -262,7 +262,12 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       setFinancialConfirmOpen(false);
       onClose();
     } catch (error) {
-      toast({ title: "No se pudieron guardar los cambios", description: error instanceof Error ? error.message : "Intenta nuevamente.", variant: "destructive" });
+      const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
+      if (code === "23505") {
+        toast({ title: "Ya existe otro activo con ese código", description: "Usa un código distinto.", variant: "destructive" });
+      } else {
+        toast({ title: "No se pudieron guardar los cambios", description: error instanceof Error ? error.message : "Intenta nuevamente.", variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
