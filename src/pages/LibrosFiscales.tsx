@@ -2095,7 +2095,7 @@ export default function LibrosFiscales() {
                     <span className="text-muted-foreground">Neto: </span>
                     <span className="font-semibold">Q {salesTotals.totalNet}</span>
                   </div>
-                  {!isSmallTaxpayer && (
+                  {appliesVat && (
                     <div>
                       <span className="text-muted-foreground">IVA: </span>
                       <span className="font-semibold">Q {salesTotals.totalVAT}</span>
@@ -2107,10 +2107,12 @@ export default function LibrosFiscales() {
                       <span className="font-semibold">Q {salesTotals.totalTax5}</span>
                     </div>
                   )}
-                  <div>
-                    <span className="text-muted-foreground">Total c/IVA: </span>
-                    <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
-                  </div>
+                  {appliesVat && (
+                    <div>
+                      <span className="text-muted-foreground">Total c/IVA: </span>
+                      <span className="font-semibold">Q {salesTotals.totalWithVAT}</span>
+                    </div>
+                  )}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2362,11 +2364,11 @@ export default function LibrosFiscales() {
                     <p><strong>Documentos anulados:</strong> {salesTotals.annulledCount}</p>
                   )}
                   <p><strong>Neto:</strong> Q {salesTotals.totalNet}</p>
-                  {!isSmallTaxpayer && <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>}
+                  {appliesVat && <p><strong>IVA:</strong> Q {salesTotals.totalVAT}</p>}
                   {isSmallTaxpayer && (
                     <p><strong>Impuesto ({smallTaxpayerRate}%):</strong> Q {salesTotals.totalTax5}</p>
                   )}
-                  <p><strong>Total:</strong> Q {salesTotals.totalWithVAT}</p>
+                  {appliesVat && <p><strong>Total:</strong> Q {salesTotals.totalWithVAT}</p>}
                 </>
               )}
             </div>
