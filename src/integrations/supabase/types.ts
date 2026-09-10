@@ -155,6 +155,64 @@ export type Database = {
           },
         ]
       }
+      fixed_asset_custodian_assignments: {
+        Row: {
+          asset_id: number
+          assigned_date: string
+          created_at: string
+          created_by: string | null
+          custodian_id: number
+          enterprise_id: number
+          id: number
+          notes: string | null
+          returned_date: string | null
+        }
+        Insert: {
+          asset_id: number
+          assigned_date: string
+          created_at?: string
+          created_by?: string | null
+          custodian_id: number
+          enterprise_id: number
+          id?: never
+          notes?: string | null
+          returned_date?: string | null
+        }
+        Update: {
+          asset_id?: number
+          assigned_date?: string
+          created_at?: string
+          created_by?: string | null
+          custodian_id?: number
+          enterprise_id?: number
+          id?: never
+          notes?: string | null
+          returned_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fixed_asset_custodian_assignments_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_custodian_assignments_custodian_id_fkey"
+            columns: ["custodian_id"]
+            isOneToOne: false
+            referencedRelation: "fixed_asset_custodians"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fixed_asset_custodian_assignments_enterprise_id_fkey"
+            columns: ["enterprise_id"]
+            isOneToOne: false
+            referencedRelation: "tab_enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fixed_asset_custodians: {
         Row: {
           contact: string | null
@@ -5596,6 +5654,13 @@ export type Database = {
         }
         Returns: string
       }
+      purge_old_audit_log: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          deleted_count: number
+          remaining_older_than_36mo: number
+        }[]
+      }
       register_fx_settlement: {
         Args: {
           p_difc_journal_id: number
@@ -5622,6 +5687,7 @@ export type Database = {
         Returns: undefined
       }
       reverse_fx_revaluation: { Args: { p_run_id: number }; Returns: number }
+      run_audit_log_purge: { Args: never; Returns: Json }
       update_posted_entry_metadata: {
         Args: {
           p_bank_reference?: string
