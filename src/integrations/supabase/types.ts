@@ -2258,7 +2258,7 @@ export type Database = {
           created_by?: string | null
           effective_from: string
           enterprise_id: number
-          id?: number
+          id?: never
           tax_regime: string
         }
         Update: {
@@ -2266,7 +2266,7 @@ export type Database = {
           created_by?: string | null
           effective_from?: string
           enterprise_id?: number
-          id?: number
+          id?: never
           tax_regime?: string
         }
         Relationships: [
