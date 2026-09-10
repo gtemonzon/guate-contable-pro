@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useFixedAssets, useAssetPolicy, useActivateAsset, useUpsertFixedAsset, useCreateAndActivateAsset,
   useAssetCategories, useAssetLocations,
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Loader2, Plus, Search, Eye, Zap } from "lucide-react";
@@ -66,6 +67,8 @@ export default function AssetList() {
   const [formOpen, setFormOpen] = useState(false);
   const [detailAsset, setDetailAsset] = useState<FixedAsset | null>(null);
   const [form, setForm] = useState<Partial<FixedAsset>>(EMPTY_ASSET);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
 
   const filtered = assets.filter((a) => {
     const matchSearch = !search ||
@@ -75,6 +78,15 @@ export default function AssetList() {
     const matchCat = categoryFilter === "ALL" || String(a.category_id) === categoryFilter;
     return matchSearch && matchStatus && matchCat;
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, categoryFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paged = filtered.slice(startIndex, startIndex + pageSize);
 
   const openNew = () => {
     setForm({ ...EMPTY_ASSET, currency: baseCurrency, exchange_rate_at_acquisition: 1 });
@@ -187,7 +199,7 @@ export default function AssetList() {
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((asset) => (
+              {paged.map((asset) => (
                 <TableRow key={asset.id} className="group cursor-pointer hover:bg-muted/50" onClick={() => setDetailAsset(asset)}>
                   <TableCell className="font-mono font-medium">{asset.asset_code}</TableCell>
                   <TableCell>{asset.asset_name}</TableCell>
@@ -224,6 +236,48 @@ export default function AssetList() {
         </div>
       )}
 
+      {!isLoading && filtered.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              Mostrando {startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} de {filtered.length}
+            </span>
+            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+              <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span>por página</span>
+          </div>
+          {totalPages > 1 && (
+            <Pagination className="mx-0 w-auto">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <span className="px-3 text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+        </div>
+      )}
+
       {/* Create / Edit dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -257,6 +311,64 @@ export default function AssetList() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Ubicación</Label>
+              <Select value={form.location_id ? String(form.location_id) : "none"} onValueChange={(v) => setForm((f) => ({ ...f, location_id: v === "none" ? null : Number(v) }))}>
+                <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Ninguna</SelectItem>
+                  {locations.filter((l) => l.is_active).map((l) => (<SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Serie</Label>
+              <Input value={form.serial_number || ""} onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Modelo</Label>
+              <Input value={form.model || ""} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Año</Label>
+              <Input type="number" min={1900} value={form.manufacture_year ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, manufacture_year: e.target.value ? parseInt(e.target.value) : null }))} />
+            </div>
+            <div>
+              <Label>NIT del proveedor</Label>
+              <NitAutocomplete
+                value={form.supplier_nit || ""}
+                onChange={(e) => setForm((f) => ({ ...f, supplier_nit: e.target.value.replace(/-/g, "") }))}
+                onBlur={async (e) => {
+                  const nit = e.target.value.trim();
+                  if (!nit || form.supplier_name?.trim()) return;
+                  const result = await lookupNit(nit);
+                  if (result?.found && result.name) {
+                    setForm((f) => ({ ...f, supplier_name: result.name }));
+                  }
+                }}
+                onSelectTaxpayer={(nit, name) => setForm((f) => ({ ...f, supplier_nit: nit, supplier_name: name }))}
+                placeholder="NIT del proveedor"
+              />
+            </div>
+            <div>
+              <Label>Nombre del proveedor</Label>
+              <Input
+                value={form.supplier_name || ""}
+                onChange={(e) => setForm((f) => ({ ...f, supplier_name: e.target.value }))}
+                placeholder="Nombre del proveedor"
+              />
+            </div>
+            <div>
+              <Label>Fecha de adquisición *</Label>
+              <Input type="date" value={form.acquisition_date || ""}
+                onChange={(e) => setForm((f) => ({ ...f, acquisition_date: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Fecha de puesta en servicio</Label>
+              <Input type="date" value={form.in_service_date || ""}
+                onChange={(e) => setForm((f) => ({ ...f, in_service_date: e.target.value || null }))} />
             </div>
             <div className={isMultiCurrency ? "col-span-2" : ""}>
               <CurrencyAmountInput
@@ -300,64 +412,6 @@ export default function AssetList() {
               <Label>Vida útil (meses) *</Label>
               <Input type="number" min={1} value={form.useful_life_months || 60}
                 onChange={(e) => setForm((f) => ({ ...f, useful_life_months: parseInt(e.target.value) }))} />
-            </div>
-            <div>
-              <Label>Fecha de adquisición *</Label>
-              <Input type="date" value={form.acquisition_date || ""}
-                onChange={(e) => setForm((f) => ({ ...f, acquisition_date: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Fecha de puesta en servicio</Label>
-              <Input type="date" value={form.in_service_date || ""}
-                onChange={(e) => setForm((f) => ({ ...f, in_service_date: e.target.value || null }))} />
-            </div>
-            <div>
-              <Label>Ubicación</Label>
-              <Select value={form.location_id ? String(form.location_id) : "none"} onValueChange={(v) => setForm((f) => ({ ...f, location_id: v === "none" ? null : Number(v) }))}>
-                <SelectTrigger><SelectValue placeholder="Ninguna" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ninguna</SelectItem>
-                  {locations.filter((l) => l.is_active).map((l) => (<SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Serie</Label>
-              <Input value={form.serial_number || ""} onChange={(e) => setForm((f) => ({ ...f, serial_number: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Modelo</Label>
-              <Input value={form.model || ""} onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Año de fabricación</Label>
-              <Input type="number" min={1900} value={form.manufacture_year ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, manufacture_year: e.target.value ? parseInt(e.target.value) : null }))} />
-            </div>
-            <div>
-              <Label>NIT del proveedor</Label>
-              <NitAutocomplete
-                value={form.supplier_nit || ""}
-                onChange={(e) => setForm((f) => ({ ...f, supplier_nit: e.target.value.replace(/-/g, "") }))}
-                onBlur={async (e) => {
-                  const nit = e.target.value.trim();
-                  if (!nit || form.supplier_name?.trim()) return;
-                  const result = await lookupNit(nit);
-                  if (result?.found && result.name) {
-                    setForm((f) => ({ ...f, supplier_name: result.name }));
-                  }
-                }}
-                onSelectTaxpayer={(nit, name) => setForm((f) => ({ ...f, supplier_nit: nit, supplier_name: name }))}
-                placeholder="NIT del proveedor"
-              />
-            </div>
-            <div>
-              <Label>Nombre del proveedor</Label>
-              <Input
-                value={form.supplier_name || ""}
-                onChange={(e) => setForm((f) => ({ ...f, supplier_name: e.target.value }))}
-                placeholder="Nombre del proveedor"
-              />
             </div>
             {/* Moneda integrada en CurrencyAmountInput de Costo y Valor residual */}
           </div>
