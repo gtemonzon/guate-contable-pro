@@ -14,7 +14,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
-import { useSmallTaxpayerRate } from "@/hooks/useSmallTaxpayerRate";
 import {
   Table,
   TableBody,
@@ -27,6 +26,7 @@ import { previewPdfDoc } from "@/lib/pdfPreview";
 
 interface PurchaseRow {
   invoice_date: string;
+  invoice_series: string;
   invoice_number: string;
   supplier_nit: string;
   supplier_name: string;
@@ -35,6 +35,7 @@ interface PurchaseRow {
 
 interface SaleRow {
   invoice_date: string;
+  invoice_series: string;
   invoice_number: string;
   customer_nit: string;
   customer_name: string;
@@ -50,6 +51,18 @@ const noFillTableStyle: Partial<Styles> = {
   fontStyle: "bold",
   lineWidth: 0.2,
   lineColor: [0, 0, 0],
+};
+
+// Fecha | Serie | No. Doc | NIT | Proveedor/Cliente | Monto — mismas columnas y
+// anchos en Compras y Ventas para que ambas secciones se vean simétricas. El
+// nombre queda más angosto (hace wrap) para dejar espacio a la columna Serie.
+const purchaseSaleColumnStyles: Record<number, Partial<Styles>> = {
+  0: { cellWidth: 16 },
+  1: { cellWidth: 10 },
+  2: { cellWidth: 16 },
+  3: { cellWidth: 18 },
+  4: { cellWidth: 40 },
+  5: { halign: "right" },
 };
 
 const monthNames = [
@@ -69,10 +82,6 @@ export default function ReporteComprasVentas() {
   const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
-  const isSmallTaxpayer = strategy.regime === "pequeño_contribuyente";
-  const { rate: smallTaxpayerRate } = useSmallTaxpayerRate(
-    currentEnterpriseId ? parseInt(currentEnterpriseId) : null
-  );
 
   useEffect(() => {
     const id = localStorage.getItem("currentEnterpriseId");
@@ -92,16 +101,13 @@ export default function ReporteComprasVentas() {
 
   const totals = useMemo(() => {
     const activeSales = sales.filter(s => !s.is_annulled);
-    const totalSales = activeSales.reduce((s, v) => s + (Number(v.total_amount) || 0), 0);
     return {
       totalPurchases: purchases.reduce((s, p) => s + (Number(p.total_amount) || 0), 0),
-      totalSales,
-      // Pequeño Contribuyente: impuesto fijo sobre ingresos brutos (mismo cálculo usado en LibrosFiscales)
-      totalSalesTax: isSmallTaxpayer ? totalSales * (smallTaxpayerRate / 100) : 0,
+      totalSales: activeSales.reduce((s, v) => s + (Number(v.total_amount) || 0), 0),
       purchaseCount: purchases.length,
       saleCount: activeSales.length,
     };
-  }, [purchases, sales, isSmallTaxpayer, smallTaxpayerRate]);
+  }, [purchases, sales]);
 
   const generateReport = async () => {
     if (!currentEnterpriseId) {
@@ -117,7 +123,7 @@ export default function ReporteComprasVentas() {
       const [p, s] = await Promise.all([
         fetchAllRecords<any>(
           supabase.from("tab_purchase_ledger")
-            .select("invoice_date, invoice_number, supplier_nit, supplier_name, total_amount")
+            .select("invoice_date, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount")
             .eq("enterprise_id", eid)
             .gte("invoice_date", start).lte("invoice_date", end)
             .order("invoice_date", { ascending: true })
@@ -125,7 +131,7 @@ export default function ReporteComprasVentas() {
         ),
         fetchAllRecords<any>(
           supabase.from("tab_sales_ledger")
-            .select("invoice_date, invoice_number, customer_nit, customer_name, total_amount, is_annulled")
+            .select("invoice_date, invoice_series, invoice_number, customer_nit, customer_name, total_amount, is_annulled")
             .eq("enterprise_id", eid)
             .gte("invoice_date", start).lte("invoice_date", end)
             .order("invoice_date", { ascending: true })
@@ -179,24 +185,25 @@ export default function ReporteComprasVentas() {
       startY: tableStartY,
       margin: { left: leftX, right: pageWidth - (leftX + half) },
       tableWidth: half,
-      head: [["Fecha", "No. Doc", "NIT", "Proveedor", "Monto"]],
+      head: [["Fecha", "Serie", "No. Doc", "NIT", "Proveedor", "Monto"]],
       body: purchases.length === 0
-        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
+        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 6, styles: { halign: "center", fontStyle: "italic" } }]]
         : purchases.map(p => [
         new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
+        p.invoice_series,
         p.invoice_number,
         p.supplier_nit,
         p.supplier_name,
         `Q ${formatCurrency(Number(p.total_amount) || 0)}`,
       ]),
       foot: [[
-        { content: "Subtotal Compras", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
+        { content: "Subtotal Compras", colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
         { content: `Q ${formatCurrency(totals.totalPurchases)}`, styles: { fontStyle: "bold" } },
       ]],
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
       headStyles: noFillTableStyle,
       footStyles: noFillTableStyle,
-      columnStyles: { 4: { halign: "right" } },
+      columnStyles: purchaseSaleColumnStyles,
     });
 
     // Sales (right)
@@ -204,55 +211,30 @@ export default function ReporteComprasVentas() {
     doc.setFontSize(10);
     doc.text("VENTAS", rightX, tableStartY - 2);
     const activeSalesForPdf = sales.filter(s => !s.is_annulled);
-    const salesHead = isSmallTaxpayer
-      ? ["Fecha", "No. Doc", "NIT", "Cliente", "Monto", `Impuesto (${smallTaxpayerRate}%)`]
-      : ["Fecha", "No. Doc", "NIT", "Cliente", "Monto"];
     const salesBody: RowInput[] = activeSalesForPdf.length === 0
-      ? [[{ content: "SIN MOVIMIENTOS", colSpan: salesHead.length, styles: { halign: "center", fontStyle: "italic" } }]]
-      : activeSalesForPdf.map(s => {
-        const amount = Number(s.total_amount) || 0;
-        const row = [
-          new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
-          s.invoice_number,
-          s.customer_nit || "C/F",
-          s.customer_name || "Consumidor Final",
-          `Q ${formatCurrency(amount)}`,
-        ];
-        if (isSmallTaxpayer) {
-          row.push(`Q ${formatCurrency(amount * (smallTaxpayerRate / 100))}`);
-        }
-        return row;
-      });
-    const salesFoot: RowInput[] = isSmallTaxpayer
-      ? [[
-          { content: "Subtotal Ventas", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
-          { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
-          { content: `Q ${formatCurrency(totals.totalSalesTax)}`, styles: { fontStyle: "bold" } },
-        ]]
-      : [[
-          { content: "Subtotal Ventas", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
-          { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
-        ]];
+      ? [[{ content: "SIN MOVIMIENTOS", colSpan: 6, styles: { halign: "center", fontStyle: "italic" } }]]
+      : activeSalesForPdf.map(s => [
+        new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
+        s.invoice_series,
+        s.invoice_number,
+        s.customer_nit || "C/F",
+        s.customer_name || "Consumidor Final",
+        `Q ${formatCurrency(Number(s.total_amount) || 0)}`,
+      ]);
     autoTable(doc, {
       startY: tableStartY,
       margin: { left: rightX, right: margin },
       tableWidth: half,
-      head: [salesHead],
+      head: [["Fecha", "Serie", "No. Doc", "NIT", "Cliente", "Monto"]],
       body: salesBody,
-      foot: salesFoot,
+      foot: [[
+        { content: "Subtotal Ventas", colSpan: 5, styles: { halign: "right", fontStyle: "bold" } },
+        { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
+      ]],
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
       headStyles: noFillTableStyle,
       footStyles: noFillTableStyle,
-      columnStyles: isSmallTaxpayer
-        ? {
-            0: { cellWidth: 14 },
-            1: { cellWidth: 14 },
-            2: { cellWidth: 16 },
-            3: { cellWidth: "auto" },
-            4: { halign: "right", cellWidth: 16 },
-            5: { halign: "right", cellWidth: 20 },
-          }
-        : { 4: { halign: "right" } },
+      columnStyles: purchaseSaleColumnStyles,
     });
 
     // Footer totals on last page
@@ -269,10 +251,8 @@ export default function ReporteComprasVentas() {
   };
 
   const exportExcel = () => {
-    const comprasHeaderCols = ["Fecha", "No. Doc", "NIT", "Proveedor", "Monto"];
-    const ventasHeaderCols = isSmallTaxpayer
-      ? ["Fecha", "No. Doc", "NIT", "Cliente", "Monto", `Impuesto (${smallTaxpayerRate}%)`]
-      : ["Fecha", "No. Doc", "NIT", "Cliente", "Monto"];
+    const comprasHeaderCols = ["Fecha", "Serie", "No. Doc", "NIT", "Proveedor", "Monto"];
+    const ventasHeaderCols = ["Fecha", "Serie", "No. Doc", "NIT", "Cliente", "Monto"];
     const totalCols = comprasHeaderCols.length + 1 + ventasHeaderCols.length;
 
     const aoa: (string | number)[][] = [];
@@ -298,41 +278,35 @@ export default function ReporteComprasVentas() {
       for (let i = 0; i < rows; i++) {
         const p = purchases[i];
         const s = activeSales[i];
-        const saleAmount = s ? Number(s.total_amount) || 0 : 0;
-        const ventasRow: (string | number)[] = [
-          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
-          s?.invoice_number ?? "",
-          s?.customer_nit ?? "",
-          s?.customer_name ?? "",
-          s ? saleAmount.toFixed(2) : "",
-        ];
-        if (isSmallTaxpayer) {
-          ventasRow.push(s ? (saleAmount * (smallTaxpayerRate / 100)).toFixed(2) : "");
-        }
         aoa.push([
           p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && purchases.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          p?.invoice_series ?? "",
           p?.invoice_number ?? "",
           p?.supplier_nit ?? "",
           p?.supplier_name ?? "",
           p ? (Number(p.total_amount) || 0).toFixed(2) : "",
           "",
-          ...ventasRow,
+          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          s?.invoice_series ?? "",
+          s?.invoice_number ?? "",
+          s?.customer_nit ?? "",
+          s?.customer_name ?? "",
+          s ? (Number(s.total_amount) || 0).toFixed(2) : "",
         ]);
       }
     }
     aoa.push([]);
-
-    const ventasSubtotalRow = isSmallTaxpayer
-      ? ["", "", "", "Subtotal:", totals.totalSales.toFixed(2), totals.totalSalesTax.toFixed(2)]
-      : ["", "", "", "Subtotal:", totals.totalSales.toFixed(2)];
-    aoa.push(["", "", "", "Subtotal:", totals.totalPurchases.toFixed(2), "", ...ventasSubtotalRow]);
+    aoa.push([
+      "", "", "", "", "Subtotal:", totals.totalPurchases.toFixed(2),
+      "",
+      "", "", "", "", "Subtotal:", totals.totalSales.toFixed(2),
+    ]);
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"] = [
-      { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 14 },
+      { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 25 }, { wch: 14 },
       { wch: 2 },
-      { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 14 },
-      ...(isSmallTaxpayer ? [{ wch: 16 }] : []),
+      { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 25 }, { wch: 14 },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Compras y Ventas");
@@ -423,6 +397,7 @@ export default function ReporteComprasVentas() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>
+                      <TableHead>Serie</TableHead>
                       <TableHead>No. Doc</TableHead>
                       <TableHead>NIT</TableHead>
                       <TableHead>Proveedor</TableHead>
@@ -433,6 +408,7 @@ export default function ReporteComprasVentas() {
                     {purchases.map((p, i) => (
                       <TableRow key={i}>
                         <TableCell>{new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
+                        <TableCell>{p.invoice_series}</TableCell>
                         <TableCell>{p.invoice_number}</TableCell>
                         <TableCell>{p.supplier_nit}</TableCell>
                         <TableCell>{p.supplier_name}</TableCell>
@@ -456,17 +432,9 @@ export default function ReporteComprasVentas() {
                 <p className="text-lg font-semibold text-muted-foreground">SIN MOVIMIENTOS</p>
                 <p className="text-xs text-muted-foreground">No hay ventas registradas en este período</p>
               </div>
-              <div className="px-4 py-2 bg-muted border-t space-y-1">
-                <div className="flex justify-between font-semibold">
-                  <span>Subtotal Ventas (0)</span>
-                  <span>Q {formatCurrency(0)}</span>
-                </div>
-                {isSmallTaxpayer && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%)</span>
-                    <span className="font-medium">Q {formatCurrency(0)}</span>
-                  </div>
-                )}
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Ventas (0)</span>
+                <span>Q {formatCurrency(0)}</span>
               </div>
             </div>
           ) : (
@@ -477,44 +445,30 @@ export default function ReporteComprasVentas() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fecha</TableHead>
+                      <TableHead>Serie</TableHead>
                       <TableHead>No. Doc</TableHead>
                       <TableHead>NIT</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
-                      {isSmallTaxpayer && (
-                        <TableHead className="text-right">Impuesto ({smallTaxpayerRate}%)</TableHead>
-                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {activeSales.map((s, i) => (
                       <TableRow key={i}>
                         <TableCell>{new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT")}</TableCell>
+                        <TableCell>{s.invoice_series}</TableCell>
                         <TableCell>{s.invoice_number}</TableCell>
                         <TableCell>{s.customer_nit || "C/F"}</TableCell>
                         <TableCell>{s.customer_name || "Consumidor Final"}</TableCell>
                         <TableCell className="text-right">Q {formatCurrency(s.total_amount)}</TableCell>
-                        {isSmallTaxpayer && (
-                          <TableCell className="text-right">
-                            Q {formatCurrency((Number(s.total_amount) || 0) * (smallTaxpayerRate / 100))}
-                          </TableCell>
-                        )}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <div className="px-4 py-2 bg-muted border-t space-y-1">
-                <div className="flex justify-between font-semibold">
-                  <span>Subtotal Ventas ({totals.saleCount})</span>
-                  <span>Q {formatCurrency(totals.totalSales)}</span>
-                </div>
-                {isSmallTaxpayer && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%)</span>
-                    <span className="font-medium">Q {formatCurrency(totals.totalSalesTax)}</span>
-                  </div>
-                )}
+              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
+                <span>Subtotal Ventas ({totals.saleCount})</span>
+                <span>Q {formatCurrency(totals.totalSales)}</span>
               </div>
             </div>
           )}
