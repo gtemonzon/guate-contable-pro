@@ -51,15 +51,15 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
               <TableBody>
                 {locations.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Sin ubicaciones</TableCell></TableRow>}
                 {locations.map((loc) => (
-                  <TableRow key={loc.id}>
+                  <TableRow key={loc.id} onClick={() => { setForm(loc); setOpen(true); }} className="cursor-pointer hover:bg-muted/50 transition-colors">
                     <TableCell className="font-mono">{loc.code}</TableCell>
                     <TableCell>{loc.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{loc.description}</TableCell>
                     <TableCell><Badge variant={loc.is_active ? "default" : "secondary"}>{loc.is_active ? "Activa" : "Inactiva"}</Badge></TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setForm(loc); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteId(loc.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setForm(loc); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(loc.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>

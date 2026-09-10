@@ -107,7 +107,7 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
                 {categories.map((cat) => {
                   const complete = !!(cat.asset_account_id && cat.accumulated_depreciation_account_id && cat.depreciation_expense_account_id && cat.gain_loss_on_disposal_account_id);
                   return (
-                    <TableRow key={cat.id}>
+                    <TableRow key={cat.id} onClick={() => openEdit(cat)} className="cursor-pointer hover:bg-muted/50 transition-colors">
                       <TableCell className="font-mono font-medium">{cat.code}</TableCell>
                       <TableCell>{cat.name}</TableCell>
                       <TableCell>{cat.default_useful_life_months} meses</TableCell>
@@ -127,10 +127,10 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(cat)}>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(cat); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(cat.id)}>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(cat.id); }}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
