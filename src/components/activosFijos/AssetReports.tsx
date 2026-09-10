@@ -1,10 +1,11 @@
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, ArrowRightLeft, BookOpen, LayoutGrid } from "lucide-react";
+import { FileText, ArrowRightLeft, BookOpen, LayoutGrid, ClipboardSignature } from "lucide-react";
 import AssetsAsOfReport from "./reports/AssetsAsOfReport";
 import AdditionsDisposalsReport from "./reports/AdditionsDisposalsReport";
 import AssetLedgerReport from "./reports/AssetLedgerReport";
 import AssetKardexReport from "./reports/AssetKardexReport";
+import ResponsibilityCardReport from "./reports/ResponsibilityCardReport";
 
 export default function AssetReports() {
   const { selectedEnterprise, selectedEnterpriseId: enterpriseId } = useEnterprise();
@@ -42,6 +43,10 @@ export default function AssetReports() {
           <LayoutGrid className="h-4 w-4" />
           Kardex
         </TabsTrigger>
+        <TabsTrigger value="responsibility-card" className="flex items-center gap-2">
+          <ClipboardSignature className="h-4 w-4" />
+          Tarjeta de Responsabilidad
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="as-of" className="mt-6">
@@ -58,6 +63,10 @@ export default function AssetReports() {
 
       <TabsContent value="kardex" className="mt-6">
         <AssetKardexReport {...commonProps} />
+      </TabsContent>
+
+      <TabsContent value="responsibility-card" className="mt-6">
+        <ResponsibilityCardReport {...commonProps} />
       </TabsContent>
     </Tabs>
   );

@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Calendar, History, Paperclip, Save, Plus, UserMinus } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import DisposalWizard from "./DisposalWizard";
 import AssetAttachmentsTab from "./AssetAttachmentsTab";
 
@@ -122,6 +123,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returningAssignment, setReturningAssignment] = useState<null | { id: number; custodian_id: number; assigned_date: string }>(null);
   const [returnForm, setReturnForm] = useState({ returned_date: todayDateInput(), notes: "" });
+  const [custodianPage, setCustodianPage] = useState(1);
 
   useEffect(() => {
     setForm(formFromAsset(asset));
@@ -143,6 +145,11 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
     form.residual_value !== asset.residual_value ||
     form.useful_life_months !== asset.useful_life_months;
   const openAssignment = assignments.find((a) => !a.returned_date) ?? null;
+  const CUSTODIAN_PAGE_SIZE = 10;
+  const custodianTotalPages = Math.max(1, Math.ceil(assignments.length / CUSTODIAN_PAGE_SIZE));
+  const custodianCurrentPage = Math.min(custodianPage, custodianTotalPages);
+  const custodianStartIndex = (custodianCurrentPage - 1) * CUSTODIAN_PAGE_SIZE;
+  const pagedAssignments = assignments.slice(custodianStartIndex, custodianStartIndex + CUSTODIAN_PAGE_SIZE);
 
   const saveChanges = async () => {
     if (!form.asset_name.trim()) {
@@ -398,11 +405,11 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                   />
                 </div>
                 <div><Label>Centro de costo</Label><Input value={form.cost_center} onChange={(event) => updateForm("cost_center", event.target.value)} /></div>
-                <div><Label>Fecha de adquisición</Label><Input type="date" value={form.acquisition_date} onChange={(event) => updateForm("acquisition_date", event.target.value)} /></div>
-                <div><Label>Fecha de puesta en servicio</Label><Input type="date" value={form.in_service_date} onChange={(event) => updateForm("in_service_date", event.target.value)} /></div>
                 <div><Label>Serie</Label><Input value={form.serial_number} onChange={(event) => updateForm("serial_number", event.target.value)} /></div>
                 <div><Label>Modelo</Label><Input value={form.model} onChange={(event) => updateForm("model", event.target.value)} /></div>
-                <div><Label>Año de fabricación</Label><Input type="number" min="1900" value={form.manufacture_year ?? ""} onChange={(event) => updateForm("manufacture_year", event.target.value ? Number(event.target.value) : null)} /></div>
+                <div><Label>Año</Label><Input type="number" min="1900" value={form.manufacture_year ?? ""} onChange={(event) => updateForm("manufacture_year", event.target.value ? Number(event.target.value) : null)} /></div>
+                <div><Label>Fecha de adquisición</Label><Input type="date" value={form.acquisition_date} onChange={(event) => updateForm("acquisition_date", event.target.value)} /></div>
+                <div><Label>Fecha de puesta en servicio</Label><Input type="date" value={form.in_service_date} onChange={(event) => updateForm("in_service_date", event.target.value)} /></div>
                 <div><Label>Costo de adquisición</Label><Input type="number" min="0" step="0.01" value={form.acquisition_cost} disabled={hasPostedRows} onChange={(event) => updateForm("acquisition_cost", Number(event.target.value))} /><p className="mt-1 text-xs text-muted-foreground">{hasPostedRows ? "No editable: ya existe depreciación contabilizada." : "Editable mientras no exista depreciación contabilizada."}</p></div>
                 <div><Label>Valor residual</Label><Input type="number" min="0" step="0.01" value={form.residual_value} disabled={hasPostedRows} onChange={(event) => updateForm("residual_value", Number(event.target.value))} /></div>
                 <div><Label>Vida útil (meses)</Label><Input type="number" min="1" value={form.useful_life_months} disabled={hasPostedRows} onChange={(event) => updateForm("useful_life_months", Number(event.target.value))} /></div>
@@ -445,7 +452,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {assignments.map((a) => (
+                          {pagedAssignments.map((a) => (
                             <TableRow key={a.id}>
                               <TableCell>
                                 <div className="flex items-center gap-2">
@@ -471,6 +478,34 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                           ))}
                         </TableBody>
                       </Table>
+                    </div>
+                  )}
+                  {assignments.length > 0 && custodianTotalPages > 1 && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        Mostrando {custodianStartIndex + 1}–{Math.min(custodianStartIndex + CUSTODIAN_PAGE_SIZE, assignments.length)} de {assignments.length}
+                      </span>
+                      <Pagination className="mx-0 w-auto">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCustodianPage((p) => Math.max(1, p - 1))}
+                              className={custodianCurrentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                          <PaginationItem>
+                            <span className="px-3 text-sm text-muted-foreground">
+                              Página {custodianCurrentPage} de {custodianTotalPages}
+                            </span>
+                          </PaginationItem>
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCustodianPage((p) => Math.min(custodianTotalPages, p + 1))}
+                              className={custodianCurrentPage === custodianTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
                     </div>
                   )}
                 </>

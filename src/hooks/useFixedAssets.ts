@@ -746,6 +746,38 @@ export function useReturnCustodian() {
   });
 }
 
+// ─── Reports: open custodian assignments across the enterprise ──────────────
+// Usada por el reporte "Tarjeta de Responsabilidad" — necesita, para TODOS
+// los custodios de la empresa (filtrados en el componente), sus asignaciones
+// actualmente abiertas (returned_date IS NULL) con datos del activo.
+
+export interface OpenCustodianAssignmentForReport {
+  id: number;
+  custodian_id: number;
+  assigned_date: string;
+  asset: {
+    asset_code: string;
+    asset_name: string;
+    category: { name: string } | null;
+  } | null;
+}
+
+export function useOpenCustodianAssignmentsByEnterprise(enterpriseId: number | null) {
+  return useQuery<OpenCustodianAssignmentForReport[]>({
+    queryKey: ["open_custodian_assignments", enterpriseId],
+    enabled: !!enterpriseId,
+    queryFn: async () => {
+      const { data, error } = await db("fixed_asset_custodian_assignments")
+        .select("id, custodian_id, assigned_date, asset:fixed_assets(asset_code, asset_name, category:fixed_asset_categories(name))")
+        .eq("enterprise_id", enterpriseId!)
+        .is("returned_date", null)
+        .order("assigned_date", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as OpenCustodianAssignmentForReport[];
+    },
+  });
+}
+
 // ─── Accounts for dropdowns (used in AssetCategoriesManager) ─────────────────
 
 export function useEnterpriseAccounts(enterpriseId: number | null) {
