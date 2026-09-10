@@ -49,14 +49,14 @@ export default function AssetCustodiansManager({ enterpriseId }: Props) {
               <TableBody>
                 {items.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">Sin custodios</TableCell></TableRow>}
                 {items.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow key={item.id} onClick={() => { setForm(item); setOpen(true); }} className="cursor-pointer hover:bg-muted/50 transition-colors">
                     <TableCell className="font-medium">{item.name}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{item.identifier || "—"}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{item.contact || "—"}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setForm(item); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteId(item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setForm(item); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(item.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
