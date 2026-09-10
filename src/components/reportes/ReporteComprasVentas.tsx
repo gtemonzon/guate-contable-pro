@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { type Styles, type RowInput } from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { formatCurrency } from "@/lib/utils";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
+import { useSmallTaxpayerRate } from "@/hooks/useSmallTaxpayerRate";
 import {
   Table,
   TableBody,
@@ -41,6 +42,16 @@ interface SaleRow {
   is_annulled?: boolean;
 }
 
+// Sin relleno de color — mismo criterio económico de impresión que el Libro Diario
+// (negrita + línea delgada negra en vez de un fondo de color).
+const noFillTableStyle: Partial<Styles> = {
+  fillColor: false,
+  textColor: 0,
+  fontStyle: "bold",
+  lineWidth: 0.2,
+  lineColor: [0, 0, 0],
+};
+
 const monthNames = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -58,6 +69,10 @@ export default function ReporteComprasVentas() {
   const [reportGenerated, setReportGenerated] = useState(false);
   const { toast } = useToast();
   const { strategy } = useEnterpriseTaxRegime();
+  const isSmallTaxpayer = strategy.regime === "pequeño_contribuyente";
+  const { rate: smallTaxpayerRate } = useSmallTaxpayerRate(
+    currentEnterpriseId ? parseInt(currentEnterpriseId) : null
+  );
 
   useEffect(() => {
     const id = localStorage.getItem("currentEnterpriseId");
@@ -77,13 +92,16 @@ export default function ReporteComprasVentas() {
 
   const totals = useMemo(() => {
     const activeSales = sales.filter(s => !s.is_annulled);
+    const totalSales = activeSales.reduce((s, v) => s + (Number(v.total_amount) || 0), 0);
     return {
       totalPurchases: purchases.reduce((s, p) => s + (Number(p.total_amount) || 0), 0),
-      totalSales: activeSales.reduce((s, v) => s + (Number(v.total_amount) || 0), 0),
+      totalSales,
+      // Pequeño Contribuyente: impuesto fijo sobre ingresos brutos (mismo cálculo usado en LibrosFiscales)
+      totalSalesTax: isSmallTaxpayer ? totalSales * (smallTaxpayerRate / 100) : 0,
       purchaseCount: purchases.length,
       saleCount: activeSales.length,
     };
-  }, [purchases, sales]);
+  }, [purchases, sales, isSmallTaxpayer, smallTaxpayerRate]);
 
   const generateReport = async () => {
     if (!currentEnterpriseId) {
@@ -176,8 +194,8 @@ export default function ReporteComprasVentas() {
         { content: `Q ${formatCurrency(totals.totalPurchases)}`, styles: { fontStyle: "bold" } },
       ]],
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-      footStyles: { fillColor: [230, 230, 230], textColor: 0 },
+      headStyles: noFillTableStyle,
+      footStyles: noFillTableStyle,
       columnStyles: { 4: { halign: "right" } },
     });
 
@@ -185,28 +203,56 @@ export default function ReporteComprasVentas() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text("VENTAS", rightX, tableStartY - 2);
+    const activeSalesForPdf = sales.filter(s => !s.is_annulled);
+    const salesHead = isSmallTaxpayer
+      ? ["Fecha", "No. Doc", "NIT", "Cliente", "Monto", `Impuesto (${smallTaxpayerRate}%)`]
+      : ["Fecha", "No. Doc", "NIT", "Cliente", "Monto"];
+    const salesBody: RowInput[] = activeSalesForPdf.length === 0
+      ? [[{ content: "SIN MOVIMIENTOS", colSpan: salesHead.length, styles: { halign: "center", fontStyle: "italic" } }]]
+      : activeSalesForPdf.map(s => {
+        const amount = Number(s.total_amount) || 0;
+        const row = [
+          new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
+          s.invoice_number,
+          s.customer_nit || "C/F",
+          s.customer_name || "Consumidor Final",
+          `Q ${formatCurrency(amount)}`,
+        ];
+        if (isSmallTaxpayer) {
+          row.push(`Q ${formatCurrency(amount * (smallTaxpayerRate / 100))}`);
+        }
+        return row;
+      });
+    const salesFoot: RowInput[] = isSmallTaxpayer
+      ? [[
+          { content: "Subtotal Ventas", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
+          { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
+          { content: `Q ${formatCurrency(totals.totalSalesTax)}`, styles: { fontStyle: "bold" } },
+        ]]
+      : [[
+          { content: "Subtotal Ventas", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
+          { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
+        ]];
     autoTable(doc, {
       startY: tableStartY,
       margin: { left: rightX, right: margin },
       tableWidth: half,
-      head: [["Fecha", "No. Doc", "NIT", "Cliente", "Monto"]],
-      body: sales.filter(s => !s.is_annulled).length === 0
-        ? [[{ content: "SIN MOVIMIENTOS", colSpan: 5, styles: { halign: "center", fontStyle: "italic" } }]]
-        : sales.filter(s => !s.is_annulled).map(s => [
-        new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT"),
-        s.invoice_number,
-        s.customer_nit || "C/F",
-        s.customer_name || "Consumidor Final",
-        `Q ${formatCurrency(Number(s.total_amount) || 0)}`,
-      ]),
-      foot: [[
-        { content: "Subtotal Ventas", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
-        { content: `Q ${formatCurrency(totals.totalSales)}`, styles: { fontStyle: "bold" } },
-      ]],
+      head: [salesHead],
+      body: salesBody,
+      foot: salesFoot,
       styles: { font: "helvetica", fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [34, 197, 94], textColor: 255 },
-      footStyles: { fillColor: [230, 230, 230], textColor: 0 },
-      columnStyles: { 4: { halign: "right" } },
+      headStyles: noFillTableStyle,
+      footStyles: noFillTableStyle,
+      columnStyles: isSmallTaxpayer
+        ? {
+            0: { cellWidth: 14 },
+            1: { cellWidth: 14 },
+            2: { cellWidth: 16 },
+            3: { cellWidth: "auto" },
+            4: { halign: "right", cellWidth: 16 },
+            5: { halign: "right", cellWidth: 20 },
+          }
+        : { 4: { halign: "right" } },
     });
 
     // Footer totals on last page
@@ -223,26 +269,46 @@ export default function ReporteComprasVentas() {
   };
 
   const exportExcel = () => {
-    const aoa: any[][] = [];
+    const comprasHeaderCols = ["Fecha", "No. Doc", "NIT", "Proveedor", "Monto"];
+    const ventasHeaderCols = isSmallTaxpayer
+      ? ["Fecha", "No. Doc", "NIT", "Cliente", "Monto", `Impuesto (${smallTaxpayerRate}%)`]
+      : ["Fecha", "No. Doc", "NIT", "Cliente", "Monto"];
+    const totalCols = comprasHeaderCols.length + 1 + ventasHeaderCols.length;
+
+    const aoa: (string | number)[][] = [];
     aoa.push([enterpriseName]);
     aoa.push([`NIT: ${enterpriseNit}    Régimen: ${strategy.label}`]);
     aoa.push([`Libro de Compras y Ventas — ${periodLabel}`]);
     aoa.push([]);
-    aoa.push(["COMPRAS", "", "", "", "", "", "VENTAS", "", "", "", ""]);
     aoa.push([
-      "Fecha", "No. Doc", "NIT", "Proveedor", "Monto",
+      "COMPRAS", ...Array(comprasHeaderCols.length - 1).fill(""),
       "",
-      "Fecha", "No. Doc", "NIT", "Cliente", "Monto",
+      "VENTAS", ...Array(ventasHeaderCols.length - 1).fill(""),
     ]);
+    aoa.push([...comprasHeaderCols, "", ...ventasHeaderCols]);
+
     const activeSales = sales.filter(s => !s.is_annulled);
     const rows = Math.max(purchases.length, activeSales.length);
     const hasAnyData = purchases.length > 0 || activeSales.length > 0;
     if (!hasAnyData) {
-      aoa.push(["SIN MOVIMIENTOS EN EL PERÍODO", "", "", "", "", "", "", "", "", "", ""]);
+      const emptyRow: string[] = Array(totalCols).fill("");
+      emptyRow[0] = "SIN MOVIMIENTOS EN EL PERÍODO";
+      aoa.push(emptyRow);
     } else {
       for (let i = 0; i < rows; i++) {
         const p = purchases[i];
         const s = activeSales[i];
+        const saleAmount = s ? Number(s.total_amount) || 0 : 0;
+        const ventasRow: (string | number)[] = [
+          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
+          s?.invoice_number ?? "",
+          s?.customer_nit ?? "",
+          s?.customer_name ?? "",
+          s ? saleAmount.toFixed(2) : "",
+        ];
+        if (isSmallTaxpayer) {
+          ventasRow.push(s ? (saleAmount * (smallTaxpayerRate / 100)).toFixed(2) : "");
+        }
         aoa.push([
           p ? new Date(p.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && purchases.length === 0 ? "SIN MOVIMIENTOS" : ""),
           p?.invoice_number ?? "",
@@ -250,22 +316,23 @@ export default function ReporteComprasVentas() {
           p?.supplier_name ?? "",
           p ? (Number(p.total_amount) || 0).toFixed(2) : "",
           "",
-          s ? new Date(s.invoice_date + "T00:00:00").toLocaleDateString("es-GT") : (i === 0 && activeSales.length === 0 ? "SIN MOVIMIENTOS" : ""),
-          s?.invoice_number ?? "",
-          s?.customer_nit ?? "",
-          s?.customer_name ?? "",
-          s ? (Number(s.total_amount) || 0).toFixed(2) : "",
+          ...ventasRow,
         ]);
       }
     }
     aoa.push([]);
-    aoa.push(["", "", "", "Subtotal:", totals.totalPurchases.toFixed(2), "", "", "", "", "Subtotal:", totals.totalSales.toFixed(2)]);
+
+    const ventasSubtotalRow = isSmallTaxpayer
+      ? ["", "", "", "Subtotal:", totals.totalSales.toFixed(2), totals.totalSalesTax.toFixed(2)]
+      : ["", "", "", "Subtotal:", totals.totalSales.toFixed(2)];
+    aoa.push(["", "", "", "Subtotal:", totals.totalPurchases.toFixed(2), "", ...ventasSubtotalRow]);
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"] = [
       { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 14 },
       { wch: 2 },
       { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 35 }, { wch: 14 },
+      ...(isSmallTaxpayer ? [{ wch: 16 }] : []),
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Compras y Ventas");
@@ -389,9 +456,17 @@ export default function ReporteComprasVentas() {
                 <p className="text-lg font-semibold text-muted-foreground">SIN MOVIMIENTOS</p>
                 <p className="text-xs text-muted-foreground">No hay ventas registradas en este período</p>
               </div>
-              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
-                <span>Subtotal Ventas (0)</span>
-                <span>Q {formatCurrency(0)}</span>
+              <div className="px-4 py-2 bg-muted border-t space-y-1">
+                <div className="flex justify-between font-semibold">
+                  <span>Subtotal Ventas (0)</span>
+                  <span>Q {formatCurrency(0)}</span>
+                </div>
+                {isSmallTaxpayer && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%)</span>
+                    <span className="font-medium">Q {formatCurrency(0)}</span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -406,6 +481,9 @@ export default function ReporteComprasVentas() {
                       <TableHead>NIT</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
+                      {isSmallTaxpayer && (
+                        <TableHead className="text-right">Impuesto ({smallTaxpayerRate}%)</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -416,14 +494,27 @@ export default function ReporteComprasVentas() {
                         <TableCell>{s.customer_nit || "C/F"}</TableCell>
                         <TableCell>{s.customer_name || "Consumidor Final"}</TableCell>
                         <TableCell className="text-right">Q {formatCurrency(s.total_amount)}</TableCell>
+                        {isSmallTaxpayer && (
+                          <TableCell className="text-right">
+                            Q {formatCurrency((Number(s.total_amount) || 0) * (smallTaxpayerRate / 100))}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <div className="px-4 py-2 bg-muted flex justify-between font-semibold border-t">
-                <span>Subtotal Ventas ({totals.saleCount})</span>
-                <span>Q {formatCurrency(totals.totalSales)}</span>
+              <div className="px-4 py-2 bg-muted border-t space-y-1">
+                <div className="flex justify-between font-semibold">
+                  <span>Subtotal Ventas ({totals.saleCount})</span>
+                  <span>Q {formatCurrency(totals.totalSales)}</span>
+                </div>
+                {isSmallTaxpayer && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Impuesto ({smallTaxpayerRate}%)</span>
+                    <span className="font-medium">Q {formatCurrency(totals.totalSalesTax)}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
