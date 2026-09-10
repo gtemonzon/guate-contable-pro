@@ -14,7 +14,7 @@ import {
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
 import { fmt, formatDateEs, parseDateParts, sumDepreciationUpTo, isPresentAsOf } from "./reportShared";
-import { drawAssetReportHeader } from "./reportPdfHelpers";
+import { drawAssetReportHeader, noFillTableStyle } from "./reportPdfHelpers";
 
 interface Props {
   enterpriseId: number;
@@ -92,8 +92,8 @@ export default function AssetsAsOfReport({ enterpriseId, enterpriseName, enterpr
         { content: `Q ${fmt(totalNetBookValue)}`, styles: { fontStyle: "bold" } },
       ]],
       styles: { font: "helvetica", fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [59, 130, 246], textColor: 255 },
-      footStyles: { fillColor: [230, 230, 230], textColor: 0 },
+      headStyles: noFillTableStyle,
+      footStyles: noFillTableStyle,
       columnStyles: {
         2: { halign: "right" },
         3: { halign: "right" },

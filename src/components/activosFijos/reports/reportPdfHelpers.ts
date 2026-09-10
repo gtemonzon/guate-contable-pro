@@ -1,4 +1,5 @@
 import type jsPDF from "jspdf";
+import type { Styles } from "jspdf-autotable";
 
 /**
  * jspdf-autotable adjunta `lastAutoTable` al doc en tiempo de ejecución; no
@@ -37,3 +38,14 @@ export function drawAssetReportHeader(doc: jsPDF, opts: AssetReportHeaderOptions
   doc.setFontSize(9);
   return 30;
 }
+
+// Sin relleno de color — mismo criterio económico de impresión que el Libro
+// de Compras y Ventas (ReporteComprasVentas.tsx: negrita + línea delgada
+// negra en vez de un fondo de color, para abaratar la impresión).
+export const noFillTableStyle: Partial<Styles> = {
+  fillColor: false,
+  textColor: 0,
+  fontStyle: "bold",
+  lineWidth: 0.2,
+  lineColor: [0, 0, 0],
+};
