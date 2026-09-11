@@ -140,6 +140,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
     (row) => row.status === "PLANNED" && periodKey(row.year, row.month) < currentPeriodKey,
   );
   const hasPostedRows = schedule.some((row) => row.status === "POSTED");
+  const skippedCount = schedule.filter((row) => row.status === "SKIPPED").length;
   const financialFieldsChanged =
     form.acquisition_cost !== asset.acquisition_cost ||
     form.residual_value !== asset.residual_value ||
@@ -188,7 +189,16 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
       if (error) throw error;
 
       let regeneratedRowCount = 0;
+      let preservedSkippedCount = 0;
+      let droppedSkippedPeriods: Array<{ year: number; month: number }> = [];
       if (willRegenerateSchedule) {
+        // Preservar qué períodos estaban SKIPPED (depreciación histórica ya
+        // aplicada sin partida) — el delete de abajo los borra a todos, así
+        // que hay que recordarlos ANTES de borrar para poder reponerlos.
+        const skippedPeriods = new Set(
+          schedule.filter((r) => r.status === "SKIPPED").map((r) => periodKey(r.year, r.month)),
+        );
+
         const { error: deleteError } = await supabase.from("fixed_asset_depreciation_schedule").delete().eq("asset_id", asset.id);
         if (deleteError) throw deleteError;
 
@@ -201,17 +211,30 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
           depreciation_start_rule: policy?.depreciation_start_rule ?? "ACQUISITION_DATE",
         });
         regeneratedRowCount = newSchedule.length;
+
+        const newPeriods = new Set(newSchedule.map((r) => periodKey(r.year, r.month)));
+        droppedSkippedPeriods = schedule
+          .filter((r) => r.status === "SKIPPED" && !newPeriods.has(periodKey(r.year, r.month)))
+          .map((r) => ({ year: r.year, month: r.month }));
+
         if (newSchedule.length > 0) {
-          const rows = newSchedule.map((r) => ({
-            asset_id: asset.id,
-            enterprise_id: asset.enterprise_id,
-            year: r.year,
-            month: r.month,
-            planned_depreciation_amount: r.planned_depreciation_amount,
-            accumulated_depreciation: r.accumulated_depreciation,
-            net_book_value: r.net_book_value,
-            status: "PLANNED" as const,
-          }));
+          const rows = newSchedule.map((r) => {
+            const isSkipped = skippedPeriods.has(periodKey(r.year, r.month));
+            if (isSkipped) preservedSkippedCount += 1;
+            // El estado SKIPPED se preserva, pero los montos SIEMPRE se
+            // recalculan con los valores nuevos — el calendario debe quedar
+            // aritméticamente coherente con el costo nuevo.
+            return {
+              asset_id: asset.id,
+              enterprise_id: asset.enterprise_id,
+              year: r.year,
+              month: r.month,
+              planned_depreciation_amount: r.planned_depreciation_amount,
+              accumulated_depreciation: r.accumulated_depreciation,
+              net_book_value: r.net_book_value,
+              status: isSkipped ? ("SKIPPED" as const) : ("PLANNED" as const),
+            };
+          });
           const { error: insertError } = await supabase.from("fixed_asset_depreciation_schedule").insert(rows);
           if (insertError) throw insertError;
         }
@@ -227,6 +250,8 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
               old_values: { acquisition_cost: asset.acquisition_cost, residual_value: asset.residual_value, useful_life_months: asset.useful_life_months },
               new_values: { acquisition_cost: form.acquisition_cost, residual_value: form.residual_value, useful_life_months: form.useful_life_months },
               schedule_rows: regeneratedRowCount,
+              preserved_skipped: preservedSkippedCount,
+              dropped_skipped_periods: droppedSkippedPeriods,
             }
           : { updated_fields: Object.keys(update).filter((key) => key !== "updated_at") },
       });
@@ -462,7 +487,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                               </TableCell>
                               <TableCell>{a.assigned_date}</TableCell>
                               <TableCell>{a.returned_date ?? "—"}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{a.notes || "—"}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground whitespace-pre-line">{a.notes || "—"}</TableCell>
                               <TableCell>
                                 {!a.returned_date && (
                                   <Button
@@ -545,7 +570,9 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Regenerar calendario de depreciación?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cambiar el costo, valor residual o vida útil regenerará el calendario de depreciación. ¿Continuar?
+              Cambiar el costo, valor residual o vida útil regenerará el calendario de depreciación.
+              {skippedCount > 0 && ` Se conservarán los ${skippedCount} mes(es) marcados como aplicados sin partida, recalculando sus montos con los nuevos valores.`}
+              {" "}¿Continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
