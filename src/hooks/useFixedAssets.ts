@@ -721,8 +721,25 @@ export function useReturnCustodian() {
       notes?: string;
     }) => {
       const { data: authData } = await supabase.auth.getUser();
+
+      // No sobrescribir la observación de la asignación (por qué se asignó)
+      // con una nota de entrega vacía. Si el usuario sí escribe algo al
+      // entregar, se agrega a la nota existente en vez de reemplazarla —
+      // así no se pierde ninguna de las dos.
+      const updatePayload: { returned_date: string; notes?: string } = { returned_date };
+      const trimmedNotes = notes?.trim();
+      if (trimmedNotes) {
+        const { data: existingRow, error: fetchError } = await db("fixed_asset_custodian_assignments")
+          .select("notes")
+          .eq("id", assignment_id)
+          .single();
+        if (fetchError) throw fetchError;
+        const existingNotes = (existingRow as { notes: string | null } | null)?.notes;
+        updatePayload.notes = existingNotes ? `${existingNotes}\n[Entrega] ${trimmedNotes}` : `[Entrega] ${trimmedNotes}`;
+      }
+
       const { error: updateError } = await db("fixed_asset_custodian_assignments")
-        .update({ returned_date, notes: notes?.trim() || null })
+        .update(updatePayload)
         .eq("id", assignment_id);
       if (updateError) throw updateError;
 
