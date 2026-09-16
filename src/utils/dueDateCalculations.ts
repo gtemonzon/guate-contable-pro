@@ -153,6 +153,79 @@ export function formatDueDate(date: Date): string {
 }
 
 /**
+ * Formatea una fecha como "YYYY-MM-DD" usando sus componentes LOCALES
+ * (getFullYear/getMonth/getDate), nunca toISOString(). Un Date construido
+ * por funciones de date-fns como endOfMonth (que fija la hora a
+ * 23:59:59.999) puede, combinado con un huso horario negativo como el de
+ * Guatemala (UTC-6), representar en UTC el día SIGUIENTE al día calendario
+ * local real — toISOString().split('T')[0] hereda ese corrimiento. Esta
+ * función siempre refleja el día calendario tal como lo ve el usuario.
+ */
+export function toDateOnlyString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parsea una fecha "YYYY-MM-DD" (columna date de Postgres) como medianoche
+ * LOCAL, nunca con `new Date(dateStr)` — ese constructor interpreta un
+ * string "YYYY-MM-DD" como medianoche UTC, que en un huso horario negativo
+ * como Guatemala (UTC-6) se ve localmente como las 18:00 del día ANTERIOR,
+ * corriendo la fecha un día hacia atrás al formatear o comparar.
+ */
+export function parseDateOnly(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Texto relativo ("Vence hoy" / "Vence mañana" / "Quedan N días" /
+ * "Vencido hace N días") calculado en el momento de mostrarlo — nunca debe
+ * persistirse en la base de datos, porque deja de ser cierto con el paso
+ * del tiempo (ej. "Vence mañana" guardado hace una semana sigue mostrando
+ * "Vence mañana" si se persiste el texto en vez del dato).
+ */
+export function getRelativeDueDateText(dueDate: Date): string {
+  const daysUntil = getDaysUntil(dueDate);
+  if (daysUntil === 0) return 'Vence hoy';
+  if (daysUntil === 1) return 'Vence mañana';
+  if (daysUntil > 1) return `Quedan ${daysUntil} días`;
+  const daysAgo = Math.abs(daysUntil);
+  return `Vencido hace ${daysAgo} día${daysAgo === 1 ? '' : 's'}`;
+}
+
+/**
+ * Deriva el período (mes/año) que cubre un vencimiento fiscal a partir de
+ * su propia fecha límite (dueDate), sin necesitar el mes ancla
+ * ("currentMonth") con el que se calculó originalmente. Válido porque,
+ * para toda combinación real de calculation_type/reference_period usada en
+ * este módulo, el mes de dueDate siempre coincide con el mes de
+ * referenceDate (last_business_day y fixed_day operan dentro del mismo mes
+ * de referencia; business_days_after con los valores configurados en la
+ * app nunca se sale de él) — así que "el mes anterior al de dueDate" es
+ * siempre el período cubierto, igual que ya hacía el ciclo con
+ * referenceDate. Reutilizada tanto por el ciclo normal (con el dueDate
+ * recién calculado) como por el auto-sanado de alertas viejas (con el
+ * event_date ya guardado en la notificación).
+ */
+export function derivePeriodCovered(dueDate: Date): { periodMonth: number; periodYear: number } {
+  const periodCovered = subDays(new Date(dueDate.getFullYear(), dueDate.getMonth(), 1), 1);
+  return {
+    periodMonth: getMonth(periodCovered) + 1, // 1-indexed
+    periodYear: getYear(periodCovered),
+  };
+}
+
+/** Nombres de mes en español, 1-indexado (índice 0 vacío) para usar junto a periodMonth/getMonth()+1. */
+export const MONTH_NAMES_ES = [
+  '',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
+
+/**
  * Get default tax due date configurations for Guatemala
  */
 export function getDefaultTaxConfigs(): Omit<TaxDueDateConfig, 'is_active'>[] {

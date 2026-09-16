@@ -2,17 +2,20 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import {
-  calculateDueDate, 
-  parseHolidays, 
-  getDaysUntil, 
+  calculateDueDate,
+  parseHolidays,
+  getDaysUntil,
   getPriorityFromDays,
   formatDueDate,
+  toDateOnlyString,
+  parseDateOnly,
+  derivePeriodCovered,
+  MONTH_NAMES_ES,
   TaxDueDateConfig,
   Holiday,
   getDefaultTaxConfigs,
-  getReferenceDate,
 } from '@/utils/dueDateCalculations';
-import { addMonths, subDays, differenceInDays, getMonth, getYear } from 'date-fns';
+import { addMonths, subDays, differenceInDays } from 'date-fns';
 
 /**
  * Map tax_type code (from tab_tax_due_date_config) to substrings that
@@ -145,7 +148,7 @@ export function useAlertGenerator() {
         priority: 'urgente' | 'importante' | 'informativa',
         actionUrl: string
       ) => {
-        const eventDateStr = eventDate.toISOString().split('T')[0];
+        const eventDateStr = toDateOnlyString(eventDate);
         const exists = await notificationExists(type, eventDateStr);
         if (exists) return false;
 
@@ -209,6 +212,48 @@ export function useAlertGenerator() {
         );
       };
 
+      // 1a. Auto-sanado GLOBAL de alertas de vencimiento fiscal: el ciclo de
+      // abajo solo evalúa el mes en curso (currentMonth), así que sin este
+      // bloque las alertas de meses anteriores (ej. IVA de enero cuando ya
+      // vamos en septiembre) nunca se vuelven a revisar y quedan huérfanas
+      // para siempre, aunque el formulario correspondiente ya esté
+      // presentado. A diferencia de la limpieza puntual de más abajo (que
+      // solo borra la del due date del mes actual), este bloque revisa
+      // TODAS las no leídas de tipo vencimiento_* sin importar su
+      // event_date — mismo criterio que el auto-sanado de periodo_pendiente.
+      // vencimiento_cxc/vencimiento_cxp quedan excluidas: ya tienen su
+      // propio manejo de "una sola viva a la vez" en la sección 4b.
+      const NON_TAX_VENCIMIENTO_TYPES = new Set(['vencimiento_cxc', 'vencimiento_cxp']);
+      const { data: unreadTaxAlerts, error: unreadTaxAlertsError } = await supabase
+        .from('tab_notifications')
+        .select('id, notification_type, event_date')
+        .eq('enterprise_id', enterpriseId)
+        .eq('is_read', false)
+        .like('notification_type', 'vencimiento_%');
+      if (unreadTaxAlertsError) console.error('[alerts] error cargando alertas de vencimiento para auto-sanado:', unreadTaxAlertsError);
+
+      const staleTaxAlertIds: number[] = [];
+      for (const alert of (unreadTaxAlerts || [])) {
+        if (NON_TAX_VENCIMIENTO_TYPES.has(alert.notification_type)) continue;
+        if (!alert.event_date) continue;
+
+        const taxType = alert.notification_type.slice('vencimiento_'.length);
+        const alertDueDate = parseDateOnly(alert.event_date);
+        const { periodMonth, periodYear } = derivePeriodCovered(alertDueDate);
+
+        const formPresented = isFormAlreadyPresented(taxType, periodMonth, periodYear);
+        // Red de seguridad: una alerta de vencimiento de hace más de 60 días
+        // no aporta nada aunque, por algún otro motivo, el formulario no
+        // haya quedado registrado como presentado — solo genera ruido.
+        const daysSinceEvent = differenceInDays(today, alertDueDate);
+        if (formPresented || daysSinceEvent > 60) {
+          staleTaxAlertIds.push(alert.id);
+        }
+      }
+      if (staleTaxAlertIds.length > 0) {
+        await supabase.from('tab_notifications').delete().in('id', staleTaxAlertIds);
+      }
+
       for (const taxConfig of effectiveTaxConfigs) {
         const alertConfig = getAlertConfig(`vencimiento_${taxConfig.tax_type}`);
         if (!alertConfig.is_enabled) continue;
@@ -217,13 +262,9 @@ export function useAlertGenerator() {
         const daysUntil = getDaysUntil(dueDate);
 
         if (daysUntil <= alertConfig.days_before && daysUntil >= -1) {
-          // Determine the reference period (month/year the form would cover).
-          const referenceDate = getReferenceDate(currentMonth, taxConfig.reference_period);
           // Tax forms typically cover the month BEFORE the due-date reference month
           // (e.g. IVA con vencimiento 30/04 corresponde al período de marzo).
-          const periodCovered = subDays(new Date(getYear(referenceDate), getMonth(referenceDate), 1), 1);
-          const periodMonth = getMonth(periodCovered) + 1; // 1-indexed
-          const periodYear = getYear(periodCovered);
+          const { periodMonth, periodYear } = derivePeriodCovered(dueDate);
 
           // Skip alert if the corresponding tax form has already been filed.
           if (isFormAlreadyPresented(taxConfig.tax_type, periodMonth, periodYear)) {
@@ -233,20 +274,16 @@ export function useAlertGenerator() {
               .delete()
               .eq('enterprise_id', enterpriseId)
               .eq('notification_type', `vencimiento_${taxConfig.tax_type}`)
-              .eq('event_date', dueDate.toISOString().split('T')[0]);
+              .eq('event_date', toDateOnlyString(dueDate));
             continue;
           }
 
           const priority = getPriorityFromDays(daysUntil);
-          const daysText = daysUntil === 0 ? 'Vence hoy' :
-                          daysUntil < 0 ? 'Vencido' :
-                          daysUntil === 1 ? 'Vence mañana' :
-                          `Quedan ${daysUntil} días`;
 
           await createAlert(
             `vencimiento_${taxConfig.tax_type}`,
-            `Vencimiento ${taxConfig.tax_label}`,
-            `${daysText}. Fecha límite: ${formatDueDate(dueDate)}`,
+            `Vencimiento ${taxConfig.tax_label} — ${MONTH_NAMES_ES[periodMonth]} ${periodYear}`,
+            `Fecha límite: ${formatDueDate(dueDate)}`,
             dueDate,
             priority,
             '/generar-declaracion'
@@ -293,11 +330,11 @@ export function useAlertGenerator() {
           .select('id, year, end_date')
           .eq('enterprise_id', enterpriseId)
           .eq('status', 'abierto')
-          .lt('end_date', today.toISOString().split('T')[0]);
+          .lt('end_date', toDateOnlyString(today));
         if (pendingPeriodsError) console.error('[alerts] error cargando períodos pendientes:', pendingPeriodsError);
 
         for (const period of (pendingPeriods || [])) {
-          const endDate = new Date(period.end_date);
+          const endDate = parseDateOnly(period.end_date);
           const daysPast = differenceInDays(today, endDate);
 
           if (daysPast >= alertConfigPeriods.days_before) {
@@ -371,7 +408,7 @@ export function useAlertGenerator() {
           .select('id', { count: 'exact', head: true })
           .eq('enterprise_id', enterpriseId)
           .eq('is_reconciled', false)
-          .lt('movement_date', thirtyDaysAgo.toISOString().split('T')[0]);
+          .lt('movement_date', toDateOnlyString(thirtyDaysAgo));
         if (movCountError) console.error('[alerts] error contando movimientos bancarios:', movCountError);
 
         await clearUnread('conciliacion_pendiente');
@@ -425,7 +462,7 @@ export function useAlertGenerator() {
 
         const horizon = new Date(today);
         horizon.setDate(horizon.getDate() + (cfg.days_before || 5));
-        const horizonStr = horizon.toISOString().split('T')[0];
+        const horizonStr = toDateOnlyString(horizon);
 
         const { data: dueRows, error: dueRowsError } = await supabase
           .from('tab_collection_tracking')
@@ -439,7 +476,7 @@ export function useAlertGenerator() {
         const rows = dueRows || [];
         if (rows.length === 0) { await clearUnread(alertType); continue; }
 
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = toDateOnlyString(today);
         const hasOverdue = rows.some((r) => r.due_date < todayStr);
         const totalPending = rows.reduce(
           (sum: number, r) => sum + (Number(r.amount_total) - Number(r.amount_paid || 0)),
@@ -474,11 +511,11 @@ export function useAlertGenerator() {
         .select('*')
         .eq('is_completed', false)
         .or(`enterprise_id.eq.${enterpriseId},enterprise_id.is.null`)
-        .lte('reminder_date', addMonths(today, 1).toISOString().split('T')[0]);
+        .lte('reminder_date', toDateOnlyString(addMonths(today, 1)));
       if (remindersError) console.error('[alerts] error cargando recordatorios:', remindersError);
 
       for (const reminder of (reminders || [])) {
-        const reminderDate = new Date(reminder.reminder_date);
+        const reminderDate = parseDateOnly(reminder.reminder_date);
         const daysUntil = getDaysUntil(reminderDate);
 
         if (daysUntil <= 5 && daysUntil >= -1) {

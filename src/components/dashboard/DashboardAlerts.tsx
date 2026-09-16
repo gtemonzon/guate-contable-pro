@@ -6,6 +6,27 @@ import { useNotifications, Notification } from '@/hooks/useNotifications';
 import { useAlertGenerator } from '@/hooks/useAlertGenerator';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { getRelativeDueDateText, parseDateOnly } from '@/utils/dueDateCalculations';
+
+// Alertas de vencimiento fiscal con una sola fecha límite (excluye
+// vencimiento_cxc/vencimiento_cxp, que son agregados de varias facturas sin
+// una única fecha a la que aplicarles "Vence mañana"/"Quedan N días").
+function isSingleDateDueAlert(notificationType: string): boolean {
+  return notificationType.startsWith('vencimiento_') &&
+    notificationType !== 'vencimiento_cxc' &&
+    notificationType !== 'vencimiento_cxp';
+}
+
+// Texto relativo calculado en el momento de mostrarlo — nunca se persiste
+// en la base de datos (dejaría de ser cierto con el paso del tiempo).
+function displayDescription(notification: Notification): string | null {
+  if (!notification.description) return null;
+  if (notification.event_date && isSingleDateDueAlert(notification.notification_type)) {
+    const relativeText = getRelativeDueDateText(parseDateOnly(notification.event_date));
+    return `${relativeText}. ${notification.description}`;
+  }
+  return notification.description;
+}
 
 interface DashboardAlertsProps {
   enterpriseId?: number | null;
@@ -127,6 +148,7 @@ export function DashboardAlerts({ enterpriseId }: DashboardAlertsProps) {
             {allDisplayed.map((notification) => {
               const config = getPriorityConfig(notification.priority, notification.notification_type);
               const Icon = config.icon;
+              const description = displayDescription(notification);
 
               return (
                 <div
@@ -142,9 +164,9 @@ export function DashboardAlerts({ enterpriseId }: DashboardAlertsProps) {
                     <Icon className={cn('h-5 w-5 mt-0.5 shrink-0', config.text)} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{notification.title}</p>
-                      {notification.description && (
+                      {description && (
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                          {notification.description}
+                          {description}
                         </p>
                       )}
                     </div>
