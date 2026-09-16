@@ -4,10 +4,12 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { getRelativeDueDateText, parseDateOnly } from '@/utils/dueDateCalculations';
 
 interface NotificationItemProps {
   notification: {
     id: number;
+    notification_type: string;
     title: string;
     description: string | null;
     priority: 'urgente' | 'importante' | 'informativa';
@@ -18,6 +20,15 @@ interface NotificationItemProps {
   };
   onMarkAsRead?: (id: number) => void;
   compact?: boolean;
+}
+
+// Alertas de vencimiento fiscal con una sola fecha límite (excluye
+// vencimiento_cxc/vencimiento_cxp, que son agregados de varias facturas sin
+// una única fecha a la que aplicarles "Vence mañana"/"Quedan N días").
+function isSingleDateDueAlert(notificationType: string): boolean {
+  return notificationType.startsWith('vencimiento_') &&
+    notificationType !== 'vencimiento_cxc' &&
+    notificationType !== 'vencimiento_cxp';
 }
 
 export function NotificationItem({ notification, onMarkAsRead, compact = false }: NotificationItemProps) {
@@ -52,6 +63,15 @@ export function NotificationItem({ notification, onMarkAsRead, compact = false }
 
   const config = priorityConfig[notification.priority];
   const Icon = config.icon;
+
+  // Texto relativo calculado en el momento de mostrarlo — nunca se persiste
+  // en la base de datos (dejaría de ser cierto con el paso del tiempo).
+  const relativeDueText = notification.event_date && isSingleDateDueAlert(notification.notification_type)
+    ? getRelativeDueDateText(parseDateOnly(notification.event_date))
+    : null;
+  const displayDescription = relativeDueText && notification.description
+    ? `${relativeDueText}. ${notification.description}`
+    : notification.description;
 
   const handleClick = () => {
     if (!notification.is_read && onMarkAsRead) {
@@ -99,9 +119,9 @@ export function NotificationItem({ notification, onMarkAsRead, compact = false }
               )}
             </div>
             <p className="font-medium text-sm mt-0.5 truncate">{notification.title}</p>
-            {notification.description && (
+            {displayDescription && (
               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                {notification.description}
+                {displayDescription}
               </p>
             )}
             <p className="text-xs text-muted-foreground mt-1">{timeAgo()}</p>
@@ -138,12 +158,12 @@ export function NotificationItem({ notification, onMarkAsRead, compact = false }
             <span className="text-xs text-muted-foreground ml-auto">{timeAgo()}</span>
           </div>
           <h4 className="font-semibold">{notification.title}</h4>
-          {notification.description && (
-            <p className="text-sm text-muted-foreground mt-1">{notification.description}</p>
+          {displayDescription && (
+            <p className="text-sm text-muted-foreground mt-1">{displayDescription}</p>
           )}
           {notification.event_date && (
             <p className="text-xs text-muted-foreground mt-2">
-              Fecha evento: {format(new Date(notification.event_date), "dd 'de' MMMM yyyy", { locale: es })}
+              Fecha evento: {format(parseDateOnly(notification.event_date), "dd 'de' MMMM yyyy", { locale: es })}
             </p>
           )}
           <div className="flex gap-2 mt-3">
