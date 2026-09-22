@@ -517,12 +517,11 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
           </div>
 
           {/* Segunda fila: Montos, tipo operación y cuenta con botones */}
-          <div className={cn(
-            "grid gap-2",
-            showSmallTaxpayerTax ? "grid-cols-[repeat(14,minmax(0,1fr))]" : "grid-cols-12"
-          )}>
+          <div className="grid gap-2 grid-cols-12">
             <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">Total c/IVA</label>
+              <label className="text-xs text-muted-foreground">
+                {showSmallTaxpayerTax ? "Total" : "Total c/IVA"}
+              </label>
               <Input
                 type="number"
                 step="0.01"
@@ -531,16 +530,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 className="h-8"
               />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-muted-foreground">IVA</label>
-              <Input
-                type="number"
-                step="0.01"
-                value={sale.vat_amount}
-                readOnly
-                className="h-8 bg-muted"
-              />
-            </div>
+            {!showSmallTaxpayerTax && (
+              <div className="col-span-2">
+                <label className="text-xs text-muted-foreground">IVA</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={sale.vat_amount}
+                  readOnly
+                  className="h-8 bg-muted"
+                />
+              </div>
+            )}
             {showSmallTaxpayerTax && (
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground whitespace-nowrap">
