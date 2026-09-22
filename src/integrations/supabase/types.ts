@@ -5625,6 +5625,7 @@ export type Database = {
         Args: { p_enterprise_id: number }
         Returns: undefined
       }
+      is_active_app_user: { Args: never; Returns: boolean }
       is_admin_for_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
