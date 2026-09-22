@@ -2421,6 +2421,52 @@ Deno.serve(async (req) => {
         ? undefined
         : (await client.auth.getUser()).data?.user?.id;
 
+      // El borrado masivo es una acción privilegiada: solo super-admins o
+      // administradores del tenant dueño de la empresa pueden ejecutarla.
+      if (!isInternalClearContinuation) {
+        if (!userId) {
+          return new Response(JSON.stringify({ error: "No autorizado" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: callerRow } = await adminClient
+          .from("tab_users")
+          .select("is_super_admin, is_tenant_admin, tenant_id, is_active")
+          .eq("id", userId)
+          .maybeSingle();
+
+        const caller = callerRow as {
+          is_super_admin: boolean | null;
+          is_tenant_admin: boolean | null;
+          tenant_id: number | null;
+          is_active: boolean | null;
+        } | null;
+
+        const enterpriseTenantId = (enterprise as EnterpriseTenantRow).tenant_id;
+        const isPrivileged =
+          !!caller &&
+          caller.is_active !== false &&
+          (caller.is_super_admin === true ||
+            (caller.is_tenant_admin === true &&
+              caller.tenant_id != null &&
+              caller.tenant_id === enterpriseTenantId));
+
+        if (!isPrivileged) {
+          return new Response(
+            JSON.stringify({
+              error:
+                "Solo un administrador puede borrar los datos de la empresa.",
+            }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
+
       let progressJobId = requestedClearJobId;
       if (!progressJobId) {
         const { data: progressJob, error: progJobErr } = await adminClient
