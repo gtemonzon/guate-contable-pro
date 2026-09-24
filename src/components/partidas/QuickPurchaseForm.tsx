@@ -434,6 +434,7 @@ export function QuickPurchaseForm({
           batch_reference: bankReference || null,
           bank_account_id: bankAccountId || null,
           purchase_book_id: purchaseBookId,
+          created_by: user.id,
         })
         .select("id").single();
 

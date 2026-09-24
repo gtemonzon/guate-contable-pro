@@ -1060,10 +1060,12 @@ export function ImportPurchasesDialog({
     try {
       let insertedCount = 0;
       let updatedCount = 0;
+      const { data: { session } } = await supabase.auth.getSession();
+      const createdBy = session?.user.id ?? null;
 
       // Insert new records
       if (recordsToInsert.length > 0) {
-        const payload = recordsToInsert.map(({ __sourceRow, ...rest }) => rest);
+        const payload = recordsToInsert.map(({ __sourceRow, ...rest }) => ({ ...rest, created_by: createdBy }));
 
         const { error: insertError } = await supabase
           .from("tab_purchase_ledger")
@@ -1102,7 +1104,7 @@ export function ImportPurchasesDialog({
 
           const { error: insertError } = await supabase
             .from("tab_purchase_ledger")
-            .insert(payload);
+            .insert({ ...payload, created_by: createdBy });
 
           if (insertError) throw insertError;
           updatedCount++;

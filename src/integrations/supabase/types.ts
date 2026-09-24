@@ -3975,6 +3975,7 @@ export type Database = {
           base_amount: number | null
           batch_reference: string | null
           created_at: string | null
+          created_by: string | null
           currency_code: string | null
           currency_id: number | null
           deleted_at: string | null
@@ -4010,6 +4011,7 @@ export type Database = {
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
@@ -4045,6 +4047,7 @@ export type Database = {
           base_amount?: number | null
           batch_reference?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency_code?: string | null
           currency_id?: number | null
           deleted_at?: string | null
@@ -4333,6 +4336,7 @@ export type Database = {
           accounting_period_id: number | null
           authorization_number: string
           created_at: string | null
+          created_by: string | null
           currency_code: string | null
           currency_id: number | null
           customer_name: string
@@ -4365,6 +4369,7 @@ export type Database = {
           accounting_period_id?: number | null
           authorization_number: string
           created_at?: string | null
+          created_by?: string | null
           currency_code?: string | null
           currency_id?: number | null
           customer_name: string
@@ -4397,6 +4402,7 @@ export type Database = {
           accounting_period_id?: number | null
           authorization_number?: string
           created_at?: string | null
+          created_by?: string | null
           currency_code?: string | null
           currency_id?: number | null
           customer_name?: string
@@ -5408,6 +5414,12 @@ export type Database = {
           residual_value: number
           status: string
           useful_life_months: number
+        }[]
+      }
+      get_audited_tables: {
+        Args: never
+        Returns: {
+          table_name: string
         }[]
       }
       get_authorization_folio_status: {

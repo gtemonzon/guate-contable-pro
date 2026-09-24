@@ -543,6 +543,7 @@ export default function LinkedPurchasesModal({
       }
 
       // Save purchases to purchase ledger
+      const { data: { session } } = await supabase.auth.getSession();
       const purchasesToInsert = purchases.map(p => ({
         enterprise_id: enterpriseId,
         invoice_series: p.invoice_series || null,
@@ -561,6 +562,7 @@ export default function LinkedPurchasesModal({
         batch_reference: documentReference || null,
         journal_entry_id: journalEntryId || null,
         purchase_book_id: purchaseBookId,
+        created_by: session?.user.id ?? null,
       }));
 
       const { data: insertedPurchases, error: purchaseError } = await supabase
