@@ -23,7 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Check, ChevronDown, ChevronRight, Clock, Download, FileText, Filter, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert, X,
+  AlertTriangle, Check, ChevronDown, ChevronRight, Clock, Download, FileText, Filter, HandCoins, Info, ListOrdered, Pencil, Plus, Receipt, ShieldAlert, X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
@@ -226,7 +226,12 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
   }, [rows, thirdPartyFilter]);
 
   const totals = useMemo(() => {
-    const pending = filteredRows.reduce((s, r) => s + (Number(r.amount_total) - Number(r.amount_paid)), 0);
+    // Saldos negativos (abonos mayores que el total, tras reducir el monto de la
+    // factura) no son saldo pendiente: se excluyen del total y se resaltan en la fila.
+    const pending = filteredRows.reduce((s, r) => {
+      const balance = Number(r.amount_total) - Number(r.amount_paid);
+      return balance > 0 ? s + balance : s;
+    }, 0);
     return { count: filteredRows.length, pending };
   }, [filteredRows]);
 
@@ -238,7 +243,7 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     for (const r of unpaid) {
       const name = r.third_party_name || "—";
       const balance = Number(r.amount_total) - Number(r.amount_paid);
-      if (balance <= 0) continue;
+      if (balance <= 0) continue; // incluye saldos negativos (sobrepago)
       const days = Math.abs(daysBetween(r.due_date, today));
       const g = groups.get(name) || { name, b0_30: 0, b31_60: 0, b61_90: 0, b90plus: 0, total: 0 };
       if (days <= 30) g.b0_30 += balance;
@@ -492,7 +497,25 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
                         <TableCell>{r.due_date}</TableCell>
                         <TableCell><AgingCell row={r} /></TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(r.amount_total))}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(balance)}</TableCell>
+                        <TableCell className="text-right">
+                          {balance < -0.005 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center justify-end gap-1 font-medium text-destructive">
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                    {formatCurrency(balance)}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Los abonos superan el total de la factura. Revisa el monto o los abonos registrados.
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            formatCurrency(balance)
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={STATUS_STYLES[r.status]}>{STATUS_LABEL[r.status]}</Badge>
                         </TableCell>
@@ -983,6 +1006,9 @@ function InitialBalancesDialog({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Record<number, { checked: boolean; dueDate: string }>>({});
   const [saving, setSaving] = useState(false);
+  // Plazo con el que se sugiere el vencimiento; se guarda en payment_term_days para
+  // que el trigger de sincronización sepa si el vencimiento sigue siendo el derivado.
+  const [termDays, setTermDays] = useState(30);
 
   useEffect(() => {
     (async () => {
@@ -1001,6 +1027,7 @@ function InitialBalancesDialog({
         .eq("is_default", true)
         .maybeSingle();
       const defaultDays = term?.days ?? 30;
+      setTermDays(Number(defaultDays));
 
       // 3. Fetch ledger (split by direction — see fetchLedgerNamesMap for why)
       type RawCandidate = { id: number; invoice_date: string; third_party_name: string; document_number: string; total_amount: number };
@@ -1101,6 +1128,7 @@ function InitialBalancesDialog({
         source_ledger_id: c.id,
         issue_date: c.invoice_date,
         due_date: selected[c.id].dueDate,
+        payment_term_days: termDays,
         amount_total: c.total_amount,
         amount_paid: 0,
         status: "pendiente" as const,
