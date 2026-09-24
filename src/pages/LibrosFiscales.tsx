@@ -1466,9 +1466,12 @@ export default function LibrosFiscales() {
       };
 
       if (entry.isNew) {
+        // created_by solo en la inserción: el .update() de abajo no lo lleva
+        // para no sobrescribir la autoría original.
+        const { data: { session } } = await supabase.auth.getSession();
         const { data, error } = await supabase
           .from("tab_purchase_ledger")
-          .insert(entryData)
+          .insert({ ...entryData, created_by: session?.user.id ?? null })
           .select()
           .single();
 
@@ -1581,9 +1584,12 @@ export default function LibrosFiscales() {
       };
 
       if (entry.isNew) {
+        // created_by solo en la inserción: el .update() de abajo no lo lleva
+        // para no sobrescribir la autoría original.
+        const { data: { session } } = await supabase.auth.getSession();
         const { data, error } = await supabase
           .from("tab_sales_ledger")
-          .insert(entryData)
+          .insert({ ...entryData, created_by: session?.user.id ?? null })
           .select()
           .single();
 

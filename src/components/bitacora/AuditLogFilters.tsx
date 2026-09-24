@@ -53,14 +53,8 @@ export function AuditLogFilters({ filters, onFiltersChange, isSuperAdmin }: Audi
   };
 
   const fetchAvailableTables = async () => {
-    const { data } = await supabase
-      .from("tab_audit_log")
-      .select("table_name")
-      .limit(1000);
-    if (data) {
-      const uniqueTables = [...new Set(data.map((d) => d.table_name))];
-      setTables(uniqueTables.sort());
-    }
+    const { data } = await supabase.rpc("get_audited_tables");
+    if (data) setTables(data.map((r: { table_name: string }) => r.table_name));
   };
 
   const updateFilter = <K extends keyof AuditLogFiltersState>(

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Trash2, Save, X, AlertTriangle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LedgerHistoryButton } from "@/components/audit/LedgerHistoryButton";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -730,6 +731,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   >
                     <Save className="h-3 w-3" />
                   </Button>
+                  {purchase.id && !isNewRecord && (
+                    <LedgerHistoryButton
+                      entityType="tab_purchase_ledger"
+                      entityId={purchase.id}
+                      documentLabel={`${purchase.invoice_series ? `${purchase.invoice_series}-` : ""}${purchase.invoice_number}`}
+                    />
+                  )}
                   <Button 
                     size="sm" 
                     variant="ghost" 
@@ -1005,6 +1013,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 >
                   <X className="h-3 w-3" />
                 </Button>
+              )}
+              {purchase.id && !isNewRecord && (
+                <LedgerHistoryButton
+                  entityType="tab_purchase_ledger"
+                  entityId={purchase.id}
+                  documentLabel={`${purchase.invoice_series ? `${purchase.invoice_series}-` : ""}${purchase.invoice_number}`}
+                />
               )}
               <Button 
                 size="sm" 

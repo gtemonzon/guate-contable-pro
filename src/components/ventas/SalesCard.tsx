@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Trash2, Save, Ban, RotateCcw, X, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LedgerHistoryButton } from "@/components/audit/LedgerHistoryButton";
 import { AccountCombobox } from "@/components/ui/account-combobox";
 import { cn, formatCurrency } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -650,6 +651,13 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 >
                   <X className="h-3 w-3" />
                 </Button>
+              )}
+              {sale.id && !isNewRecord && (
+                <LedgerHistoryButton
+                  entityType="tab_sales_ledger"
+                  entityId={sale.id}
+                  documentLabel={`${sale.invoice_series ? `${sale.invoice_series}-` : ""}${sale.invoice_number}`}
+                />
               )}
               <Button 
                 size="sm" 

@@ -210,6 +210,7 @@ export async function importLegacyData(
       tax_category: p.taxCategory ?? null,
       operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
       expense_account_id: expenseAccountId,
+      created_by: user.id,
     };
   });
 
@@ -286,6 +287,7 @@ export async function importLegacyData(
       income_account_id: incomeAccountId,
       establishment_code: s.branchCode ?? null,
       establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
+      created_by: user.id,
     };
   });
 

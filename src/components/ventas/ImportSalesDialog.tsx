@@ -638,9 +638,11 @@ export function ImportSalesDialog({
         }));
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
+      const createdBy = session?.user.id ?? null;
       const { error: insertError } = await supabase
         .from("tab_sales_ledger")
-        .insert(recordsToInsert);
+        .insert(recordsToInsert.map((record) => ({ ...record, created_by: createdBy })));
 
       if (insertError) throw insertError;
 

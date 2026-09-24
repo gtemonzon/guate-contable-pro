@@ -220,6 +220,7 @@ export function PurchaseInvoiceWizard({
       const fxVat = Math.round(step2Data.vat_amount * rate * 100) / 100;
       const fxTotal = Math.round(step2Data.total_amount * rate * 100) / 100;
 
+      const { data: { session } } = await supabase.auth.getSession();
       const { error } = await supabase.from("tab_purchase_ledger").insert({
         enterprise_id: enterpriseId,
         accounting_period_id: periodId ?? null,
@@ -240,6 +241,7 @@ export function PurchaseInvoiceWizard({
         original_subtotal: isFunctional ? null : step2Data.net_amount,
         original_vat: isFunctional ? null : step2Data.vat_amount,
         original_total: isFunctional ? null : step2Data.total_amount,
+        created_by: session?.user.id ?? null,
       });
 
       if (error) throw error;

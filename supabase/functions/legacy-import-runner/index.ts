@@ -1778,6 +1778,7 @@ async function runImport(jobId: string) {
         tax_category: p.taxCategory ?? (Number(p.idpAmount) > 0 ? "IDP" : null),
         operation_type_id: opTypeIdByCode.get(p.operationTypeCode) ?? null,
         expense_account_id: expenseAccountId,
+        created_by: userId,
       };
     });
 
@@ -1828,6 +1829,7 @@ async function runImport(jobId: string) {
         income_account_id: incomeAccountId,
         establishment_code: s.branchCode ?? null,
         establishment_name: s.branchCode ? `Sucursal ${s.branchCode}` : null,
+        created_by: userId,
       };
     });
 
