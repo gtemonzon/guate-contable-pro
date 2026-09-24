@@ -81,11 +81,13 @@ export function useFxSettlement() {
         purchaseIds.length
           ? supabase.from("tab_purchase_ledger")
               .select("id, invoice_number, supplier_nit, supplier_name")
+              .is("deleted_at", null)
               .in("id", purchaseIds)
           : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
         salesIds.length
           ? supabase.from("tab_sales_ledger")
               .select("id, invoice_series, invoice_number, customer_nit, customer_name")
+              .is("deleted_at", null)
               .in("id", salesIds)
           : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
       ]);

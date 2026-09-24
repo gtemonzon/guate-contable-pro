@@ -44,6 +44,7 @@ interface SaleEntry {
   isNew?: boolean;
   establishment_code?: string | null;
   establishment_name?: string | null;
+  authorization_number?: string | null;
 }
 
 interface SalesCardProps {
@@ -326,7 +327,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               {sale.is_annulled && <Ban className="h-3 w-3 text-destructive" />}
               {formatDate(sale.invoice_date)}
             </div>
-            <div className="col-span-1 font-mono">
+            <div
+              className="col-span-1 font-mono"
+              title={sale.authorization_number ? `No. de Autorización: ${sale.authorization_number}` : undefined}
+            >
               {sale.invoice_series || "-"}-{sale.invoice_number}
             </div>
             <div className="col-span-1 text-center">
@@ -671,9 +675,21 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
             </div>
           </div>
 
-          {sale.journal_entry_id && (
-            <div className="pt-2 border-t">
-              <Badge variant="secondary">{journalEntryLabel || "Póliza generada"}</Badge>
+          {(sale.journal_entry_id || !isNewRecord) && (
+            <div className="pt-2 border-t flex flex-wrap items-center gap-3">
+              {sale.journal_entry_id && (
+                <Badge variant="secondary">{journalEntryLabel || "Póliza generada"}</Badge>
+              )}
+              {/* Solo lectura: la edición de la factura nunca modifica la autorización FEL. */}
+              {!isNewRecord && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>No. de Autorización:</span>
+                  <span className="font-mono text-foreground">{sale.authorization_number || "—"}</span>
+                  {sale.authorization_number?.startsWith("AUTH-") && (
+                    <Badge variant="outline" className="text-[10px]">Marcador, no es la autorización FEL</Badge>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

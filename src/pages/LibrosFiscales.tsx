@@ -191,6 +191,8 @@ interface SaleEntry {
   isNew?: boolean;
   establishment_code?: string | null;
   establishment_name?: string | null;
+  /** Número de autorización FEL. Solo se escribe al crear; una edición nunca lo toca. */
+  authorization_number?: string | null;
   _recommendedFields?: string[];
 }
 
@@ -854,6 +856,7 @@ export default function LibrosFiscales() {
           const { data: freshPurchases } = await supabase
             .from("tab_purchase_ledger")
             .select("*")
+            .is("deleted_at", null)
             .eq("purchase_book_id", book.id)
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
@@ -872,6 +875,7 @@ export default function LibrosFiscales() {
         const { data: freshSales } = await supabase
           .from("tab_sales_ledger")
           .select("*")
+          .is("deleted_at", null)
           .eq("enterprise_id", parseInt(eid))
           .gte("invoice_date", startDate)
           .lte("invoice_date", endDate)
@@ -1053,6 +1057,7 @@ export default function LibrosFiscales() {
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
         .select("*")
+        .is("deleted_at", null)
         .eq("purchase_book_id", bookId)
         .order("invoice_date", { ascending: false })
         .order("invoice_number", { ascending: false });
@@ -1079,6 +1084,7 @@ export default function LibrosFiscales() {
       const { data, error } = await supabase
         .from("tab_sales_ledger")
         .select("*")
+        .is("deleted_at", null)
         .eq("enterprise_id", parseInt(enterpriseId))
         .gte("invoice_date", startDate)
         .lte("invoice_date", endDate)
@@ -1160,6 +1166,7 @@ export default function LibrosFiscales() {
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
         .select("id, invoice_date")
+        .is("deleted_at", null)
         .eq("purchase_book_id", currentBookId)
         .eq("supplier_nit", entry.supplier_nit)
         .eq("fel_document_type", entry.fel_document_type)
@@ -1201,6 +1208,7 @@ export default function LibrosFiscales() {
       const { data, error } = await supabase
         .from("tab_sales_ledger")
         .select("id, invoice_date")
+        .is("deleted_at", null)
         .eq("enterprise_id", parseInt(currentEnterpriseId))
         .eq("fel_document_type", entry.fel_document_type)
         .eq("invoice_series", entry.invoice_series || "")
@@ -1573,7 +1581,8 @@ export default function LibrosFiscales() {
         invoice_number: entry.invoice_number,
         invoice_date: entry.invoice_date,
         fel_document_type: entry.fel_document_type,
-        authorization_number: `AUTH-${entry.invoice_number}`,
+        // authorization_number NO va aquí: entryData también alimenta el UPDATE, y
+        // escribirlo en cada edición destruía el número de autorización real del FEL.
         customer_nit: entry.customer_nit,
         customer_name: entry.customer_name,
         total_amount: entry.total_amount,
@@ -1587,9 +1596,11 @@ export default function LibrosFiscales() {
         // created_by solo en la inserción: el .update() de abajo no lo lleva
         // para no sobrescribir la autoría original.
         const { data: { session } } = await supabase.auth.getSession();
+        // Al crear, el marcador AUTH-<número> solo se usa si no viene autorización.
+        const authorizationNumber = entry.authorization_number?.trim() || `AUTH-${entry.invoice_number}`;
         const { data, error } = await supabase
           .from("tab_sales_ledger")
-          .insert({ ...entryData, created_by: session?.user.id ?? null })
+          .insert({ ...entryData, authorization_number: authorizationNumber, created_by: session?.user.id ?? null })
           .select()
           .single();
 
@@ -1621,6 +1632,7 @@ export default function LibrosFiscales() {
           .select(
             "invoice_series, invoice_number, invoice_date, fel_document_type, customer_nit, customer_name, total_amount, vat_amount, net_amount, income_account_id, operation_type_id"
           )
+          .is("deleted_at", null)
           .eq("id", entry.id)
           .maybeSingle();
 
@@ -1708,10 +1720,16 @@ export default function LibrosFiscales() {
     if (!entry.id) return;
 
     try {
+      // Borrado lógico: la fila queda con deleted_at/deleted_by y deja de aparecer
+      // en libros, reportes y declaraciones (todas las lecturas filtran deleted_at).
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+
       const { error } = await supabase
         .from("tab_purchase_ledger")
-        .delete()
-        .eq("id", entry.id);
+        .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+        .eq("id", entry.id)
+        .is("deleted_at", null);
 
       if (error) throw error;
 
@@ -1773,10 +1791,16 @@ export default function LibrosFiscales() {
     if (!entry.id) return;
 
     try {
+      // Borrado lógico: la fila queda con deleted_at/deleted_by y deja de aparecer
+      // en libros, reportes y declaraciones (todas las lecturas filtran deleted_at).
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+
       const { error } = await supabase
         .from("tab_sales_ledger")
-        .delete()
-        .eq("id", entry.id);
+        .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+        .eq("id", entry.id)
+        .is("deleted_at", null);
 
       if (error) throw error;
 

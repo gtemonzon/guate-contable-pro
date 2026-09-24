@@ -124,6 +124,7 @@ export default function ReporteComprasVentas() {
         fetchAllRecords<any>(
           supabase.from("tab_purchase_ledger")
             .select("invoice_date, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount")
+            .is("deleted_at", null)
             .eq("enterprise_id", eid)
             .gte("invoice_date", start).lte("invoice_date", end)
             .order("invoice_date", { ascending: true })
@@ -132,6 +133,7 @@ export default function ReporteComprasVentas() {
         fetchAllRecords<any>(
           supabase.from("tab_sales_ledger")
             .select("invoice_date, invoice_series, invoice_number, customer_nit, customer_name, total_amount, is_annulled")
+            .is("deleted_at", null)
             .eq("enterprise_id", eid)
             .gte("invoice_date", start).lte("invoice_date", end)
             .order("invoice_date", { ascending: true })

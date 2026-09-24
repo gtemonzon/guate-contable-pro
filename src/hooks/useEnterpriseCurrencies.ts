@@ -53,8 +53,10 @@ export function useEnterpriseCurrencies(enterpriseId: number | null) {
       supabase.from("tab_journal_entries").select("id", { count: "exact", head: true })
         .eq("enterprise_id", enterpriseId).eq("currency_code", code),
       supabase.from("tab_purchase_ledger").select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId).eq("currency_code", code),
       supabase.from("tab_sales_ledger").select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId).eq("currency_code", code),
     ]);
     const total = (checks[0].count ?? 0) + (checks[1].count ?? 0) + (checks[2].count ?? 0);

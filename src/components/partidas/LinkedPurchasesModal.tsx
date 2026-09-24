@@ -205,6 +205,7 @@ export default function LinkedPurchasesModal({
       const { data: d1, error: e1 } = await supabase
         .from("tab_purchase_ledger")
         .select("*")
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId)
         .eq("journal_entry_id", entryId)
         .order("created_at");
@@ -216,6 +217,7 @@ export default function LinkedPurchasesModal({
         const { data: d2 } = await supabase
           .from("tab_purchase_ledger")
           .select("*")
+          .is("deleted_at", null)
           .eq("enterprise_id", enterpriseId)
           .eq("batch_reference", documentReference)
           .order("created_at");
@@ -340,6 +342,7 @@ export default function LinkedPurchasesModal({
       const { data, error } = await supabase
         .from("tab_purchase_ledger")
         .select("id, invoice_date")
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId)
         .eq("supplier_nit", purchase.supplier_nit)
         .eq("fel_document_type", purchase.fel_document_type)
@@ -498,12 +501,17 @@ export default function LinkedPurchasesModal({
       }
 
       // Delete old purchase records if editing (from DB-linked entries or previous contabilizar)
+      // Borrado lógico: las filas viejas quedan marcadas con deleted_at/deleted_by.
       const idsToDelete = [...new Set([...existingPurchaseIds, ...savedPurchaseIds])];
       if (idsToDelete.length > 0) {
-        const { error: deleteError } = await supabase
-          .from("tab_purchase_ledger")
-          .delete()
-          .in("id", idsToDelete);
+        const { data: { user: deletingUser } } = await supabase.auth.getUser();
+        const { error: deleteError } = deletingUser
+          ? await supabase
+              .from("tab_purchase_ledger")
+              .update({ deleted_at: new Date().toISOString(), deleted_by: deletingUser.id })
+              .in("id", idsToDelete)
+              .is("deleted_at", null)
+          : { error: new Error("No autenticado") };
         if (deleteError) {
           console.error("Error deleting old purchases:", deleteError);
         }

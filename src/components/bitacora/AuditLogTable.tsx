@@ -16,6 +16,7 @@ import type { AuditLogEntry } from "@/pages/Bitacora";
 import {
   getTableLabel,
   buildChangeSummary,
+  getDisplayAction,
   ACTION_LABELS,
 } from "@/constants/auditFieldRules";
 
@@ -23,6 +24,7 @@ const ACTION_VARIANTS: Record<string, "default" | "secondary" | "destructive"> =
   INSERT: "default",
   UPDATE: "secondary",
   DELETE: "destructive",
+  RESTORE: "default",
 };
 
 interface AuditLogTableProps {
@@ -84,9 +86,19 @@ export function AuditLogTable({
                 log.old_values,
                 log.new_values,
               );
+              const displayAction = getDisplayAction(
+                log.action,
+                log.table_name,
+                log.old_values,
+                log.new_values,
+              );
 
               return (
-                <TableRow key={log.id}>
+                <TableRow
+                  key={log.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => onViewDetails(log)}
+                >
                   <TableCell className="font-mono text-sm">
                     {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", {
                       locale: es,
@@ -105,8 +117,8 @@ export function AuditLogTable({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={ACTION_VARIANTS[log.action] || "secondary"}>
-                      {ACTION_LABELS[log.action] || log.action}
+                    <Badge variant={ACTION_VARIANTS[displayAction] || "secondary"}>
+                      {ACTION_LABELS[displayAction] || displayAction}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm">
@@ -119,7 +131,10 @@ export function AuditLogTable({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onViewDetails(log)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewDetails(log);
+                      }}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>

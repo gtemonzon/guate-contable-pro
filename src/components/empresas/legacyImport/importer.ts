@@ -234,6 +234,7 @@ export async function importLegacyData(
           const { data: existing } = await supabase
             .from("tab_purchase_ledger")
             .select("id, invoice_date")
+            .is("deleted_at", null)
             .eq("enterprise_id", enterpriseId)
             .eq("supplier_nit", src.supplierNit)
             .eq("invoice_series", src.series || "")
@@ -309,6 +310,7 @@ export async function importLegacyData(
           const { data: existing } = await supabase
             .from("tab_sales_ledger")
             .select("id, invoice_date")
+            .is("deleted_at", null)
             .eq("enterprise_id", enterpriseId)
             .eq("customer_nit", src.customerNit)
             .eq("invoice_series", src.series || "")

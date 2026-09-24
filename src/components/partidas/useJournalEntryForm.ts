@@ -678,8 +678,8 @@ export function useJournalEntryForm(
 
     const purchaseIds = (links || []).map((l: any) => l.purchase_id);
 
-    if (purchaseIds.length === 0) {
-      // Remove purchase-sourced lines, ensure minimum lines remain
+    // Remove purchase-sourced lines, ensure minimum lines remain
+    const removePurchaseLines = () => {
       setDetailLines(prev => {
         const filtered = prev.filter(l => l.source_type !== 'PURCHASE');
         while (filtered.filter(l => !l.is_bank_line).length < 2) {
@@ -687,11 +687,15 @@ export function useJournalEntryForm(
         }
         return filtered;
       });
+    };
+
+    if (purchaseIds.length === 0) {
+      removePurchaseLines();
       return;
     }
 
     const [
-      { data: purchases },
+      { data: purchases, error: purchasesError },
       { data: felDocTypes },
       { data: enterpriseData },
     ] = await Promise.all([
@@ -713,7 +717,13 @@ export function useJournalEntryForm(
 
     const enterpriseAppliesVat = getFiscalBookStrategy(enterpriseData?.tax_regime).appliesVat;
 
-    if (!purchases || purchases.length === 0) return;
+    // Con borrado lógico el vínculo en tab_purchase_journal_links sobrevive a la
+    // compra (antes se borraba en cascada). Si todas las compras vinculadas están
+    // borradas, se comporta como si no hubiera vínculos.
+    if (!purchases || purchases.length === 0) {
+      if (!purchasesError) removePurchaseLines();
+      return;
+    }
 
     // Build lookup for FEL document type multipliers and VAT applicability
     const docTypeMap = buildDocTypeMap(felDocTypes as any);

@@ -10,6 +10,7 @@ import {
   Shield, Clock, User, ChevronDown, ChevronRight,
   ArrowRight,
 } from "lucide-react";
+import { SOFT_DELETE_TABLES, getSoftDeleteTransition } from "@/constants/auditFieldRules";
 
 // ──────────────────────────────────────────────
 // Types
@@ -46,6 +47,14 @@ const EXCLUDED_FIELDS = new Set([
   "last_activity_at", "current_enterprise_name",
 ]);
 
+// En tablas con borrado lógico, deleted_at/deleted_by son el cambio: no se ocultan.
+function isExcludedField(field: string, tableName: string): boolean {
+  if ((field === "deleted_at" || field === "deleted_by") && SOFT_DELETE_TABLES.includes(tableName)) {
+    return false;
+  }
+  return EXCLUDED_FIELDS.has(field);
+}
+
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
@@ -53,6 +62,7 @@ const ACTION_CONFIG: Record<string, { label: string; color: string }> = {
   INSERT: { label: "Creado",     color: "bg-success/10 text-success border-success/30" },
   UPDATE: { label: "Modificado", color: "bg-primary/10 text-primary border-primary/30" },
   DELETE: { label: "Eliminado",  color: "bg-destructive/10 text-destructive border-destructive/30" },
+  RESTORE: { label: "Restaurado", color: "bg-success/10 text-success border-success/30" },
 };
 
 function formatVal(v: unknown): string {
@@ -64,6 +74,7 @@ function formatVal(v: unknown): string {
 }
 
 function computeDiffs(
+  tableName: string,
   before: Record<string, unknown> | null,
   after: Record<string, unknown> | null,
 ): { field: string; oldVal: string; newVal: string }[] {
@@ -73,7 +84,7 @@ function computeDiffs(
   const keys = new Set([...Object.keys(b), ...Object.keys(a)]);
   const diffs: { field: string; oldVal: string; newVal: string }[] = [];
   for (const k of keys) {
-    if (EXCLUDED_FIELDS.has(k)) continue;
+    if (isExcludedField(k, tableName)) continue;
     if (JSON.stringify(b[k]) !== JSON.stringify(a[k])) {
       diffs.push({ field: k, oldVal: formatVal(b[k]), newVal: formatVal(a[k]) });
     }
@@ -86,8 +97,11 @@ function computeDiffs(
 // ──────────────────────────────────────────────
 function AuditEventRow({ event }: { event: AuditEvent }) {
   const [open, setOpen] = useState(false);
-  const cfg = ACTION_CONFIG[event.action] ?? { label: event.action, color: "bg-muted text-muted-foreground border-border" };
-  const diffs = computeDiffs(event.old_values, event.new_values);
+  // Un borrado lógico llega como UPDATE de deleted_at: se muestra como "Eliminado".
+  const softDelete = getSoftDeleteTransition(event.action, event.table_name, event.old_values, event.new_values);
+  const displayAction = softDelete === "delete" ? "DELETE" : softDelete === "restore" ? "RESTORE" : event.action;
+  const cfg = ACTION_CONFIG[displayAction] ?? { label: event.action, color: "bg-muted text-muted-foreground border-border" };
+  const diffs = computeDiffs(event.table_name, event.old_values, event.new_values);
   const snapshot = event.action === "INSERT" ? event.new_values : event.old_values;
 
   return (
@@ -159,7 +173,7 @@ function AuditEventRow({ event }: { event: AuditEvent }) {
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valores iniciales</p>
                 <div className="bg-muted rounded-md p-2 space-y-1 max-h-48 overflow-y-auto">
                   {Object.entries(snapshot)
-                    .filter(([k]) => !EXCLUDED_FIELDS.has(k))
+                    .filter(([k]) => !isExcludedField(k, event.table_name))
                     .map(([k, v]) => (
                       <div key={k} className="flex gap-2 text-xs">
                         <span className="font-mono text-muted-foreground min-w-[140px] shrink-0">{k}</span>
