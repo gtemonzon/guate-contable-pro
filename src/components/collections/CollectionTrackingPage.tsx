@@ -29,6 +29,8 @@ import * as XLSX from "xlsx";
 import { allocateEntryNumber } from "@/utils/journalEntryNumbering";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { fetchLedgerNamesMap } from "@/utils/collectionLedger";
 
 type Status = "pendiente" | "parcial" | "pagada";
 
@@ -91,45 +93,6 @@ const STATUS_LABEL: Record<Status, string> = {
 interface Props {
   direction: "cxc" | "cxp";
   title: string;
-}
-
-// Looks up third-party name + document number for a set of source ledger ids.
-// Split by direction (rather than a dynamic table/column name) because
-// Supabase's typed client can't correlate two separately-computed literal
-// unions (table name + column name) that are only valid in matching pairs —
-// it type-checks every combination, including the invalid ones.
-async function fetchLedgerNamesMap(
-  direction: "cxc" | "cxp",
-  ids: number[],
-): Promise<Map<number, { name: string; doc: string }>> {
-  const map = new Map<number, { name: string; doc: string }>();
-  if (ids.length === 0) return map;
-  if (direction === "cxc") {
-    const { data } = await supabase
-      .from("tab_sales_ledger")
-      .select("id,customer_name,invoice_series,invoice_number")
-      .is("deleted_at", null)
-      .in("id", ids);
-    (data || []).forEach((l) => {
-      map.set(l.id, {
-        name: l.customer_name || "",
-        doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-      });
-    });
-  } else {
-    const { data } = await supabase
-      .from("tab_purchase_ledger")
-      .select("id,supplier_name,invoice_series,invoice_number")
-      .is("deleted_at", null)
-      .in("id", ids);
-    (data || []).forEach((l) => {
-      map.set(l.id, {
-        name: l.supplier_name || "",
-        doc: [l.invoice_series, l.invoice_number].filter(Boolean).join("-"),
-      });
-    });
-  }
-  return map;
 }
 
 function daysBetween(a: string, b: Date) {
@@ -209,15 +172,25 @@ export default function CollectionTrackingPage({ direction, title }: Props) {
     }
     const base = (data || []) as TrackingRow[];
     const ids = base.map((r) => r.source_ledger_id);
-    if (ids.length > 0) {
-      const map = await fetchLedgerNamesMap(direction, ids);
-      base.forEach((r) => {
-        const m = map.get(r.source_ledger_id);
-        r.third_party_name = m?.name || "—";
-        r.document_number = m?.doc || "—";
-      });
+    let map: Map<number, { name: string; doc: string }>;
+    try {
+      map = await fetchLedgerNamesMap(direction, ids);
+    } catch (err) {
+      setLoading(false);
+      toast({ title: "Error al cargar facturas", description: getSafeErrorMessage(err), variant: "destructive" });
+      return;
     }
-    setRows(base);
+    // Toda fila de seguimiento nace de una factura del libro, así que si su
+    // factura no está en el mapa es porque fue borrada (borrado lógico): se
+    // oculta para que no siga sumando como saldo pendiente. La fila y sus abonos
+    // se quedan en la base. Esto cubre tabla, antigüedad y exportación (derivan de rows).
+    const visible = base.filter((r) => map.has(r.source_ledger_id));
+    visible.forEach((r) => {
+      const m = map.get(r.source_ledger_id)!;
+      r.third_party_name = m.name || "—";
+      r.document_number = m.doc || "—";
+    });
+    setRows(visible);
     setLoading(false);
   }, [selectedEnterprise, direction, moduleEnabled]);
 
@@ -1276,9 +1249,19 @@ function GeneratePolizaDialog({
     const trMap = new Map<number, number>();
     trList.forEach((t) => trMap.set(Number(t.id), Number(t.source_ledger_id)));
     const ledgerIds = Array.from(new Set(payList.map((p) => trMap.get(Number(p.tracking_id))).filter(Boolean) as number[]));
-    const ledgerMap = await fetchLedgerNamesMap(direction, ledgerIds);
+    let ledgerMap: Map<number, { name: string; doc: string }>;
+    try {
+      ledgerMap = await fetchLedgerNamesMap(direction, ledgerIds);
+    } catch (err) {
+      setLoading(false);
+      toast({ title: "Error al cargar facturas", description: getSafeErrorMessage(err), variant: "destructive" });
+      return;
+    }
 
-    const enriched: PendingPayment[] = payList.map((p) => {
+    // Abonos de facturas borradas (ausentes del mapa) no generan póliza.
+    const livePayments = payList.filter((p) => ledgerMap.has(trMap.get(Number(p.tracking_id)) || 0));
+
+    const enriched: PendingPayment[] = livePayments.map((p) => {
       const ledgerId = trMap.get(Number(p.tracking_id)) || 0;
       const info = ledgerMap.get(ledgerId);
       return {

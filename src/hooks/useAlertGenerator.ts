@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchLedgerNamesMap } from '@/utils/collectionLedger';
 import type { Database } from '@/integrations/supabase/types';
 import {
   calculateDueDate,
@@ -466,14 +467,23 @@ export function useAlertGenerator() {
 
         const { data: dueRows, error: dueRowsError } = await supabase
           .from('tab_collection_tracking')
-          .select('due_date, amount_total, amount_paid, status')
+          .select('source_ledger_id, due_date, amount_total, amount_paid, status')
           .eq('enterprise_id', enterpriseId)
           .eq('direction', dir)
           .neq('status', 'pagada')
           .lte('due_date', horizonStr);
         if (dueRowsError) console.error('[alerts] error cargando seguimiento de cobros:', dueRowsError);
 
-        const rows = dueRows || [];
+        // Facturas borradas (borrado lógico) no cuentan como saldo pendiente: su
+        // fila de seguimiento sigue en la base, pero la factura ya no está en el libro.
+        let liveLedger: Map<number, unknown>;
+        try {
+          liveLedger = await fetchLedgerNamesMap(dir, (dueRows || []).map((r) => Number(r.source_ledger_id)));
+        } catch (err) {
+          console.error('[alerts] error verificando facturas de seguimiento:', err);
+          continue; // sin datos confiables, no se actualiza esta alerta
+        }
+        const rows = (dueRows || []).filter((r) => liveLedger.has(Number(r.source_ledger_id)));
         if (rows.length === 0) { await clearUnread(alertType); continue; }
 
         const todayStr = toDateOnlyString(today);

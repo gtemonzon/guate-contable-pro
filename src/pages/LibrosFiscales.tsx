@@ -12,6 +12,10 @@ import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarCha
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PurchaseCard, type PurchaseCardRef } from "@/components/compras/PurchaseCard";
 import { SalesCard, type SalesCardRef } from "@/components/ventas/SalesCard";
 import { ImportPurchasesDialog } from "@/components/compras/ImportPurchasesDialog";
@@ -223,6 +227,10 @@ export default function LibrosFiscales() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  // Borrado pendiente de confirmar: la factura tiene abonos en Cuentas por Cobrar/Pagar.
+  const [pendingLedgerDelete, setPendingLedgerDelete] = useState<
+    { kind: "purchase" | "sale"; id: number; amountPaid: number } | null
+  >(null);
   const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
     try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
@@ -1709,6 +1717,24 @@ export default function LibrosFiscales() {
     }
   };
 
+  /**
+   * Abonos registrados en Cuentas por Cobrar/Pagar para una factura. Si falla la
+   * consulta devuelve 0: el aviso es informativo y nunca bloquea el borrado.
+   */
+  const getTrackedAmountPaid = async (direction: "cxc" | "cxp", ledgerId: number): Promise<number> => {
+    const { data, error } = await supabase
+      .from("tab_collection_tracking")
+      .select("amount_paid")
+      .eq("direction", direction)
+      .eq("source_ledger_id", ledgerId)
+      .maybeSingle();
+    if (error) {
+      console.warn("No se pudo verificar abonos de la factura:", error);
+      return 0;
+    }
+    return Number(data?.amount_paid ?? 0);
+  };
+
   const deletePurchaseRow = async (index: number) => {
     const entry = purchases[index];
     
@@ -1719,6 +1745,15 @@ export default function LibrosFiscales() {
 
     if (!entry.id) return;
 
+    const amountPaid = await getTrackedAmountPaid("cxp", entry.id);
+    if (amountPaid > 0) {
+      setPendingLedgerDelete({ kind: "purchase", id: entry.id, amountPaid });
+      return;
+    }
+    await softDeletePurchase(entry.id);
+  };
+
+  const softDeletePurchase = async (id: number) => {
     try {
       // Borrado lógico: la fila queda con deleted_at/deleted_by y deja de aparecer
       // en libros, reportes y declaraciones (todas las lecturas filtran deleted_at).
@@ -1728,12 +1763,12 @@ export default function LibrosFiscales() {
       const { error } = await supabase
         .from("tab_purchase_ledger")
         .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-        .eq("id", entry.id)
+        .eq("id", id)
         .is("deleted_at", null);
 
       if (error) throw error;
 
-      setPurchases(purchases.filter((_, i) => i !== index));
+      setPurchases((prev) => prev.filter((p) => p.id !== id));
       toast({
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
@@ -1790,6 +1825,15 @@ export default function LibrosFiscales() {
 
     if (!entry.id) return;
 
+    const amountPaid = await getTrackedAmountPaid("cxc", entry.id);
+    if (amountPaid > 0) {
+      setPendingLedgerDelete({ kind: "sale", id: entry.id, amountPaid });
+      return;
+    }
+    await softDeleteSale(entry.id);
+  };
+
+  const softDeleteSale = async (id: number) => {
     try {
       // Borrado lógico: la fila queda con deleted_at/deleted_by y deja de aparecer
       // en libros, reportes y declaraciones (todas las lecturas filtran deleted_at).
@@ -1799,12 +1843,12 @@ export default function LibrosFiscales() {
       const { error } = await supabase
         .from("tab_sales_ledger")
         .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-        .eq("id", entry.id)
+        .eq("id", id)
         .is("deleted_at", null);
 
       if (error) throw error;
 
-      setSales(sales.filter((_, i) => i !== index));
+      setSales((prev) => prev.filter((s) => s.id !== id));
       toast({
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
@@ -1816,6 +1860,14 @@ export default function LibrosFiscales() {
         variant: "destructive",
       });
     }
+  };
+
+  const confirmPendingLedgerDelete = async () => {
+    const pending = pendingLedgerDelete;
+    setPendingLedgerDelete(null);
+    if (!pending) return;
+    if (pending.kind === "purchase") await softDeletePurchase(pending.id);
+    else await softDeleteSale(pending.id);
   };
 
   if (!currentEnterpriseId) {
@@ -3190,7 +3242,31 @@ export default function LibrosFiscales() {
           type={activeTab}
         />
       )}
-      
+
+      <AlertDialog
+        open={pendingLedgerDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingLedgerDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>La factura tiene abonos registrados</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta factura tiene Q{formatCurrency(pendingLedgerDelete?.amountPaid ?? 0)} en abonos registrados.
+              Si la eliminas, desaparecerá de Cuentas por {pendingLedgerDelete?.kind === "sale" ? "Cobrar" : "Pagar"} junto
+              con sus abonos. ¿Deseas continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPendingLedgerDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar factura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
