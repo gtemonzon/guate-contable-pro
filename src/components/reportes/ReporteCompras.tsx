@@ -206,6 +206,7 @@ export default function ReporteCompras() {
         supabase
           .from("tab_purchase_ledger")
           .select("*")
+          .is("deleted_at", null)
           .eq("enterprise_id", parseInt(currentEnterpriseId))
           .gte("invoice_date", startDate)
           .lte("invoice_date", endDate)

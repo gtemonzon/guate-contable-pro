@@ -21,6 +21,7 @@ import {
   categoriseChanges,
   getTableLabel,
   buildChangeSummary,
+  getDisplayAction,
   ACTION_LABELS,
   type AuditFieldChange,
 } from "@/constants/auditFieldRules";
@@ -83,6 +84,10 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
     ? buildChangeSummary(log.action, log.table_name, log.old_values, log.new_values)
     : "";
 
+  const displayAction = log
+    ? getDisplayAction(log.action, log.table_name, log.old_values, log.new_values)
+    : "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
@@ -93,8 +98,8 @@ export function AuditLogDetailDialog({ log, open, onOpenChange }: AuditLogDetail
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   Detalle de Auditoría
-                  <Badge variant={log.action === "DELETE" ? "destructive" : "secondary"}>
-                    {ACTION_LABELS[log.action] || log.action}
+                  <Badge variant={displayAction === "DELETE" ? "destructive" : "secondary"}>
+                    {ACTION_LABELS[displayAction] || displayAction}
                   </Badge>
                 </DialogTitle>
                 <DialogDescription>

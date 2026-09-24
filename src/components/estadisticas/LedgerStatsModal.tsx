@@ -73,6 +73,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
           supabase
             .from(tableName)
             .select("invoice_date")
+            .is("deleted_at", null)
             .eq("enterprise_id", parseInt(enterpriseId))
             .order("invoice_date", { ascending: true })
       );
@@ -105,6 +106,7 @@ export function LedgerStatsModal({ open, onOpenChange, enterpriseId, type }: Led
             let query: any = supabase
               .from(tableName)
               .select(`${nitField}, ${nameField}, total_amount, invoice_date`)
+              .is("deleted_at", null)
               .eq("enterprise_id", parseInt(enterpriseId))
               .gte("invoice_date", startDate)
               .lte("invoice_date", endDate);

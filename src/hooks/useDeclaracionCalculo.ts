@@ -209,6 +209,7 @@ export function useDeclaracionCalculo(
       const salesQuery = supabase
         .from("tab_sales_ledger")
         .select("id, invoice_date, net_amount, vat_amount, total_amount, fel_document_type, operation_type_id, is_annulled")
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId)
         .gte("invoice_date", startDate)
         .lte("invoice_date", endDate)
@@ -221,6 +222,7 @@ export function useDeclaracionCalculo(
       const purchasesQuery = supabase
         .from("tab_purchase_ledger")
         .select("id, invoice_date, net_amount, vat_amount, total_amount, base_amount, fel_document_type, operation_type_id, supplier_nit, supplier_name, invoice_series, invoice_number")
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId)
         .gte("invoice_date", startDate)
         .lte("invoice_date", endDate);
@@ -238,6 +240,7 @@ export function useDeclaracionCalculo(
           supabase
             .from("tab_sales_ledger")
             .select("net_amount")
+            .is("deleted_at", null)
             .eq("enterprise_id", enterpriseId)
             .eq("is_annulled", false)
             .gte("invoice_date", previousYearStart)
@@ -247,6 +250,7 @@ export function useDeclaracionCalculo(
           supabase
             .from("tab_purchase_ledger")
             .select("net_amount")
+            .is("deleted_at", null)
             .eq("enterprise_id", enterpriseId)
             .gte("invoice_date", previousYearStart)
             .lte("invoice_date", previousYearEnd)

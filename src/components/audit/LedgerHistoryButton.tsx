@@ -43,6 +43,7 @@ export function LedgerHistoryButton({ entityType, entityId, documentLabel }: Led
         .from(entityType)
         .select("created_at, created_by")
         .eq("id", entityId)
+        .is("deleted_at", null)
         .maybeSingle();
 
       let createdByName: string | null = null;

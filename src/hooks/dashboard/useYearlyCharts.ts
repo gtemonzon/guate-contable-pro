@@ -75,8 +75,8 @@ export async function fetchAvailableChartYears(enterpriseId: number): Promise<nu
 
   const yearsSet = new Set<number>();
   const [{ data: sales }, { data: purchases }] = await Promise.all([
-    supabase.from('tab_sales_ledger').select('invoice_date').eq('enterprise_id', enterpriseId).eq('is_annulled', false).limit(5000),
-    supabase.from('tab_purchase_ledger').select('invoice_date').eq('enterprise_id', enterpriseId).limit(5000),
+    supabase.from('tab_sales_ledger').select('invoice_date').is('deleted_at', null).eq('enterprise_id', enterpriseId).eq('is_annulled', false).limit(5000),
+    supabase.from('tab_purchase_ledger').select('invoice_date').is('deleted_at', null).eq('enterprise_id', enterpriseId).limit(5000),
   ]);
 
   sales?.forEach((s) => yearsSet.add(new Date(s.invoice_date).getFullYear()));

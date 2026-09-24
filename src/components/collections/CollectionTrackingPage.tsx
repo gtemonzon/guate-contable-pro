@@ -108,6 +108,7 @@ async function fetchLedgerNamesMap(
     const { data } = await supabase
       .from("tab_sales_ledger")
       .select("id,customer_name,invoice_series,invoice_number")
+      .is("deleted_at", null)
       .in("id", ids);
     (data || []).forEach((l) => {
       map.set(l.id, {
@@ -119,6 +120,7 @@ async function fetchLedgerNamesMap(
     const { data } = await supabase
       .from("tab_purchase_ledger")
       .select("id,supplier_name,invoice_series,invoice_number")
+      .is("deleted_at", null)
       .in("id", ids);
     (data || []).forEach((l) => {
       map.set(l.id, {
@@ -1034,6 +1036,7 @@ function InitialBalancesDialog({
         const { data: ledger } = await supabase
           .from("tab_sales_ledger")
           .select("id,invoice_date,customer_name,invoice_series,invoice_number,total_amount")
+          .is("deleted_at", null)
           .eq("enterprise_id", enterpriseId)
           .order("invoice_date", { ascending: false })
           .limit(2000);
@@ -1050,6 +1053,7 @@ function InitialBalancesDialog({
         const { data: ledger } = await supabase
           .from("tab_purchase_ledger")
           .select("id,invoice_date,supplier_name,invoice_series,invoice_number,total_amount")
+          .is("deleted_at", null)
           .eq("enterprise_id", enterpriseId)
           .order("invoice_date", { ascending: false })
           .limit(2000);

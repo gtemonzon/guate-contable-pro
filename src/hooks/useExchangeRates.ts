@@ -103,9 +103,11 @@ export function useExchangeRates(enterpriseId: number | null) {
         .eq("enterprise_id", enterpriseId).eq("currency_code", currency_code)
         .gte("entry_date", start).lte("entry_date", endDate),
       supabase.from("tab_purchase_ledger").select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId).eq("currency_code", currency_code)
         .gte("invoice_date", start).lte("invoice_date", endDate),
       supabase.from("tab_sales_ledger").select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId).eq("currency_code", currency_code)
         .gte("invoice_date", start).lte("invoice_date", endDate),
     ]);

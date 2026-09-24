@@ -674,6 +674,7 @@ export function ImportPurchasesDialog({
             .select(
               "id, purchase_book_id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
             )
+            .is("deleted_at", null)
             .eq("purchase_book_id", bookId)
             .eq("enterprise_id", enterpriseId)
         );
@@ -921,6 +922,7 @@ export function ImportPurchasesDialog({
             .select(
               "id, purchase_book_id, invoice_series, invoice_number, supplier_nit, supplier_name, total_amount, invoice_date, fel_document_type"
             )
+            .is("deleted_at", null)
             .eq("purchase_book_id", bookId)
             .eq("enterprise_id", enterpriseId)
         );
@@ -1080,11 +1082,18 @@ export function ImportPurchasesDialog({
         for (const record of recordsToUpsert) {
           const { __sourceRow, ...payload } = record;
 
+          // Sobrescribir = borrado lógico de la fila vieja + inserción de la nueva.
+          // Los índices únicos son parciales (WHERE deleted_at IS NULL), así que la
+          // fila marcada como borrada no bloquea la nueva.
           // Prefer delete by id (more reliable) if we can map it
           const keyWithBook = `${payload.supplier_nit}|${payload.fel_document_type}|${payload.invoice_series || ''}|${payload.invoice_number}|${payload.purchase_book_id}`;
           const existingId = existingByKey.get(keyWithBook);
 
-          let deleteQuery = supabase.from("tab_purchase_ledger").delete();
+          if (!createdBy) throw new Error("No autenticado");
+          let deleteQuery = supabase
+            .from("tab_purchase_ledger")
+            .update({ deleted_at: new Date().toISOString(), deleted_by: createdBy })
+            .is("deleted_at", null);
 
           if (existingId) {
             deleteQuery = deleteQuery.eq("id", existingId);

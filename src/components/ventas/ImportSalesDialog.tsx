@@ -153,6 +153,7 @@ async function checkDuplicates(
   const { data: existing, error } = await supabase
     .from("tab_sales_ledger")
     .select("fel_document_type, invoice_series, invoice_number, invoice_date")
+    .is("deleted_at", null)
     .eq("enterprise_id", enterpriseId)
     .gte("invoice_date", minDate)
     .lte("invoice_date", maxDate)

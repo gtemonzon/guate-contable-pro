@@ -229,6 +229,7 @@ export function LegacyImportWizard({
       supabase
         .from("tab_purchase_ledger")
         .select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId),
       supabase
         .from("tab_purchase_books")
@@ -237,6 +238,7 @@ export function LegacyImportWizard({
       supabase
         .from("tab_sales_ledger")
         .select("id", { count: "exact", head: true })
+        .is("deleted_at", null)
         .eq("enterprise_id", enterpriseId),
       supabase
         .from("tab_journal_entries")

@@ -35,6 +35,17 @@ export const GLOBAL_IGNORED_FIELDS: readonly string[] = [
   "enterprise_id",
 ];
 
+// ── Tablas con borrado lógico ───────────────────────────────────────
+// En estas tablas un borrado es un UPDATE que llena deleted_at/deleted_by, así
+// que esos dos campos SÍ se muestran (son el cambio) aunque estén en
+// GLOBAL_IGNORED_FIELDS. En cualquier otra tabla siguen ocultos.
+export const SOFT_DELETE_TABLES: readonly string[] = [
+  "tab_purchase_ledger",
+  "tab_sales_ledger",
+];
+
+const SOFT_DELETE_FIELDS: readonly string[] = ["deleted_at", "deleted_by"];
+
 // ── Per-table: system / computed fields (shown collapsed) ───────────
 export const SYSTEM_FIELDS_BY_TABLE: Record<string, readonly string[]> = {
   tab_journal_entries: [
@@ -119,6 +130,12 @@ export const FIELD_LABELS: Record<string, string> = {
   // sales
   customer_name: "Cliente",
   customer_nit: "NIT Cliente",
+  authorization_number: "Número de Autorización",
+
+  // authorship / soft delete
+  created_by: "Creado Por",
+  deleted_at: "Fecha de Eliminación",
+  deleted_by: "Eliminado Por",
 
   // periods
   year: "Año",
@@ -162,19 +179,61 @@ export const ACTION_LABELS: Record<string, string> = {
   INSERT: "Creación",
   UPDATE: "Modificación",
   DELETE: "Eliminación",
+  RESTORE: "Restauración",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-/** Returns true if a field should be completely hidden from audit display. */
-export function isIgnoredField(field: string): boolean {
+/**
+ * Returns true if a field should be completely hidden from audit display.
+ * deleted_at / deleted_by are NOT hidden for soft-delete tables (see SOFT_DELETE_TABLES).
+ */
+export function isIgnoredField(field: string, tableName?: string): boolean {
+  if (tableName && SOFT_DELETE_TABLES.includes(tableName) && SOFT_DELETE_FIELDS.includes(field)) {
+    return false;
+  }
   return (GLOBAL_IGNORED_FIELDS as readonly string[]).includes(field);
+}
+
+/**
+ * Detects a soft delete (deleted_at null → value) or restore (value → null)
+ * in an UPDATE on a soft-delete table. Returns null for any other change.
+ */
+export function getSoftDeleteTransition(
+  action: string,
+  tableName: string,
+  oldValues: Record<string, unknown> | null,
+  newValues: Record<string, unknown> | null,
+): "delete" | "restore" | null {
+  if (action !== "UPDATE" || !SOFT_DELETE_TABLES.includes(tableName)) return null;
+  if (!oldValues || !newValues) return null;
+  const wasDeleted = oldValues.deleted_at != null;
+  const isDeleted = newValues.deleted_at != null;
+  if (!wasDeleted && isDeleted) return "delete";
+  if (wasDeleted && !isDeleted) return "restore";
+  return null;
 }
 
 /** Returns true if a field is system/computed for the given table. */
 export function isSystemField(tableName: string, field: string): boolean {
   const tableRules = SYSTEM_FIELDS_BY_TABLE[tableName];
   return tableRules ? tableRules.includes(field) : false;
+}
+
+/**
+ * Action to display for a log entry: a soft delete (UPDATE on deleted_at) is shown
+ * as DELETE and a restore as RESTORE; everything else keeps its real action.
+ */
+export function getDisplayAction(
+  action: string,
+  tableName: string,
+  oldValues: Record<string, unknown> | null,
+  newValues: Record<string, unknown> | null,
+): string {
+  const transition = getSoftDeleteTransition(action, tableName, oldValues, newValues);
+  if (transition === "delete") return "DELETE";
+  if (transition === "restore") return "RESTORE";
+  return action;
 }
 
 /** Get a human-readable label for a field name. */
@@ -209,13 +268,22 @@ export function buildChangeSummary(
     return `Eliminación de ${entityLabel}${identifier}`;
   }
 
+  // UPDATE — a soft delete / restore reads as such, not as a generic change
+  const softDelete = getSoftDeleteTransition(action, tableName, oldValues, newValues);
+  if (softDelete === "delete") {
+    return `Eliminación de ${entityLabel}${extractIdentifier(oldValues)}`;
+  }
+  if (softDelete === "restore") {
+    return `Restauración de ${entityLabel}${extractIdentifier(newValues)}`;
+  }
+
   // UPDATE — list meaningful changed fields
   if (!oldValues || !newValues) return `Modificación en ${entityLabel}`;
 
   const meaningfulChanges: string[] = [];
 
   for (const key of Object.keys(newValues)) {
-    if (isIgnoredField(key)) continue;
+    if (isIgnoredField(key, tableName)) continue;
     if (isSystemField(tableName, key)) continue;
 
     const oldVal = oldValues[key];
@@ -288,7 +356,7 @@ export function categoriseChanges(
 
   if (action === "INSERT") {
     for (const [key, value] of Object.entries(newValues || {})) {
-      if (isIgnoredField(key)) continue;
+      if (isIgnoredField(key, tableName)) continue;
       const cat = isSystemField(tableName, key) ? "system" : "meaningful";
       const change: AuditFieldChange = {
         field: key,
@@ -304,7 +372,7 @@ export function categoriseChanges(
 
   if (action === "DELETE") {
     for (const [key, value] of Object.entries(oldValues || {})) {
-      if (isIgnoredField(key)) continue;
+      if (isIgnoredField(key, tableName)) continue;
       const cat = isSystemField(tableName, key) ? "system" : "meaningful";
       const change: AuditFieldChange = {
         field: key,
@@ -325,7 +393,7 @@ export function categoriseChanges(
   ]);
 
   for (const key of allKeys) {
-    if (isIgnoredField(key)) continue;
+    if (isIgnoredField(key, tableName)) continue;
 
     const oldVal = oldValues?.[key];
     const newVal = newValues?.[key];
