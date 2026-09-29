@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AccountBalanceInspector } from "./AccountBalanceInspector";
-import VoidChequeDialog from "./VoidChequeDialog";
+import VoidChequeDialog, { type VoidBankDocumentResult } from "./VoidChequeDialog";
 import { MetadataEditDialog } from "./MetadataEditDialog";
 import { PurchaseLinkManager } from "./PurchaseLinkManager";
 import { ReferenceBadges } from "./ReferenceBadges";
@@ -39,6 +39,8 @@ interface JournalEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (savedEntryId?: number) => void;
+  /** Abre otra partida en el editor (p. ej. el borrador de reemplazo tras anular un documento). */
+  onOpenEntry?: (entryId: number) => void;
   entryToEdit?: {
     id: number;
     entry_number: string;
@@ -58,6 +60,7 @@ export default function JournalEntryDialog({
   open,
   onOpenChange,
   onSuccess,
+  onOpenEntry,
   entryToEdit = null,
 }: JournalEntryDialogProps) {
   // form declared below after handleFormSuccess
@@ -420,26 +423,12 @@ export default function JournalEntryDialog({
         enterpriseId={enterpriseId}
       />
 
-      {/* Void Cheque Dialog */}
+      {/* Anular documento bancario (void_bank_document / void_bank_document_number) */}
       <VoidChequeDialog
         open={voidChequeOpen}
         onOpenChange={setVoidChequeOpen}
-        entry={entryToEdit ? {
-          id: entryToEdit.id,
-          entry_number: entryToEdit.entry_number,
-          entry_date: entryToEdit.entry_date,
-          description: entryToEdit.description,
-          total_debit: entryToEdit.total_debit,
-          total_credit: entryToEdit.total_credit,
-          is_posted: entryToEdit.is_posted,
-          accounting_period_id: entryToEdit.accounting_period_id,
-          enterprise_id: enterpriseId,
-          bank_account_id: form.bankAccountId,
-          bank_reference: form.bankReference,
-          beneficiary_name: form.beneficiaryName,
-          bank_direction: form.bankDirection,
-        } : null}
-        formValues={!entryToEdit ? {
+        entryId={entryToEdit?.id ?? form.draftEntryId ?? null}
+        formValues={!entryToEdit && !form.draftEntryId ? {
           enterpriseId,
           bankAccountId: form.bankAccountId,
           bankReference: form.bankReference,
@@ -447,12 +436,19 @@ export default function JournalEntryDialog({
           entryDate: form.entryDate,
           description: form.headerDescription,
           bankDirection: form.bankDirection,
-          draftEntryId: form.draftEntryId,
         } : undefined}
-        onSuccess={async () => {
-          // After voiding: cleanup draft if any, close dialog, refresh list
-          await form.handleDiscardAndClose();
-          onSuccess();
+        onSuccess={async (result: VoidBankDocumentResult) => {
+          if (result.mode === "number_only") {
+            // Formulario sin guardar: no queda partida que conservar.
+            await form.handleDiscardAndClose();
+            onSuccess();
+            return;
+          }
+          // La partida sigue existiendo (y el documento VOID la referencia): no borrarla.
+          form.closeWithoutCleanup();
+          const openTarget = result.replacement_entry_id ?? result.reversal_entry_id ?? null;
+          onSuccess(openTarget ?? result.original_entry_id ?? undefined);
+          if (openTarget && onOpenEntry) onOpenEntry(openTarget);
         }}
       />
 

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import JournalEntryDialog from "@/components/partidas/JournalEntryDialog";
 import JournalEntryViewDialog from "@/components/partidas/JournalEntryViewDialog";
 import VoidEntryDialog from "@/components/partidas/VoidEntryDialog";
+import VoidChequeDialog, { type VoidBankDocumentResult } from "@/components/partidas/VoidChequeDialog";
 import { MetadataEditDialog } from "@/components/partidas/MetadataEditDialog";
 import YearMonthFilter from "@/components/partidas/YearMonthFilter";
 import EntryDetailPanel from "@/components/partidas/EntryDetailPanel";
@@ -99,6 +100,8 @@ export default function Partidas() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showVoidDialog, setShowVoidDialog] = useState(false);
+  // Anular documento bancario de una partida contabilizada (desde el panel)
+  const [voidDocumentEntryId, setVoidDocumentEntryId] = useState<number | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [viewingEntryId, setViewingEntryId] = useState<number | null>(null);
   const [voidingEntry, setVoidingEntry] = useState<JournalEntry | null>(null);
@@ -615,6 +618,33 @@ export default function Partidas() {
     }
   };
 
+  /** Abre una partida por id en el editor (borradores) y la selecciona en el panel. */
+  const openEntryForEdit = async (entryId: number) => {
+    const { data, error } = await supabase
+      .from("tab_journal_entries")
+      .select("*")
+      .eq("id", entryId)
+      .maybeSingle();
+    if (error || !data) return;
+    const entry = {
+      ...(data as JournalEntry),
+      status: (data.status || (data.is_posted ? 'contabilizado' : 'borrador')) as EntryStatus,
+    };
+    setSelectedEntryId(entry.id);
+    setSplitViewOpen(true);
+    if (entry.status !== 'contabilizado') {
+      setEditingEntry(entry);
+      setShowEditDialog(true);
+    }
+  };
+
+  const handleVoidDocumentSuccess = (result: VoidBankDocumentResult) => {
+    if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+    setDetailRefreshKey(k => k + 1);
+    const target = result.replacement_entry_id ?? result.reversal_entry_id ?? null;
+    if (target) openEntryForEdit(target);
+  };
+
   const handleDeleteDraftFromPanel = (entryId: number, entryNumber: string) => {
     setDeleteTarget({ id: entryId, number: entryNumber });
     setShowDeleteDialog(true);
@@ -1027,6 +1057,10 @@ export default function Partidas() {
                 onVoid={handleVoidFromPanel}
                 onDeleteDraft={permissions.canCreateEntries ? handleDeleteDraftFromPanel : undefined}
                 onReopen={permissions.canPostEntries ? handleReopenFromPanel : undefined}
+                onVoidDocument={(id) => setVoidDocumentEntryId(id)}
+                onEntriesChanged={() => {
+                  if (currentEnterpriseId) fetchEntries(currentEnterpriseId, filterYear);
+                }}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -1052,7 +1086,15 @@ export default function Partidas() {
           setDetailRefreshKey(k => k + 1);
           setEditingEntry(null);
         }}
+        onOpenEntry={openEntryForEdit}
         entryToEdit={editingEntry}
+      />
+
+      <VoidChequeDialog
+        open={voidDocumentEntryId !== null}
+        onOpenChange={(open) => { if (!open) setVoidDocumentEntryId(null); }}
+        entryId={voidDocumentEntryId}
+        onSuccess={handleVoidDocumentSuccess}
       />
 
       <JournalEntryViewDialog

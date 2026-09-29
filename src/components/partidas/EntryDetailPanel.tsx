@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle, Trash2, Unlock,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle, Trash2, Unlock, Ban, Undo2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
@@ -94,9 +94,20 @@ interface EntryDetailPanelProps {
   onDeleteDraft?: (entryId: number, entryNumber: string) => void;
   onReopen?: (entryId: number, entryNumber: string) => void;
   onOpenInJournal?: (entryId: number) => void;
+  /** Anular el documento bancario (cheque) de una partida contabilizada. */
+  onVoidDocument?: (entryId: number) => void;
+  /** Notifica que la lista de partidas cambió (p. ej. al deshacer una anulación). */
+  onEntriesChanged?: () => void;
 }
 
-export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onDeleteDraft, onReopen, onOpenInJournal }: EntryDetailPanelProps) {
+/** Documento bancario VOID ligado a la partida (original o REV). */
+interface VoidDocInfo {
+  id: number;
+  document_number: string;
+  reversal_journal_entry_id: number | null;
+}
+
+export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onDeleteDraft, onReopen, onOpenInJournal, onVoidDocument, onEntriesChanged }: EntryDetailPanelProps) {
   const [loading, setLoading] = useState(false);
   const [entry, setEntry] = useState<EntryData | null>(null);
   const [linkedPurchases, setLinkedPurchases] = useState<LinkedPurchase[]>([]);
@@ -105,6 +116,8 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
   const [reversalInfo, setReversalInfo] = useState<{ entry_number: string; status: string; id: number } | null>(null);
   const [reversedByInfo, setReversedByInfo] = useState<{ entry_number: string; id: number } | null>(null);
   const [postingReversal, setPostingReversal] = useState(false);
+  const [voidDoc, setVoidDoc] = useState<VoidDocInfo | null>(null);
+  const [undoingVoid, setUndoingVoid] = useState(false);
   const [ledgerDrawerAccount, setLedgerDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
   const { selectedEnterpriseId } = useEnterprise();
   const navigate = useNavigate();
@@ -121,6 +134,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
       setDateContext(null);
       setReversalInfo(null);
       setReversedByInfo(null);
+      setVoidDoc(null);
     }
   }, [entryId]);
 
@@ -188,6 +202,15 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         setReversedByInfo(null);
       }
 
+      // Documento bancario anulado ligado a esta partida (como original o como REV)
+      const { data: voidDocs } = await supabase
+        .from("tab_bank_documents")
+        .select("id, document_number, reversal_journal_entry_id")
+        .eq("status", "VOID")
+        .or(`reversal_journal_entry_id.eq.${id},journal_entry_id.eq.${id}`)
+        .limit(5);
+      setVoidDoc(((voidDocs || []) as VoidDocInfo[]).find((d) => d.reversal_journal_entry_id != null) ?? null);
+
       // Derive date context from accounting period or entry date
       if (entryData.accounting_period_id) {
         const { data: period } = await supabase
@@ -220,6 +243,40 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
       setLinkedPurchases(data || []);
     } catch {
       // ignore - non-critical lookup
+    }
+  };
+
+  const handleUndoVoid = async () => {
+    if (!voidDoc) return;
+    try {
+      setUndoingVoid(true);
+      const { data, error } = await supabase.rpc("undo_void_bank_document", { p_bank_document_id: voidDoc.id });
+      if (error) throw error;
+      const result = (data ?? {}) as {
+        deleted_reversal_entry_number?: string;
+        unlinked_purchase_ids?: number[];
+        replacement_entry_number?: string | null;
+      };
+      const unlinked = result.unlinked_purchase_ids?.length ?? 0;
+      const parts = [`Se eliminó la reversión ${result.deleted_reversal_entry_number ?? ""} y el número ${voidDoc.document_number} quedó libre.`];
+      if (result.replacement_entry_number) {
+        parts.push(`El borrador de reemplazo ${result.replacement_entry_number} sigue existiendo; elimínalo si ya no lo necesitas.`);
+      } else if (unlinked > 0) {
+        parts.push(`${unlinked} factura(s) quedaron desvinculadas: vuelve a vincularlas desde "Vincular Facturas".`);
+      }
+      toast({ title: "Anulación deshecha", description: parts.join(" ") });
+      onEntriesChanged?.();
+      // Si se estaba viendo la REV, ya no existe.
+      if (entry && voidDoc.reversal_journal_entry_id === entry.id) {
+        onClose();
+      } else if (entryId) {
+        fetchEntry(entryId);
+        fetchLinkedPurchases(entryId);
+      }
+    } catch (err: unknown) {
+      toast({ title: "No se pudo deshacer la anulación", description: getSafeErrorMessage(err), variant: "destructive" });
+    } finally {
+      setUndoingVoid(false);
     }
   };
 
@@ -324,6 +381,20 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
               </TooltipContent>
             </Tooltip>
           )}
+          {onVoidDocument && entry.status === 'contabilizado' && entry.bank_account_id && entry.bank_reference
+            && !entry.reversal_entry_id && !entry.reversed_by_entry_id
+            && entry.entry_type !== 'apertura' && entry.entry_type !== 'cierre' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => onVoidDocument(entry.id)}>
+                  <Ban className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Anular documento {entry.bank_reference}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {onDeleteDraft && entry.status === 'borrador' && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -378,6 +449,18 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
               <span>Corrección pendiente: <strong>{reversalInfo.entry_number}</strong> no contabilizada aún.</span>
             )}
           </div>
+          {reversalInfo.status !== 'contabilizado' && voidDoc?.reversal_journal_entry_id === reversalInfo.id && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              disabled={undoingVoid}
+              onClick={handleUndoVoid}
+            >
+              <Undo2 className="h-3 w-3 mr-1" />
+              Deshacer anulación
+            </Button>
+          )}
           {reversalInfo.status !== 'contabilizado' && (
             <Button
               variant="outline"
@@ -411,7 +494,19 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
       {reversedByInfo && (
         <div className="mx-4 mt-2 flex items-center gap-2 p-2.5 rounded-lg border text-xs bg-muted/50 border-border text-muted-foreground">
           <RotateCcw className="h-4 w-4 flex-shrink-0" />
-          <span>Esta partida es reversión de <strong>{reversedByInfo.entry_number}</strong></span>
+          <span className="flex-1">Esta partida es reversión de <strong>{reversedByInfo.entry_number}</strong></span>
+          {entry.status === 'borrador' && voidDoc?.reversal_journal_entry_id === entry.id && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              disabled={undoingVoid}
+              onClick={handleUndoVoid}
+            >
+              <Undo2 className="h-3 w-3 mr-1" />
+              Deshacer anulación
+            </Button>
+          )}
         </div>
       )}
 

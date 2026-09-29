@@ -52,35 +52,6 @@ export interface AuditInfo {
   updatedAt: string | null;
 }
 
-const getMonthBounds = (isoDate: string) => {
-  const year = Number(isoDate.slice(0, 4));
-  const month = Number(isoDate.slice(5, 7));
-  if (!year || !month) return null;
-
-  const nextYear = month === 12 ? year + 1 : year;
-  const nextMonth = month === 12 ? 1 : month + 1;
-
-  return {
-    start: `${year}-${String(month).padStart(2, "0")}-01`,
-    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`,
-    key: `${year}-${String(month).padStart(2, "0")}`,
-  };
-};
-
-const parseBankReference = (value?: string | null) => {
-  const match = value?.trim().match(/^(.*?)(\d+)$/);
-  if (!match) return null;
-  return {
-    value: value.trim(),
-    prefix: match[1],
-    sequence: Number(match[2]),
-    width: match[2].length,
-  };
-};
-
-const formatNextBankReference = (prefix: string, sequence: number, width: number) =>
-  `${prefix}${String(sequence).padStart(width, "0")}`;
-
 interface EntryToEdit {
   id: number;
   entry_number: string;
@@ -338,14 +309,15 @@ export function useJournalEntryForm(
 
   // No longer preview entry numbers on open — numbers are assigned only at save time
 
+  // Sugerencia del siguiente número de documento: último número de la cuenta sin
+  // importar el mes (next_bank_document_number: partidas + documentos, incluidos
+  // los anulados, que también queman el número).
   useEffect(() => {
-    if (!open || !bankAccountId || !entryDate || entryToEdit) return;
+    if (!open || !bankAccountId || entryToEdit) return;
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
     if (!enterpriseId) return;
     const entId = parseInt(enterpriseId);
-    const monthBounds = getMonthBounds(entryDate);
-    if (!monthBounds) return;
-    const contextKey = `${entId}:${bankAccountId}:${bankDirection}:${monthBounds.key}`;
+    const contextKey = `${entId}:${bankAccountId}:${bankDirection}`;
     const currentSuggestion = suggestedBankReferenceRef.current;
     const canReplaceReference = !bankReference || bankReference === currentSuggestion?.value;
     if (!canReplaceReference) return;
@@ -353,65 +325,17 @@ export function useJournalEntryForm(
 
     let cancelled = false;
     (async () => {
-      const [{ data: monthlyEntries }, { data: bankAcct }] = await Promise.all([
-        supabase
-          .from("tab_journal_entries")
-          .select("bank_reference, entry_date, created_at")
-          .eq("enterprise_id", entId)
-          .eq("bank_account_id", bankAccountId)
-          .eq("bank_direction", bankDirection)
-          .gte("entry_date", monthBounds.start)
-          .lt("entry_date", monthBounds.end)
-          .not("bank_reference", "is", null)
-          .is("deleted_at", null)
-          .order("entry_date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("tab_bank_accounts")
-          .select("id")
-          .eq("account_id", bankAccountId)
-          .eq("enterprise_id", entId)
-          .maybeSingle(),
-      ]);
-
-      const parsedEntries = (monthlyEntries || [])
-        .map((row: { bank_reference: string | null }) => parseBankReference(row.bank_reference))
-        .filter(Boolean) as Array<NonNullable<ReturnType<typeof parseBankReference>>>;
-
-      let parsedDocs: Array<NonNullable<ReturnType<typeof parseBankReference>>> = [];
-      if (bankAcct?.id) {
-        const { data: docs } = await supabase
-          .from("tab_bank_documents")
-          .select("document_number")
-          .eq("enterprise_id", entId)
-          .eq("bank_account_id", bankAcct.id)
-          .eq("direction", bankDirection)
-          .gte("document_date", monthBounds.start)
-          .lt("document_date", monthBounds.end)
-          .order("document_date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(200);
-
-        parsedDocs = (docs || [])
-          .map((row: { document_number: string | null }) => parseBankReference(row.document_number))
-          .filter(Boolean) as Array<NonNullable<ReturnType<typeof parseBankReference>>>;
-      }
-
-      const seedReference = parsedEntries[0] || parsedDocs[0];
-      if (!seedReference) return;
-
-      const sameSeries = [...parsedEntries, ...parsedDocs].filter((ref) => ref.prefix === seedReference.prefix);
-      const maxSequence = sameSeries.reduce((max, ref) => Math.max(max, ref.sequence), seedReference.sequence);
-      const nextReference = formatNextBankReference(seedReference.prefix, maxSequence + 1, seedReference.width);
-
-      if (!cancelled) {
-        suggestedBankReferenceRef.current = { value: nextReference, context: contextKey };
-        if (bankReference !== nextReference) setBankReference(nextReference);
-      }
+      const { data: nextReference, error } = await supabase.rpc("next_bank_document_number", {
+        p_enterprise_id: entId,
+        p_bank_gl_account_id: bankAccountId,
+        p_direction: bankDirection,
+      });
+      if (error || !nextReference || cancelled) return;
+      suggestedBankReferenceRef.current = { value: nextReference, context: contextKey };
+      if (bankReference !== nextReference) setBankReference(nextReference);
     })();
     return () => { cancelled = true; };
-  }, [open, bankAccountId, bankDirection, entryDate, bankReference, entryToEdit]);
+  }, [open, bankAccountId, bankDirection, bankReference, entryToEdit]);
 
   // ─── Auto Bank Line Management (single invariant) ──────────────────
   useEffect(() => {
@@ -1165,6 +1089,12 @@ export function useJournalEntryForm(
       onOpenChange(false);
     },
     handleSaveDraftAndClose: async () => { setShowCloseConfirm(false); await saveEntry(false); },
+    /** Cierra sin borrar el borrador automático (p. ej. tras anular su documento bancario). */
+    closeWithoutCleanup: () => {
+      setShowCloseConfirm(false);
+      resetForm();
+      onOpenChange(false);
+    },
     permissions, formatDateTime,
   };
 }
