@@ -5659,6 +5659,14 @@ export type Database = {
         Args: { p_enterprise_id: number }
         Returns: number
       }
+      next_bank_document_number: {
+        Args: {
+          p_bank_gl_account_id: number
+          p_direction: string
+          p_enterprise_id: number
+        }
+        Returns: string | null
+      }
       preview_next_entry_number: {
         Args: {
           p_enterprise_id: number
@@ -5701,6 +5709,10 @@ export type Database = {
       }
       reverse_fx_revaluation: { Args: { p_run_id: number }; Returns: number }
       run_audit_log_purge: { Args: never; Returns: Json }
+      undo_void_bank_document: {
+        Args: { p_bank_document_id: number }
+        Returns: Json
+      }
       update_posted_entry_metadata: {
         Args: {
           p_bank_reference?: string
@@ -5716,6 +5728,31 @@ export type Database = {
       user_is_linked_to_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
+      }
+      void_bank_document: {
+        Args: {
+          p_create_replacement?: boolean
+          p_entry_id: number
+          p_reason: string
+          p_replacement_date?: string
+          p_replacement_number?: string
+          p_void_date: string
+        }
+        Returns: Json
+      }
+      void_bank_document_number: {
+        Args: {
+          p_bank_gl_account_id: number
+          p_beneficiary_name?: string
+          p_concept?: string
+          p_direction: string
+          p_document_date: string
+          p_document_number: string
+          p_enterprise_id: number
+          p_reason: string
+          p_void_date?: string
+        }
+        Returns: Json
       }
       validate_invoice_date: {
         Args: { book_month: number; book_year: number; invoice_date: string }

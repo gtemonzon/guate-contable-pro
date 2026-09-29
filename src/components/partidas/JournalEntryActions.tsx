@@ -46,7 +46,7 @@ export function JournalEntryActions({
   onCancel, onSaveDraft, onPost, onVoidCheque, onEditMetadata, onLinkPurchases, onLiquidateForeignInvoice,
   auditInfo, formatDateTime,
 }: JournalEntryActionsProps) {
-  // Show void cheque when: bank account is set, has a reference, and entry is not already posted with amounts
+  // Show "Anular documento" when: bank account is set and has a reference
   const showVoidCheque = hasBankAccount && hasBankReference;
   return (
     <>
@@ -97,7 +97,7 @@ export function JournalEntryActions({
           {showVoidCheque && !isReadOnly && (
             <Button variant="outline" onClick={onVoidCheque} disabled={loading} className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/20">
               <Ban className="mr-2 h-4 w-4" />
-              Anular Cheque
+              Anular documento
             </Button>
           )}
 

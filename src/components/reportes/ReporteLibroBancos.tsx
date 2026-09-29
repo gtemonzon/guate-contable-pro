@@ -55,6 +55,20 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   VOID: "destructive",
 };
 
+
+/**
+ * Concepto de una fila VOID: "<concepto> — ANULADO el dd/mm/aaaa: <motivo>" (fecha real
+ * de anulación). Las anulaciones antiguas guardaban "— ANULADO: <motivo>" dentro del
+ * concepto; ese sufijo se quita para no duplicarlo.
+ */
+function buildVoidConcept(concept: string | null, voidDate: string | null, voidReason: string | null): string {
+  const base = (concept || "").replace(/\s*—\s*ANULADO:.*$/s, "").trim();
+  const [y, m, d] = (voidDate || "").split("-");
+  const when = voidDate ? ` el ${d}/${m}/${y}` : "";
+  const reason = voidReason ? `: ${voidReason}` : "";
+  return `${base ? `${base} — ` : ""}ANULADO${when}${reason}`;
+}
+
 export default function ReporteLibroBancos() {
   const [searchParams] = useSearchParams();
   const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
@@ -196,7 +210,7 @@ export default function ReporteLibroBancos() {
             date: doc.document_date,
             document_number: doc.document_number,
             beneficiary: doc.beneficiary_name || "",
-            concept: doc.concept || "",
+            concept: isVoid ? buildVoidConcept(doc.concept, doc.void_date, doc.void_reason) : (doc.concept || ""),
             direction: doc.direction,
             debit: isVoid ? 0 : 0,
             credit: isVoid ? 0 : 0,

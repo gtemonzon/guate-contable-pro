@@ -180,6 +180,8 @@ export const ACTION_LABELS: Record<string, string> = {
   UPDATE: "Modificación",
   DELETE: "Eliminación",
   RESTORE: "Restauración",
+  VOID_BANK_DOCUMENT: "Anulación de documento",
+  UNDO_VOID_BANK_DOCUMENT: "Anulación deshecha",
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
