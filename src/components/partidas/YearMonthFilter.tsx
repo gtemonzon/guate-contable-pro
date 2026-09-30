@@ -13,10 +13,8 @@ interface YearMonthFilterProps {
   onMonthsChange: (months: number[]) => void;
   /** Optional override for available years and per-year counts (used when entries are loaded lazily by year). */
   yearCountsOverride?: Record<string, number>;
-  /** Compact mode: shows only the selected chip (used when the page header is compressed on scroll). */
+  /** Compact mode: shows the selected chip and opens the full selector in a popover. */
   compact?: boolean;
-  /** Called when the user clicks the compact chip, to request re-expansion. */
-  onExpandRequest?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -37,7 +35,6 @@ export default function YearMonthFilter({
   onMonthsChange,
   yearCountsOverride,
   compact = false,
-  onExpandRequest,
 }: YearMonthFilterProps) {
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
@@ -140,33 +137,7 @@ export default function YearMonthFilter({
     return selectedYear === year;
   };
 
-  // Modo compacto: solo el chip seleccionado (año o "Todo")
-  if (compact) {
-    const label = selectedYear && selectedYear !== "all" ? selectedYear : "Todo";
-    const count = selectedYear && selectedYear !== "all"
-      ? (countByYear[selectedYear] || 0)
-      : (countByYear.all || 0);
-    return (
-      <div className="flex items-center gap-2">
-        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-        <Button
-          variant="default"
-          size="sm"
-          className="h-7 text-xs transition-all"
-          onClick={() => onExpandRequest?.()}
-          title="Mostrar todos los períodos"
-        >
-          {label}
-          <Badge variant="secondary" className="ml-2 text-[10px]">
-            {count}
-          </Badge>
-          <ChevronDown className="ml-1 h-3 w-3" />
-        </Button>
-      </div>
-    );
-  }
-
-  return (
+  const fullSelector = (
     <div className="space-y-3">
       {/* Selector de Años */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -350,4 +321,40 @@ export default function YearMonthFilter({
       )}
     </div>
   );
+
+  if (compact) {
+    const yearLabel = selectedYear && selectedYear !== "all" ? selectedYear : "Todo";
+    const monthsLabel = selectedMonths.length > 3
+      ? `${selectedMonths.length} meses`
+      : selectedMonths.map((month) => MONTH_NAMES[month - 1]).join(", ");
+    const label = monthsLabel ? `${yearLabel} · ${monthsLabel}` : yearLabel;
+    const count = selectedYear && selectedYear !== "all"
+      ? (countByYear[selectedYear] || 0)
+      : (countByYear.all || 0);
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 text-xs"
+            title="Seleccionar períodos"
+          >
+            <Calendar className="mr-1 h-3.5 w-3.5" />
+            {label}
+            <Badge variant="secondary" className="ml-2 text-[10px]">
+              {count}
+            </Badge>
+            <ChevronDown className="ml-1 h-3 w-3" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[min(92vw,640px)] p-3">
+          {fullSelector}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  return fullSelector;
 }
