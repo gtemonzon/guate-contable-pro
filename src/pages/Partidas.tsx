@@ -146,39 +146,6 @@ export default function Partidas() {
   const permissions = useUserPermissions();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Compactación progresiva del encabezado al hacer scroll
-  // Se usa un callback ref: el contenedor se re-monta al abrir/cerrar el split view,
-  // por lo que un useEffect con ref.current perdería el listener.
-  const scrollCleanupRef = useRef<(() => void) | null>(null);
-  const [isCompact, setIsCompact] = useState(false);
-  const [forceExpanded, setForceExpanded] = useState(false);
-
-  const listScrollRef = useCallback((el: HTMLDivElement | null) => {
-    scrollCleanupRef.current?.();
-    scrollCleanupRef.current = null;
-    if (!el) return;
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        const compact = el.scrollTop > 40;
-        setIsCompact(compact);
-        if (!compact) setForceExpanded(false);
-        ticking = false;
-      });
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    // sincroniza el estado con la posición actual al (re)montar
-    setIsCompact(el.scrollTop > 40);
-    scrollCleanupRef.current = () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => () => scrollCleanupRef.current?.(), []);
-
-  const headerCompact = isCompact && !forceExpanded;
-
-
   // Mostrar "Revaluación FX" solo si la empresa tiene monedas adicionales activas
   const { data: hasForeignCurrencies = false } = useQuery({
     queryKey: ['enterprise-foreign-currencies', currentEnterpriseId],
@@ -682,15 +649,14 @@ export default function Partidas() {
       onYearChange={setFilterYear}
       onMonthsChange={setFilterMonths}
       yearCountsOverride={yearCounts}
-      compact={headerCompact}
-      onExpandRequest={() => setForceExpanded(true)}
+      compact
     />
   );
 
   const filterControlsEl = (
     <>
       <Select value={filterStatus} onValueChange={setFilterStatus}>
-        <SelectTrigger className={cn("h-8 text-xs", headerCompact ? "w-[110px]" : "w-[130px]")}>
+        <SelectTrigger className="h-8 text-xs w-[110px]">
           <SelectValue placeholder="Estado" />
         </SelectTrigger>
         <SelectContent>
@@ -704,7 +670,7 @@ export default function Partidas() {
       </Select>
 
       <Select value={filterType} onValueChange={setFilterType}>
-        <SelectTrigger className={cn("h-8 text-xs", headerCompact ? "w-[95px]" : "w-[110px]")}>
+        <SelectTrigger className="h-8 text-xs w-[95px]">
           <SelectValue placeholder="Tipo" />
         </SelectTrigger>
         <SelectContent>
@@ -717,10 +683,10 @@ export default function Partidas() {
       </Select>
 
       <Input
-        placeholder={headerCompact ? "Buscar..." : "Buscar #, ref, cheque..."}
+        placeholder="Buscar..."
         value={filterNumber}
         onChange={(e) => setFilterNumber(e.target.value)}
-        className={cn("h-8 text-xs", headerCompact ? "w-[90px]" : "w-[120px]")}
+        className="h-8 text-xs w-[90px]"
       />
 
       {(filterNumber || filterType !== "all" || filterStatus !== "all" || filterYear) && (
@@ -728,8 +694,6 @@ export default function Partidas() {
           Limpiar
         </Button>
       )}
-
-      {!headerCompact && <div className="flex-1" />}
 
       <div className="flex items-center gap-1">
         <Button
@@ -772,28 +736,13 @@ export default function Partidas() {
   const entryList = (
     <div className="flex flex-col h-full">
       {/* Sticky Header */}
-      <div className={cn(
-        "sticky top-0 z-20 bg-muted/80 backdrop-blur-sm px-4 border-b transition-all duration-200",
-        headerCompact ? "pt-2 pb-2" : "pt-4 pb-3"
-      )}>
-        <div className={cn(
-          "flex justify-between items-center gap-2 transition-all duration-200",
-          headerCompact ? "mb-0" : "mb-3"
-        )}>
-          {headerCompact ? (
-            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 overflow-x-auto">
-              <h1 className="font-bold leading-tight text-sm whitespace-nowrap mr-1">Partidas</h1>
-              {periodFilterEl}
-              {filterControlsEl}
-            </div>
-          ) : (
-            <div>
-              <h1 className="font-bold leading-tight text-2xl transition-all duration-200">
-                Partidas Contables
-              </h1>
-              <p className="text-xs text-muted-foreground">Libro diario de la empresa</p>
-            </div>
-          )}
+      <div className="sticky top-0 z-20 bg-muted/80 backdrop-blur-sm px-4 border-b pt-2 pb-2">
+        <div className="flex justify-between items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 overflow-x-auto">
+            <h1 className="font-bold leading-tight text-sm whitespace-nowrap mr-1">Partidas</h1>
+            {periodFilterEl}
+            {filterControlsEl}
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             {permissions.canApproveEntries && pendingReviewCount > 0 && (
               <Badge variant="outline" className="border-amber-400 text-amber-600 dark:text-amber-400 gap-1">
@@ -816,50 +765,40 @@ export default function Partidas() {
             </Tooltip>
             {permissions.canCreateEntries && (
               <>
-                {hasForeignCurrencies && !headerCompact && (
+                {hasForeignCurrencies && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        size="sm"
+                        size="icon"
                         variant="outline"
+                        className="h-8 w-8"
                         onClick={() => setShowFxWizard(true)}
                         disabled={!currentEnterpriseId}
                       >
-                        <RefreshCw className="mr-1.5 h-4 w-4" />
-                        Revaluación FX
+                        <RefreshCw className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Revaluación cambiaria — Diferencial NO realizado</TooltipContent>
                   </Tooltip>
                 )}
-                <Button size="sm" onClick={() => setShowEditDialog(true)}>
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  Nueva
-                  {!headerCompact && (
-                    <kbd className="ml-1.5 px-1 py-0.5 text-[10px] bg-primary-foreground/20 rounded border border-primary-foreground/30 font-mono">
-                      Alt+N
-                    </kbd>
-                  )}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" onClick={() => setShowEditDialog(true)}>
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Nueva
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Nueva partida (Alt+N)</TooltipContent>
+                </Tooltip>
               </>
             )}
           </div>
         </div>
-
-        {!headerCompact && (
-          <>
-            {/* Period Row */}
-            <div className="mb-2 transition-all duration-200">{periodFilterEl}</div>
-
-            {/* Filter Row */}
-            <div className="flex flex-wrap items-center gap-2">{filterControlsEl}</div>
-          </>
-        )}
       </div>
 
 
       {/* Scrollable list */}
-      <div ref={listScrollRef} className="flex-1 overflow-auto px-4 py-3">
+      <div className="flex-1 overflow-auto px-4 py-3">
         {loading ? (
           <p className="text-center text-muted-foreground py-8">Cargando partidas...</p>
         ) : filteredEntries.length === 0 ? (

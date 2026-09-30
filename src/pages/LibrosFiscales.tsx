@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Upload, Plus, Search, Loader2, AlertCircle, RefreshCw, BarChart3, ChevronDown, ChevronUp, Info, X } from "lucide-react";
@@ -231,32 +230,12 @@ export default function LibrosFiscales() {
   const [pendingLedgerDelete, setPendingLedgerDelete] = useState<
     { kind: "purchase" | "sale"; id: number; amountPaid: number } | null
   >(null);
-  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
     try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
   });
   useEffect(() => {
     try { localStorage.setItem("librosFiscales_showBreakdown", showBreakdown ? "1" : "0"); } catch {}
   }, [showBreakdown]);
-  useEffect(() => {
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        setIsHeaderCompact((prev) => {
-          const y = window.scrollY;
-          if (prev) return y > 20; // already compact: only expand if scroll drops below 20
-          return y > 60; // expanded: only compact if scroll passes 60
-        });
-        ticking = false;
-      });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");
   const [isGeneratingJournal, setIsGeneratingJournal] = useState(false);
@@ -1886,12 +1865,20 @@ export default function LibrosFiscales() {
 
   return (
     <div className="p-8">
+      {(strategy.combinedBook || strategy.headerNote) && (
+        <div className="mb-3 rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm">
+          <strong>{strategy.label}.</strong>{" "}
+          {strategy.combinedBook
+            ? "El reporte oficial es el Libro de Compras y Ventas combinado (formato SAT). Disponible en Reportes ▸ Compras y Ventas."
+            : strategy.headerNote}
+        </div>
+      )}
       {/* Header Sticky - contiene título, selectores, tabs, resúmenes y botones */}
-      <div className={`sticky top-0 z-10 bg-background transition-all duration-200 ${isHeaderCompact ? "pb-2 space-y-2 shadow-sm" : "pb-4 space-y-4"}`}>
+      <div className="sticky top-16 z-20 bg-background pb-2 space-y-2 shadow-sm">
         <div className="flex justify-between items-start gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <h1 className={`font-bold transition-all duration-200 ${isHeaderCompact ? "text-lg" : "text-3xl"}`}>
+              <h1 className="font-bold text-lg">
                 {activeTab === "compras" ? "Compras" : "Ventas"}
               </h1>
               <SaveStatusIndicator status={saveStatus} />
@@ -1900,7 +1887,7 @@ export default function LibrosFiscales() {
               ) : (
                 <IncompleteRecordsAlert groups={incompleteSaleGroups} onJumpTo={jumpToIncomplete} />
               )}
-              {isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
+              {(strategy.combinedBook || strategy.headerNote) && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1919,18 +1906,15 @@ export default function LibrosFiscales() {
                 </TooltipProvider>
               )}
             </div>
-            {!isHeaderCompact && (
-              <p className="text-muted-foreground">Registro de {activeTab === "compras" ? "compras" : "ventas"}</p>
-            )}
           </div>
-          <div className={`flex gap-2 items-end ${isHeaderCompact ? "items-center" : ""}`}>
+          <div className="flex gap-2 items-center">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
                     size="icon"
-                    className={isHeaderCompact ? "h-8 w-8" : ""}
+                    className="h-8 w-8"
                     onClick={() => setShowSearchDialog(true)}
                   >
                     <Search className="h-4 w-4" />
@@ -1940,9 +1924,8 @@ export default function LibrosFiscales() {
               </Tooltip>
             </TooltipProvider>
             <div>
-              {!isHeaderCompact && <Label htmlFor="month-select">Mes</Label>}
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
-                <SelectTrigger id="month-select" className={`transition-all ${isHeaderCompact ? "w-[110px] h-8 text-xs" : "w-[150px]"}`}>
+                <SelectTrigger id="month-select" className="w-[110px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1955,11 +1938,10 @@ export default function LibrosFiscales() {
               </Select>
             </div>
             <div>
-              {!isHeaderCompact && <Label htmlFor="year-select">Año</Label>}
               <Input
                 id="year-select"
                 type="number"
-                className={`transition-all ${isHeaderCompact ? "w-[80px] h-8 text-xs" : "w-[100px]"}`}
+                className="w-[80px] h-8 text-xs"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 min="2020"
@@ -1978,25 +1960,16 @@ export default function LibrosFiscales() {
             setEditingSaleIndex(null);
           }}
         >
-          <TabsList className={`grid w-full grid-cols-2 transition-all ${isHeaderCompact ? "h-8" : ""}`}>
-            <TabsTrigger value="compras" className={isHeaderCompact ? "text-xs py-1" : ""}>
+          <TabsList className="grid w-full grid-cols-2 h-8">
+            <TabsTrigger value="compras" className="text-xs py-1">
               {strategy.combinedBook ? "Compras (Libro Compras y Ventas)" : "Libro de Compras"}
             </TabsTrigger>
-            <TabsTrigger value="ventas" className={isHeaderCompact ? "text-xs py-1" : ""}>
+            <TabsTrigger value="ventas" className="text-xs py-1">
               {strategy.combinedBook ? "Ventas (Libro Compras y Ventas)" : "Libro de Ventas"}
             </TabsTrigger>
           </TabsList>
 
-          {!isHeaderCompact && (strategy.combinedBook || strategy.headerNote) && (
-            <div className="mt-3 rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 text-sm">
-              <strong>{strategy.label}.</strong>{" "}
-              {strategy.combinedBook
-                ? "El reporte oficial es el Libro de Compras y Ventas combinado (formato SAT). Disponible en Reportes ▸ Compras y Ventas."
-                : strategy.headerNote}
-            </div>
-          )}
-
-          <TabsContent value="compras" className={`space-y-2 ${isHeaderCompact ? "mt-2" : "mt-4"}`}>
+          <TabsContent value="compras" className="space-y-2 mt-2">
             <Collapsible open={showBreakdown} onOpenChange={setShowBreakdown} className="space-y-2">
               {/* Resumen principal */}
               <div className="flex justify-between items-center gap-2">
@@ -2147,7 +2120,7 @@ export default function LibrosFiscales() {
             </Collapsible>
           </TabsContent>
 
-          <TabsContent value="ventas" className={`space-y-2 ${isHeaderCompact ? "mt-2" : "mt-4"}`}>
+          <TabsContent value="ventas" className="space-y-2 mt-2">
             <Collapsible open={showBreakdown} onOpenChange={setShowBreakdown} className="space-y-2">
               {/* Resumen principal */}
               <div className="flex justify-between items-center gap-2">

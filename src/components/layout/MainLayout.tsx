@@ -218,7 +218,7 @@ const MainLayout = () => {
         <div className="flex flex-1 w-full">
           <AppSidebar />
           <div className="flex-1 flex flex-col min-w-0">
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
+            <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6">
             <SidebarTrigger />
 
             <div className="flex items-center gap-2">
