@@ -5665,7 +5665,7 @@ export type Database = {
           p_direction: string
           p_enterprise_id: number
         }
-        Returns: string | null
+        Returns: string
       }
       preview_next_entry_number: {
         Args: {
@@ -5729,6 +5729,10 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      validate_invoice_date: {
+        Args: { book_month: number; book_year: number; invoice_date: string }
+        Returns: boolean
+      }
       void_bank_document: {
         Args: {
           p_create_replacement?: boolean
@@ -5753,10 +5757,6 @@ export type Database = {
           p_void_date?: string
         }
         Returns: Json
-      }
-      validate_invoice_date: {
-        Args: { book_month: number; book_year: number; invoice_date: string }
-        Returns: boolean
       }
     }
     Enums: {
