@@ -35,6 +35,11 @@ import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
 import { mergeFetchedRows, shouldDeferSilentReload } from "@/utils/ledgerRowMerge";
+import { isMinimallyComplete, missingFieldsMessage, type LedgerKind } from "@/utils/ledgerMinimum";
+import {
+  ledgerDraftKey, saveLedgerDraft, readLedgerDraft, clearLedgerDraft, formatDraftTimestamp,
+} from "@/utils/ledgerDraft";
+import type { LedgerSaveOptions } from "@/hooks/useLedgerCardAutoSave";
 import {
   aggregatePurchaseJournalLines,
   buildDocTypeMap,
@@ -214,6 +219,44 @@ function debugReload(motivo: string) {
 /** Clave estable de una fila de compras (_uid: "db-<id>" o "tmp-<uuid>"). */
 const purchaseKeyOf = (p: { _uid?: string; id?: number }) => p._uid ?? (p.id ? `db-${p.id}` : "");
 
+/** Serie-número para mostrar ("A-123" o "123"). */
+const docLabelOf = (row: { invoice_series?: string | null; invoice_number?: string | null }) =>
+  `${row.invoice_series ? `${row.invoice_series}-` : ""}${row.invoice_number || "(sin número)"}`;
+
+/** Fila nueva sin nada escrito por el usuario (solo valores por defecto). */
+function isPristineNewPurchase(p: PurchaseEntry): boolean {
+  return !!p.isNew && !p.id &&
+    !p.invoice_series?.trim() && !p.invoice_number?.trim() &&
+    !p.supplier_nit?.trim() && !p.supplier_name?.trim() &&
+    !(Number(p.total_amount) > 0) && !(Number(p.exempt_amount) > 0) && !p.batch_reference?.trim();
+}
+function isPristineNewSale(s: SaleEntry): boolean {
+  return !!s.isNew && !s.id &&
+    !s.invoice_series?.trim() && !s.invoice_number?.trim() &&
+    !s.customer_nit?.trim() && !s.customer_name?.trim() && !(Number(s.total_amount) > 0);
+}
+
+/** Eliminación/descarte pendiente de confirmar (compras o ventas). */
+interface PendingDelete {
+  kind: LedgerKind;
+  /** null = fila nueva sin guardar (se descarta). */
+  id: number | null;
+  clave: string;
+  etiqueta: string;
+  tercero: string;
+  total: number;
+  etiquetaPoliza: string | null;
+  abonos: number;
+}
+
+/** Borrador local ofrecido para restaurar. */
+interface DraftOffer {
+  kind: LedgerKind;
+  key: string;
+  savedAt: number;
+  row: Record<string, unknown>;
+}
+
 export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
@@ -241,10 +284,12 @@ export default function LibrosFiscales() {
   const [showJournalDialog, setShowJournalDialog] = useState(false);
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  // Borrado pendiente de confirmar: la factura tiene abonos en Cuentas por Cobrar/Pagar.
-  const [pendingLedgerDelete, setPendingLedgerDelete] = useState<
-    { kind: "purchase" | "sale"; id: number; amountPaid: number } | null
-  >(null);
+  // Eliminación pendiente de confirmar (con póliza/abonos si los tiene) o descarte
+  // de una fila nueva con datos.
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  // Borradores locales encontrados al cargar el libro (se ofrecen de uno en uno).
+  const [draftOffers, setDraftOffers] = useState<DraftOffer[]>([]);
+  const draftCheckedRef = useRef(new Set<string>());
   const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
     try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
   });
@@ -756,7 +801,13 @@ export default function LibrosFiscales() {
       .filter((p) => !p.fel_document_type || p.fel_document_type.trim() === "")
       .map((p) => toItem(p));
 
+    // Facturas a medias: sin número, sin NIT o con total 0.
+    const missingBasics = saved
+      .filter((p) => !p.invoice_number?.trim() || !p.supplier_nit?.trim() || !(Number(p.total_amount) > 0))
+      .map((p) => toItem(p));
+
     return [
+      { fieldLabel: "Datos básicos", items: missingBasics },
       { fieldLabel: "Tipo de Operación", items: missingOperation },
       { fieldLabel: "Tipo de Documento", items: missingDocType },
     ];
@@ -783,7 +834,13 @@ export default function LibrosFiscales() {
       .filter((s) => !s.fel_document_type || s.fel_document_type.trim() === "")
       .map((s) => toItem(s));
 
+    // Facturas a medias: sin número, sin NIT o con total 0.
+    const missingBasics = saved
+      .filter((s) => !s.invoice_number?.trim() || !s.customer_nit?.trim() || !(Number(s.total_amount) > 0))
+      .map((s) => toItem(s));
+
     return [
+      { fieldLabel: "Datos básicos", items: missingBasics },
       { fieldLabel: "Tipo de Operación", items: missingOperation },
       { fieldLabel: "Tipo de Documento", items: missingDocType },
     ];
@@ -836,6 +893,49 @@ export default function LibrosFiscales() {
     ]);
     return results.every(Boolean);
   }, []);
+
+  /** Clave del borrador local del periodo cargado. */
+  const draftKeyFor = (kind: LedgerKind) =>
+    ledgerDraftKey(kind, currentEnterpriseIdRef.current ?? "", selectedYearRef.current, selectedMonthRef.current);
+
+  /**
+   * Quita las filas nuevas que siguen vacías (solo valores por defecto) antes de
+   * cambiar de pestaña/periodo o recargar: no hay nada que guardar ni que avisar.
+   */
+  const discardPristineNewRows = () => {
+    const pKey = editingPurchaseKeyRef.current;
+    const sKey = editingSaleKeyRef.current;
+    const pristinePurchase = purchasesRef.current.find((p) => purchaseKeyOf(p) === pKey);
+    const pristineSale = salesRef.current.find((x) => x.client_id === sKey);
+    if (purchasesRef.current.some(isPristineNewPurchase)) {
+      applyPurchases((prev) => prev.filter((p) => !isPristineNewPurchase(p)));
+    }
+    if (salesRef.current.some(isPristineNewSale)) {
+      applySales((prev) => prev.filter((x) => !isPristineNewSale(x)));
+    }
+    if (pristinePurchase && isPristineNewPurchase(pristinePurchase)) setEditingPurchaseKey(null);
+    if (pristineSale && isPristineNewSale(pristineSale)) setEditingSaleKey(null);
+  };
+
+  /**
+   * Al cargar un periodo: si no hay fila nueva y hay un borrador local vigente de
+   * ese periodo, se ofrece restaurarlo (una vez por periodo y tipo).
+   */
+  const maybeOfferDraft = (kind: LedgerKind) => {
+    if (!currentEnterpriseIdRef.current) return;
+    const key = draftKeyFor(kind);
+    if (draftCheckedRef.current.has(key)) return;
+    draftCheckedRef.current.add(key);
+    const hasNew = kind === "purchase"
+      ? purchasesRef.current.some((p) => p.isNew)
+      : salesRef.current.some((x) => x.isNew);
+    if (hasNew) return;
+    const draft = readLedgerDraft<Record<string, unknown>>(key);
+    if (!draft) return;
+    setDraftOffers((prev) => (prev.some((o) => o.key === key) ? prev : [...prev, { kind, key, savedAt: draft.savedAt, row: draft.row }]));
+  };
+  const maybeOfferDraftRef = useRef(maybeOfferDraft);
+  maybeOfferDraftRef.current = maybeOfferDraft;
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -936,6 +1036,7 @@ export default function LibrosFiscales() {
     const eid = localStorage.getItem("currentEnterpriseId");
     if (!eid) return;
     // Primero se guarda lo pendiente; si no se pudo, no se recarga.
+    discardPristineNewRows();
     if (!(await flushEditing())) return;
     debugReload("actualizar manual");
     lastFetchTimestamp.current = Date.now();
@@ -1077,6 +1178,7 @@ export default function LibrosFiscales() {
    * periodo no cambia). Sin tarjeta en edición el cambio es inmediato.
    */
   const changePeriod = async (month: number, year: number) => {
+    discardPristineNewRows();
     if (purchaseEditRef.current || saleEditRef.current) {
       if (!(await flushEditing())) return;
     }
@@ -1088,15 +1190,18 @@ export default function LibrosFiscales() {
   };
 
   /** Cambia de pestaña Compras/Ventas guardando antes lo pendiente. */
-  const changeTab = async (tab: "compras" | "ventas") => {
-    if (!(await flushEditing())) return;
+  const changeTab = async (tab: "compras" | "ventas"): Promise<boolean> => {
+    discardPristineNewRows();
+    if (!(await flushEditing())) return false;
     setActiveTab(tab);
     setEditingPurchaseKey(null);
     setEditingSaleKey(null);
+    return true;
   };
 
   /** Abre un diálogo que termina en recarga (importar, póliza) guardando antes lo pendiente. */
   const openAfterFlush = async (open: () => void) => {
+    discardPristineNewRows();
     if (!(await flushEditing())) return;
     open();
   };
@@ -1277,6 +1382,7 @@ export default function LibrosFiscales() {
         loadedPurchaseBookIdRef.current = bookId;
         purchasesRef.current = normalized;
         setPurchases(normalized);
+        maybeOfferDraftRef.current("purchase");
       }
 
     } catch (error: unknown) {
@@ -1320,6 +1426,7 @@ export default function LibrosFiscales() {
         loadedSalesPeriodRef.current = period;
         salesRef.current = fetched;
         setSales(fetched);
+        maybeOfferDraftRef.current("sale");
       }
 
       // Verificar pólizas existentes para ventas y compras
@@ -1556,6 +1663,31 @@ export default function LibrosFiscales() {
     }
   }, [flushEditing, createSaleEntry]);
 
+  // Borrador local de la fila NUEVA en edición (300 ms tras cada cambio). Se borra al
+  // guardarla en la base o al descartarla.
+  useEffect(() => {
+    if (!currentEnterpriseId) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const schedule = (kind: LedgerKind, find: () => (PurchaseEntry | SaleEntry) | undefined, pristine: boolean) => {
+      if (pristine) return;
+      const key = ledgerDraftKey(kind, currentEnterpriseId, selectedYear, selectedMonth);
+      timers.push(setTimeout(() => {
+        // Releer al disparar: si ya se guardó (isNew false) no se vuelve a escribir.
+        const row = find();
+        if (row?.isNew && !row.id) saveLedgerDraft(key, row);
+      }, 300));
+    };
+    const pRow = editingPurchaseKey ? purchases.find((p) => purchaseKeyOf(p) === editingPurchaseKey && p.isNew) : undefined;
+    if (pRow) {
+      schedule("purchase", () => purchasesRef.current.find((p) => purchaseKeyOf(p) === editingPurchaseKey), isPristineNewPurchase(pRow));
+    }
+    const sRow = editingSaleKey ? sales.find((x) => x.client_id === editingSaleKey && x.isNew) : undefined;
+    if (sRow) {
+      schedule("sale", () => salesRef.current.find((x) => x.client_id === editingSaleKey), isPristineNewSale(sRow));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [purchases, sales, editingPurchaseKey, editingSaleKey, currentEnterpriseId, selectedMonth, selectedYear]);
+
   // Focus the edited/new row once it exists in the DOM
   useEffect(() => {
     if (!pendingFocusTab) return;
@@ -1650,14 +1782,27 @@ export default function LibrosFiscales() {
    * existe), false si no se pudo (duplicado, error): la tarjeta sigue abierta y con
    * cambios pendientes. Los avisos se muestran aquí, una sola vez.
    */
-  const savePurchaseRow = (rowKey: string): Promise<boolean> =>
-    serializeSave(`p:${rowKey}`, () => doSavePurchaseRow(rowKey));
+  const savePurchaseRow = (rowKey: string, opts?: LedgerSaveOptions): Promise<boolean> =>
+    serializeSave(`p:${rowKey}`, () => doSavePurchaseRow(rowKey, opts));
 
-  const doSavePurchaseRow = async (rowKey: string): Promise<boolean> => {
+  /** Aviso "Faltan: …" solo en guardados manuales (el autoguardado no molesta). */
+  const warnIncomplete = (missing: string[], opts?: LedgerSaveOptions) => {
+    if (opts?.reason === "manual") {
+      toast({ title: missingFieldsMessage(missing), variant: "destructive" });
+    }
+  };
+
+  const doSavePurchaseRow = async (rowKey: string, opts?: LedgerSaveOptions): Promise<boolean> => {
     // Se lee la fila al ejecutar (no al programar): siempre la versión más reciente.
     const rawEntry = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
     if (!rawEntry) return true;
     if (!currentBookId || !currentEnterpriseId) return false;
+    // Solo se escribe en la base si cumple el mínimo (fecha, número, NIT válido, total).
+    const minimum = isMinimallyComplete(rawEntry, "purchase");
+    if (!minimum.ok) {
+      warnIncomplete(minimum.missing, opts);
+      return false;
+    }
 
     const exemption = purchaseExemption(rawEntry);
     // Una fila exonerada (o con IVA 0 y base = total) no se recalcula al 12% al guardar.
@@ -1726,6 +1871,7 @@ export default function LibrosFiscales() {
         applyPurchases((prev) => prev.map((p) =>
           purchaseKeyOf(p) === rowKey ? { ...p, id: data.id, isNew: false } : p
         ));
+        clearLedgerDraft(draftKeyFor("purchase"));
 
 
         // Guardar última cuenta usada
@@ -1787,13 +1933,18 @@ export default function LibrosFiscales() {
   };
 
   /** Guarda una fila de ventas por su clave (client_id). Mismo contrato que compras. */
-  const saveSaleRow = (rowId: string): Promise<boolean> =>
-    serializeSave(`s:${rowId}`, () => doSaveSaleRow(rowId));
+  const saveSaleRow = (rowId: string, opts?: LedgerSaveOptions): Promise<boolean> =>
+    serializeSave(`s:${rowId}`, () => doSaveSaleRow(rowId, opts));
 
-  const doSaveSaleRow = async (rowId: string): Promise<boolean> => {
+  const doSaveSaleRow = async (rowId: string, opts?: LedgerSaveOptions): Promise<boolean> => {
     const entry = salesRef.current.find((s) => s.client_id === rowId);
     if (!entry) return true;
     if (!currentEnterpriseId) return false;
+    const minimum = isMinimallyComplete(entry, "sale");
+    if (!minimum.ok) {
+      warnIncomplete(minimum.missing, opts);
+      return false;
+    }
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicateSale(entry, entry.id);
@@ -1862,6 +2013,7 @@ export default function LibrosFiscales() {
               }
             : s
         ));
+        clearLedgerDraft(draftKeyFor("sale"));
 
         // Guardar última cuenta usada
         if (entry.income_account_id) {
@@ -1978,24 +2130,50 @@ export default function LibrosFiscales() {
     return Number(data?.amount_paid ?? 0);
   };
 
+  /** Quita una fila nueva sin guardar y su borrador local. */
+  const discardNewRow = (kind: LedgerKind, rowKey: string) => {
+    if (kind === "purchase") {
+      applyPurchases((prev) => prev.filter((p) => purchaseKeyOf(p) !== rowKey));
+      if (editingPurchaseKeyRef.current === rowKey) setEditingPurchaseKey(null);
+    } else {
+      applySales((prev) => prev.filter((x) => x.client_id !== rowKey));
+      if (editingSaleKeyRef.current === rowKey) setEditingSaleKey(null);
+    }
+    clearLedgerDraft(draftKeyFor(kind));
+  };
+
+  const policyLabelOf = (journalEntryId: number | null | undefined) =>
+    journalEntryId ? formatShortEntryLabel(journalEntryNumbers[journalEntryId]) : null;
+
+  /**
+   * Eliminar siempre confirma (solo advierte, nunca bloquea). Una fila nueva vacía se
+   * descarta sin preguntar; con datos, se confirma el descarte.
+   */
   const deletePurchaseRow = async (rowKey: string) => {
     const entry = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
     if (!entry) return;
-    
-    if (entry.isNew) {
-      applyPurchases((prev) => prev.filter((p) => purchaseKeyOf(p) !== rowKey));
-      if (editingPurchaseKeyRef.current === rowKey) setEditingPurchaseKey(null);
+    const info = {
+      kind: "purchase" as const,
+      clave: rowKey,
+      etiqueta: docLabelOf(entry),
+      tercero: entry.supplier_name || entry.supplier_nit || "",
+      total: Number(entry.total_amount) || 0,
+      etiquetaPoliza: policyLabelOf(entry.journal_entry_id),
+    };
+
+    if (entry.isNew && !entry.id) {
+      if (isPristineNewPurchase(entry)) {
+        discardNewRow("purchase", rowKey);
+        return;
+      }
+      setPendingDelete({ ...info, id: null, abonos: 0 });
       return;
     }
 
     if (!entry.id) return;
 
-    const amountPaid = await getTrackedAmountPaid("cxp", entry.id);
-    if (amountPaid > 0) {
-      setPendingLedgerDelete({ kind: "purchase", id: entry.id, amountPaid });
-      return;
-    }
-    await softDeletePurchase(entry.id);
+    const abonos = await getTrackedAmountPaid("cxp", entry.id);
+    setPendingDelete({ ...info, id: entry.id, abonos });
   };
 
   const softDeletePurchase = async (id: number) => {
@@ -2059,23 +2237,30 @@ export default function LibrosFiscales() {
   };
 
   const deleteSaleRow = async (rowId: string) => {
-    const entry = salesRef.current.find((s) => s.client_id === rowId);
+    const entry = salesRef.current.find((x) => x.client_id === rowId);
     if (!entry) return;
-    
-    if (entry.isNew) {
-      applySales((prev) => prev.filter((s) => s.client_id !== rowId));
-      if (editingSaleKeyRef.current === rowId) setEditingSaleKey(null);
+    const info = {
+      kind: "sale" as const,
+      clave: rowId,
+      etiqueta: docLabelOf(entry),
+      tercero: entry.customer_name || entry.customer_nit || "",
+      total: Number(entry.total_amount) || 0,
+      etiquetaPoliza: policyLabelOf(entry.journal_entry_id),
+    };
+
+    if (entry.isNew && !entry.id) {
+      if (isPristineNewSale(entry)) {
+        discardNewRow("sale", rowId);
+        return;
+      }
+      setPendingDelete({ ...info, id: null, abonos: 0 });
       return;
     }
 
     if (!entry.id) return;
 
-    const amountPaid = await getTrackedAmountPaid("cxc", entry.id);
-    if (amountPaid > 0) {
-      setPendingLedgerDelete({ kind: "sale", id: entry.id, amountPaid });
-      return;
-    }
-    await softDeleteSale(entry.id);
+    const abonos = await getTrackedAmountPaid("cxc", entry.id);
+    setPendingDelete({ ...info, id: entry.id, abonos });
   };
 
   const softDeleteSale = async (id: number) => {
@@ -2107,12 +2292,76 @@ export default function LibrosFiscales() {
     }
   };
 
-  const confirmPendingLedgerDelete = async () => {
-    const pending = pendingLedgerDelete;
-    setPendingLedgerDelete(null);
+  const confirmPendingDelete = async () => {
+    const pending = pendingDelete;
+    setPendingDelete(null);
     if (!pending) return;
-    if (pending.kind === "purchase") await softDeletePurchase(pending.id);
-    else await softDeleteSale(pending.id);
+    // Si había un guardado en vuelo (p. ej. el INSERT de una fila nueva), esperar a
+    // que termine para saber si la fila ya existe en la base.
+    const chainKey = `${pending.kind === "purchase" ? "p" : "s"}:${pending.clave}`;
+    await saveChainsRef.current.get(chainKey)?.catch(() => false);
+
+    const current = pending.kind === "purchase"
+      ? purchasesRef.current.find((p) => purchaseKeyOf(p) === pending.clave)
+      : salesRef.current.find((x) => x.client_id === pending.clave);
+    const id = current?.id ?? pending.id;
+    if (current && !current.id) {
+      discardNewRow(pending.kind, pending.clave);
+      return;
+    }
+    if (!id) return;
+    if (pending.kind === "purchase") {
+      await softDeletePurchase(id);
+      if (editingPurchaseKeyRef.current === pending.clave) setEditingPurchaseKey(null);
+    } else {
+      await softDeleteSale(id);
+      if (editingSaleKeyRef.current === pending.clave) setEditingSaleKey(null);
+    }
+    if (pending.id === null) clearLedgerDraft(draftKeyFor(pending.kind));
+  };
+
+  /** Restaurar un borrador local: fila nueva arriba, en edición, con montos recalculados. */
+  const restoreDraft = async (offer: DraftOffer) => {
+    setDraftOffers((prev) => prev.filter((o) => o.key !== offer.key));
+    const tab = offer.kind === "purchase" ? "compras" : "ventas";
+    if (activeTab !== tab) {
+      if (!(await changeTab(tab))) return;
+    } else if (!(await flushEditing())) {
+      return;
+    }
+    if (offer.kind === "purchase") {
+      const base = {
+        ...(offer.row as unknown as PurchaseEntry),
+        id: undefined,
+        isNew: true,
+        journal_entry_id: null,
+        _uid: `tmp-${crypto.randomUUID()}`,
+      } as PurchaseEntry;
+      const row = applyMixedTaxToRow(base, { appliesVat, exemption: purchaseExemption(base) }) as PurchaseEntry;
+      applyPurchases((prev) => [row, ...prev]);
+      setEditingPurchaseKey(row._uid ?? null);
+      setPendingFocusTab("compras");
+    } else {
+      const draftRow = offer.row as unknown as SaleEntry;
+      const { base, vat } = calculateVAT(Number(draftRow.total_amount) || 0, draftRow.fel_document_type);
+      const row: SaleEntry = {
+        ...draftRow,
+        id: undefined,
+        isNew: true,
+        journal_entry_id: null,
+        net_amount: base,
+        vat_amount: vat,
+        client_id: `tmp-${crypto.randomUUID()}`,
+      };
+      applySales((prev) => [row, ...prev]);
+      setEditingSaleKey(row.client_id);
+      setPendingFocusTab("ventas");
+    }
+  };
+
+  const discardDraft = (offer: DraftOffer) => {
+    setDraftOffers((prev) => prev.filter((o) => o.key !== offer.key));
+    clearLedgerDraft(offer.key);
   };
 
   /** Abrir otra factura = guardar antes la que está en edición (si falla, no cambia). */
@@ -3473,6 +3722,7 @@ export default function LibrosFiscales() {
           enterpriseId={currentEnterpriseId}
           onSelectInvoice={async (month, year, tab, invoiceId) => {
             // Ir a otra factura = guardar antes lo pendiente.
+            discardPristineNewRows();
             if (!(await flushEditing())) return;
             setEditingPurchaseKey(null);
             setEditingSaleKey(null);
@@ -3495,26 +3745,79 @@ export default function LibrosFiscales() {
       )}
 
       <AlertDialog
-        open={pendingLedgerDelete !== null}
-        onOpenChange={(open) => { if (!open) setPendingLedgerDelete(null); }}
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>La factura tiene abonos registrados</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta factura tiene Q{formatCurrency(pendingLedgerDelete?.amountPaid ?? 0)} en abonos registrados.
-              Si la eliminas, desaparecerá de Cuentas por {pendingLedgerDelete?.kind === "sale" ? "Cobrar" : "Pagar"} junto
-              con sus abonos. ¿Deseas continuar?
+            <AlertDialogTitle>
+              {pendingDelete?.id === null ? "¿Descartar esta factura sin guardar?" : "¿Eliminar esta factura?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">
+                  {pendingDelete?.etiqueta}
+                  {pendingDelete?.tercero ? ` · ${pendingDelete.tercero}` : ""}
+                  {` · Q${formatCurrency(pendingDelete?.total ?? 0)}`}
+                </p>
+                {pendingDelete?.id === null && (
+                  <p>Lo que escribiste en esta factura se perderá.</p>
+                )}
+                {pendingDelete?.etiquetaPoliza && (
+                  <p>
+                    Esta factura está incluida en la póliza {pendingDelete.etiquetaPoliza}. La póliza NO se
+                    ajusta automáticamente: revísala y corrígela después de eliminar la factura.
+                  </p>
+                )}
+                {(pendingDelete?.abonos ?? 0) > 0 && (
+                  <p>
+                    Esta factura tiene Q{formatCurrency(pendingDelete?.abonos ?? 0)} en abonos registrados.
+                    Si la eliminas, desaparecerá de Cuentas por {pendingDelete?.kind === "sale" ? "Cobrar" : "Pagar"} junto
+                    con sus abonos.
+                  </p>
+                )}
+                {pendingDelete?.kind === "sale" && pendingDelete.id !== null && (
+                  <p>Si solo quieres sacarla de los cálculos, usa “Anular” en lugar de eliminarla.</p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel autoFocus>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmPendingLedgerDelete}
+              onClick={confirmPendingDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Eliminar factura
+              {pendingDelete?.id === null ? "Descartar factura" : "Eliminar factura"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={draftOffers.length > 0 && pendingDelete === null}
+        onOpenChange={(open) => {
+          // Cerrar con ESC solo oculta el aviso; el borrador sigue en este equipo.
+          if (!open && draftOffers[0]) {
+            const key = draftOffers[0].key;
+            setDraftOffers((prev) => prev.filter((o) => o.key !== key));
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Tienes una factura sin terminar (guardada en este equipo el {draftOffers[0] ? formatDraftTimestamp(draftOffers[0].savedAt) : ""})
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {draftOffers[0]?.kind === "sale" ? "Libro de Ventas" : "Libro de Compras"}
+              {draftOffers[0] ? ` · ${docLabelOf(draftOffers[0].row as { invoice_series?: string; invoice_number?: string })}` : ""}
+              {". "}¿Quieres restaurarla para terminarla?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => draftOffers[0] && discardDraft(draftOffers[0])}>Descartar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => draftOffers[0] && void restoreDraft(draftOffers[0])}>Restaurar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

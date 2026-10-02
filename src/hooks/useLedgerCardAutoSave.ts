@@ -3,11 +3,19 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 /** Resultado del guardado: false = no se guardó (la fila sigue con cambios pendientes). */
 export type LedgerSaveResult = boolean | void;
 
+/**
+ * Motivo del guardado: "auto" (pausa al escribir, pestaña oculta, desmontaje) no
+ * avisa si falta algo; "manual" (guardar/cerrar, cambiar de factura…) sí.
+ */
+export interface LedgerSaveOptions {
+  reason: "auto" | "manual";
+}
+
 interface UseLedgerCardAutoSaveOptions {
   /** Clave estable de la fila (compras: _uid; ventas: client_id). */
   rowKey: string;
   /** Guarda la fila por su clave. */
-  onSave: (rowKey: string) => LedgerSaveResult | Promise<LedgerSaveResult>;
+  onSave: (rowKey: string, opts: LedgerSaveOptions) => LedgerSaveResult | Promise<LedgerSaveResult>;
   /** Tarjeta: para devolver el foco al campo activo tras el autoguardado. */
   cardRef: RefObject<HTMLElement>;
   delayMs?: number;
@@ -51,12 +59,12 @@ export function useLedgerCardAutoSave({ rowKey, onSave, cardRef, delayMs = 2500 
   }, []);
 
   /** Guarda ahora. Solo queda "limpia" si se guardó y no hubo cambios mientras tanto. */
-  const runSave = useCallback(async (): Promise<boolean> => {
+  const runSave = useCallback(async (reason: LedgerSaveOptions["reason"]): Promise<boolean> => {
     clearTimer();
     const tickAtStart = changeTickRef.current;
     let ok: boolean;
     try {
-      ok = (await onSaveRef.current(keyRef.current)) !== false;
+      ok = (await onSaveRef.current(keyRef.current, { reason })) !== false;
     } catch {
       ok = false;
     }
@@ -74,7 +82,7 @@ export function useLedgerCardAutoSave({ rowKey, onSave, cardRef, delayMs = 2500 
   const flush = useCallback(async (opts?: { force?: boolean }): Promise<boolean> => {
     clearTimer();
     if (!hasChangesRef.current && !opts?.force) return true;
-    return runSave();
+    return runSave("manual");
   }, [clearTimer, runSave]);
 
   // Autoguardado con debounce: el temporizador se reinicia con cada cambio.
@@ -95,7 +103,7 @@ export function useLedgerCardAutoSave({ rowKey, onSave, cardRef, delayMs = 2500 
           }, 50);
         });
       };
-      void runSave().then(restoreFocus);
+      void runSave("auto").then(restoreFocus);
       restoreFocus();
     }, delayMs);
     return clearTimer;
@@ -104,7 +112,7 @@ export function useLedgerCardAutoSave({ rowKey, onSave, cardRef, delayMs = 2500 
   // Pestaña oculta con cambios pendientes: guardar de inmediato.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "hidden" && hasChangesRef.current) void runSave();
+      if (document.visibilityState === "hidden" && hasChangesRef.current) void runSave("auto");
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
@@ -129,7 +137,7 @@ export function useLedgerCardAutoSave({ rowKey, onSave, cardRef, delayMs = 2500 
       if (hasChangesRef.current) {
         hasChangesRef.current = false;
         void Promise.resolve()
-          .then(() => onSaveRef.current(keyRef.current))
+          .then(() => onSaveRef.current(keyRef.current, { reason: "auto" }))
           .catch(() => {});
       }
     };

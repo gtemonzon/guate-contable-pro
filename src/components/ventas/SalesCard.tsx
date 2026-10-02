@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { useLedgerCardAutoSave, type LedgerSaveResult } from "@/hooks/useLedgerCardAutoSave";
+import { useLedgerCardAutoSave, type LedgerSaveOptions, type LedgerSaveResult } from "@/hooks/useLedgerCardAutoSave";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -63,7 +63,7 @@ interface SalesCardProps {
   smallTaxpayerRate?: number;
   onUpdate: (rowId: string, field: keyof SaleEntry, value: any) => void;
   /** Guarda la fila; false = no se guardó (la tarjeta no se cierra). */
-  onSave: (rowId: string) => LedgerSaveResult | Promise<LedgerSaveResult>;
+  onSave: (rowId: string, opts?: LedgerSaveOptions) => LedgerSaveResult | Promise<LedgerSaveResult>;
   onDelete: (rowId: string) => void;
   onToggleAnnulled: (rowId: string) => void;
   recommendedFields?: string[];
@@ -79,7 +79,10 @@ interface SalesCardProps {
 
 export interface SalesCardRef {
   focusDateField: () => void;
-  /** Guarda ya lo pendiente; true si no había nada o se guardó. */
+  /**
+   * Guarda ya lo pendiente; true si no había nada o se guardó. En una fila nueva
+   * siempre intenta guardar (si no cumple el mínimo, el padre avisa y devuelve false).
+   */
   flush: () => Promise<boolean>;
 }
 
@@ -138,7 +141,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
         }
       }, 150);
     },
-    flush: () => flush(),
+    flush: () => flush({ force: !!isNewRecord }),
   }));
 
 
