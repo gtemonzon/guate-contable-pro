@@ -83,15 +83,24 @@ export interface PurchaseCardProps {
 
 /** Insignia "Exonerado Decreto 22-2026" con la regla y su vigencia en el tooltip. */
 function ExemptionBadge({ exemption, className }: { exemption: ResolvedTaxExemption; className?: string }) {
+  // Dos líneas para que no desborde su columna: primera palabra arriba, resto abajo.
+  const label = exemptionBadgeLabel(exemption);
+  const spaceIndex = label.indexOf(" ");
+  const lines = spaceIndex === -1 ? [label] : [label.slice(0, spaceIndex), label.slice(spaceIndex + 1)];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge
           variant="outline"
-          className={cn("text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400 whitespace-nowrap", className)}
+          className={cn(
+            "block w-full min-w-0 text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400 leading-tight text-center h-auto rounded-md",
+            className,
+          )}
           onClick={(e) => e.stopPropagation()}
         >
-          {exemptionBadgeLabel(exemption)}
+          {lines.map((line, i) => (
+            <span key={i} className="block">{line}</span>
+          ))}
         </Badge>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs text-xs">{exemptionTooltip(exemption)}</TooltipContent>
@@ -712,7 +721,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </>
               )}
               {exemption && (
-                <div className="col-span-1 flex items-end pb-1.5">
+                <div className="col-span-1 min-w-0 flex items-end pb-1.5">
                   <ExemptionBadge exemption={exemption} />
                 </div>
               )}
@@ -985,7 +994,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </>
             )}
             {exemption && (
-              <div className="col-span-1 flex items-end pb-1.5">
+              <div className="col-span-1 min-w-0 flex items-end pb-1.5">
                 <ExemptionBadge exemption={exemption} />
               </div>
             )}
