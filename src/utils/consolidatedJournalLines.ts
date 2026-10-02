@@ -68,6 +68,9 @@ export interface PurchaseRowLike {
   exempt_amount?: number | null;
   tax_category?: string | null;
   expense_account_id?: number | null;
+  /** Sello de exención (Decreto 22-2026 u otra regla) guardado en tab_purchase_ledger. */
+  exemption_rule_code?: string | null;
+  vat_rate_applied?: number | null;
 }
 
 export interface PurchaseAggregationResult {
@@ -121,6 +124,8 @@ export function aggregatePurchaseJournalLines(options: {
         expense_account_id: p.expense_account_id,
         multiplier,
         appliesVat,
+        exemption_rule_code: p.exemption_rule_code ?? null,
+        vat_rate_applied: p.vat_rate_applied ?? null,
       },
       mapping ?? null
     );

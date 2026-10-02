@@ -17,6 +17,9 @@ import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { calculatePurchaseAccounting, TAX_CATEGORIES } from "@/utils/purchaseAccountingEngine";
+import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
+import { resolveExemption, exemptionBadgeLabel, exemptionTooltip } from "@/utils/taxExemption";
+import { Badge } from "@/components/ui/badge";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -143,6 +146,12 @@ export function QuickPurchaseForm({
   const selectedOpType = operationTypes.find(t => t.id === operationTypeId);
   const isFuelOperation = selectedOpType?.code === "COMBUSTIBLE";
   const isExemptOperation = selectedOpType?.code === "EXENTAS";
+
+  // Exención temporal vigente para (tipo de operación, fecha): Decreto 22-2026 en
+  // combustible oct–dic 2026 → IVA 0, base = total, sin IDP.
+  const { rules: exemptionRules } = useTaxExemptionRules();
+  const exemption = resolveExemption(exemptionRules, selectedOpType?.code ?? null, date);
+  const hideNonVatInput = isFuelOperation && !!exemption?.blocksIdp;
 
   // ─── Duplicate check ───
   const checkDuplicate = useCallback(async () => {
@@ -352,15 +361,20 @@ export function QuickPurchaseForm({
 
   // Calculate base/VAT/non-VAT using the unified purchase accounting engine
   const enterpriseAppliesVat = taxRegimeStrategy.appliesVat;
+  // En combustible el "No afecto" es el IDP aunque aún no se haya elegido categoría.
+  const effectiveTaxCategory = taxCategory ?? (isFuelOperation && exemptAmount > 0 ? "IDP" : null);
   const accounting = calculatePurchaseAccounting({
     totalAmount: total,
     nonVatAmount: exemptAmount,
-    taxCategory,
+    taxCategory: effectiveTaxCategory,
     documentType: docType,
     appliesVat: enterpriseAppliesVat && !isExemptOperation,
+    exemption,
   });
   const base = accounting.base;
   const vat = accounting.vat;
+  // No afecto final (la exención puede dejar el IDP en 0).
+  const effectiveExempt = accounting.nonVat;
 
   const canSubmit = nitValid === true && number.trim() && total > 0 && operationTypeId && expenseAccountId && !duplicate;
 
@@ -420,8 +434,11 @@ export function QuickPurchaseForm({
           base_amount: baseFunctional,
           net_amount: baseFunctional,
           vat_amount: vatFunctional,
-          exempt_amount: Math.round((exemptAmount || 0) * r * 100) / 100,
-          tax_category: (exemptAmount || 0) > 0 ? (taxCategory ?? (isFuelOperation ? 'IDP' : 'OTHER')) : null,
+          exempt_amount: Math.round((effectiveExempt || 0) * r * 100) / 100,
+          tax_category: (effectiveExempt || 0) > 0 ? (accounting.taxCategory ?? (isFuelOperation ? 'IDP' : 'OTHER')) : null,
+          // Sellos de exención (el trigger trg_purchase_apply_tax_exemption los verifica).
+          vat_rate_applied: exemption ? exemption.vatRate : null,
+          exemption_rule_code: exemption ? exemption.code : null,
           // Multi-moneda: moneda original + tasa + montos originales
           currency_code: currencyCode,
           exchange_rate: r,
@@ -485,7 +502,7 @@ export function QuickPurchaseForm({
     } finally {
       setLoading(false);
     }
-  }, [canSubmit, nit, number, docType, series, date, supplier, total, base, vat, exemptAmount, taxCategory, isFuelOperation, expenseAccountId, operationTypeId, enterpriseId, journalEntryId, entryMonth, entryYear, duplicate, checkDuplicate, toast, onCreated, exchangeRate, currencyCode]);
+  }, [canSubmit, nit, number, docType, series, date, supplier, total, base, vat, exemptAmount, taxCategory, isFuelOperation, effectiveExempt, accounting.taxCategory, exemption, expenseAccountId, operationTypeId, enterpriseId, journalEntryId, entryMonth, entryYear, duplicate, checkDuplicate, toast, onCreated, exchangeRate, currencyCode]);
 
   // ─── Alt+N shortcut ───
   useEffect(() => {
@@ -698,6 +715,18 @@ export function QuickPurchaseForm({
             placeholder="0.00"
           />
         </div>
+        {hideNonVatInput && exemption ? (
+          <div className="flex items-end pb-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
+                  {exemptionBadgeLabel(exemption)}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-xs">{exemptionTooltip(exemption)}</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
         <div>
           <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
             {isFuelOperation ? <><Fuel className="h-3 w-3" /> IDP</> : <>No afecto</>}
@@ -717,6 +746,7 @@ export function QuickPurchaseForm({
             title={isFuelOperation ? "Impuesto a Distribución de Petróleo" : "Porción no afecta a IVA (turismo, timbres, electricidad, etc.)"}
           />
         </div>
+        )}
       </div>
 
       {/* Categoría del monto no afecto (cuando aplica y no es combustible) */}
@@ -741,7 +771,8 @@ export function QuickPurchaseForm({
       {total > 0 && (
         <p className="text-[10px] text-muted-foreground">
           Base: {formatCurrency(base)} · IVA: {formatCurrency(vat)}
-          {exemptAmount > 0 && ` · No afecto: ${formatCurrency(exemptAmount)}`}
+          {effectiveExempt > 0 && ` · No afecto: ${formatCurrency(effectiveExempt)}`}
+          {exemption && ` · ${exemptionBadgeLabel(exemption)}`}
         </p>
       )}
 

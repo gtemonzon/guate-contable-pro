@@ -15,6 +15,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { NitAutocomplete } from "@/components/ui/nit-autocomplete";
 import { useNitLookup } from "@/hooks/useNitLookup";
 import { TAX_CATEGORIES } from "@/utils/purchaseTaxCalculation";
+import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
+import {
+  resolveRowExemption, exemptionBadgeLabel, exemptionTooltip, type ResolvedTaxExemption,
+} from "@/utils/taxExemption";
 
 export interface PurchaseEntry {
   id?: number;
@@ -37,6 +41,9 @@ export interface PurchaseEntry {
   bank_account_id: number | null;
   journal_entry_id: number | null;
   purchase_book_id?: number;
+  /** Sellos de exención (Decreto 22-2026 u otra regla). */
+  vat_rate_applied?: number | null;
+  exemption_rule_code?: string | null;
   isNew?: boolean;
   _recommendedFields?: string[];
   /** Stable client-side UID for React key; survives insert (id assignment) so the input keeps focus. */
@@ -72,6 +79,24 @@ export interface PurchaseCardProps {
   appliesVat?: boolean;
   /** Short label for the linked journal entry (e.g. "PD-13"). */
   journalEntryLabel?: string;
+}
+
+/** Insignia "Exonerado Decreto 22-2026" con la regla y su vigencia en el tooltip. */
+function ExemptionBadge({ exemption, className }: { exemption: ResolvedTaxExemption; className?: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge
+          variant="outline"
+          className={cn("text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400 whitespace-nowrap", className)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {exemptionBadgeLabel(exemption)}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs">{exemptionTooltip(exemption)}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export interface PurchaseCardRef {
@@ -120,7 +145,20 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   purchaseRef.current = purchase;
 
   // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
-  const isFuelOperation = operationTypes.find(t => t.id === purchase.operation_type_id)?.code === "COMBUSTIBLE";
+  const operationTypeCode = operationTypes.find(t => t.id === purchase.operation_type_id)?.code ?? null;
+  const isFuelOperation = operationTypeCode === "COMBUSTIBLE";
+
+  // Exención vigente (Decreto 22-2026: combustible oct–dic 2026): IVA 0, base = total,
+  // sin IDP. Los montos los recalcula el padre; aquí solo cambia lo que se muestra.
+  const { rules: exemptionRules, isLoaded: exemptionRulesLoaded } = useTaxExemptionRules();
+  const exemption = resolveRowExemption(
+    purchase,
+    operationTypeCode,
+    exemptionRules,
+    exemptionRulesLoaded && operationTypes.length > 0,
+  );
+  // Con la exención el IDP también es 0: el campo se oculta.
+  const showIdpField = isFuelOperation && !exemption;
 
   // Auto-enter edit mode for new records
   const inEditMode = isEditing || isNewRecord;
@@ -428,6 +466,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               </div>
               <div className="col-span-1 text-right font-mono text-[11px] text-muted-foreground">
                 {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
+                {exemption && <ExemptionBadge exemption={exemption} className="ml-1 px-1 py-0 text-[9px]" />}
               </div>
               <div className="col-span-2 text-xs truncate flex items-center gap-1" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
                 {getAccountName(purchase.expense_account_id, expenseAccounts)}
@@ -484,6 +523,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             </div>
             <div className="col-span-1 text-right font-mono text-muted-foreground">
               {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
+              {exemption && <ExemptionBadge exemption={exemption} className="block mt-0.5 w-fit ml-auto px-1 py-0 text-[9px]" />}
               {appliesVat && (purchase.exempt_amount || 0) > 0 && (
                 <span className="block text-[10px] text-muted-foreground/70">No afecto: {formatCurrency(purchase.exempt_amount || 0)}</span>
               )}
@@ -671,7 +711,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   </div>
                 </>
               )}
-              {isFuelOperation && (
+              {exemption && (
+                <div className="col-span-1 flex items-end pb-1.5">
+                  <ExemptionBadge exemption={exemption} />
+                </div>
+              )}
+              {showIdpField && (
                 <div className="col-span-1">
                   <label className="text-xs text-muted-foreground">IDP</label>
                   <Input
@@ -939,7 +984,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 </div>
               </>
             )}
-            {isFuelOperation && (
+            {exemption && (
+              <div className="col-span-1 flex items-end pb-1.5">
+                <ExemptionBadge exemption={exemption} />
+              </div>
+            )}
+            {showIdpField && (
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">IDP</label>
                 <Input

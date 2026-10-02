@@ -28,7 +28,9 @@ import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { useSmallTaxpayerRate } from "@/hooks/useSmallTaxpayerRate";
-import { applyMixedTaxToRow, calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { applyMixedTaxToRow, calculateMixedTax, rowNeedsRecalc } from "@/utils/purchaseTaxCalculation";
+import { resolveRowExemption } from "@/utils/taxExemption";
+import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
@@ -170,6 +172,9 @@ interface PurchaseEntry {
   bank_account_id: number | null;
   journal_entry_id: number | null;
   purchase_book_id?: number;
+  /** Sellos de exención (Decreto 22-2026 u otra regla); los fija también el trigger de la base. */
+  vat_rate_applied?: number | null;
+  exemption_rule_code?: string | null;
   isNew?: boolean;
   _uid?: string;
   _recommendedFields?: string[];
@@ -265,6 +270,30 @@ export default function LibrosFiscales() {
     code: string;
     name: string;
   }>>([]);
+
+  // Exenciones temporales de IVA/IDP (Decreto 22-2026: combustibles oct–dic 2026).
+  const { rules: exemptionRules, isLoaded: exemptionRulesLoaded } = useTaxExemptionRules();
+  const purchaseExemption = (row: Pick<PurchaseEntry, "operation_type_id" | "invoice_date" | "exemption_rule_code" | "vat_rate_applied">) =>
+    resolveRowExemption(
+      row,
+      operationTypes.find((ot) => ot.id === row.operation_type_id)?.code ?? null,
+      exemptionRules,
+      // Sin tipos de operación cargados no se puede resolver en vivo: usar el sello.
+      exemptionRulesLoaded && operationTypes.length > 0,
+    );
+  /**
+   * Normaliza base/IVA de una fila cargada. Solo recalcula si hace falta: una fila
+   * exonerada (sellada o con IVA 0 y base = total) nunca se devuelve al 12%.
+   */
+  const normalizePurchaseRow = <T extends PurchaseEntry>(row: T): T => {
+    const exemption = purchaseExemption(row);
+    return rowNeedsRecalc(row, { appliesVat, exemption })
+      ? (applyMixedTaxToRow(row, { appliesVat, exemption }) as T)
+      : row;
+  };
+  // Ref para callbacks/efectos con dependencias propias (recarga silenciosa).
+  const normalizePurchaseRowRef = useRef(normalizePurchaseRow);
+  normalizePurchaseRowRef.current = normalizePurchaseRow;
   
   // Estados para memoria de última cuenta usada
   const [lastExpenseAccountId, setLastExpenseAccountId] = useState<number | null>(null);
@@ -304,6 +333,25 @@ export default function LibrosFiscales() {
   );
   const { strategy } = useEnterpriseTaxRegime(undefined, regimeAsOfDate);
   const appliesVat = strategy.appliesVat;
+
+  // Cuando terminan de cargar las reglas de exención y los tipos de operación, las
+  // filas ya cargadas se vuelven a normalizar (p. ej. combustible de octubre guardado
+  // al 12% antes de la regla). Las que no cambian conservan su identidad.
+  useEffect(() => {
+    if (!exemptionRulesLoaded || operationTypes.length === 0) return;
+    setPurchases((prev) => {
+      let changed = false;
+      const next = prev.map((row) => {
+        if (row.isNew) return row;
+        const normalized = normalizePurchaseRowRef.current(row);
+        if (normalized !== row) changed = true;
+        return normalized;
+      });
+      if (!changed) return prev;
+      purchasesRef.current = next;
+      return next;
+    });
+  }, [exemptionRulesLoaded, operationTypes, exemptionRules]);
   const isSmallTaxpayer = strategy.regime === "pequeño_contribuyente";
   const { rate: smallTaxpayerRate } = useSmallTaxpayerRate(
     currentEnterpriseId ? parseInt(currentEnterpriseId) : null
@@ -849,7 +897,7 @@ export default function LibrosFiscales() {
             .order("invoice_date", { ascending: false })
             .order("invoice_number", { ascending: false });
           if (freshPurchases) {
-            const normalized = freshPurchases.map((row) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
+            const normalized = freshPurchases.map((row) => ({ ...normalizePurchaseRowRef.current(row as unknown as PurchaseEntry), _uid: `db-${row.id}` })) as PurchaseEntry[];
             purchasesRef.current = normalized;
             setPurchases(normalized);
           }
@@ -1051,7 +1099,7 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      const normalized = (data || []).map((row) => ({ ...applyMixedTaxToRow(row, { appliesVat }), _uid: `db-${row.id}` })) as PurchaseEntry[];
+      const normalized = (data || []).map((row) => ({ ...normalizePurchaseRowRef.current(row as unknown as PurchaseEntry), _uid: `db-${row.id}` })) as PurchaseEntry[];
       purchasesRef.current = normalized;
       setPurchases(normalized);
 
@@ -1372,19 +1420,32 @@ export default function LibrosFiscales() {
       if (
         field === "total_amount" ||
         field === "fel_document_type" ||
-        field === "exempt_amount"
+        field === "exempt_amount" ||
+        field === "tax_category" ||
+        // La exención depende del tipo de operación y de la fecha: si cambian, se
+        // activa o se quita (y entonces se recalcula normal, al 12%).
+        field === "invoice_date" ||
+        field === "operation_type_id"
       ) {
         const current = updated[index];
+        const exemption = purchaseExemption(current);
         const result = calculateMixedTax({
           totalAmount: field === "total_amount" ? parseFloat(String(value)) || 0 : Number(current.total_amount) || 0,
           exemptAmount: field === "exempt_amount" ? parseFloat(String(value)) || 0 : Number(current.exempt_amount) || 0,
           documentType: field === "fel_document_type" ? String(value) : current.fel_document_type,
           appliesVat,
+          taxCategory: current.tax_category ?? null,
+          exemption,
         });
         updated[index].total_amount = result.total;
         updated[index].exempt_amount = result.exempt;
         updated[index].base_amount = result.base;
         updated[index].vat_amount = result.vat;
+        if (exemption && result.taxCategory === null && current.tax_category) {
+          updated[index].tax_category = null;
+        }
+        updated[index].vat_rate_applied = exemption ? exemption.vatRate : null;
+        updated[index].exemption_rule_code = exemption ? exemption.code : null;
       }
 
       // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
@@ -1419,7 +1480,11 @@ export default function LibrosFiscales() {
     if (!currentBookId || !currentEnterpriseId) return;
     if (!rawEntry) return;
 
-    const entry = applyMixedTaxToRow(rawEntry, { appliesVat }) as PurchaseEntry;
+    const exemption = purchaseExemption(rawEntry);
+    // Una fila exonerada (o con IVA 0 y base = total) no se recalcula al 12% al guardar.
+    const entry = (rowNeedsRecalc(rawEntry, { appliesVat, exemption })
+      ? applyMixedTaxToRow(rawEntry, { appliesVat, exemption })
+      : rawEntry) as PurchaseEntry;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicatePurchase(entry, entry.id);
@@ -1459,6 +1524,10 @@ export default function LibrosFiscales() {
         expense_account_id: entry.expense_account_id,
         bank_account_id: entry.bank_account_id,
         operation_type_id: entry.operation_type_id,
+        // Sellos de exención (el trigger trg_purchase_apply_tax_exemption los
+        // verifica y corrige contra la regla vigente).
+        vat_rate_applied: exemption ? exemption.vatRate : null,
+        exemption_rule_code: exemption ? exemption.code : null,
       };
 
       if (entry.isNew) {

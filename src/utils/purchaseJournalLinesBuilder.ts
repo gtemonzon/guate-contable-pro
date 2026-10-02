@@ -15,6 +15,7 @@ import {
   calculatePurchaseAccounting,
   type TaxCategoryCode,
 } from "./purchaseAccountingEngine";
+import { exemptionFromStamp } from "./purchaseTaxCalculation";
 
 export interface EnterpriseAccountMapping {
   vat_credit_account_id?: number | null;
@@ -57,6 +58,9 @@ export interface PurchaseLineInput {
   expense_account_id?: number | null;
   multiplier?: number; // e.g. -1 for credit notes
   appliesVat?: boolean;
+  /** Sello de exención guardado en la fila (trg_purchase_apply_tax_exemption). */
+  exemption_rule_code?: string | null;
+  vat_rate_applied?: number | null;
 }
 
 export interface BuiltAccountingLine {
@@ -83,6 +87,8 @@ export function buildPurchaseLines(
     taxCategory: input.tax_category ?? null,
     documentType: input.fel_document_type ?? undefined,
     appliesVat: input.appliesVat,
+    // Factura exonerada (sellada en la base): sin línea de IVA crédito.
+    exemption: exemptionFromStamp(input),
   });
 
   const lines: BuiltAccountingLine[] = [];

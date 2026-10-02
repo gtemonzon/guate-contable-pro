@@ -19,6 +19,9 @@ import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { validateNIT } from "@/utils/nitValidation";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
+import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { resolveExemption } from "@/utils/taxExemption";
+import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 
 interface DetailLine {
   id: string;
@@ -77,6 +80,8 @@ export default function LinkedPurchasesModal({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [felDocTypes, setFelDocTypes] = useState<FelDocumentType[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationType[]>([]);
+  // Exenciones temporales (Decreto 22-2026: combustible oct–dic 2026).
+  const { rules: exemptionRules } = useTaxExemptionRules();
   const [loading, setLoading] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [focusLastCard, setFocusLastCard] = useState(false);
@@ -296,12 +301,32 @@ export default function LinkedPurchasesModal({
   };
 
   const recalcVat = (p: PurchaseEntry): PurchaseEntry => {
+    const opCode = operationTypes.find((t) => t.id === p.operation_type_id)?.code ?? null;
+    const exemption = resolveExemption(exemptionRules, opCode, p.invoice_date);
+    if (exemption) {
+      // Exención vigente: IVA 0, base = total − No afecto (IDP en 0 si la regla lo exonera).
+      const r = calculateMixedTax({
+        totalAmount: p.total_amount || 0,
+        exemptAmount: p.exempt_amount || 0,
+        taxCategory: p.tax_category ?? null,
+        exemption,
+      });
+      return {
+        ...p,
+        exempt_amount: r.exempt,
+        tax_category: r.taxCategory ?? null,
+        base_amount: r.base,
+        vat_amount: r.vat,
+        vat_rate_applied: exemption.vatRate,
+        exemption_rule_code: exemption.code,
+      };
+    }
     const total = p.total_amount || 0;
     const nonVat = p.exempt_amount || 0;
     const taxable = total - nonVat;
     const base = Number((taxable / (1 + VAT_RATE)).toFixed(2));
     const vat = Number((taxable - base).toFixed(2));
-    return { ...p, base_amount: base, vat_amount: vat };
+    return { ...p, base_amount: base, vat_amount: vat, vat_rate_applied: null, exemption_rule_code: null };
   };
 
   const updatePurchase = (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
@@ -309,7 +334,11 @@ export default function LinkedPurchasesModal({
     setPurchases(prev => prev.map((p, i) => {
       if (i !== index) return p;
       const updated = { ...p, [field]: value };
-      if (field === 'total_amount' || field === 'exempt_amount') {
+      if (
+        field === 'total_amount' || field === 'exempt_amount' || field === 'tax_category' ||
+        // La exención depende del tipo de operación y de la fecha.
+        field === 'invoice_date' || field === 'operation_type_id'
+      ) {
         if (field === 'total_amount') updated.total_amount = Number(value) || 0;
         if (field === 'exempt_amount') updated.exempt_amount = Number(value) || 0;
         return recalcVat(updated);
@@ -571,6 +600,9 @@ export default function LinkedPurchasesModal({
         journal_entry_id: journalEntryId || null,
         purchase_book_id: purchaseBookId,
         created_by: session?.user.id ?? null,
+        // Sellos de exención (el trigger trg_purchase_apply_tax_exemption los verifica).
+        vat_rate_applied: p.exemption_rule_code ? (p.vat_rate_applied ?? 0) : null,
+        exemption_rule_code: p.exemption_rule_code ?? null,
       }));
 
       const { data: insertedPurchases, error: purchaseError } = await supabase
