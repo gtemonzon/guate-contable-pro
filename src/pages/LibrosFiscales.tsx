@@ -34,6 +34,7 @@ import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
+import { mergeFetchedRows, shouldDeferSilentReload } from "@/utils/ledgerRowMerge";
 import {
   aggregatePurchaseJournalLines,
   buildDocTypeMap,
@@ -205,6 +206,14 @@ interface SaleEntry {
   _recommendedFields?: string[];
 }
 
+/** Rastro (solo en desarrollo) de cada recarga del libro y su motivo. */
+function debugReload(motivo: string) {
+  if (import.meta.env.DEV) console.debug(`[LibrosFiscales] recarga por ${motivo}`);
+}
+
+/** Clave estable de una fila de compras (_uid: "db-<id>" o "tmp-<uuid>"). */
+const purchaseKeyOf = (p: { _uid?: string; id?: number }) => p._uid ?? (p.id ? `db-${p.id}` : "");
+
 export default function LibrosFiscales() {
   const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [sales, setSales] = useState<SaleEntry[]>([]);
@@ -303,8 +312,14 @@ export default function LibrosFiscales() {
   const [lastSaleOperationTypeId, setLastSaleOperationTypeId] = useState<number | null>(null);
 
   // Inline-edit state + focus management
-  const [editingPurchaseIndex, setEditingPurchaseIndex] = useState<number | null>(null);
-  const [editingSaleIndex, setEditingSaleIndex] = useState<number | null>(null);
+  // Clave estable de la fila en edición (compras: _uid; ventas: client_id), nunca un
+  // índice: reordenar, insertar o recargar no cambia qué fila se está editando.
+  const [editingPurchaseKey, setEditingPurchaseKey] = useState<string | null>(null);
+  const [editingSaleKey, setEditingSaleKey] = useState<string | null>(null);
+  const editingPurchaseKeyRef = useRef(editingPurchaseKey);
+  editingPurchaseKeyRef.current = editingPurchaseKey;
+  const editingSaleKeyRef = useRef(editingSaleKey);
+  editingSaleKeyRef.current = editingSaleKey;
   const [pendingFocusTab, setPendingFocusTab] = useState<null | "compras" | "ventas">(null);
   const purchaseEditRef = useRef<PurchaseCardRef>(null);
   const saleEditRef = useRef<SalesCardRef>(null);
@@ -319,8 +334,41 @@ export default function LibrosFiscales() {
     salesRef.current = sales;
   }, [sales]);
 
+  /**
+   * Aplica un cambio a las filas y deja el ref al día de inmediato, para que un
+   * guardado llamado justo después (flush) lea ya el valor nuevo.
+   */
+  const applyPurchases = (fn: (prev: PurchaseEntry[]) => PurchaseEntry[]) => {
+    purchasesRef.current = fn(purchasesRef.current);
+    setPurchases((prev) => fn(prev));
+  };
+  const applySales = (fn: (prev: SaleEntry[]) => SaleEntry[]) => {
+    salesRef.current = fn(salesRef.current);
+    setSales((prev) => fn(prev));
+  };
+
+  // Guardados en serie por fila: un segundo guardado espera al primero (así una
+  // factura nueva nunca se inserta dos veces).
+  const saveChainsRef = useRef(new Map<string, Promise<boolean>>());
+  const serializeSave = (chainKey: string, run: () => Promise<boolean>): Promise<boolean> => {
+    const previous = saveChainsRef.current.get(chainKey) ?? Promise.resolve(true);
+    const next = previous.catch(() => false).then(run);
+    saveChainsRef.current.set(chainKey, next);
+    void next.finally(() => {
+      if (saveChainsRef.current.get(chainKey) === next) saveChainsRef.current.delete(chainKey);
+    });
+    return next;
+  };
+
+  // Periodo cargado en pantalla: una recarga del MISMO periodo mezcla (no pisa la
+  // fila en edición ni las nuevas); un periodo distinto reemplaza.
+  const loadedPurchaseBookIdRef = useRef<number | null>(null);
+  const loadedSalesPeriodRef = useRef<string | null>(null);
+
   // Save status indicator state
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const saveStatusRef = useRef(saveStatus);
+  saveStatusRef.current = saveStatus;
   const saveStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const { toast } = useToast();
@@ -773,8 +821,25 @@ export default function LibrosFiscales() {
   }, [selectedMonth, selectedYear, activeTab, currentEnterpriseId]);
 
 
+  // Empresa cargada en pantalla (para ignorar eventos que no cambian de empresa).
+  const currentEnterpriseIdRef = useRef<string | null>(null);
+  currentEnterpriseIdRef.current = currentEnterpriseId;
+
+  /**
+   * Guarda lo pendiente de la tarjeta en edición (compras o ventas). Devuelve false
+   * si no se pudo guardar: quien llama no cambia de fila, pestaña, periodo ni recarga.
+   */
+  const flushEditing = useCallback(async (): Promise<boolean> => {
+    const results = await Promise.all([
+      purchaseEditRef.current ? purchaseEditRef.current.flush() : Promise.resolve(true),
+      saleEditRef.current ? saleEditRef.current.flush() : Promise.resolve(true),
+    ]);
+    return results.every(Boolean);
+  }, []);
+
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
+    currentEnterpriseIdRef.current = enterpriseId;
     setCurrentEnterpriseId(enterpriseId);
     
     const fetchEnterpriseNit = async (id: string) => {
@@ -787,6 +852,7 @@ export default function LibrosFiscales() {
     };
     
     if (enterpriseId) {
+      debugReload("montaje");
       fetchFELDocTypes();
       fetchAccounts(enterpriseId);
       fetchOrCreateBook(enterpriseId, selectedMonthRef.current, selectedYearRef.current);
@@ -816,8 +882,20 @@ export default function LibrosFiscales() {
       }
 
       const newEnterpriseId = localStorage.getItem("currentEnterpriseId");
+      // "enterpriseChanged" también llega en eventos de sesión (p. ej. renovación del
+      // token) sin que cambie la empresa: en ese caso no se recarga nada.
+      if (newEnterpriseId === currentEnterpriseIdRef.current) {
+        if (import.meta.env.DEV) console.debug("[LibrosFiscales] evento de empresa ignorado (misma empresa)");
+        return;
+      }
+      // Lo pendiente se guarda en el libro de la empresa anterior antes de cambiar.
+      await flushEditing();
+      currentEnterpriseIdRef.current = newEnterpriseId;
+      setEditingPurchaseKey(null);
+      setEditingSaleKey(null);
       setCurrentEnterpriseId(newEnterpriseId);
       if (newEnterpriseId) {
+        debugReload("cambio de empresa");
         const month = selectedMonthRef.current;
         const year = selectedYearRef.current;
         fetchFELDocTypes();
@@ -831,6 +909,10 @@ export default function LibrosFiscales() {
           .single();
         if (data) setEnterpriseNit(data.nit);
       } else {
+        purchasesRef.current = [];
+        salesRef.current = [];
+        loadedPurchaseBookIdRef.current = null;
+        loadedSalesPeriodRef.current = null;
         setPurchases([]);
         setSales([]);
         setEnterpriseNit("");
@@ -850,17 +932,108 @@ export default function LibrosFiscales() {
   const lastFetchTimestamp = useRef<number>(Date.now());
   const REFETCH_THROTTLE_MS = 60_000; // 60 seconds
 
-  const handleManualRefresh = useCallback(() => {
+  const handleManualRefresh = useCallback(async () => {
     const eid = localStorage.getItem("currentEnterpriseId");
     if (!eid) return;
+    // Primero se guarda lo pendiente; si no se pudo, no se recarga.
+    if (!(await flushEditing())) return;
+    debugReload("actualizar manual");
     lastFetchTimestamp.current = Date.now();
     setIsRefreshing(true);
     fetchOrCreateBook(eid, selectedMonthRef.current, selectedYearRef.current);
     fetchSales(eid, selectedMonthRef.current, selectedYearRef.current);
-  }, []);
+  }, [flushEditing]);
+
+  // ─── Recarga silenciosa (volver a la pestaña) ─────────────────────────────
+  // Nunca pisa trabajo en curso: con una fila en edición, una nueva sin guardar o
+  // un guardado en vuelo se omite y se hace UNA sola vez al terminar la edición.
+  // Cuando corre, mezcla (mergeFetchedRows) en lugar de reemplazar.
+  const pendingSilentReloadRef = useRef(false);
+  const hasWorkInProgress = () =>
+    shouldDeferSilentReload({
+      editingKeys: [editingPurchaseKeyRef.current, editingSaleKeyRef.current],
+      hasUnsavedNewRows:
+        purchasesRef.current.some((p) => p.isNew) || salesRef.current.some((s) => s.isNew),
+      saveStatus: saveStatusRef.current,
+    });
+
+  const silentReload = async (motivo: string) => {
+    const eid = localStorage.getItem("currentEnterpriseId");
+    if (!eid || eid !== currentEnterpriseIdRef.current) return;
+    debugReload(motivo);
+
+    // Refresh the auth session first to avoid stale-token empty results
+    try {
+      await supabase.auth.getSession();
+    } catch (_) {
+      // ignore — autoRefreshToken will handle it
+    }
+
+    lastFetchTimestamp.current = Date.now();
+    // Silently refetch WITHOUT clearing existing data (no setLoading(true))
+    const month = selectedMonthRef.current;
+    const year = selectedYearRef.current;
+    try {
+      const { data: book } = await supabase
+        .from("tab_purchase_books")
+        .select("id")
+        .eq("enterprise_id", parseInt(eid))
+        .eq("month", month)
+        .eq("year", year)
+        .maybeSingle();
+      if (book && book.id === loadedPurchaseBookIdRef.current) {
+        const { data: freshPurchases } = await supabase
+          .from("tab_purchase_ledger")
+          .select("*")
+          .is("deleted_at", null)
+          .eq("purchase_book_id", book.id)
+          .order("invoice_date", { ascending: false })
+          .order("invoice_number", { ascending: false });
+        if (freshPurchases && book.id === loadedPurchaseBookIdRef.current) {
+          const normalized = freshPurchases.map((row) => ({ ...normalizePurchaseRowRef.current(row as unknown as PurchaseEntry), _uid: `db-${row.id}` })) as PurchaseEntry[];
+          applyPurchases((prev) => mergeFetchedRows<PurchaseEntry>(prev, normalized, {
+            keyOf: purchaseKeyOf,
+            setKey: (row, key) => ({ ...row, _uid: key }),
+            preserveKeys: [editingPurchaseKeyRef.current],
+          }));
+        }
+
+      }
+    } catch (_) { /* silent */ }
+
+    try {
+      const period = `${eid}:${year}-${month}`;
+      if (period !== loadedSalesPeriodRef.current) return;
+      const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const { data: freshSales } = await supabase
+        .from("tab_sales_ledger")
+        .select("*")
+        .is("deleted_at", null)
+        .eq("enterprise_id", parseInt(eid))
+        .gte("invoice_date", startDate)
+        .lte("invoice_date", endDate)
+        .order("invoice_date", { ascending: false })
+        .order("invoice_number", { ascending: false });
+      if (freshSales && period === loadedSalesPeriodRef.current) {
+        const fetched = freshSales.map((row) => ({ ...row, client_id: `db-${row.id}` })) as SaleEntry[];
+        applySales((prev) => mergeFetchedRows<SaleEntry>(prev, fetched, {
+          keyOf: (row) => row.client_id,
+          setKey: (row, key) => ({ ...row, client_id: key }),
+          preserveKeys: [editingSaleKeyRef.current],
+        }));
+      }
+    } catch (_) { /* silent */ }
+  };
+  const silentReloadRef = useRef(silentReload);
+  silentReloadRef.current = silentReload;
+  const hasWorkInProgressRef = useRef(hasWorkInProgress);
+  hasWorkInProgressRef.current = hasWorkInProgress;
 
   useEffect(() => {
-    const handleVisibilityChange = async () => {
+    const handleVisibilityChange = () => {
+      // Al ocultarse, cada tarjeta con cambios pendientes los guarda de inmediato
+      // (useLedgerCardAutoSave); aquí solo se trata el regreso a la pestaña.
       if (document.visibilityState !== 'visible') return;
       const eid = localStorage.getItem("currentEnterpriseId");
       if (!eid) return;
@@ -869,72 +1042,64 @@ export default function LibrosFiscales() {
       const elapsed = Date.now() - lastFetchTimestamp.current;
       if (elapsed < REFETCH_THROTTLE_MS) return;
 
-      // Refresh the auth session first to avoid stale-token empty results
-      try {
-        await supabase.auth.getSession();
-      } catch (_) {
-        // ignore — autoRefreshToken will handle it
+      if (hasWorkInProgressRef.current()) {
+        pendingSilentReloadRef.current = true;
+        if (import.meta.env.DEV) console.debug("[LibrosFiscales] recarga por visibilidad diferida (edición en curso)");
+        return;
       }
-
-      lastFetchTimestamp.current = Date.now();
-      // Silently refetch WITHOUT clearing existing data (no setLoading(true))
-      const month = selectedMonthRef.current;
-      const year = selectedYearRef.current;
-      try {
-        const { data: book } = await supabase
-          .from("tab_purchase_books")
-          .select("id")
-          .eq("enterprise_id", parseInt(eid))
-          .eq("month", month)
-          .eq("year", year)
-          .maybeSingle();
-        if (book) {
-          const { data: freshPurchases } = await supabase
-            .from("tab_purchase_ledger")
-            .select("*")
-            .is("deleted_at", null)
-            .eq("purchase_book_id", book.id)
-            .order("invoice_date", { ascending: false })
-            .order("invoice_number", { ascending: false });
-          if (freshPurchases) {
-            const normalized = freshPurchases.map((row) => ({ ...normalizePurchaseRowRef.current(row as unknown as PurchaseEntry), _uid: `db-${row.id}` })) as PurchaseEntry[];
-            purchasesRef.current = normalized;
-            setPurchases(normalized);
-          }
-
-        }
-      } catch (_) { /* silent */ }
-
-      try {
-        const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-        const { data: freshSales } = await supabase
-          .from("tab_sales_ledger")
-          .select("*")
-          .is("deleted_at", null)
-          .eq("enterprise_id", parseInt(eid))
-          .gte("invoice_date", startDate)
-          .lte("invoice_date", endDate)
-          .order("invoice_date", { ascending: false })
-          .order("invoice_number", { ascending: false });
-        if (freshSales) {
-          setSales(freshSales.map((row) => ({ ...row, client_id: `db-${row.id}` })));
-        }
-      } catch (_) { /* silent */ }
+      void silentReloadRef.current("visibilidad");
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
+  // Recarga diferida: se hace una sola vez cuando ya no hay trabajo en curso.
+  useEffect(() => {
+    if (!pendingSilentReloadRef.current) return;
+    if (hasWorkInProgressRef.current()) return;
+    pendingSilentReloadRef.current = false;
+    void silentReloadRef.current("pendiente tras edición");
+  }, [editingPurchaseKey, editingSaleKey, saveStatus, purchases, sales]);
+
   useEffect(() => {
     if (currentEnterpriseId) {
+      debugReload("cambio de mes/año");
       lastFetchTimestamp.current = Date.now();
       fetchAccounts(currentEnterpriseId);
       fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
       fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
     }
   }, [selectedMonth, selectedYear]);
+
+  /**
+   * Cambia de periodo guardando antes lo pendiente (si no se pudo guardar, el
+   * periodo no cambia). Sin tarjeta en edición el cambio es inmediato.
+   */
+  const changePeriod = async (month: number, year: number) => {
+    if (purchaseEditRef.current || saleEditRef.current) {
+      if (!(await flushEditing())) return;
+    }
+    if (month === selectedMonthRef.current && year === selectedYearRef.current) return;
+    setEditingPurchaseKey(null);
+    setEditingSaleKey(null);
+    setSelectedMonth(month);
+    setSelectedYear(year);
+  };
+
+  /** Cambia de pestaña Compras/Ventas guardando antes lo pendiente. */
+  const changeTab = async (tab: "compras" | "ventas") => {
+    if (!(await flushEditing())) return;
+    setActiveTab(tab);
+    setEditingPurchaseKey(null);
+    setEditingSaleKey(null);
+  };
+
+  /** Abre un diálogo que termina en recarga (importar, póliza) guardando antes lo pendiente. */
+  const openAfterFlush = async (open: () => void) => {
+    if (!(await flushEditing())) return;
+    open();
+  };
 
   const fetchFELDocTypes = async () => {
     try {
@@ -1100,8 +1265,19 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
       const normalized = (data || []).map((row) => ({ ...normalizePurchaseRowRef.current(row as unknown as PurchaseEntry), _uid: `db-${row.id}` })) as PurchaseEntry[];
-      purchasesRef.current = normalized;
-      setPurchases(normalized);
+      if (loadedPurchaseBookIdRef.current === bookId) {
+        // Mismo libro (actualizar, importar, póliza): mezclar sin pisar la fila en
+        // edición ni las nuevas, y conservando la clave de cada fila.
+        applyPurchases((prev) => mergeFetchedRows<PurchaseEntry>(prev, normalized, {
+          keyOf: purchaseKeyOf,
+          setKey: (row, key) => ({ ...row, _uid: key }),
+          preserveKeys: [editingPurchaseKeyRef.current],
+        }));
+      } else {
+        loadedPurchaseBookIdRef.current = bookId;
+        purchasesRef.current = normalized;
+        setPurchases(normalized);
+      }
 
     } catch (error: unknown) {
       toast({
@@ -1128,10 +1304,23 @@ export default function LibrosFiscales() {
         .order("invoice_number", { ascending: false });
 
       if (error) throw error;
-      setSales((data || []).map((row) => ({
+      const fetched = (data || []).map((row) => ({
         ...row,
         client_id: `db-${row.id}`,
-      })));
+      })) as SaleEntry[];
+      const period = `${enterpriseId}:${year}-${month}`;
+      if (loadedSalesPeriodRef.current === period) {
+        // Mismo periodo: mezclar sin pisar la fila en edición ni las nuevas.
+        applySales((prev) => mergeFetchedRows<SaleEntry>(prev, fetched, {
+          keyOf: (row) => row.client_id,
+          setKey: (row, key) => ({ ...row, client_id: key }),
+          preserveKeys: [editingSaleKeyRef.current],
+        }));
+      } else {
+        loadedSalesPeriodRef.current = period;
+        salesRef.current = fetched;
+        setSales(fetched);
+      }
 
       // Verificar pólizas existentes para ventas y compras
       await checkExistingJournalEntries(enterpriseId, month, year);
@@ -1306,12 +1495,8 @@ export default function LibrosFiscales() {
       _recommendedFields: recommendedList,
     };
 
-    setPurchases((prev) => {
-      const updated = [newEntry, ...prev];
-      purchasesRef.current = updated;
-      return updated;
-    });
-    setEditingPurchaseIndex(0);
+    applyPurchases((prev) => [newEntry, ...prev]);
+    setEditingPurchaseKey(newEntry._uid ?? null);
     setPendingFocusTab("compras");
   }, [selectedYear, selectedMonth, felDocTypes, lastExpenseAccountId, lastBankAccountId, lastPurchaseOperationTypeId]);
 
@@ -1340,50 +1525,36 @@ export default function LibrosFiscales() {
       isNew: true,
       _recommendedFields: recommendedList,
     };
-    setSales((prev) => {
-      const updated = [newEntry, ...prev];
-      salesRef.current = updated;
-      return updated;
-    });
-    setEditingSaleIndex(0);
+    applySales((prev) => [newEntry, ...prev]);
+    setEditingSaleKey(newEntry.client_id);
     setPendingFocusTab("ventas");
   }, [selectedYear, selectedMonth, felDocTypes, lastIncomeAccountId, lastSaleOperationTypeId]);
 
-  // Save current record first, then create new one
+  // Guarda primero lo pendiente de la fila en edición; si no se pudo guardar, no
+  // se crea otra factura (la que se está editando sigue abierta).
   const addNewPurchase = useCallback(async () => {
     if (isCreatingNewRef.current) return;
     isCreatingNewRef.current = true;
 
     try {
-      // If there's a record being edited, save it first
-      if (editingPurchaseIndex !== null && purchasesRef.current[editingPurchaseIndex]) {
-        await savePurchaseRow(editingPurchaseIndex);
-      }
-      // Now create the new entry
+      if (!(await flushEditing())) return;
       createPurchaseEntry();
     } finally {
       isCreatingNewRef.current = false;
     }
-  }, [editingPurchaseIndex, createPurchaseEntry]);
+  }, [flushEditing, createPurchaseEntry]);
 
   const addNewSale = useCallback(async () => {
     if (isCreatingNewRef.current) return;
     isCreatingNewRef.current = true;
 
     try {
-      // If there's a record being edited, save it first
-      if (editingSaleIndex !== null && salesRef.current[editingSaleIndex]) {
-        const entry = salesRef.current[editingSaleIndex];
-        if (entry.client_id) {
-          await saveSaleRow(entry.client_id);
-        }
-      }
-      // Now create the new entry
+      if (!(await flushEditing())) return;
       createSaleEntry();
     } finally {
       isCreatingNewRef.current = false;
     }
-  }, [editingSaleIndex, createSaleEntry]);
+  }, [flushEditing, createSaleEntry]);
 
   // Focus the edited/new row once it exists in the DOM
   useEffect(() => {
@@ -1411,10 +1582,12 @@ export default function LibrosFiscales() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeTab, addNewPurchase, addNewSale]);
 
-  const updatePurchaseRow = (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
-    setPurchases((prev) => {
+  const updatePurchaseRow = (rowKey: string, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
+    // El índice se resuelve al aplicar el cambio (la lista pudo reordenarse o crecer).
+    applyPurchases((prev) => {
+      const index = prev.findIndex((p) => purchaseKeyOf(p) === rowKey);
+      if (index < 0) return prev;
       const updated = [...prev];
-      if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
 
       if (
@@ -1448,16 +1621,15 @@ export default function LibrosFiscales() {
         updated[index].exemption_rule_code = exemption ? exemption.code : null;
       }
 
-      // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
-      purchasesRef.current = updated;
       return updated;
     });
   };
 
-  const updateSaleRow = (index: number, field: keyof SaleEntry, value: SaleEntry[keyof SaleEntry]) => {
-    setSales((prev) => {
+  const updateSaleRow = (rowKey: string, field: keyof SaleEntry, value: SaleEntry[keyof SaleEntry]) => {
+    applySales((prev) => {
+      const index = prev.findIndex((s) => s.client_id === rowKey);
+      if (index < 0) return prev;
       const updated = [...prev];
-      if (!updated[index]) return prev;
       updated[index] = { ...updated[index], [field]: value };
 
       if (field === "total_amount" || field === "fel_document_type") {
@@ -1469,16 +1641,23 @@ export default function LibrosFiscales() {
         updated[index].vat_amount = vat;
       }
 
-      // IMPORTANT: keep ref in sync immediately to avoid stale-closure saves
-      salesRef.current = updated;
       return updated;
     });
   };
 
-  const savePurchaseRow = async (index: number) => {
-    const rawEntry = purchasesRef.current[index];
-    if (!currentBookId || !currentEnterpriseId) return;
-    if (!rawEntry) return;
+  /**
+   * Guarda una fila de compras por su clave. Devuelve true si quedó guardada (o ya no
+   * existe), false si no se pudo (duplicado, error): la tarjeta sigue abierta y con
+   * cambios pendientes. Los avisos se muestran aquí, una sola vez.
+   */
+  const savePurchaseRow = (rowKey: string): Promise<boolean> =>
+    serializeSave(`p:${rowKey}`, () => doSavePurchaseRow(rowKey));
+
+  const doSavePurchaseRow = async (rowKey: string): Promise<boolean> => {
+    // Se lee la fila al ejecutar (no al programar): siempre la versión más reciente.
+    const rawEntry = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
+    if (!rawEntry) return true;
+    if (!currentBookId || !currentEnterpriseId) return false;
 
     const exemption = purchaseExemption(rawEntry);
     // Una fila exonerada (o con IVA 0 y base = total) no se recalcula al 12% al guardar.
@@ -1494,7 +1673,7 @@ export default function LibrosFiscales() {
         description: `Documento ya ingresado en el mes ${duplicateCheck.month} ${duplicateCheck.year}`,
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     // Start save indicator
@@ -1542,14 +1721,11 @@ export default function LibrosFiscales() {
 
         if (error) throw error;
 
-        setPurchases((prev) => {
-          const updated = [...prev];
-          if (!updated[index]) return prev;
-          // Merge server response into current state to preserve any characters
-          // the user typed while the insert request was in flight.
-          updated[index] = { ...updated[index], id: data.id, isNew: false };
-          return updated;
-        });
+        // Se ubica la fila por su clave (no por el índice de cuando empezó el
+        // guardado) y se conserva lo que el usuario escribió mientras tanto.
+        applyPurchases((prev) => prev.map((p) =>
+          purchaseKeyOf(p) === rowKey ? { ...p, id: data.id, isNew: false } : p
+        ));
 
 
         // Guardar última cuenta usada
@@ -1593,6 +1769,7 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
+      return true;
     } catch (error: unknown) {
       setSaveStatus("idle");
       const errMsg1 = error instanceof Error ? error.message : "";
@@ -1605,14 +1782,18 @@ export default function LibrosFiscales() {
         description: errorMessage,
         variant: "destructive",
       });
+      return false;
     }
   };
 
-  const saveSaleRow = async (rowId: string) => {
-    const index = salesRef.current.findIndex((s) => s.client_id === rowId);
-    const entry = index >= 0 ? salesRef.current[index] : undefined;
-    if (!currentEnterpriseId) return;
-    if (!entry) return;
+  /** Guarda una fila de ventas por su clave (client_id). Mismo contrato que compras. */
+  const saveSaleRow = (rowId: string): Promise<boolean> =>
+    serializeSave(`s:${rowId}`, () => doSaveSaleRow(rowId));
+
+  const doSaveSaleRow = async (rowId: string): Promise<boolean> => {
+    const entry = salesRef.current.find((s) => s.client_id === rowId);
+    if (!entry) return true;
+    if (!currentEnterpriseId) return false;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicateSale(entry, entry.id);
@@ -1622,7 +1803,7 @@ export default function LibrosFiscales() {
         description: `Documento ya ingresado en el mes ${duplicateCheck.month} ${duplicateCheck.year}`,
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     // Start save indicator
@@ -1663,13 +1844,24 @@ export default function LibrosFiscales() {
 
         if (error) throw error;
 
-        setSales((prev) => {
-          const updated = [...prev];
-          const idx = updated.findIndex((s) => s.client_id === rowId);
-          if (idx < 0) return prev;
-          updated[idx] = { ...data, client_id: rowId, isNew: false };
-          return updated;
-        });
+        // Se conserva lo que el usuario escribió mientras se insertaba: del servidor
+        // solo se toman id, autorización y datos de creación.
+        const serverFields = {
+          created_at: data.created_at,
+          created_by: data.created_by,
+        };
+        applySales((prev) => prev.map((s) =>
+          s.client_id === rowId
+            ? {
+                ...s,
+                ...serverFields,
+                id: data.id,
+                authorization_number: data.authorization_number ?? s.authorization_number,
+                client_id: rowId,
+                isNew: false,
+              }
+            : s
+        ));
 
         // Guardar última cuenta usada
         if (entry.income_account_id) {
@@ -1751,6 +1943,7 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
+      return true;
     } catch (error: unknown) {
       setSaveStatus("idle");
       const errMsg2 = error instanceof Error ? error.message : "";
@@ -1763,6 +1956,7 @@ export default function LibrosFiscales() {
         description: errorMessage,
         variant: "destructive",
       });
+      return false;
     }
   };
 
@@ -1784,11 +1978,13 @@ export default function LibrosFiscales() {
     return Number(data?.amount_paid ?? 0);
   };
 
-  const deletePurchaseRow = async (index: number) => {
-    const entry = purchases[index];
+  const deletePurchaseRow = async (rowKey: string) => {
+    const entry = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
+    if (!entry) return;
     
     if (entry.isNew) {
-      setPurchases(purchases.filter((_, i) => i !== index));
+      applyPurchases((prev) => prev.filter((p) => purchaseKeyOf(p) !== rowKey));
+      if (editingPurchaseKeyRef.current === rowKey) setEditingPurchaseKey(null);
       return;
     }
 
@@ -1817,7 +2013,7 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
 
-      setPurchases((prev) => prev.filter((p) => p.id !== id));
+      applyPurchases((prev) => prev.filter((p) => p.id !== id));
       toast({
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
@@ -1831,9 +2027,9 @@ export default function LibrosFiscales() {
     }
   };
 
-  const toggleSaleAnnulled = async (index: number) => {
-    const entry = sales[index];
-    if (!entry.id) return;
+  const toggleSaleAnnulled = async (rowId: string) => {
+    const entry = salesRef.current.find((s) => s.client_id === rowId);
+    if (!entry?.id) return;
 
     const newStatus = !entry.is_annulled;
 
@@ -1845,9 +2041,7 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
 
-      const updated = [...sales];
-      updated[index] = { ...updated[index], is_annulled: newStatus };
-      setSales(updated);
+      applySales((prev) => prev.map((s) => (s.client_id === rowId ? { ...s, is_annulled: newStatus } : s)));
 
       toast({
         title: newStatus ? "Factura anulada" : "Factura reactivada",
@@ -1864,11 +2058,13 @@ export default function LibrosFiscales() {
     }
   };
 
-  const deleteSaleRow = async (index: number) => {
-    const entry = sales[index];
+  const deleteSaleRow = async (rowId: string) => {
+    const entry = salesRef.current.find((s) => s.client_id === rowId);
+    if (!entry) return;
     
     if (entry.isNew) {
-      setSales(sales.filter((_, i) => i !== index));
+      applySales((prev) => prev.filter((s) => s.client_id !== rowId));
+      if (editingSaleKeyRef.current === rowId) setEditingSaleKey(null);
       return;
     }
 
@@ -1897,7 +2093,7 @@ export default function LibrosFiscales() {
 
       if (error) throw error;
 
-      setSales((prev) => prev.filter((s) => s.id !== id));
+      applySales((prev) => prev.filter((s) => s.id !== id));
       toast({
         title: "Factura eliminada",
         description: "La factura se eliminó correctamente",
@@ -1917,6 +2113,21 @@ export default function LibrosFiscales() {
     if (!pending) return;
     if (pending.kind === "purchase") await softDeletePurchase(pending.id);
     else await softDeleteSale(pending.id);
+  };
+
+  /** Abrir otra factura = guardar antes la que está en edición (si falla, no cambia). */
+  const startEditPurchase = async (rowKey: string) => {
+    if (editingPurchaseKeyRef.current === rowKey) return;
+    if (!(await flushEditing())) return;
+    setEditingPurchaseKey(rowKey);
+    setPendingFocusTab("compras");
+  };
+
+  const startEditSale = async (rowId: string) => {
+    if (editingSaleKeyRef.current === rowId) return;
+    if (!(await flushEditing())) return;
+    setEditingSaleKey(rowId);
+    setPendingFocusTab("ventas");
   };
 
   if (!currentEnterpriseId) {
@@ -1994,7 +2205,7 @@ export default function LibrosFiscales() {
               </Tooltip>
             </TooltipProvider>
             <div>
-              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+              <Select value={String(selectedMonth)} onValueChange={(v) => void changePeriod(parseInt(v), selectedYear)}>
                 <SelectTrigger id="month-select" className="w-[110px] h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -2013,7 +2224,7 @@ export default function LibrosFiscales() {
                 type="number"
                 className="w-[80px] h-8 text-xs"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                onChange={(e) => void changePeriod(selectedMonth, parseInt(e.target.value))}
                 min="2020"
                 max="2099"
               />
@@ -2023,12 +2234,7 @@ export default function LibrosFiscales() {
 
         <Tabs
           value={activeTab}
-          onValueChange={(v) => {
-            const tab = v as "compras" | "ventas";
-            setActiveTab(tab);
-            setEditingPurchaseIndex(null);
-            setEditingSaleIndex(null);
-          }}
+          onValueChange={(v) => void changeTab(v as "compras" | "ventas")}
         >
           <TabsList className="grid w-full grid-cols-2 h-8">
             <TabsTrigger value="compras" className="text-xs py-1">
@@ -2118,7 +2324,7 @@ export default function LibrosFiscales() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" onClick={() => setShowImportDialog(true)}>
+                        <Button variant="outline" size="icon" onClick={() => void openAfterFlush(() => setShowImportDialog(true))}>
                           <Upload className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -2126,7 +2332,7 @@ export default function LibrosFiscales() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" onClick={() => setShowJournalDialog(true)}>
+                        <Button variant="outline" size="icon" onClick={() => void openAfterFlush(() => setShowJournalDialog(true))}>
                           <FileText className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -2278,7 +2484,7 @@ export default function LibrosFiscales() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" onClick={() => setShowImportDialog(true)}>
+                        <Button variant="outline" size="icon" onClick={() => void openAfterFlush(() => setShowImportDialog(true))}>
                           <Upload className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -2286,7 +2492,7 @@ export default function LibrosFiscales() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" onClick={() => setShowJournalDialog(true)}>
+                        <Button variant="outline" size="icon" onClick={() => void openAfterFlush(() => setShowJournalDialog(true))}>
                           <FileText className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -2366,13 +2572,13 @@ export default function LibrosFiscales() {
               ) : (
                 <div className="space-y-2">
                   {filteredPurchases.map((purchase) => {
-                    const index = purchases.indexOf(purchase);
+                    const rowKey = purchaseKeyOf(purchase);
                     return (
                     <PurchaseCard
-                      key={purchase._uid || purchase.id || `new-${index}`}
-                      ref={editingPurchaseIndex === index ? purchaseEditRef : undefined}
+                      key={rowKey}
+                      ref={editingPurchaseKey === rowKey ? purchaseEditRef : undefined}
                       purchase={purchase}
-                      index={index}
+                      rowKey={rowKey}
                       enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
@@ -2386,12 +2592,9 @@ export default function LibrosFiscales() {
                       recommendedFields={purchase.isNew ? purchase._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === purchase.id}
                       isIncomplete={purchase.id ? incompletePurchaseIds.has(purchase.id) : false}
-                      isEditing={editingPurchaseIndex === index}
-                      onStartEdit={(idx) => {
-                        setEditingPurchaseIndex(idx);
-                        setPendingFocusTab("compras");
-                      }}
-                      onCancelEdit={() => setEditingPurchaseIndex(null)}
+                      isEditing={editingPurchaseKey === rowKey}
+                      onStartEdit={(key) => void startEditPurchase(key)}
+                      onCancelEdit={() => setEditingPurchaseKey(null)}
                     />
                     );
                   })}
@@ -2405,13 +2608,11 @@ export default function LibrosFiscales() {
               ) : (
                 <div className="space-y-2">
                   {filteredSales.map((sale) => {
-                    const index = sales.indexOf(sale);
                     return (
                     <SalesCard
                       key={sale.client_id}
-                      ref={editingSaleIndex === index ? saleEditRef : undefined}
+                      ref={editingSaleKey === sale.client_id ? saleEditRef : undefined}
                       sale={sale}
-                      index={index}
                       rowId={sale.client_id}
                       enterpriseId={currentEnterpriseId ? parseInt(currentEnterpriseId) : null}
                       felDocTypes={felDocTypes}
@@ -2427,12 +2628,9 @@ export default function LibrosFiscales() {
                       recommendedFields={sale.isNew ? sale._recommendedFields || [] : []}
                       isHighlighted={highlightedInvoiceId === sale.id}
                       isIncomplete={sale.id ? incompleteSaleIds.has(sale.id) : false}
-                      isEditing={editingSaleIndex === index}
-                      onStartEdit={(idx) => {
-                        setEditingSaleIndex(idx);
-                        setPendingFocusTab("ventas");
-                      }}
-                      onCancelEdit={() => setEditingSaleIndex(null)}
+                      isEditing={editingSaleKey === sale.client_id}
+                      onStartEdit={(key) => void startEditSale(key)}
+                      onCancelEdit={() => setEditingSaleKey(null)}
                     />
                     );
                   })}
@@ -2625,6 +2823,7 @@ export default function LibrosFiscales() {
                           .in("id", purchaseIds);
                       }
 
+                      debugReload("póliza");
                       if (currentBookId) await fetchPurchases(currentBookId);
 
                       toast({
@@ -2721,6 +2920,7 @@ export default function LibrosFiscales() {
                           .in("id", saleIds);
                       }
 
+                      debugReload("póliza");
                       await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
 
                       toast({
@@ -3002,6 +3202,7 @@ export default function LibrosFiscales() {
                         });
                       }
 
+                      debugReload("póliza");
                       if (currentBookId) await fetchPurchases(currentBookId);
                     } else {
                       // Obtener configuración de empresa para cuenta de IVA Débito
@@ -3203,6 +3404,7 @@ export default function LibrosFiscales() {
                         });
                       }
 
+                      debugReload("póliza");
                       await fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
                     }
 
@@ -3241,6 +3443,7 @@ export default function LibrosFiscales() {
           enterpriseId={parseInt(currentEnterpriseId)}
           enterpriseNit={enterpriseNit}
           onSuccess={() => {
+            debugReload("importación");
             if (currentEnterpriseId) fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }}
           expenseAccounts={expenseAccounts}
@@ -3255,6 +3458,7 @@ export default function LibrosFiscales() {
           enterpriseId={parseInt(currentEnterpriseId)}
           enterpriseNit={enterpriseNit}
           onSuccess={() => {
+            debugReload("importación");
             if (currentEnterpriseId) fetchSales(currentEnterpriseId, selectedMonth, selectedYear);
           }}
           incomeAccounts={incomeAccounts}
@@ -3267,7 +3471,11 @@ export default function LibrosFiscales() {
           isOpen={showSearchDialog}
           onClose={() => setShowSearchDialog(false)}
           enterpriseId={currentEnterpriseId}
-          onSelectInvoice={(month, year, tab, invoiceId) => {
+          onSelectInvoice={async (month, year, tab, invoiceId) => {
+            // Ir a otra factura = guardar antes lo pendiente.
+            if (!(await flushEditing())) return;
+            setEditingPurchaseKey(null);
+            setEditingSaleKey(null);
             setSelectedMonth(month);
             setSelectedYear(year);
             setActiveTab(tab);

@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useLedgerCardAutoSave, type LedgerSaveResult } from "@/hooks/useLedgerCardAutoSave";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, Ban, RotateCcw, X, Loader2 } from "lucide-react";
+import { Trash2, Save, Ban, RotateCcw, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LedgerHistoryButton } from "@/components/audit/LedgerHistoryButton";
 import { AccountCombobox } from "@/components/ui/account-combobox";
@@ -49,7 +50,7 @@ interface SaleEntry {
 
 interface SalesCardProps {
   sale: SaleEntry;
-  index: number;
+  /** Clave estable de la fila (client_id); todos los callbacks la reciben en vez de un índice. */
   rowId: string;
   /** Enterprise ID for repeat-last-NIT lookup */
   enterpriseId?: number | null;
@@ -60,16 +61,17 @@ interface SalesCardProps {
   showSmallTaxpayerTax?: boolean;
   /** Configured Pequeño Contribuyente rate (e.g. 5 for 5%) */
   smallTaxpayerRate?: number;
-  onUpdate: (index: number, field: keyof SaleEntry, value: any) => void;
-  onSave: (rowId: string) => void;
-  onDelete: (index: number) => void;
-  onToggleAnnulled: (index: number) => void;
+  onUpdate: (rowId: string, field: keyof SaleEntry, value: any) => void;
+  /** Guarda la fila; false = no se guardó (la tarjeta no se cierra). */
+  onSave: (rowId: string) => LedgerSaveResult | Promise<LedgerSaveResult>;
+  onDelete: (rowId: string) => void;
+  onToggleAnnulled: (rowId: string) => void;
   recommendedFields?: string[];
   isHighlighted?: boolean;
   /** Marks the record as missing required classification fields */
   isIncomplete?: boolean;
   isEditing?: boolean;
-  onStartEdit?: (index: number) => void;
+  onStartEdit?: (rowId: string) => void;
   onCancelEdit?: () => void;
   /** Short label for the linked journal entry (e.g. "PD-13"). */
   journalEntryLabel?: string;
@@ -77,6 +79,8 @@ interface SalesCardProps {
 
 export interface SalesCardRef {
   focusDateField: () => void;
+  /** Guarda ya lo pendiente; true si no había nada o se guardó. */
+  flush: () => Promise<boolean>;
 }
 
 // Style for system-recommended values that user hasn't touched
@@ -84,7 +88,6 @@ const recommendedStyle = "italic text-muted-foreground/60";
 
 export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({ 
   sale, 
-  index, 
   rowId,
   enterpriseId,
   felDocTypes,
@@ -104,15 +107,13 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   onCancelEdit,
   journalEntryLabel
 }, ref) => {
-  const [hasChanges, setHasChanges] = useState(false);
-  const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
   const { lookupNit } = useNitLookup();
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNewRecord = sale.isNew;
+  const { hasChanges, markChanged, flush } = useLedgerCardAutoSave({ rowKey: rowId, onSave, cardRef });
   
   const saleRef = useRef(sale);
   saleRef.current = sale;
@@ -136,15 +137,15 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
           dateInputRef.current.focus();
         }
       }, 150);
-    }
+    },
+    flush: () => flush(),
   }));
 
 
   const handleFieldChange = (field: keyof SaleEntry, value: any) => {
-    setHasChanges(true);
-    setChangeTick((t) => t + 1);
+    markChanged();
     setTouchedFields(prev => new Set(prev).add(field));
-    onUpdate(index, field, value);
+    onUpdate(rowId, field, value);
   };
 
   /** Shortcut: pressing "+" in the NIT field repeats the last NIT entered in this book */
@@ -173,68 +174,16 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   };
 
 
-  const restoreFocusById = (activeId?: string | null) => {
-    if (!activeId) return;
-    window.setTimeout(() => {
-      const el = document.getElementById(activeId) as HTMLElement | null;
-      if (el && document.contains(el)) el.focus();
-    }, 80);
-  };
-
   // Clear untouched recommended optional fields before saving
   const clearUntouchedRecommendedFields = () => {
     if (!isNewRecord) return;
     const optionalRecommendedFields = ['income_account_id', 'operation_type_id'];
     optionalRecommendedFields.forEach(field => {
       if (recommendedFields.includes(field) && !touchedFields.has(field)) {
-        onUpdate(index, field as keyof SaleEntry, null);
+        onUpdate(rowId, field as keyof SaleEntry, null);
       }
     });
   };
-
-  // Auto-save with debounce: timer RESETS on every keystroke (via changeTick),
-  // so save only fires once the user pauses. Prevents mid-typing saves that
-  // were wiping subsequent characters.
-  useEffect(() => {
-    if (!hasChanges || !inEditMode) return;
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      const activeEl = document.activeElement as HTMLElement | null;
-      const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-
-      onSave(rowId);
-      setHasChanges(false);
-
-      if (activeId) {
-        window.requestAnimationFrame(() => {
-          window.setTimeout(() => {
-            const el = document.getElementById(activeId);
-            if (el && document.contains(el)) {
-              el.focus();
-            }
-          }, 50);
-        });
-      }
-    }, 2500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [changeTick, hasChanges, inEditMode, rowId]);
-
-  // Save on unmount if there are pending changes
-  useEffect(() => {
-    return () => {
-      if (hasChanges) {
-        onSave(rowId);
-      }
-    };
-  }, []);
 
   // Scroll into view when highlighted
   useEffect(() => {
@@ -252,22 +201,18 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
     }
   }, [isNewRecord]);
 
-  const handleSaveClick = () => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+  // Disco = "Guardar y cerrar": guarda lo pendiente y solo cierra si se guardó.
+  // En una fila nueva siempre intenta guardar (aunque no haya cambios registrados).
+  const handleSaveClick = async () => {
     clearUntouchedRecommendedFields();
-    onSave(rowId);
-    setHasChanges(false);
-    onCancelEdit?.();
+    const ok = await flush({ force: !!isNewRecord });
+    if (ok) onCancelEdit?.();
   };
 
-  const handleCancelClick = () => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    setHasChanges(false);
-    onCancelEdit?.();
+  // ESC: guarda lo pendiente y cierra (si no se pudo guardar, sigue en edición).
+  const handleEscapeClose = async () => {
+    const ok = await flush();
+    if (ok) onCancelEdit?.();
   };
 
   // ESC cierra el modo edición (excepto en registros nuevos)
@@ -282,11 +227,11 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
       ) {
         return;
       }
-      handleCancelClick();
+      void handleEscapeClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [inEditMode, isNewRecord, handleCancelClick]);
+  }, [inEditMode, isNewRecord, handleEscapeClose]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -316,7 +261,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
           isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
           sale.is_annulled && "opacity-60 bg-destructive/5"
         )}
-        onClick={() => onStartEdit?.(index)}
+        onClick={() => onStartEdit?.(rowId)}
       >
         <CardContent className="p-3">
           <div className={cn(
@@ -629,7 +574,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => onToggleAnnulled(index)}>
+                      <AlertDialogAction onClick={() => onToggleAnnulled(rowId)}>
                         {sale.is_annulled ? "Sí, reactivar" : "Sí, anular"}
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -641,21 +586,10 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
                 variant={hasChanges ? "default" : "outline"} 
                 onClick={handleSaveClick}
                 className="h-8 w-8 p-0"
-                title="Guardar"
+                title="Guardar y cerrar"
               >
                 <Save className="h-3 w-3" />
               </Button>
-              {!isNewRecord && (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={handleCancelClick}
-                  className="h-8 w-8 p-0"
-                  title="Cancelar"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
               {sale.id && !isNewRecord && (
                 <LedgerHistoryButton
                   entityType="tab_sales_ledger"
@@ -666,7 +600,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
               <Button 
                 size="sm" 
                 variant="ghost" 
-                onClick={() => onDelete(index)} 
+                onClick={() => onDelete(rowId)} 
                 className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                 title="Eliminar"
               >

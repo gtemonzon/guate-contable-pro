@@ -16,7 +16,7 @@ interface PurchaseInvoiceListProps {
   editingIndex: number | null;
   onEditingIndexChange: (index: number | null) => void;
   onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
-  onSave: (index: number) => void;
+  onSave: (index: number) => boolean | void | Promise<boolean | void>;
   onDelete: (index: number) => void;
   onAdd: () => void;
   loading?: boolean;
@@ -39,6 +39,11 @@ interface PurchaseInvoiceListProps {
   highlightIndex?: number | null;
   /** Returns whether the record at the index is missing required fields */
   getIsIncomplete?: (index: number) => boolean;
+}
+
+/** Clave estable de la fila: _uid; si no lo tiene, el id o (último recurso) la posición. */
+function rowKeyOf(purchase: PurchaseEntry, index: number): string {
+  return purchase._uid ?? (purchase.id ? `id-${purchase.id}` : `new-${index}`);
 }
 
 export function PurchaseInvoiceList({
@@ -69,6 +74,24 @@ export function PurchaseInvoiceList({
   getIsIncomplete,
 }: PurchaseInvoiceListProps) {
   const lastCardRef = useRef<PurchaseCardRef>(null);
+
+  // Las tarjetas trabajan con una clave estable por fila (_uid); esta lista sigue
+  // exponiendo índices a su consumidor, así que traduce clave → índice en el
+  // momento de aplicar (con la lista más reciente, nunca con un índice viejo).
+  const purchasesRef = useRef(purchases);
+  purchasesRef.current = purchases;
+  const indexOfKey = useCallback(
+    (key: string) => purchasesRef.current.findIndex((p, i) => rowKeyOf(p, i) === key),
+    [],
+  );
+  const withIndex = useCallback(
+    <A extends unknown[], R>(fn: ((index: number, ...args: A) => R) | undefined) =>
+      (key: string, ...args: A): R | undefined => {
+        const index = indexOfKey(key);
+        return index >= 0 && fn ? fn(index, ...args) : undefined;
+      },
+    [indexOfKey],
+  );
 
   // Focus last card when requested (e.g. after adding new)
   useEffect(() => {
@@ -112,25 +135,31 @@ export function PurchaseInvoiceList({
       </div>
       {purchases.map((purchase, index) => (
         <PurchaseCard
-          key={purchase._uid ?? (purchase.id ? `id-${purchase.id}` : `new-${index}`)}
+          key={rowKeyOf(purchase, index)}
           ref={index === purchases.length - 1 ? lastCardRef : undefined}
           purchase={purchase}
-          index={index}
+          rowKey={rowKeyOf(purchase, index)}
           enterpriseId={enterpriseId}
           variant={variant}
           felDocTypes={felDocTypes}
           operationTypes={operationTypes}
           expenseAccounts={expenseAccounts}
           bankAccounts={bankAccounts}
-          onUpdate={onUpdate}
-          onSave={onSave}
-          onDelete={onDelete}
+          onUpdate={withIndex(onUpdate)}
+          onSave={(key) => {
+            const index = indexOfKey(key);
+            return index >= 0 ? onSave(index) : true;
+          }}
+          onDelete={withIndex(onDelete)}
           recommendedFields={getRecommendedFields?.(index) ?? (purchase.isNew ? purchase._recommendedFields || [] : [])}
           isEditing={editingIndex === index}
-          onStartEdit={(idx) => onEditingIndexChange(idx)}
+          onStartEdit={(key) => {
+            const idx = indexOfKey(key);
+            if (idx >= 0) onEditingIndexChange(idx);
+          }}
           onCancelEdit={() => onEditingIndexChange(null)}
           duplicateWarning={duplicateWarnings?.[index] ?? null}
-          onCheckDuplicate={onCheckDuplicate}
+          onCheckDuplicate={withIndex(onCheckDuplicate)}
           appliesVat={appliesVat}
           isHighlighted={highlightIndex === index}
           isIncomplete={getIsIncomplete?.(index) ?? false}

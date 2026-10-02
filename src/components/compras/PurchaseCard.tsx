@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useLedgerCardAutoSave, type LedgerSaveResult } from "@/hooks/useLedgerCardAutoSave";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Trash2, Save, X, AlertTriangle, Loader2 } from "lucide-react";
+import { Trash2, Save, AlertTriangle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { LedgerHistoryButton } from "@/components/audit/LedgerHistoryButton";
 import { AccountCombobox } from "@/components/ui/account-combobox";
@@ -52,29 +53,31 @@ export interface PurchaseEntry {
 
 export interface PurchaseCardProps {
   purchase: PurchaseEntry;
-  index: number;
+  /** Clave estable de la fila (_uid); todos los callbacks la reciben en vez de un índice. */
+  rowKey: string;
   /** Enterprise ID for auto-suggest mapping lookups */
   enterpriseId?: number | null;
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
   bankAccounts: { id: number; account_code: string; account_name: string }[];
-  onUpdate: (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => void;
-  onSave: (index: number) => void;
-  onDelete: (index: number) => void;
+  onUpdate: (rowKey: string, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => void;
+  /** Guarda la fila; false = no se guardó (la tarjeta no se cierra). */
+  onSave: (rowKey: string) => LedgerSaveResult | Promise<LedgerSaveResult>;
+  onDelete: (rowKey: string) => void;
   recommendedFields?: string[];
   isHighlighted?: boolean;
   /** Marks the record as missing required classification fields */
   isIncomplete?: boolean;
   isEditing?: boolean;
-  onStartEdit?: (index: number) => void;
+  onStartEdit?: (rowKey: string) => void;
   onCancelEdit?: () => void;
   /** 'full' shows all fields; 'compact' hides bank, operation, IDP, batch_reference */
   variant?: 'full' | 'compact';
   /** External duplicate warning to display */
   duplicateWarning?: string | null;
   /** Called on invoice_number blur for external duplicate checking */
-  onCheckDuplicate?: (index: number) => void;
+  onCheckDuplicate?: (rowKey: string) => void;
   /** Phase 2: when false, hide VAT/Base/Exento fields and relabel Total. */
   appliesVat?: boolean;
   /** Short label for the linked journal entry (e.g. "PD-13"). */
@@ -110,6 +113,8 @@ function ExemptionBadge({ exemption, className }: { exemption: ResolvedTaxExempt
 
 export interface PurchaseCardRef {
   focusDateField: () => void;
+  /** Guarda ya lo pendiente; true si no había nada o se guardó. */
+  flush: () => Promise<boolean>;
 }
 
 // Style for system-recommended values that user hasn't touched
@@ -117,7 +122,7 @@ const recommendedStyle = "italic text-muted-foreground/60";
 
 export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({ 
   purchase, 
-  index, 
+  rowKey, 
   enterpriseId,
   felDocTypes, 
   operationTypes, 
@@ -138,14 +143,12 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   appliesVat = true,
   journalEntryLabel,
 }, ref) => {
-  const [hasChanges, setHasChanges] = useState(false);
-  const [changeTick, setChangeTick] = useState(0);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [nitError, setNitError] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNewRecord = purchase.isNew;
+  const { hasChanges, markChanged, flush } = useLedgerCardAutoSave({ rowKey, onSave, cardRef });
   
   const isCompact = variant === 'compact';
 
@@ -188,7 +191,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
           dateInputRef.current.focus();
         }
       }, 150);
-    }
+    },
+    flush: () => flush(),
   }));
 
 
@@ -205,10 +209,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
         if (mapping && (mapping as { operation_type_id?: number; expense_account_id?: number }).operation_type_id) {
           const m = mapping as { operation_type_id?: number; expense_account_id?: number };
           if (!touchedFields.has("operation_type_id") && m.operation_type_id) {
-            onUpdate(index, "operation_type_id", m.operation_type_id);
+            onUpdate(rowKey, "operation_type_id", m.operation_type_id);
           }
           if (!touchedFields.has("expense_account_id") && m.expense_account_id) {
-            onUpdate(index, "expense_account_id", m.expense_account_id);
+            onUpdate(rowKey, "expense_account_id", m.expense_account_id);
           }
           return;
         }
@@ -227,10 +231,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
       if (lastPurchase) {
         if (!touchedFields.has("operation_type_id") && lastPurchase.operation_type_id) {
-          onUpdate(index, "operation_type_id", lastPurchase.operation_type_id);
+          onUpdate(rowKey, "operation_type_id", lastPurchase.operation_type_id);
         }
         if (!touchedFields.has("expense_account_id") && lastPurchase.expense_account_id) {
-          onUpdate(index, "expense_account_id", lastPurchase.expense_account_id);
+          onUpdate(rowKey, "expense_account_id", lastPurchase.expense_account_id);
         }
       }
     } catch {
@@ -246,7 +250,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     if (current) return; // don't overwrite user-provided name
     const result = await lookupNit(nit);
     if (result?.found && result.name) {
-      onUpdate(index, "supplier_name", result.name);
+      onUpdate(rowKey, "supplier_name", result.name);
     }
   };
 
@@ -284,10 +288,9 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
 
 
   const handleFieldChange = (field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => {
-    setHasChanges(true);
-    setChangeTick((t) => t + 1);
+    markChanged();
     setTouchedFields(prev => new Set(prev).add(field));
-    onUpdate(index, field, value);
+    onUpdate(rowKey, field, value);
   };
 
   /**
@@ -297,11 +300,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
    */
   const handleIdpChange = (rawValue: string) => {
     const numeric = parseFloat(rawValue) || 0;
-    setHasChanges(true);
-    setChangeTick((t) => t + 1);
+    markChanged();
     setTouchedFields(prev => new Set(prev).add("exempt_amount").add("tax_category"));
-    onUpdate(index, "exempt_amount", numeric);
-    onUpdate(index, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
+    onUpdate(rowKey, "exempt_amount", numeric);
+    onUpdate(rowKey, "tax_category", numeric > 0 ? "IDP" : (purchase.tax_category ?? null));
   };
   const idpDisplayValue = ((purchase.tax_category ?? null) === "IDP")
     ? (purchase.exempt_amount || 0)
@@ -313,62 +315,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     const optionalRecommendedFields = ['expense_account_id', 'bank_account_id', 'operation_type_id'];
     optionalRecommendedFields.forEach(field => {
       if (recommendedFields.includes(field) && !touchedFields.has(field)) {
-        onUpdate(index, field as keyof PurchaseEntry, null);
+        onUpdate(rowKey, field as keyof PurchaseEntry, null);
       }
     });
   };
-
-  // Keep refs to the latest callbacks so debounced timers never fire a stale
-  // closure (which previously saved an earlier snapshot of the row).
-  const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
-  const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
-
-  // Auto-save with debounce: timer RESETS on every keystroke (via changeTick),
-  // so the save only fires once the user actually pauses typing. This prevents
-  // mid-typing saves that were wiping subsequent characters.
-  useEffect(() => {
-    if (!hasChanges || !inEditMode) return;
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      const activeEl = document.activeElement as HTMLElement | null;
-      const activeId = cardRef.current?.contains(activeEl) ? activeEl?.id : null;
-
-      // Always invoke the LATEST onSave so it reads the latest parent state.
-      onSaveRef.current(index);
-      setHasChanges(false);
-
-      if (activeId) {
-        window.requestAnimationFrame(() => {
-          window.setTimeout(() => {
-            const el = document.getElementById(activeId);
-            if (el && document.contains(el)) {
-              el.focus();
-            }
-          }, 50);
-        });
-      }
-    }, 2500);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [changeTick, hasChanges, inEditMode, index]);
-
-  // Save on unmount if there are pending changes
-  useEffect(() => {
-    return () => {
-      if (hasChanges) {
-        onSaveRef.current(index);
-      }
-    };
-  }, []);
 
   // Scroll into view when highlighted
   useEffect(() => {
@@ -386,22 +336,18 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
     }
   }, [isNewRecord]);
 
-  const handleSaveClick = () => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
+  // Disco = "Guardar y cerrar": guarda lo pendiente y solo cierra si se guardó.
+  // En una fila nueva siempre intenta guardar (aunque no haya cambios registrados).
+  const handleSaveClick = async () => {
     clearUntouchedRecommendedFields();
-    onSave(index);
-    setHasChanges(false);
-    onCancelEdit?.();
+    const ok = await flush({ force: !!isNewRecord });
+    if (ok) onCancelEdit?.();
   };
 
-  const handleCancelClick = () => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    setHasChanges(false);
-    onCancelEdit?.();
+  // ESC: guarda lo pendiente y cierra (si no se pudo guardar, sigue en edición).
+  const handleEscapeClose = async () => {
+    const ok = await flush();
+    if (ok) onCancelEdit?.();
   };
 
   // ESC cierra el modo edición (excepto en registros nuevos)
@@ -416,11 +362,11 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
       ) {
         return;
       }
-      handleCancelClick();
+      void handleEscapeClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [inEditMode, isNewRecord, handleCancelClick]);
+  }, [inEditMode, isNewRecord, handleEscapeClose]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -453,7 +399,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             isHighlighted && "ring-2 ring-primary border-primary bg-accent/20",
             dupWarning && "border-destructive/50 bg-destructive/5",
           )}
-          onClick={() => onStartEdit?.(index)}
+          onClick={() => onStartEdit?.(rowKey)}
         >
           <CardContent className="p-2.5">
             <div className="grid grid-cols-12 gap-2 items-center text-sm">
@@ -506,7 +452,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
           isIncomplete && !isHighlighted && "ring-1 ring-destructive/50 border-destructive/40",
           isHighlighted && "ring-2 ring-primary border-primary bg-accent/20"
         )}
-        onClick={() => onStartEdit?.(index)}
+        onClick={() => onStartEdit?.(rowKey)}
       >
         <CardContent className="p-3">
           <div className="grid grid-cols-12 gap-2 items-center text-sm">
@@ -574,7 +520,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 <label className="text-xs text-muted-foreground">Fecha</label>
                 <Input
                   ref={dateInputRef}
-                  id={`purchase-${index}-invoice_date`}
+                  id={`purchase-${rowKey}-invoice_date`}
                   type="date"
                   value={purchase.invoice_date}
                   onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -600,7 +546,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className="col-span-1">
                 <label className="text-xs text-muted-foreground">Serie</label>
                 <Input
-                  id={`purchase-${index}-invoice_series`}
+                  id={`purchase-${rowKey}-invoice_series`}
                   value={purchase.invoice_series}
                   onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
                   placeholder="A"
@@ -610,10 +556,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className="col-span-2">
                 <label className="text-xs text-muted-foreground">Número</label>
                 <Input
-                  id={`purchase-${index}-invoice_number`}
+                  id={`purchase-${rowKey}-invoice_number`}
                   value={purchase.invoice_number}
                   onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
-                  onBlur={() => onCheckDuplicate?.(index)}
+                  onBlur={() => onCheckDuplicate?.(rowKey)}
                   placeholder="123456"
                   className="h-8 text-xs"
                 />
@@ -781,7 +727,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                     variant={hasChanges ? "default" : "outline"}
                     onClick={handleSaveClick}
                     className="h-8 w-8 p-0"
-                    title="Guardar"
+                    title="Guardar y cerrar"
                   >
                     <Save className="h-3 w-3" />
                   </Button>
@@ -795,7 +741,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                   <Button 
                     size="sm" 
                     variant="ghost" 
-                    onClick={() => onDelete(index)} 
+                    onClick={() => onDelete(rowKey)} 
                     className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                     title="Eliminar"
                   >
@@ -850,7 +796,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <label className="text-xs text-muted-foreground">Fecha</label>
               <Input
                 ref={dateInputRef}
-                id={`purchase-${index}-invoice_date`}
+                id={`purchase-${rowKey}-invoice_date`}
                 type="date"
                 value={purchase.invoice_date}
                 onChange={(e) => handleFieldChange("invoice_date", e.target.value)}
@@ -860,7 +806,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-1">
               <label className="text-xs text-muted-foreground">Serie</label>
               <Input
-                id={`purchase-${index}-invoice_series`}
+                id={`purchase-${rowKey}-invoice_series`}
                 value={purchase.invoice_series}
                 onChange={(e) => handleFieldChange("invoice_series", e.target.value)}
                 placeholder="Ej: A"
@@ -870,10 +816,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-2">
               <label className="text-xs text-muted-foreground">Número</label>
               <Input
-                id={`purchase-${index}-invoice_number`}
+                id={`purchase-${rowKey}-invoice_number`}
                 value={purchase.invoice_number}
                 onChange={(e) => handleFieldChange("invoice_number", e.target.value)}
-                onBlur={() => onCheckDuplicate?.(index)}
+                onBlur={() => onCheckDuplicate?.(rowKey)}
                 placeholder="12345"
                 className="h-8"
               />
@@ -1058,21 +1004,10 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 variant={hasChanges ? "default" : "outline"} 
                 onClick={handleSaveClick}
                 className="h-8 w-8 p-0"
-                title="Guardar"
+                title="Guardar y cerrar"
               >
                 <Save className="h-3 w-3" />
               </Button>
-              {!isNewRecord && (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={handleCancelClick}
-                  className="h-8 w-8 p-0"
-                  title="Cancelar"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
               {purchase.id && !isNewRecord && (
                 <LedgerHistoryButton
                   entityType="tab_purchase_ledger"
@@ -1083,7 +1018,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <Button 
                 size="sm" 
                 variant="ghost" 
-                onClick={() => onDelete(index)} 
+                onClick={() => onDelete(rowKey)} 
                 className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                 title="Eliminar"
               >
