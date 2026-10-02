@@ -249,6 +249,7 @@ export default function LinkedPurchasesModal({
           expense_account_id: d.expense_account_id,
           bank_account_id: d.bank_account_id,
           journal_entry_id: d.journal_entry_id,
+          _uid: `db-${d.id}`,
         }));
         setPurchases(loaded);
       } else {
@@ -278,6 +279,7 @@ export default function LinkedPurchasesModal({
     bank_account_id: null,
     journal_entry_id: null,
     isNew: true,
+    _uid: `tmp-${crypto.randomUUID()}`,
   });
 
   const addPurchase = () => {
