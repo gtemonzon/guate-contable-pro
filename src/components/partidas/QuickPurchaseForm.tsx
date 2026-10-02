@@ -716,11 +716,19 @@ export function QuickPurchaseForm({
           />
         </div>
         {hideNonVatInput && exemption ? (
-          <div className="flex items-end pb-1.5">
+          <div className="flex items-end pb-1.5 min-w-0">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
-                  {exemptionBadgeLabel(exemption)}
+                <Badge
+                  variant="outline"
+                  className="block w-full min-w-0 text-[10px] border-emerald-500/50 text-emerald-700 dark:text-emerald-400 leading-tight text-center h-auto rounded-md"
+                >
+                  {(() => {
+                    const label = exemptionBadgeLabel(exemption);
+                    const spaceIndex = label.indexOf(" ");
+                    const lines = spaceIndex === -1 ? [label] : [label.slice(0, spaceIndex), label.slice(spaceIndex + 1)];
+                    return lines.map((line, i) => <span key={i} className="block">{line}</span>);
+                  })()}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs text-xs">{exemptionTooltip(exemption)}</TooltipContent>
