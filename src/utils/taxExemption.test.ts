@@ -44,6 +44,27 @@ describe("resolveExemption (fechas como texto, sin zona horaria)", () => {
   });
 });
 
+describe("exemptionBadgeLabel", () => {
+  it("con decreto en legal_reference/name => Exonerado Decreto N", () => {
+    expect(exemptionBadgeLabel({
+      code: "X", vatRate: 0, blocksIdp: false, name: "Cualquiera",
+      legalReference: "Decreto 22-2026 (Diario de Centro América)", validFrom: "2026-10-01", validTo: null,
+    } as never)).toBe("Exonerado Decreto 22-2026");
+  });
+  it("sin decreto y con name => usa el name de la regla", () => {
+    expect(exemptionBadgeLabel({
+      code: "EXENTAS", vatRate: 0, blocksIdp: false, name: "Exenta",
+      legalReference: "Operación exenta de IVA (sin crédito fiscal)", validFrom: "2026-10-01", validTo: null,
+    } as never)).toBe("Exenta");
+  });
+  it("sin name ni decreto => respaldo 'Exonerado'", () => {
+    expect(exemptionBadgeLabel({
+      code: "X", vatRate: 0, blocksIdp: false, name: "", legalReference: null, validFrom: "2026-10-01", validTo: null,
+    } as never)).toBe("Exonerado");
+    expect(exemptionBadgeLabel(null)).toBe("Exonerado");
+  });
+});
+
 describe("calculateMixedTax con exención", () => {
   const ex = resolveExemption(RULES, "COMBUSTIBLE", "2026-10-01");
   it("sin exención el cálculo no cambia", () => {
