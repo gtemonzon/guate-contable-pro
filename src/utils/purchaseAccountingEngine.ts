@@ -23,6 +23,7 @@ import {
   type TaxCategoryCode,
   type MixedTaxInput,
   type MixedTaxResult,
+  type PurchaseTaxExemption,
 } from "./purchaseTaxCalculation";
 
 export { TAX_CATEGORIES, NO_VAT_DOCUMENT_TYPES, getTaxCategoryLabel };
@@ -41,6 +42,8 @@ export interface PurchaseAccountingInput {
   vatRate?: number;
   /** False when the enterprise is fully VAT-exempt (ONG / Exenta). */
   appliesVat?: boolean;
+  /** Exención temporal vigente (p. ej. Decreto 22-2026): IVA 0, base = total − No afecto. */
+  exemption?: PurchaseTaxExemption | null;
 }
 
 export interface PurchaseAccountingResult {
@@ -75,12 +78,14 @@ export function calculatePurchaseAccounting(
     documentType: input.documentType,
     vatRate: input.vatRate,
     appliesVat: input.appliesVat,
+    taxCategory: input.taxCategory ?? null,
+    exemption: input.exemption ?? null,
   };
   const r: MixedTaxResult = calculateMixedTax(mt);
   return {
     total: r.total,
     nonVat: r.exempt,
-    taxCategory: input.taxCategory ?? null,
+    taxCategory: r.taxCategory !== undefined ? r.taxCategory : (input.taxCategory ?? null),
     taxable: r.taxableWithVat,
     base: r.base,
     vat: r.vat,

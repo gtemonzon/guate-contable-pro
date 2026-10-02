@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +42,10 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
+import {
+  finalizeImportedPurchase, stripImportInternals, type FinalizedImport, type SatVatDifference,
+} from "@/utils/purchaseImportTax";
 
 // Configure PDF.js worker (bundled via Vite)
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -80,9 +84,17 @@ interface ValidPurchase {
   tax_category?: string | null;
   expense_account_id?: number | null;
   operation_type_id?: number | null;
+  /** Sellos de exención (Decreto 22-2026 u otra regla). */
+  vat_rate_applied?: number | null;
+  exemption_rule_code?: string | null;
 }
 
-type ValidPurchaseWithSourceRow = ValidPurchase & { __sourceRow: number };
+/**
+ * __sourceRow, __satVat y __satIdp son internos: se eliminan antes del insert.
+ * __satVat / __satIdp = IVA y petróleo tal como vienen en el archivo SAT (undefined
+ * si la fuente no los trae de forma confiable).
+ */
+type ValidPurchaseWithSourceRow = ValidPurchase & { __sourceRow: number; __satVat?: number; __satIdp?: number };
 
 interface PurchaseDuplicateRecord {
   id: number;
@@ -259,6 +271,8 @@ async function parsePdfFile(
   }>;
   errors: string[];
   receiverNit?: string;
+  /** "libro_compras" | "mis_documentos" | "unknown" (parse-purchases-pdf). */
+  formatType?: string;
 }> {
   // Extract text from PDF client-side (with progress)
   const pdfText = await extractTextFromPdf(file, onProgress);
@@ -317,6 +331,38 @@ export function ImportPurchasesDialog({
   // Record selection state
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [recordSearchFilter, setRecordSearchFilter] = useState("");
+
+  // Exenciones temporales (Decreto 22-2026: combustible oct–dic 2026).
+  const { rules: exemptionRules, isLoading: exemptionRulesLoading } = useTaxExemptionRules();
+  const finalizeRecord = (record: ValidPurchaseWithSourceRow): FinalizedImport<ValidPurchaseWithSourceRow> =>
+    finalizeImportedPurchase(record, {
+      rules: exemptionRules,
+      operationTypeCode: (id) => operationTypes.find((o) => o.id === id)?.code ?? null,
+    });
+
+  // Revisión fiscal de lo que se va a importar (seleccionados + duplicados a sobrescribir).
+  const taxReview = useMemo(() => {
+    if (!validationResult) return null;
+    const ctx = {
+      rules: exemptionRules,
+      operationTypeCode: (id: number | null | undefined) => operationTypes.find((o) => o.id === id)?.code ?? null,
+    };
+    // Por índice de validRecords, para marcar cada registro en la lista.
+    const validFinal = validationResult.validRecords.map((r) => finalizeImportedPurchase(r, ctx));
+    const toImport = [
+      ...validFinal.filter((_, i) => selectedIndices.has(i)),
+      ...(overwriteDuplicates ? validationResult.duplicateRecords.map((r) => finalizeImportedPurchase(r, ctx)) : []),
+    ];
+    const warnings = toImport.filter((f) => f.warning);
+    const differences = toImport.map((f) => f.satDifference).filter(Boolean) as SatVatDifference[];
+    return {
+      validFinal,
+      exemptedCount: toImport.filter((f) => f.exempted).length,
+      warnings,
+      differences,
+      differencesWithZeroSatVat: differences.filter((d) => Math.abs(d.satVat) <= 0.005).length,
+    };
+  }, [validationResult, exemptionRules, operationTypes, selectedIndices, overwriteDuplicates]);
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [
@@ -563,6 +609,14 @@ export function ImportPurchasesDialog({
         // For fuel: IVA = (Total - IDP) / 1.12 * 12%
         const { vatAmount, baseAmount } = calculateVATFromTotal(total, tipoDoc, 0.12, idpAmount);
 
+        // IVA y petróleo tal como vienen en el archivo (no se usan para el cálculo:
+        // solo para la exención sin tipo Combustible y el control de diferencias).
+        const rawSatVat = colIndices.iva !== undefined && colIndices.iva !== -1 ? values[colIndices.iva] : undefined;
+        const satVat = rawSatVat !== undefined && rawSatVat !== null && String(rawSatVat).trim() !== ""
+          ? parseNumber(rawSatVat)
+          : undefined;
+        const satIdp = colIndices.petroleo !== undefined && colIndices.petroleo !== -1 ? idpAmount : undefined;
+
         // Get other fields
         const serie = sanitizeCSVField(String(values[colIndices.serie] || ""));
         const numero = sanitizeCSVField(String(values[colIndices.numero] || ""));
@@ -624,6 +678,8 @@ export function ImportPurchasesDialog({
           total_amount: total,
           exempt_amount: idpAmount > 0 ? idpAmount : 0,
           tax_category: idpAmount > 0 ? 'IDP' : null,
+          __satVat: satVat,
+          __satIdp: satIdp,
         });
       }
 
@@ -861,6 +917,9 @@ export function ImportPurchasesDialog({
           vat_amount: row.vat_amount,
           net_amount: row.base_amount,
           total_amount: row.total_amount,
+          // "Libro de Compras" trae IVA cuando es > 0 (si no, la función lo calcula);
+          // "Mis Documentos" no trae IVA confiable: ahí solo aplica la exención.
+          __satVat: pdfResult.formatType === "libro_compras" ? row.vat_amount : undefined,
         });
       }
       
@@ -1065,9 +1124,9 @@ export function ImportPurchasesDialog({
       const { data: { session } } = await supabase.auth.getSession();
       const createdBy = session?.user.id ?? null;
 
-      // Insert new records
+      // Insert new records (paso fiscal final con el tipo de operación definitivo)
       if (recordsToInsert.length > 0) {
-        const payload = recordsToInsert.map(({ __sourceRow, ...rest }) => ({ ...rest, created_by: createdBy }));
+        const payload = recordsToInsert.map((r) => ({ ...stripImportInternals(finalizeRecord(r).record), created_by: createdBy }));
 
         const { error: insertError } = await supabase
           .from("tab_purchase_ledger")
@@ -1080,7 +1139,7 @@ export function ImportPurchasesDialog({
       // Upsert duplicate records if user chose to overwrite
       if (recordsToUpsert.length > 0) {
         for (const record of recordsToUpsert) {
-          const { __sourceRow, ...payload } = record;
+          const payload = stripImportInternals(finalizeRecord(record).record);
 
           // Sobrescribir = borrado lógico de la fila vieja + inserción de la nueva.
           // Los índices únicos son parciales (WHERE deleted_at IS NULL), así que la
@@ -1594,6 +1653,96 @@ export function ImportPurchasesDialog({
                 </div>
               </div>
 
+              {/* Exenciones temporales (Decreto 22-2026) y control del IVA del archivo SAT */}
+              {taxReview && taxReview.exemptedCount > 0 && (
+                <div className="flex items-start gap-2 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    <strong>{taxReview.exemptedCount}</strong> factura(s) exonerada(s) por tipo de operación y fecha
+                    (IVA 0, base = total, sin IDP).
+                  </span>
+                </div>
+              )}
+
+              {taxReview && taxReview.warnings.length > 0 && (
+                <Collapsible defaultOpen={taxReview.warnings.length <= 10}>
+                  <div className="border border-amber-300 dark:border-amber-800 rounded-lg overflow-hidden">
+                    <CollapsibleTrigger className="w-full bg-amber-50 dark:bg-amber-950/30 px-4 py-2 border-b border-amber-200 dark:border-amber-900 flex items-center justify-between hover:bg-amber-100/60 dark:hover:bg-amber-950/50 transition-colors">
+                      <div className="flex items-center gap-2 text-left">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                          {taxReview.warnings.length} factura(s) con IVA 0 en el archivo SAT dentro de la vigencia de una exención
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <p className="px-4 py-2 text-xs text-amber-800 dark:text-amber-300 border-b">
+                        {taxReview.warnings[0].warning}. Se importan con IVA 0 y base = total.
+                      </p>
+                      <div className="max-h-[200px] overflow-auto divide-y">
+                        {taxReview.warnings.map((f, i) => (
+                          <div key={i} className="flex items-center gap-3 px-4 py-1.5 text-xs">
+                            <span className="w-[78px] font-mono shrink-0">{f.record.invoice_date}</span>
+                            <span className="w-[110px] font-mono shrink-0 truncate">
+                              {f.record.invoice_series ? `${f.record.invoice_series}-` : ""}{f.record.invoice_number}
+                            </span>
+                            <span className="flex-1 truncate" title={f.record.supplier_name}>{f.record.supplier_name}</span>
+                            <span className="w-[90px] text-right font-mono shrink-0">Q{formatCurrency(f.record.total_amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
+              {taxReview && taxReview.differences.length > 0 && (
+                <Collapsible>
+                  <div className="border rounded-lg overflow-hidden">
+                    <CollapsibleTrigger className="w-full bg-muted/50 px-4 py-2 border-b flex items-center justify-between hover:bg-muted/70 transition-colors">
+                      <div className="flex items-center gap-2 text-left">
+                        <FileWarning className="h-4 w-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-medium">
+                          {taxReview.differences.length} factura(s) donde el IVA del archivo SAT difiere del calculado
+                          {taxReview.differencesWithZeroSatVat > 0 && ` (${taxReview.differencesWithZeroSatVat} con IVA 0 en el archivo)`}
+                        </span>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <p className="px-4 py-2 text-xs text-muted-foreground border-b">
+                        Solo es una advertencia: la importación no se bloquea y se usa el IVA calculado.
+                      </p>
+                      <div className="max-h-[220px] overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-28">Serie-No.</TableHead>
+                              <TableHead>Proveedor</TableHead>
+                              <TableHead className="w-24 text-right">Total</TableHead>
+                              <TableHead className="w-24 text-right">IVA SAT</TableHead>
+                              <TableHead className="w-24 text-right">IVA calculado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {taxReview.differences.map((d, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-mono text-xs">{d.invoice}</TableCell>
+                                <TableCell className="text-xs max-w-[200px] truncate" title={d.supplier}>{d.supplier}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(d.total)}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(d.satVat)}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(d.calculatedVat)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
               {/* Duplicates Section with Overwrite Option */}
               {validationResult.duplicateRecords.length > 0 && (
                 <div className="border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
@@ -1777,6 +1926,16 @@ export function ImportPurchasesDialog({
                                     {operationTypes.find(o => o.id === record.operation_type_id)?.code || ""}
                                   </Badge>
                                 )}
+                                {taxReview?.validFinal[idx]?.exempted && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 shrink-0 border-emerald-500/50 text-emerald-700 dark:text-emerald-400" title="IVA 0, base = total, sin IDP">
+                                    Exonerado
+                                  </Badge>
+                                )}
+                                {taxReview?.validFinal[idx]?.warning && (
+                                  <span title={taxReview.validFinal[idx].warning ?? ""} className="shrink-0">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
@@ -1857,7 +2016,7 @@ export function ImportPurchasesDialog({
                 </Button>
                 <Button 
                   onClick={handleImport} 
-                  disabled={(selectedIndices.size === 0 && (!overwriteDuplicates || validationResult.duplicateRecords.length === 0)) || importing}
+                  disabled={(selectedIndices.size === 0 && (!overwriteDuplicates || validationResult.duplicateRecords.length === 0)) || importing || exemptionRulesLoading}
                   className="flex-1"
                 >
                   {importing ? (

@@ -3983,6 +3983,7 @@ export type Database = {
           enterprise_id: number | null
           exchange_rate: number | null
           exempt_amount: number
+          exemption_rule_code: string | null
           expense_account_id: number | null
           fel_document_type: string | null
           id: number
@@ -4004,6 +4005,7 @@ export type Database = {
           tax_category: string | null
           total_amount: number
           vat_amount: number
+          vat_rate_applied: number | null
         }
         Insert: {
           accounting_period_id?: number | null
@@ -4019,6 +4021,7 @@ export type Database = {
           enterprise_id?: number | null
           exchange_rate?: number | null
           exempt_amount?: number
+          exemption_rule_code?: string | null
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
@@ -4040,6 +4043,7 @@ export type Database = {
           tax_category?: string | null
           total_amount: number
           vat_amount: number
+          vat_rate_applied?: number | null
         }
         Update: {
           accounting_period_id?: number | null
@@ -4055,6 +4059,7 @@ export type Database = {
           enterprise_id?: number | null
           exchange_rate?: number | null
           exempt_amount?: number
+          exemption_rule_code?: string | null
           expense_account_id?: number | null
           fel_document_type?: string | null
           id?: number
@@ -4076,8 +4081,16 @@ export type Database = {
           tax_category?: string | null
           total_amount?: number
           vat_amount?: number
+          vat_rate_applied?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tab_purchase_ledger_exemption_rule_code_fkey"
+            columns: ["exemption_rule_code"]
+            isOneToOne: false
+            referencedRelation: "tab_tax_exemption_rules"
+            referencedColumns: ["code"]
+          },
           {
             foreignKeyName: "tab_purchase_ledger_accounting_period_id_fkey"
             columns: ["accounting_period_id"]
@@ -4729,6 +4742,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tab_tax_exemption_rules: {
+        Row: {
+          applies_to: string
+          blocks_idp: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          id: number
+          is_active: boolean
+          legal_reference: string | null
+          name: string
+          notes: string | null
+          operation_type_code: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+          vat_rate: number
+        }
+        Insert: {
+          applies_to?: string
+          blocks_idp?: boolean
+          code: string
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          is_active?: boolean
+          legal_reference?: string | null
+          name: string
+          notes?: string | null
+          operation_type_code: string
+          updated_at?: string
+          valid_from: string
+          valid_to?: string | null
+          vat_rate?: number
+        }
+        Update: {
+          applies_to?: string
+          blocks_idp?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: number
+          is_active?: boolean
+          legal_reference?: string | null
+          name?: string
+          notes?: string | null
+          operation_type_code?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
+          vat_rate?: number
+        }
+        Relationships: []
       }
       tab_tax_forms: {
         Row: {
@@ -5420,6 +5487,26 @@ export type Database = {
         Args: never
         Returns: {
           table_name: string
+        }[]
+      }
+      get_active_tax_exemption: {
+        Args: { p_date: string; p_operation_type_code: string }
+        Returns: {
+          applies_to: string
+          blocks_idp: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          id: number
+          is_active: boolean
+          legal_reference: string | null
+          name: string
+          notes: string | null
+          operation_type_code: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+          vat_rate: number
         }[]
       }
       get_authorization_folio_status: {
