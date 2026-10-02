@@ -123,7 +123,8 @@ export function formatExemptionDate(value: string | null | undefined): string {
 export function exemptionBadgeLabel(ex: ResolvedTaxExemption | null | undefined): string {
   const ref = ex?.legalReference || ex?.name || "";
   const decree = ref.match(/Decreto\s+[\d-]+/i)?.[0];
-  return decree ? `Exonerado ${decree}` : "Exonerado";
+  if (decree) return `Exonerado ${decree}`;
+  return ex?.name?.trim() || "Exonerado";
 }
 
 /** Texto del tooltip: regla y vigencia. */
