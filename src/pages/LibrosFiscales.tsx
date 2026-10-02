@@ -35,7 +35,10 @@ import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/
 import { IncompleteRecordsAlert, type IncompleteGroup } from "@/components/libros/IncompleteRecordsAlert";
 import { allocateEntryNumber, formatShortEntryLabel } from "@/utils/journalEntryNumbering";
 import { mergeFetchedRows, shouldDeferSilentReload } from "@/utils/ledgerRowMerge";
-import { isMinimallyComplete, missingFieldsMessage, type LedgerKind } from "@/utils/ledgerMinimum";
+import {
+  isMinimallyComplete, isMinimallyCompleteForEdit, ledgerBaselineOf, missingFieldsMessage,
+  type LedgerBaseline, type LedgerKind,
+} from "@/utils/ledgerMinimum";
 import {
   ledgerDraftKey, saveLedgerDraft, readLedgerDraft, clearLedgerDraft, formatDraftTimestamp,
 } from "@/utils/ledgerDraft";
@@ -290,6 +293,9 @@ export default function LibrosFiscales() {
   // Borradores locales encontrados al cargar el libro (se ofrecen de uno en uno).
   const [draftOffers, setDraftOffers] = useState<DraftOffer[]>([]);
   const draftCheckedRef = useRef(new Set<string>());
+  // Valores guardados de cada fila EXISTENTE abierta en edición ("p:<clave>" / "s:<clave>"):
+  // el mínimo solo se exige en lo que el usuario cambie respecto a ellos.
+  const baselineRef = useRef(new Map<string, LedgerBaseline>());
   const [showBreakdown, setShowBreakdown] = useState<boolean>(() => {
     try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
   });
@@ -883,16 +889,26 @@ export default function LibrosFiscales() {
   currentEnterpriseIdRef.current = currentEnterpriseId;
 
   /**
-   * Guarda lo pendiente de la tarjeta en edición (compras o ventas). Devuelve false
-   * si no se pudo guardar: quien llama no cambia de fila, pestaña, periodo ni recarga.
+   * Guarda lo pendiente de la tarjeta en edición (compras y ventas) y devuelve el
+   * resultado de cada una (false = no se pudo guardar).
    */
-  const flushEditing = useCallback(async (): Promise<boolean> => {
-    const results = await Promise.all([
+  const flushEditing = useCallback(async (): Promise<{ purchase: boolean; sale: boolean }> => {
+    const [purchase, sale] = await Promise.all([
       purchaseEditRef.current ? purchaseEditRef.current.flush() : Promise.resolve(true),
       saleEditRef.current ? saleEditRef.current.flush() : Promise.resolve(true),
     ]);
-    return results.every(Boolean);
+    return { purchase, sale };
   }, []);
+
+  /**
+   * Flush estricto (Alt+N / nueva factura, elegir otra factura, restaurar): si algo no
+   * se pudo guardar —incluida una fila nueva incompleta, que avisa "Faltan: …"— no se
+   * continúa.
+   */
+  const flushStrict = useCallback(async (): Promise<boolean> => {
+    const r = await flushEditing();
+    return r.purchase && r.sale;
+  }, [flushEditing]);
 
   /** Clave del borrador local del periodo cargado. */
   const draftKeyFor = (kind: LedgerKind) =>
@@ -936,6 +952,60 @@ export default function LibrosFiscales() {
   };
   const maybeOfferDraftRef = useRef(maybeOfferDraft);
   maybeOfferDraftRef.current = maybeOfferDraft;
+
+  // Durante flushForNavigation, una fila nueva incompleta no avisa "Faltan: …": se
+  // guarda como borrador y se avisa con otro mensaje.
+  const quietNewIncompleteRef = useRef(false);
+
+  /**
+   * Flush para salir (pestaña, mes/año, empresa, importar, póliza, actualizar,
+   * búsqueda): una fila NUEVA incompleta no bloquea; se escribe su borrador local de
+   * inmediato (y se vuelve a ofrecer al regresar) y, si removeIncompleteNewRow, sale
+   * de pantalla. Cualquier otro fallo (duplicado, red, fila existente) bloquea.
+   */
+  const flushForNavigation = async ({ removeIncompleteNewRow }: { removeIncompleteNewRow: boolean }): Promise<boolean> => {
+    quietNewIncompleteRef.current = true;
+    let results: { purchase: boolean; sale: boolean };
+    try {
+      results = await flushEditing();
+    } finally {
+      quietNewIncompleteRef.current = false;
+    }
+    let ok = true;
+    let drafted = false;
+    for (const kind of ["purchase", "sale"] as const) {
+      if (results[kind]) continue;
+      const key = kind === "purchase" ? editingPurchaseKeyRef.current : editingSaleKeyRef.current;
+      const row = kind === "purchase"
+        ? purchasesRef.current.find((p) => purchaseKeyOf(p) === key)
+        : salesRef.current.find((x) => x.client_id === key);
+      if (!key || !row || !row.isNew || row.id || isMinimallyComplete(row, kind).ok) {
+        ok = false;
+        continue;
+      }
+      const draftKey = draftKeyFor(kind);
+      saveLedgerDraft(draftKey, row);
+      draftCheckedRef.current.delete(draftKey);
+      if (removeIncompleteNewRow) {
+        if (kind === "purchase") {
+          applyPurchases((prev) => prev.filter((p) => purchaseKeyOf(p) !== key));
+          setEditingPurchaseKey(null);
+        } else {
+          applySales((prev) => prev.filter((x) => x.client_id !== key));
+          setEditingSaleKey(null);
+        }
+      }
+      drafted = true;
+    }
+    if (drafted) {
+      toast({
+        title: "Factura sin terminar guardada como borrador en este equipo; podrás restaurarla al volver a este libro.",
+      });
+    }
+    return ok;
+  };
+  const flushForNavigationRef = useRef(flushForNavigation);
+  flushForNavigationRef.current = flushForNavigation;
 
   useEffect(() => {
     const enterpriseId = localStorage.getItem("currentEnterpriseId");
@@ -988,8 +1058,9 @@ export default function LibrosFiscales() {
         if (import.meta.env.DEV) console.debug("[LibrosFiscales] evento de empresa ignorado (misma empresa)");
         return;
       }
-      // Lo pendiente se guarda en el libro de la empresa anterior antes de cambiar.
-      await flushEditing();
+      // Lo pendiente se guarda en el libro de la empresa anterior antes de cambiar (y el
+      // borrador de una fila nueva incompleta queda con la clave de esa empresa).
+      await flushForNavigationRef.current({ removeIncompleteNewRow: true });
       currentEnterpriseIdRef.current = newEnterpriseId;
       setEditingPurchaseKey(null);
       setEditingSaleKey(null);
@@ -1032,18 +1103,19 @@ export default function LibrosFiscales() {
   const lastFetchTimestamp = useRef<number>(Date.now());
   const REFETCH_THROTTLE_MS = 60_000; // 60 seconds
 
-  const handleManualRefresh = useCallback(async () => {
+  const handleManualRefresh = async () => {
     const eid = localStorage.getItem("currentEnterpriseId");
     if (!eid) return;
-    // Primero se guarda lo pendiente; si no se pudo, no se recarga.
+    // Primero se guarda lo pendiente; si no se pudo, no se recarga. Una fila nueva
+    // incompleta queda en pantalla (la recarga la conserva) y con su borrador.
     discardPristineNewRows();
-    if (!(await flushEditing())) return;
+    if (!(await flushForNavigation({ removeIncompleteNewRow: false }))) return;
     debugReload("actualizar manual");
     lastFetchTimestamp.current = Date.now();
     setIsRefreshing(true);
     fetchOrCreateBook(eid, selectedMonthRef.current, selectedYearRef.current);
     fetchSales(eid, selectedMonthRef.current, selectedYearRef.current);
-  }, [flushEditing]);
+  };
 
   // ─── Recarga silenciosa (volver a la pestaña) ─────────────────────────────
   // Nunca pisa trabajo en curso: con una fila en edición, una nueva sin guardar o
@@ -1180,7 +1252,7 @@ export default function LibrosFiscales() {
   const changePeriod = async (month: number, year: number) => {
     discardPristineNewRows();
     if (purchaseEditRef.current || saleEditRef.current) {
-      if (!(await flushEditing())) return;
+      if (!(await flushForNavigation({ removeIncompleteNewRow: true }))) return;
     }
     if (month === selectedMonthRef.current && year === selectedYearRef.current) return;
     setEditingPurchaseKey(null);
@@ -1192,17 +1264,21 @@ export default function LibrosFiscales() {
   /** Cambia de pestaña Compras/Ventas guardando antes lo pendiente. */
   const changeTab = async (tab: "compras" | "ventas"): Promise<boolean> => {
     discardPristineNewRows();
-    if (!(await flushEditing())) return false;
+    if (!(await flushForNavigation({ removeIncompleteNewRow: true }))) return false;
     setActiveTab(tab);
     setEditingPurchaseKey(null);
     setEditingSaleKey(null);
+    // Si el libro de destino tiene un borrador vigente (p. ej. el que se acaba de dejar
+    // al salir de él) y no tiene fila nueva, se vuelve a ofrecer.
+    maybeOfferDraft(tab === "compras" ? "purchase" : "sale");
     return true;
   };
 
   /** Abre un diálogo que termina en recarga (importar, póliza) guardando antes lo pendiente. */
   const openAfterFlush = async (open: () => void) => {
     discardPristineNewRows();
-    if (!(await flushEditing())) return;
+    // La fila nueva incompleta se conserva en pantalla: la recarga posterior la mantiene.
+    if (!(await flushForNavigation({ removeIncompleteNewRow: false }))) return;
     open();
   };
 
@@ -1644,24 +1720,24 @@ export default function LibrosFiscales() {
     isCreatingNewRef.current = true;
 
     try {
-      if (!(await flushEditing())) return;
+      if (!(await flushStrict())) return;
       createPurchaseEntry();
     } finally {
       isCreatingNewRef.current = false;
     }
-  }, [flushEditing, createPurchaseEntry]);
+  }, [flushStrict, createPurchaseEntry]);
 
   const addNewSale = useCallback(async () => {
     if (isCreatingNewRef.current) return;
     isCreatingNewRef.current = true;
 
     try {
-      if (!(await flushEditing())) return;
+      if (!(await flushStrict())) return;
       createSaleEntry();
     } finally {
       isCreatingNewRef.current = false;
     }
-  }, [flushEditing, createSaleEntry]);
+  }, [flushStrict, createSaleEntry]);
 
   // Borrador local de la fila NUEVA en edición (300 ms tras cada cambio). Se borra al
   // guardarla en la base o al descartarla.
@@ -1687,6 +1763,20 @@ export default function LibrosFiscales() {
     }
     return () => timers.forEach(clearTimeout);
   }, [purchases, sales, editingPurchaseKey, editingSaleKey, currentEnterpriseId, selectedMonth, selectedYear]);
+
+  // Al salir de Libros Fiscales con una fila nueva no vacía en edición, su borrador se
+  // escribe de inmediato (el temporizador de 300 ms ya no llegaría a dispararse).
+  const draftKeyForRef = useRef(draftKeyFor);
+  draftKeyForRef.current = draftKeyFor;
+  useEffect(() => {
+    return () => {
+      if (!currentEnterpriseIdRef.current) return;
+      const p = purchasesRef.current.find((x) => purchaseKeyOf(x) === editingPurchaseKeyRef.current);
+      if (p?.isNew && !p.id && !isPristineNewPurchase(p)) saveLedgerDraft(draftKeyForRef.current("purchase"), p);
+      const sRow = salesRef.current.find((x) => x.client_id === editingSaleKeyRef.current);
+      if (sRow?.isNew && !sRow.id && !isPristineNewSale(sRow)) saveLedgerDraft(draftKeyForRef.current("sale"), sRow);
+    };
+  }, []);
 
   // Focus the edited/new row once it exists in the DOM
   useEffect(() => {
@@ -1792,17 +1882,43 @@ export default function LibrosFiscales() {
     }
   };
 
+  /**
+   * Mínimo para guardar: completo en filas nuevas; en filas existentes solo sobre lo
+   * que cambió respecto al baseline. Sin baseline (fila existente que no se abrió por
+   * startEdit) no se exige mínimo, como antes de la Entrega 2. Devuelve true si se
+   * puede guardar.
+   */
+  const passesMinimum = (
+    row: PurchaseEntry | SaleEntry,
+    kind: LedgerKind,
+    rowKey: string,
+    opts?: LedgerSaveOptions,
+  ): boolean => {
+    const isNewRow = !!row.isNew && !row.id;
+    let minimum: { ok: boolean; missing: string[] } | null = null;
+    if (isNewRow) {
+      minimum = isMinimallyComplete(row, kind);
+    } else {
+      const baseline = baselineRef.current.get(`${kind === "purchase" ? "p" : "s"}:${rowKey}`);
+      if (baseline) {
+        minimum = isMinimallyCompleteForEdit(row, baseline, kind);
+      } else if (import.meta.env.DEV) {
+        console.debug(`[LibrosFiscales] guardado sin baseline (${kind} ${rowKey}): no se aplica el mínimo`);
+      }
+    }
+    if (!minimum || minimum.ok) return true;
+    // Al salir (flushForNavigation) la fila nueva incompleta va a borrador, sin "Faltan".
+    if (!(isNewRow && quietNewIncompleteRef.current)) warnIncomplete(minimum.missing, opts);
+    return false;
+  };
+
   const doSavePurchaseRow = async (rowKey: string, opts?: LedgerSaveOptions): Promise<boolean> => {
     // Se lee la fila al ejecutar (no al programar): siempre la versión más reciente.
     const rawEntry = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
     if (!rawEntry) return true;
     if (!currentBookId || !currentEnterpriseId) return false;
     // Solo se escribe en la base si cumple el mínimo (fecha, número, NIT válido, total).
-    const minimum = isMinimallyComplete(rawEntry, "purchase");
-    if (!minimum.ok) {
-      warnIncomplete(minimum.missing, opts);
-      return false;
-    }
+    if (!passesMinimum(rawEntry, "purchase", rowKey, opts)) return false;
 
     const exemption = purchaseExemption(rawEntry);
     // Una fila exonerada (o con IVA 0 y base = total) no se recalcula al 12% al guardar.
@@ -1915,6 +2031,8 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
+      // Lo guardado pasa a ser el baseline de la fila.
+      baselineRef.current.set(`p:${rowKey}`, ledgerBaselineOf(entry, "purchase"));
       return true;
     } catch (error: unknown) {
       setSaveStatus("idle");
@@ -1940,11 +2058,7 @@ export default function LibrosFiscales() {
     const entry = salesRef.current.find((s) => s.client_id === rowId);
     if (!entry) return true;
     if (!currentEnterpriseId) return false;
-    const minimum = isMinimallyComplete(entry, "sale");
-    if (!minimum.ok) {
-      warnIncomplete(minimum.missing, opts);
-      return false;
-    }
+    if (!passesMinimum(entry, "sale", rowId, opts)) return false;
 
     // Validar duplicados antes de guardar
     const duplicateCheck = await checkDuplicateSale(entry, entry.id);
@@ -2095,6 +2209,8 @@ export default function LibrosFiscales() {
       saveStatusTimeoutRef.current = setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
+      // Lo guardado pasa a ser el baseline de la fila.
+      baselineRef.current.set(`s:${rowId}`, ledgerBaselineOf(entry, "sale"));
       return true;
     } catch (error: unknown) {
       setSaveStatus("idle");
@@ -2326,7 +2442,7 @@ export default function LibrosFiscales() {
     const tab = offer.kind === "purchase" ? "compras" : "ventas";
     if (activeTab !== tab) {
       if (!(await changeTab(tab))) return;
-    } else if (!(await flushEditing())) {
+    } else if (!(await flushStrict())) {
       return;
     }
     if (offer.kind === "purchase") {
@@ -2367,14 +2483,19 @@ export default function LibrosFiscales() {
   /** Abrir otra factura = guardar antes la que está en edición (si falla, no cambia). */
   const startEditPurchase = async (rowKey: string) => {
     if (editingPurchaseKeyRef.current === rowKey) return;
-    if (!(await flushEditing())) return;
+    if (!(await flushStrict())) return;
+    // Fila existente: se fijan sus valores guardados (aún sin tocar) como baseline.
+    const row = purchasesRef.current.find((p) => purchaseKeyOf(p) === rowKey);
+    if (row?.id && !row.isNew) baselineRef.current.set(`p:${rowKey}`, ledgerBaselineOf(row, "purchase"));
     setEditingPurchaseKey(rowKey);
     setPendingFocusTab("compras");
   };
 
   const startEditSale = async (rowId: string) => {
     if (editingSaleKeyRef.current === rowId) return;
-    if (!(await flushEditing())) return;
+    if (!(await flushStrict())) return;
+    const row = salesRef.current.find((x) => x.client_id === rowId);
+    if (row?.id && !row.isNew) baselineRef.current.set(`s:${rowId}`, ledgerBaselineOf(row, "sale"));
     setEditingSaleKey(rowId);
     setPendingFocusTab("ventas");
   };
@@ -3723,7 +3844,7 @@ export default function LibrosFiscales() {
           onSelectInvoice={async (month, year, tab, invoiceId) => {
             // Ir a otra factura = guardar antes lo pendiente.
             discardPristineNewRows();
-            if (!(await flushEditing())) return;
+            if (!(await flushForNavigation({ removeIncompleteNewRow: true }))) return;
             setEditingPurchaseKey(null);
             setEditingSaleKey(null);
             setSelectedMonth(month);
