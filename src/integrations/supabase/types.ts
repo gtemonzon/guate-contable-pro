@@ -4085,13 +4085,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "tab_purchase_ledger_exemption_rule_code_fkey"
-            columns: ["exemption_rule_code"]
-            isOneToOne: false
-            referencedRelation: "tab_tax_exemption_rules"
-            referencedColumns: ["code"]
-          },
-          {
             foreignKeyName: "tab_purchase_ledger_accounting_period_id_fkey"
             columns: ["accounting_period_id"]
             isOneToOne: false
@@ -4118,6 +4111,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tab_enterprises"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tab_purchase_ledger_exemption_rule_code_fkey"
+            columns: ["exemption_rule_code"]
+            isOneToOne: false
+            referencedRelation: "tab_tax_exemption_rules"
+            referencedColumns: ["code"]
           },
           {
             foreignKeyName: "tab_purchase_ledger_expense_account_id_fkey"
@@ -5466,6 +5466,32 @@ export type Database = {
           total_rows: number
         }[]
       }
+      get_active_tax_exemption: {
+        Args: { p_date: string; p_operation_type_code: string }
+        Returns: {
+          applies_to: string
+          blocks_idp: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          id: number
+          is_active: boolean
+          legal_reference: string | null
+          name: string
+          notes: string | null
+          operation_type_code: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+          vat_rate: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tab_tax_exemption_rules"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_asset_depreciation_summary: {
         Args: { p_as_of_date?: string; p_enterprise_id: number }
         Returns: {
@@ -5487,26 +5513,6 @@ export type Database = {
         Args: never
         Returns: {
           table_name: string
-        }[]
-      }
-      get_active_tax_exemption: {
-        Args: { p_date: string; p_operation_type_code: string }
-        Returns: {
-          applies_to: string
-          blocks_idp: boolean
-          code: string
-          created_at: string
-          created_by: string | null
-          id: number
-          is_active: boolean
-          legal_reference: string | null
-          name: string
-          notes: string | null
-          operation_type_code: string
-          updated_at: string
-          valid_from: string
-          valid_to: string | null
-          vat_rate: number
         }[]
       }
       get_authorization_folio_status: {
