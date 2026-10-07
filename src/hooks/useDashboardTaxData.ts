@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getPreviousCompletedMonth, QUARTER_MONTH_RANGES } from "@/constants/dashboardCards";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { fetchSuggestedVatCredit } from "@/utils/vatCreditCarryover";
-import { parseIvaGeneralResult, parseIvaPequenoResult } from "@/utils/declarationCalculations";
+import { parseIvaGeneralResult, parseIvaPequenoResult, parseIsrMensualResult } from "@/utils/declarationCalculations";
+import { buildIsrMensualSummary } from "@/utils/dashboardIsrMensualSummary";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
 
 export interface TaxConfig {
@@ -45,11 +46,25 @@ export interface IVAData {
 }
 
 export interface ISRMensualData {
+  /** Ingresos netos (del cálculo guardado o de libros sin documentos exentos). */
   ingresosBrutos: number;
+  /** IMPUESTO del primer tramo (5% hasta Q30,000), no la base. */
   primerTramo: number;
+  /** IMPUESTO del segundo tramo (7% del excedente), no la base. */
   segundoTramo: number;
+  /** ISR A PAGAR: del cálculo guardado (ya con retención) o, sin cálculo, el estimado con libros. */
   isrCalculado: number;
   salesCount: number;
+  /** 'saved' = último cálculo guardado del Generador; 'estimate' = libros. */
+  source: 'saved' | 'estimate';
+  /** ISR antes de retenciones. */
+  isrBruto: number;
+  /** Retención ISR realizada (solo con cálculo guardado). */
+  retention: number;
+  savedAt: string | null;
+  savedCalcId: number | null;
+  /** Los libros cambiaron desde el cálculo guardado. */
+  stale: boolean;
 }
 
 export interface ISRTrimestralData {
@@ -182,7 +197,7 @@ export function useDashboardTaxData(enterpriseId: number | null) {
 
       // Último cálculo guardado del Generador de Declaraciones para el mes de referencia:
       // si existe, manda (incluye remanente y ajustes manuales).
-      const fetchSavedCalc = async (formType: 'IVA_GENERAL' | 'IVA_PEQUENO') => {
+      const fetchSavedCalc = async (formType: 'IVA_GENERAL' | 'IVA_PEQUENO' | 'ISR_MENSUAL') => {
         const { data, error } = await supabase
           .from("tab_declaration_calculations")
           .select("id, created_at, result")
@@ -193,7 +208,7 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (error) console.error("Error cargando cálculo guardado de IVA:", error);
+        if (error) console.error(`Error cargando cálculo guardado (${formType}):`, error);
         return data ?? null;
       };
 
@@ -271,10 +286,33 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           segundoTramo = (ingresosBrutosNet - UMBRAL) * 0.07;
           isrCalculado = primerTramo + segundoTramo;
         }
+        // Ingresos con la definición del generador (todas las ventas, con el signo de
+        // cada documento) para saber si el cálculo guardado sigue vigente.
+        const liveComparable = salesData.reduce(
+          (s, r) => s + Number(r.net_amount || 0) * getSign(r.fel_document_type),
+          0,
+        );
+        const savedRow = await fetchSavedCalc('ISR_MENSUAL');
+        const saved = savedRow
+          ? { id: savedRow.id, createdAt: savedRow.created_at, ...parseIsrMensualResult(savedRow.result) }
+          : null;
+        const summary = buildIsrMensualSummary({
+          estimate: { ingresosBrutos: ingresosBrutosNet, primerTramo, segundoTramo, isrCalculado },
+          liveComparable,
+          saved,
+        });
         isrMensualData = {
-          ingresosBrutos: ingresosBrutosNet,
-          primerTramo, segundoTramo, isrCalculado,
+          ingresosBrutos: summary.ingresos,
+          primerTramo: summary.tax1,
+          segundoTramo: summary.tax2,
+          isrCalculado: summary.isrToPay,
           salesCount: salesData.length,
+          source: summary.source,
+          isrBruto: summary.isrBruto,
+          retention: summary.retention,
+          savedAt: summary.savedAt,
+          savedCalcId: summary.savedCalcId,
+          stale: summary.stale,
         };
       }
 

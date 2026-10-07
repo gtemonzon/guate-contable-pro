@@ -3,6 +3,7 @@ import { Receipt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import type { ISRMensualData } from "@/hooks/useDashboardTaxData";
+import { DashboardSourceFooter } from "./DashboardSourceFooter";
 
 interface DashboardISRMensualSummaryProps {
   data: ISRMensualData | null;
@@ -54,6 +55,12 @@ export function DashboardISRMensualSummary({ data, loading, monthName, year }: D
                 <span className="financial-number">Q {formatNumber(data.segundoTramo)}</span>
               </div>
             )}
+            {data.retention > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span className="pl-2">Retención ISR</span>
+                <span className="financial-number">Q {formatNumber(data.retention)}</span>
+              </div>
+            )}
             <div className="flex justify-between pt-2 border-t">
               <span className="font-medium">ISR a Pagar</span>
               <span className="font-bold financial-number text-destructive">
@@ -63,6 +70,12 @@ export function DashboardISRMensualSummary({ data, loading, monthName, year }: D
             <div className="flex justify-between text-xs text-muted-foreground pt-1">
               <span>{data.salesCount} documentos</span>
             </div>
+            <DashboardSourceFooter
+              source={data.source}
+              savedAt={data.savedAt}
+              stale={data.stale}
+              estimateText="Estimación basada en libros. No incluye retenciones ni ajustes manuales del Generador de Declaraciones."
+            />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Sin datos</p>

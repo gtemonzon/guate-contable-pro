@@ -176,3 +176,29 @@ export function parseIvaPequenoResult(result: unknown): IvaPequenoResultFields {
     impuestoAPagar: num(r.impuestoAPagar),
   };
 }
+
+/**
+ * Campos del resultado guardado de ISR Mensual. OJO: primerTramo y segundoTramo son
+ * la BASE de cada tramo (hasta Q30,000 y el excedente), no el impuesto.
+ */
+export interface IsrMensualResultFields {
+  ingresosBrutos: number;
+  primerTramo: number;
+  segundoTramo: number;
+  isrBruto: number;
+  retencionRealizada: number;
+  isrAPagar: number;
+}
+
+/** Lee el `result` (jsonb) de un cálculo ISR_MENSUAL; 0 en cada campo ausente o inválido. */
+export function parseIsrMensualResult(result: unknown): IsrMensualResultFields {
+  const r = isRecord(result) ? result : {};
+  return {
+    ingresosBrutos: num(r.ingresosBrutos),
+    primerTramo: num(r.primerTramo),
+    segundoTramo: num(r.segundoTramo),
+    isrBruto: num(r.isrBruto),
+    retencionRealizada: num(r.retencionRealizada),
+    isrAPagar: num(r.isrAPagar),
+  };
+}

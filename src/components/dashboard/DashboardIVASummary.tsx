@@ -1,8 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Receipt, AlertTriangle } from "lucide-react";
+import { Receipt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import type { IVAData } from "@/hooks/useDashboardTaxData";
+import { DashboardSourceFooter } from "./DashboardSourceFooter";
 
 interface DashboardIVASummaryProps {
   ivaData: IVAData | null;
@@ -14,39 +15,21 @@ interface DashboardIVASummaryProps {
 const formatNumber = (num: number): string =>
   Math.round(num).toLocaleString("es-GT", { maximumFractionDigits: 0 });
 
-/** "dd/MM/yyyy HH:mm" en hora local. */
-const formatSavedAt = (iso: string): string => {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-};
-
-/** Pie: de dónde salen los números y si los libros cambiaron desde el cálculo guardado. */
+/** Pie del IVA: cálculo guardado o estimación (con el remanente contable si lo hay). */
 function SourceFooter({ ivaData }: { ivaData: IVAData }) {
-  if (ivaData.source === "saved" && ivaData.savedAt) {
-    return (
-      <div className="space-y-1 pt-1">
-        <p className="text-[10px] text-muted-foreground leading-tight">
-          Según cálculo del {formatSavedAt(ivaData.savedAt)}
-        </p>
-        {ivaData.stale && (
-          <p className="flex items-start gap-1 text-[10px] leading-tight text-warning">
-            <AlertTriangle className="h-3 w-3 shrink-0 text-warning" />
-            Los libros cambiaron desde ese cálculo. Vuelve a generarlo.
-          </p>
-        )}
-      </div>
-    );
-  }
   return (
-    <p className="text-[10px] text-muted-foreground leading-tight pt-1">
-      {ivaData.regime === "general" && ivaData.carryoverIn > 0
-        ? `Estimación basada en libros y en el remanente contable (Q ${formatNumber(ivaData.carryoverIn)}). No incluye ajustes manuales del Generador de Declaraciones.`
-        : "Estimación basada en libros. No incluye remanente ni ajustes manuales del Generador de Declaraciones."}
-    </p>
+    <DashboardSourceFooter
+      source={ivaData.source}
+      savedAt={ivaData.savedAt}
+      stale={ivaData.stale}
+      estimateText={
+        ivaData.regime === "general" && ivaData.carryoverIn > 0
+          ? `Estimación basada en libros y en el remanente contable (Q ${formatNumber(ivaData.carryoverIn)}). No incluye ajustes manuales del Generador de Declaraciones.`
+          : "Estimación basada en libros. No incluye remanente ni ajustes manuales del Generador de Declaraciones."
+      }
+    />
   );
 }
-
 
 export function DashboardIVASummary({ ivaData, loading, monthName, year }: DashboardIVASummaryProps) {
   const navigate = useNavigate();
