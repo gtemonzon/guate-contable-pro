@@ -22,6 +22,7 @@ import {
   periodMonthForForm,
 } from "@/utils/declarationCalculations";
 import TaxFormDialog, { type TaxFormPrefill } from "@/components/impuestos/TaxFormDialog";
+import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -58,6 +59,14 @@ export default function GenerarDeclaracion() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedFormType, setSelectedFormType] = useState<TaxFormType | null>(null);
+  // ¿El usuario eligió el tipo de formulario a mano? Entonces no se preselecciona.
+  const [formTypeTouched, setFormTypeTouched] = useState(false);
+  // Régimen de IVA vigente en el mes elegido (historial de régimen).
+  const [regimeInfo, setRegimeInfo] = useState<{
+    key: string;
+    regime: string | null;
+    effectiveFrom: string | null;
+  } | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
   const [exencionIVA, setExencionIVA] = useState<number>(0);
@@ -141,15 +150,37 @@ export default function GenerarDeclaracion() {
         }
       });
   }, [enterpriseId]);
-  // Auto-select form type based on config
+  // Régimen vigente en el mes elegido (último día del mes, como Libros Fiscales).
+  const regimeKey = enterpriseId ? `${enterpriseId}:${selectedYear}-${selectedMonth}` : "";
   useEffect(() => {
-    if (taxConfigs.length > 0 && !selectedFormType) {
+    if (!enterpriseId) return;
+    let cancelled = false;
+    const key = `${enterpriseId}:${selectedYear}-${selectedMonth}`;
+    resolveTaxRegimeAsOf(enterpriseId, regimeAsOfDateForMonth(selectedYear, selectedMonth))
+      .then((r) => { if (!cancelled) setRegimeInfo({ key, ...r }); })
+      .catch((e) => console.error("Error resolviendo el régimen vigente:", e));
+    return () => { cancelled = true; };
+  }, [enterpriseId, selectedYear, selectedMonth]);
+  const currentRegime = regimeInfo && regimeInfo.key === regimeKey ? regimeInfo : null;
+  const regimeFormType = ivaFormTypeForRegime(currentRegime?.regime);
+
+  // Auto-select form type: el IVA del régimen vigente en el mes (si está configurado);
+  // si no, como antes (IVA_GENERAL o la primera configuración activa).
+  useEffect(() => {
+    if (taxConfigs.length === 0 || formTypeTouched) return;
+    const isIvaOrEmpty = !selectedFormType || selectedFormType === 'IVA_GENERAL' || selectedFormType === 'IVA_PEQUENO';
+    if (!isIvaOrEmpty) return;
+    if (regimeFormType && taxConfigs.some(c => c.is_active && c.tax_form_type === regimeFormType)) {
+      if (selectedFormType !== regimeFormType) setSelectedFormType(regimeFormType);
+      return;
+    }
+    if (!selectedFormType) {
       // Prefer IVA_GENERAL or first active config
       const ivaGeneral = taxConfigs.find(c => c.tax_form_type === 'IVA_GENERAL');
       const firstActive = taxConfigs.find(c => c.is_active);
       setSelectedFormType(ivaGeneral?.tax_form_type || firstActive?.tax_form_type || null);
     }
-  }, [taxConfigs, selectedFormType]);
+  }, [taxConfigs, selectedFormType, regimeFormType, formTypeTouched]);
 
   const currentResult = useMemo((): Record<string, unknown> | null => {
     switch (selectedFormType) {
@@ -401,7 +432,10 @@ export default function GenerarDeclaracion() {
               <Label>Tipo de Formulario</Label>
               <Select
                 value={selectedFormType || ''}
-                onValueChange={(v) => setSelectedFormType(v as TaxFormType)}
+                onValueChange={(v) => {
+                  setFormTypeTouched(true);
+                  setSelectedFormType(v as TaxFormType);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar formulario" />
@@ -440,6 +474,19 @@ export default function GenerarDeclaracion() {
               </Button>
             </div>
           </div>
+
+          {(selectedFormType === 'IVA_GENERAL' || selectedFormType === 'IVA_PEQUENO') &&
+            regimeFormType && selectedFormType !== regimeFormType && (
+            <Alert className="mt-4 border-warning/50 bg-warning/10">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                En {MONTHS[selectedMonth - 1]?.label} {selectedYear} esta empresa era{" "}
+                {regimeFormType === 'IVA_PEQUENO' ? "Pequeño Contribuyente" : "Contribuyente General"}
+                {currentRegime?.effectiveFrom ? ` (vigente desde ${currentRegime.effectiveFrom})` : ""}.
+                {" "}Estás generando {getFormTypeLabel(selectedFormType)}.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {taxConfigs.length === 0 && (
             <Alert className="mt-4">

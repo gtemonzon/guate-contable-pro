@@ -5,6 +5,7 @@ import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { fetchSuggestedVatCredit } from "@/utils/vatCreditCarryover";
 import { parseIvaGeneralResult, parseIvaPequenoResult, parseIsrMensualResult } from "@/utils/declarationCalculations";
 import { buildIsrMensualSummary } from "@/utils/dashboardIsrMensualSummary";
+import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
 
 export interface TaxConfig {
@@ -125,8 +126,20 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       const hasIsrMensual = taxConfigs.some(c => c.tax_form_type === 'ISR_MENSUAL');
       const hasIsrTrimestral = taxConfigs.some(c => c.tax_form_type === 'ISR_TRIMESTRAL');
 
-      // Fallback: inferir el régimen IVA si no hay config explícita
-      if (!hasIvaGeneral && !hasIvaPequeno) {
+      // El régimen vigente en el mes de referencia (historial de régimen) decide el tipo de
+      // IVA: una empresa puede tener activos IVA_GENERAL e IVA_PEQUENO en la configuración
+      // y haber cambiado de régimen a mitad de año. Sin régimen conocido (o exenta_ong),
+      // se decide como antes con la configuración y los vencimientos.
+      const { regime: regimeAsOfMonth } = await resolveTaxRegimeAsOf(
+        enterpriseId,
+        regimeAsOfDateForMonth(refYear, refMonth),
+      );
+      const regimeIvaType = ivaFormTypeForRegime(regimeAsOfMonth);
+      if (regimeIvaType) {
+        hasIvaGeneral = regimeIvaType === 'IVA_GENERAL';
+        hasIvaPequeno = regimeIvaType === 'IVA_PEQUENO';
+      } else if (!hasIvaGeneral && !hasIvaPequeno) {
+        // Fallback: inferir el régimen IVA si no hay config explícita
         const hasIvaDueDate = dueDateConfigs.some(c =>
           c.tax_type === 'iva_mensual' || c.tax_type === 'iva'
         );
