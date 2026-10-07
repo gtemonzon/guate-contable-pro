@@ -27,7 +27,9 @@ import {
   DeclarationCalculationRow,
   getCalculationTotal,
   mapTaxTypeToFormType,
+  quarterStartMonth,
 } from "@/utils/declarationCalculations";
+import type { TaxFormType } from "@/hooks/useDeclaracionCalculo";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
@@ -51,11 +53,33 @@ interface TaxForm {
   notes: string | null;
 }
 
+/** Datos con que se abre el diálogo al registrar un formulario desde un cálculo. */
+export interface TaxFormPrefill {
+  taxType: string;
+  periodType: "mensual" | "trimestral";
+  periodMonth: number;
+  periodYear: number;
+  amount: number;
+  calculationId: number;
+  calculationCreatedAt: string;
+}
+
 interface TaxFormDialogProps {
   open: boolean;
   onOpenChange: (success?: boolean) => void;
   enterpriseId: number;
   editingForm: TaxForm | null;
+  /** Solo aplica a formularios nuevos (sin editingForm). */
+  prefill?: TaxFormPrefill | null;
+}
+
+/** Cálculo contra el que se compara el formulario (del prefill o el más reciente del período). */
+interface ReferenceCalc {
+  id: number;
+  total: number;
+  createdAt: string;
+  formType: TaxFormType | null;
+  year: number | null;
 }
 
 interface ExtractedPdfData {
@@ -111,7 +135,9 @@ export default function TaxFormDialog({
   onOpenChange,
   enterpriseId,
   editingForm,
+  prefill: prefillProp = null,
 }: TaxFormDialogProps) {
+  const prefill = editingForm ? null : prefillProp;
   const [formNumber, setFormNumber] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [taxType, setTaxType] = useState("");
@@ -136,6 +162,8 @@ export default function TaxFormDialog({
   const [linkedCalcId, setLinkedCalcId] = useState<number | null>(null);
   // Total a pagar que trajo el análisis del PDF (null = el PDF no lo trae).
   const [pdfAmount, setPdfAmount] = useState<number | null>(null);
+  // Con prefill: el PDF corresponde a otro período/impuesto que el cálculo (aviso no bloqueante).
+  const [periodMismatch, setPeriodMismatch] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -172,13 +200,23 @@ export default function TaxFormDialog({
         setFile(null);
       } else {
         resetForm();
+        if (prefill) {
+          setTaxType(prefill.taxType);
+          setPeriodType(prefill.periodType);
+          setPeriodMonth(prefill.periodMonth.toString());
+          setPeriodYear(prefill.periodYear.toString());
+          setAmountPaid(prefill.amount.toFixed(2));
+          setLinkedCalcId(prefill.calculationId);
+          setCalcSuggestionDismissed(true);
+        }
       }
     }
-  }, [open, editingForm]);
+  }, [open, editingForm, prefill]);
 
   // Busca un cálculo guardado que corresponda al tipo de impuesto + período seleccionado
   useEffect(() => {
-    if (!open || editingForm) {
+    // Con prefill el cálculo ya viene dado: no se busca otro.
+    if (!open || editingForm || prefill) {
       setSuggestedCalc(null);
       return;
     }
@@ -191,13 +229,21 @@ export default function TaxFormDialog({
     }
     let cancelled = false;
     const lookup = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("tab_declaration_calculations")
         .select("*")
         .eq("enterprise_id", enterpriseId)
         .eq("form_type", formType)
-        .eq("period_year", year)
-        .eq("period_month", month)
+        .eq("period_year", year);
+      if (periodType === "trimestral") {
+        // El formulario trimestral se registra con el mes de inicio, pero el cálculo se
+        // guarda con el mes elegido al generarlo (cualquiera del trimestre).
+        const start = quarterStartMonth(month);
+        query = query.gte("period_month", start).lte("period_month", start + 2);
+      } else {
+        query = query.eq("period_month", month);
+      }
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(1);
       if (cancelled) return;
@@ -213,7 +259,40 @@ export default function TaxFormDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, editingForm, enterpriseId, taxType, periodMonth, periodYear]);
+  }, [open, editingForm, prefill, enterpriseId, taxType, periodType, periodMonth, periodYear]);
+
+  const referenceCalc: ReferenceCalc | null = (() => {
+    if (prefill) {
+      return {
+        id: prefill.calculationId,
+        total: prefill.amount,
+        createdAt: prefill.calculationCreatedAt,
+        formType: mapTaxTypeToFormType(prefill.taxType),
+        year: prefill.periodYear,
+      };
+    }
+    if (!suggestedCalc) return null;
+    const total = getCalculationTotal(suggestedCalc.form_type, suggestedCalc.result);
+    if (total === null) return null;
+    return {
+      id: suggestedCalc.id,
+      total,
+      createdAt: suggestedCalc.created_at,
+      formType: suggestedCalc.form_type as TaxFormType,
+      year: suggestedCalc.period_year,
+    };
+  })();
+
+  /** "IVA GENERAL Septiembre 2026" / "ISR TRIMESTRAL Julio - Septiembre (Q3) 2026". */
+  const describePeriod = (type: string, pType: string | undefined, month: number | undefined, year: number | undefined) => {
+    let period = "";
+    if (month && pType === "trimestral") {
+      period = QUARTERS.find((q) => q.value === quarterStartMonth(month))?.label ?? "";
+    } else if (month) {
+      period = MONTHS.find((m) => m.value === month)?.label ?? "";
+    }
+    return [type, period, year ? String(year) : ""].filter(Boolean).join(" ");
+  };
 
   const fetchEnterpriseInfo = async () => {
     try {
@@ -269,6 +348,7 @@ export default function TaxFormDialog({
     setCalcSuggestionDismissed(false);
     setLinkedCalcId(null);
     setPdfAmount(null);
+    setPeriodMismatch(null);
   };
 
   // NIT verification helpers
@@ -369,6 +449,7 @@ export default function TaxFormDialog({
 
     setIsAnalyzing(true);
     setPdfAmount(null);
+    setPeriodMismatch(null);
     try {
       // Extract text from PDF client-side (works for digital PDFs)
       const pdfText = await extractTextFromPdf(target);
@@ -422,6 +503,34 @@ export default function TaxFormDialog({
         setAmountPaid(extractedData.amountPaid.toString());
         // El PDF manda: ya no se ofrece "Usar monto" del cálculo guardado.
         setPdfAmount(extractedData.amountPaid);
+      }
+
+      // Si el PDF cambia el impuesto o el año, el formulario deja de ligarse a un
+      // cálculo de otro impuesto o de otro año.
+      if (referenceCalc && (extractedData.taxType || extractedData.periodYear)) {
+        const pdfFormType = extractedData.taxType
+          ? mapTaxTypeToFormType(extractedData.taxType)
+          : mapTaxTypeToFormType(taxType);
+        const pdfYear = extractedData.periodYear ?? (periodYear ? parseInt(periodYear, 10) : null);
+        if (pdfFormType !== referenceCalc.formType || pdfYear !== referenceCalc.year) {
+          setLinkedCalcId((prev) => (prev === referenceCalc.id ? null : prev));
+        }
+      }
+
+      // Con prefill: avisar (sin bloquear) si el PDF es de otro impuesto o período.
+      if (prefill) {
+        const prefillFormType = mapTaxTypeToFormType(prefill.taxType);
+        const pdfFormType = extractedData.taxType ? mapTaxTypeToFormType(extractedData.taxType) : prefillFormType;
+        const pdfYear = extractedData.periodYear ?? prefill.periodYear;
+        const pdfPeriodType = extractedData.periodType || prefill.periodType;
+        const rawPdfMonth = extractedData.periodMonth ?? prefill.periodMonth;
+        const pdfMonth = prefill.periodType === "trimestral" ? quarterStartMonth(rawPdfMonth) : rawPdfMonth;
+        if (pdfFormType !== prefillFormType || pdfYear !== prefill.periodYear || pdfMonth !== prefill.periodMonth) {
+          setPeriodMismatch(
+            `El PDF corresponde a ${describePeriod(extractedData.taxType || prefill.taxType, pdfPeriodType, rawPdfMonth, pdfYear)}, ` +
+            `pero el cálculo es de ${describePeriod(prefill.taxType, prefill.periodType, prefill.periodMonth, prefill.periodYear)}.`,
+          );
+        }
       }
 
       toast({
@@ -590,6 +699,14 @@ export default function TaxFormDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {periodMismatch && (
+            <Alert className="border-warning/50 text-warning-foreground bg-warning/10">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>El período no coincide con el cálculo</AlertTitle>
+              <AlertDescription>{periodMismatch} Puedes guardar de todos modos.</AlertDescription>
+            </Alert>
+          )}
+
           {!!file && nitCheck.status === "mismatch" && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
@@ -889,9 +1006,8 @@ export default function TaxFormDialog({
                   disabled={isAnalyzing}
                 />
                 {(() => {
-                  if (editingForm || calcSuggestionDismissed || !suggestedCalc) return null;
-                  const total = getCalculationTotal(suggestedCalc.form_type, suggestedCalc.result);
-                  if (total === null) return null;
+                  if (editingForm || !referenceCalc) return null;
+                  const total = referenceCalc.total;
                   const fmt = (v: number) =>
                     v.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                   if (pdfAmount !== null) {
@@ -904,6 +1020,8 @@ export default function TaxFormDialog({
                       </div>
                     );
                   }
+                  // Con prefill el monto ya está aplicado: no se ofrece "Usar monto".
+                  if (prefill || calcSuggestionDismissed || !suggestedCalc) return null;
                   return (
                     <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-2">
                       <p>
