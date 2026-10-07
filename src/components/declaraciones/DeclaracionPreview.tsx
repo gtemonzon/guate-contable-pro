@@ -36,6 +36,8 @@ interface DeclaracionPreviewProps {
   // ISR Trimestral inputs
   inventarioFinalEstimado?: number;
   onInventarioFinalEstimadoChange?: (value: number) => void;
+  /** Vuelve a poner el inventario final sugerido por contabilidad. */
+  onInventarioFinalSugeridoReset?: () => void;
   otrosValores?: OtroValorISR[];
   onOtrosValoresChange?: (values: OtroValorISR[]) => void;
   isrPagadoAnterior?: number;
@@ -123,6 +125,7 @@ export function DeclaracionPreview({
   vatRetenidoEmitidoInfo = 0,
   inventarioFinalEstimado = 0,
   onInventarioFinalEstimadoChange,
+  onInventarioFinalSugeridoReset,
   otrosValores = [],
   onOtrosValoresChange,
   isrPagadoAnterior = 0,
@@ -633,22 +636,42 @@ export function DeclaracionPreview({
           <div>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Costo de Ventas (estimado)</h4>
             <div className="bg-muted/30 rounded-lg p-3">
-              <CasillaRow label="Inventario Inicial (saldo al 01/01)" value={isrTrimestral.inventarioInicial} />
-              <CasillaRow label="(+) Compras del período" value={isrTrimestral.comprasPeriodo} />
-              <div className="flex items-center justify-between py-2 border-b border-border/50">
-                <span className="text-sm">(-) Inventario Final estimado</span>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={inventarioFinalEstimado}
-                    onChange={(e) => onInventarioFinalEstimadoChange?.(parseFloat(e.target.value) || 0)}
-                    className="w-32 text-right font-mono h-8"
-                    placeholder="0.00"
-                  />
-                  <CopyButton value={inventarioFinalEstimado} />
+              <CasillaRow label={`Inventario Inicial (inventario real al 31/12/${year - 1})`} value={isrTrimestral.inventarioInicial} />
+              <CasillaRow label="(+) Compras del período (brutas, sin traslados a costo)" value={isrTrimestral.comprasPeriodo} />
+              <div className="py-2 border-b border-border/50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">(-) Inventario Final estimado</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={inventarioFinalEstimado}
+                      onChange={(e) => onInventarioFinalEstimadoChange?.(parseFloat(e.target.value) || 0)}
+                      className="w-32 text-right font-mono h-8"
+                      placeholder="0.00"
+                    />
+                    <CopyButton value={inventarioFinalEstimado} />
+                  </div>
                 </div>
+                {isrTrimestral.inventarioFinalSugeridoOrigen && (
+                  <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                    <span>
+                      Sugerido por contabilidad: {formatCurrency(isrTrimestral.inventarioFinalSugerido)} ({isrTrimestral.inventarioFinalSugeridoOrigen})
+                    </span>
+                    {Math.abs(inventarioFinalEstimado - isrTrimestral.inventarioFinalSugerido) >= 0.005 && onInventarioFinalSugeridoReset && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        onClick={onInventarioFinalSugeridoReset}
+                      >
+                        Restablecer sugerido
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="border-t border-border mt-2 pt-2">
                 <CasillaRow label="(=) Costo de Ventas" value={isrTrimestral.costoVentas} />
