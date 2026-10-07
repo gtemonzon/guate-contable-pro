@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TrendingUp, DollarSign, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Settings, Inbox } from "lucide-react";
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, DefaultTooltipContent } from "recharts";
+import { lineStyleFor, sortYearsDesc } from "@/utils/chartHighlight";
 import { DashboardAlerts } from "@/components/dashboard/DashboardAlerts";
 import { DashboardPendingEntries } from "@/components/dashboard/DashboardPendingEntries";
 import { DashboardIVASummary } from "@/components/dashboard/DashboardIVASummary";
@@ -152,6 +153,21 @@ interface YearlyChartProps {
 
 function YearlyChart({ title, description, data, loading, selectedYears, availableYears, onYearsChange, icon: Icon, emptyMessage }: YearlyChartProps) {
   const hasData = data.some(d => selectedYears.some(y => (d[y.toString()] as number) > 0));
+  // Años de más reciente a más antiguo: fija el color de cada año (líneas y selector).
+  const sortedYears = sortYearsDesc(selectedYears);
+  const colorOf = (year: number) => YEAR_COLORS[sortedYears.indexOf(year) % YEAR_COLORS.length];
+  // Año bajo el mouse (línea, puntos o leyenda); solo con más de un año.
+  const [hoveredYear, setHoveredYear] = useState<number | null>(null);
+  const highlight = selectedYears.length > 1 ? hoveredYear : null;
+  useEffect(() => {
+    if (hoveredYear !== null && !selectedYears.includes(hoveredYear)) setHoveredYear(null);
+  }, [selectedYears, hoveredYear]);
+  // Tras la animación inicial, sin animación: resaltar no reinicia ni parpadea.
+  const [animationDone, setAnimationDone] = useState(false);
+  // El año resaltado se dibuja al frente (último hijo); la leyenda ordena por año.
+  const drawOrder = highlight === null
+    ? sortedYears
+    : [...sortedYears.filter((y) => y !== highlight), highlight];
   return (
     <Card>
       <CardHeader>
@@ -187,7 +203,7 @@ function YearlyChart({ title, description, data, loading, selectedYears, availab
                         <Checkbox checked={selectedYears.includes(year)} className="pointer-events-none" />
                         <div
                           className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: selectedYears.includes(year) ? YEAR_COLORS[selectedYears.indexOf(year) % YEAR_COLORS.length] : 'transparent', border: '1px solid hsl(var(--border))' }}
+                          style={{ backgroundColor: selectedYears.includes(year) ? colorOf(year) : 'transparent', border: '1px solid hsl(var(--border))' }}
                         />
                         <span className="text-sm">{year}</span>
                       </div>
@@ -214,13 +230,56 @@ function YearlyChart({ title, description, data, loading, selectedYears, availab
                   formatter={(value: number, name: string) => [`Q ${formatGTQ(value)}`, name]}
                   labelFormatter={(label) => `Mes: ${label}`}
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                  // Con un año resaltado, el tooltip muestra solo ese año.
+                  content={(props) => (
+                    <DefaultTooltipContent
+                      {...props}
+                      payload={highlight === null
+                        ? props.payload
+                        : props.payload?.filter((p) => String(p.dataKey) === String(highlight))}
+                    />
+                  )}
                 />
-                {selectedYears.length > 1 && <Legend />}
-                {selectedYears.sort((a, b) => b - a).map((year, idx) => (
+                {selectedYears.length > 1 && (
+                  <Legend
+                    onMouseEnter={(entry) => {
+                      const year = Number(entry.value);
+                      if (Number.isFinite(year)) setHoveredYear(year);
+                    }}
+                    onMouseLeave={() => setHoveredYear(null)}
+                    formatter={(value) => (
+                      <span style={{
+                        opacity: highlight !== null && String(value) !== String(highlight) ? 0.4 : 1,
+                        transition: 'opacity 0.15s',
+                      }}>
+                        {value}
+                      </span>
+                    )}
+                  />
+                )}
+                {drawOrder.map((year) => {
+                  const style = lineStyleFor(year, highlight, colorOf(year));
+                  return (
+                    <Line
+                      key={year} type="monotone" dataKey={year.toString()} name={year.toString()}
+                      stroke={style.stroke} strokeWidth={style.strokeWidth} strokeOpacity={style.strokeOpacity}
+                      dot={style.dot} activeDot={style.activeDot}
+                      isAnimationActive={!animationDone}
+                      onAnimationEnd={() => setAnimationDone(true)}
+                      className="[&_path]:transition-[stroke-opacity,stroke-width] [&_path]:duration-150"
+                      onMouseEnter={selectedYears.length > 1 ? () => setHoveredYear(year) : undefined}
+                      onMouseLeave={selectedYears.length > 1 ? () => setHoveredYear(null) : undefined}
+                    />
+                  );
+                })}
+                {/* Área de contacto cómoda (~12 px) por año: línea invisible y más ancha, sin tooltip ni leyenda. */}
+                {selectedYears.length > 1 && sortedYears.map((year) => (
                   <Line
-                    key={year} type="monotone" dataKey={year.toString()} name={year.toString()}
-                    stroke={YEAR_COLORS[idx % YEAR_COLORS.length]} strokeWidth={2}
-                    dot={{ fill: YEAR_COLORS[idx % YEAR_COLORS.length], strokeWidth: 2, r: 3 }} activeDot={{ r: 5 }}
+                    key={`hit-${year}`} type="monotone" dataKey={year.toString()}
+                    stroke="transparent" strokeWidth={12} dot={false} activeDot={false}
+                    legendType="none" tooltipType="none" isAnimationActive={false}
+                    onMouseEnter={() => setHoveredYear(year)}
+                    onMouseLeave={() => setHoveredYear(null)}
                   />
                 ))}
               </LineChart>
@@ -330,7 +389,7 @@ const Dashboard = () => {
   const chartDesc = (label: string) =>
     selectedChartYears.length === 1
       ? `Total mensual de ${label} ${selectedChartYears[0]}`
-      : `Comparativa mensual: ${selectedChartYears.sort((a, b) => b - a).join(', ')}`;
+      : `Comparativa mensual: ${sortYearsDesc(selectedChartYears).join(', ')}`;
 
   return (
     <div className="relative min-h-[80vh] space-y-6">
