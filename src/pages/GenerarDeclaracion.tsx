@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Calculator, AlertCircle, History, RotateCcw } from "lucide-react";
+import { Loader2, Calculator, AlertCircle, History, RotateCcw, FileCheck } from "lucide-react";
 import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { useCertificatePeriodTotals } from "@/hooks/useTaxCertificates";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
@@ -17,7 +17,22 @@ import {
   DeclarationCalculationRow,
   getCalculationTotal,
   parseCalculationInputs,
+  formTypeToTaxType,
+  formTypeToPeriodType,
+  periodMonthForForm,
 } from "@/utils/declarationCalculations";
+import TaxFormDialog, { type TaxFormPrefill } from "@/components/impuestos/TaxFormDialog";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Cálculo guardado al que corresponde lo que se ve en pantalla. */
+interface ActiveCalc {
+  id: number;
+  createdAt: string;
+  /** Inputs normalizados (parseCalculationInputs) en JSON, para comparar. */
+  inputsJson: string;
+  total: number;
+}
 
 
 const MONTHS = [
@@ -57,6 +72,10 @@ export default function GenerarDeclaracion() {
   const [periodYears, setPeriodYears] = useState<number[]>([]);
   const [pendingSave, setPendingSave] = useState(false);
   const [savedCalculations, setSavedCalculations] = useState<DeclarationCalculationRow[]>([]);
+  const [activeCalc, setActiveCalc] = useState<ActiveCalc | null>(null);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerPrefill, setRegisterPrefill] = useState<TaxFormPrefill | null>(null);
   const { toast } = useToast();
 
 
@@ -174,6 +193,64 @@ export default function GenerarDeclaracion() {
     setPendingSave(true);
   };
 
+  // Inputs actuales de la vista previa (los mismos que se guardan en el snapshot).
+  const currentInputs = useMemo(() => ({
+    credito_remanente: creditoRemanente,
+    exencion_iva: exencionIVA,
+    retencion_isr: retencionISR,
+    retencion_iva_pequeno: retencionIVAPequeno,
+    inventario_final_estimado: inventarioFinalEstimado,
+    otros_valores: otrosValores,
+    isr_pagado_anterior: isrPagadoAnterior,
+  }), [creditoRemanente, exencionIVA, retencionISR, retencionIVAPequeno, inventarioFinalEstimado, otrosValores, isrPagadoAnterior]);
+  const currentInputsJson = useMemo(() => JSON.stringify(parseCalculationInputs(currentInputs)), [currentInputs]);
+  const currentTotal = selectedFormType && currentResult
+    ? round2(getCalculationTotal(selectedFormType, currentResult) ?? 0)
+    : 0;
+
+  // El cálculo activo deja de valer al cambiar de período o de formulario.
+  useEffect(() => {
+    setActiveCalc(null);
+  }, [selectedMonth, selectedYear, selectedFormType, enterpriseId]);
+
+  /** Guarda el snapshot de lo que se ve en pantalla y lo deja como cálculo activo. */
+  const saveCalculationSnapshot = useCallback(async (): Promise<{ id: number; createdAt: string } | null> => {
+    if (!enterpriseId || !selectedFormType || !currentResult) return null;
+    setSavingSnapshot(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error: insertError } = await supabase
+        .from("tab_declaration_calculations")
+        .insert({
+          enterprise_id: enterpriseId,
+          form_type: selectedFormType,
+          period_month: selectedMonth,
+          period_year: selectedYear,
+          inputs: JSON.parse(JSON.stringify(currentInputs)) as Json,
+          result: JSON.parse(JSON.stringify(currentResult)) as Json,
+          created_by: userData.user?.id ?? null,
+        })
+        .select("id, created_at")
+        .single();
+      if (insertError || !data) {
+        console.error("Error guardando cálculo:", insertError);
+        toast({
+          title: "No se pudo guardar el cálculo",
+          description: insertError?.message,
+          variant: "destructive",
+        });
+        return null;
+      }
+      toast({ title: "Cálculo guardado" });
+      setActiveCalc({ id: data.id, createdAt: data.created_at, inputsJson: currentInputsJson, total: currentTotal });
+      fetchSavedCalculations();
+      return { id: data.id, createdAt: data.created_at };
+    } finally {
+      setSavingSnapshot(false);
+    }
+  }, [enterpriseId, selectedFormType, currentResult, selectedMonth, selectedYear, currentInputs,
+      currentInputsJson, currentTotal, toast, fetchSavedCalculations]);
+
   // Guarda el snapshot automáticamente al terminar el cálculo
   useEffect(() => {
     if (!pendingSave || loading || !enterpriseId || !selectedFormType || !currentResult) return;
@@ -183,45 +260,34 @@ export default function GenerarDeclaracion() {
       return;
     }
     setPendingSave(false);
-
-    const save = async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const { error: insertError } = await supabase
-        .from("tab_declaration_calculations")
-        .insert({
-          enterprise_id: enterpriseId,
-          form_type: selectedFormType,
-          period_month: selectedMonth,
-          period_year: selectedYear,
-          inputs: JSON.parse(JSON.stringify({
-            credito_remanente: creditoRemanente,
-            exencion_iva: exencionIVA,
-            retencion_isr: retencionISR,
-            retencion_iva_pequeno: retencionIVAPequeno,
-            inventario_final_estimado: inventarioFinalEstimado,
-            otros_valores: otrosValores,
-            isr_pagado_anterior: isrPagadoAnterior,
-          })) as Json,
-          result: JSON.parse(JSON.stringify(currentResult)) as Json,
-          created_by: userData.user?.id ?? null,
-        });
-      if (insertError) {
-        console.error("Error guardando cálculo:", insertError);
-        toast({
-          title: "No se pudo guardar el cálculo",
-          description: insertError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      toast({ title: "Cálculo guardado" });
-      fetchSavedCalculations();
-    };
-    save();
+    void saveCalculationSnapshot();
   }, [pendingSave, loading, error, enterpriseId, selectedFormType, currentResult,
-      selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR,
-      retencionIVAPequeno, inventarioFinalEstimado, otrosValores, isrPagadoAnterior,
-      inventarioPrellenadoPendiente, toast, fetchSavedCalculations]);
+      inventarioPrellenadoPendiente, saveCalculationSnapshot]);
+
+  /**
+   * Registrar el formulario presentado: usa el cálculo activo si lo que se ve en
+   * pantalla es lo mismo (inputs y total); si no, guarda un snapshot nuevo. Luego abre
+   * el diálogo de formulario con los datos ya puestos.
+   */
+  const handleRegisterForm = async () => {
+    if (!selectedFormType || !currentResult) return;
+    let calc: { id: number; createdAt: string } | null =
+      activeCalc && activeCalc.inputsJson === currentInputsJson && activeCalc.total === currentTotal
+        ? { id: activeCalc.id, createdAt: activeCalc.createdAt }
+        : null;
+    if (!calc) calc = await saveCalculationSnapshot();
+    if (!calc) return;
+    setRegisterPrefill({
+      taxType: formTypeToTaxType(selectedFormType),
+      periodType: formTypeToPeriodType(selectedFormType),
+      periodMonth: periodMonthForForm(selectedFormType, selectedMonth),
+      periodYear: selectedYear,
+      amount: currentTotal,
+      calculationId: calc.id,
+      calculationCreatedAt: calc.createdAt,
+    });
+    setRegisterOpen(true);
+  };
 
   const handleLoadSaved = (row: DeclarationCalculationRow) => {
     const inputs = parseCalculationInputs(row.inputs);
@@ -233,6 +299,12 @@ export default function GenerarDeclaracion() {
     setInventarioFinalEstimado(inputs.inventario_final_estimado);
     setOtrosValores(inputs.otros_valores);
     setIsrPagadoAnterior(inputs.isr_pagado_anterior);
+    setActiveCalc({
+      id: row.id,
+      createdAt: row.created_at,
+      inputsJson: JSON.stringify(inputs),
+      total: round2(getCalculationTotal(row.form_type, row.result) ?? 0),
+    });
     setHasGenerated(true);
     toast({ title: "Cálculo cargado" });
   };
@@ -426,6 +498,36 @@ export default function GenerarDeclaracion() {
           onOtrosValoresChange={setOtrosValores}
           isrPagadoAnterior={isrPagadoAnterior}
           onIsrPagadoAnteriorChange={setIsrPagadoAnterior}
+        />
+      )}
+
+      {hasGenerated && selectedFormType && (
+        <div className="space-y-1">
+          <Button
+            variant="outline"
+            onClick={() => void handleRegisterForm()}
+            disabled={
+              loading || pendingSave || savingSnapshot ||
+              (selectedFormType === 'ISR_TRIMESTRAL' && inventarioPrellenadoPendiente)
+            }
+            className="gap-2"
+          >
+            {savingSnapshot ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
+            Registrar formulario presentado
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Úsalo cuando ya presentaste el formulario en la SAT; podrás adjuntar el PDF.
+          </p>
+        </div>
+      )}
+
+      {enterpriseId && (
+        <TaxFormDialog
+          open={registerOpen}
+          onOpenChange={() => setRegisterOpen(false)}
+          enterpriseId={enterpriseId}
+          editingForm={null}
+          prefill={registerPrefill}
         />
       )}
 

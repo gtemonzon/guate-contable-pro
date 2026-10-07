@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, FileText, Download, Trash2, Edit, ArrowUpDown, Building2 } from "lucide-react";
+import { Plus, Search, FileText, Eye, Loader2, Trash2, Edit, ArrowUpDown, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import TaxFormDialog from "@/components/impuestos/TaxFormDialog";
@@ -192,8 +192,15 @@ export default function FormulariosImpuestos() {
     }
   };
 
+  // Tarjeta cuyo PDF se está descargando (para el spinner y para ignorar clics repetidos).
+  const [openingPdfId, setOpeningPdfId] = useState<number | null>(null);
+  const openingPdfIdRef = useRef<number | null>(null);
+
   const handleViewPdf = async (form: TaxForm) => {
     if (!form.file_path) return;
+    if (openingPdfIdRef.current === form.id) return;
+    openingPdfIdRef.current = form.id;
+    setOpeningPdfId(form.id);
 
     try {
       const { data, error } = await supabase.storage
@@ -210,7 +217,18 @@ export default function FormulariosImpuestos() {
         description: "No se pudo descargar el archivo",
         variant: "destructive",
       });
+    } finally {
+      if (openingPdfIdRef.current === form.id) openingPdfIdRef.current = null;
+      setOpeningPdfId((current) => (current === form.id ? null : current));
     }
+  };
+
+  /** Clic/Enter/Espacio en la tarjeta: abre el PDF si lo tiene; si no, la edición. */
+  const handleCardActivate = (form: TaxForm) => {
+    // Con texto seleccionado (copiar número o código de acceso) no se abre nada.
+    if (window.getSelection()?.toString()) return;
+    if (form.file_path) void handleViewPdf(form);
+    else handleEdit(form);
   };
 
   const formatCurrency = (amount: number) => {
@@ -334,7 +352,21 @@ export default function FormulariosImpuestos() {
         <div className="space-y-4">
           <div className="grid gap-4">
             {paginatedForms.map((form) => (
-              <Card key={form.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={form.id}
+                role="button"
+                tabIndex={0}
+                aria-label={form.file_path ? `Ver PDF del formulario ${form.form_number}` : `Editar formulario ${form.form_number}`}
+                onClick={() => handleCardActivate(form)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleCardActivate(form);
+                  }
+                }}
+                className="hover:shadow-md transition-shadow cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
                 <CardContent className="p-4">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex-1 space-y-1">
@@ -378,21 +410,33 @@ export default function FormulariosImpuestos() {
                           {formatCurrency(form.amount_paid)}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         {form.file_path && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleViewPdf(form)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleViewPdf(form);
+                            }}
+                            disabled={openingPdfId === form.id}
                             title="Ver PDF"
+                            aria-label="Ver PDF"
                           >
-                            <Download className="h-4 w-4" />
+                            {openingPdfId === form.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
                           </Button>
                         )}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEdit(form)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(form);
+                          }}
                           title="Editar"
                         >
                           <Edit className="h-4 w-4" />
@@ -400,7 +444,8 @@ export default function FormulariosImpuestos() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setFormToDelete(form);
                             setDeleteDialogOpen(true);
                           }}

@@ -105,3 +105,32 @@ export function mapTaxTypeToFormType(taxType: string | null | undefined): TaxFor
   }
   return null;
 }
+
+/** Mes de inicio del trimestre: 1-3 → 1, 4-6 → 4, 7-9 → 7, 10-12 → 10. */
+export function quarterStartMonth(month: number): number {
+  return Math.floor((month - 1) / 3) * 3 + 1;
+}
+
+/** Texto de `tax_type` (tab_tax_forms) para un tipo de cálculo. Inverso de mapTaxTypeToFormType. */
+export function formTypeToTaxType(formType: TaxFormType): string {
+  switch (formType) {
+    case "IVA_GENERAL": return "IVA GENERAL";
+    case "IVA_PEQUENO": return "IVA PEQUEÑO CONTRIBUYENTE";
+    case "ISR_MENSUAL": return "ISR MENSUAL";
+    case "ISR_TRIMESTRAL": return "ISR TRIMESTRAL";
+    case "ISO_TRIMESTRAL": return "ISO TRIMESTRAL";
+  }
+}
+
+/** Tipo de período del formulario: mensual o trimestral. */
+export function formTypeToPeriodType(formType: TaxFormType): "mensual" | "trimestral" {
+  return formType === "ISR_TRIMESTRAL" || formType === "ISO_TRIMESTRAL" ? "trimestral" : "mensual";
+}
+
+/**
+ * Mes con que se registra el formulario: el mes elegido en los mensuales y el mes de
+ * inicio del trimestre (1, 4, 7, 10) en los trimestrales.
+ */
+export function periodMonthForForm(formType: TaxFormType, month: number): number {
+  return formTypeToPeriodType(formType) === "trimestral" ? quarterStartMonth(month) : month;
+}
