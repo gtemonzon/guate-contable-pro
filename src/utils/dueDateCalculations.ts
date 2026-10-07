@@ -124,10 +124,10 @@ export function parseHolidays(holidays: Holiday[], year?: number): Date[] {
 }
 
 /**
- * Get days until a due date
+ * Get days until a due date (desde `now`, por omisión hoy; ambos a medianoche local)
  */
-export function getDaysUntil(dueDate: Date): number {
-  const today = new Date();
+export function getDaysUntil(dueDate: Date, now: Date = new Date()): number {
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   const due = new Date(dueDate);
   due.setHours(0, 0, 0, 0);
@@ -279,4 +279,200 @@ export function getDefaultTaxConfigs(): Omit<TaxDueDateConfig, 'is_active'>[] {
       consider_holidays: true,
     },
   ];
+}
+
+// ─── Próximos vencimientos (Dashboard) ─────────────────────────────────────
+
+/** Solo se avisa de los vencimientos a esta cantidad de días o menos. */
+export const DEADLINE_WINDOW_DAYS = 30;
+/** Un vencimiento sin presentar deja de mostrarse pasados estos días. */
+export const OVERDUE_LOOKBACK_DAYS = 60;
+
+/**
+ * Coincidencia del texto libre tax_type de tab_tax_forms con el tax_type de la
+ * configuración: lista de alternativas (OR); cada alternativa, tokens que deben
+ * aparecer todos (AND). Texto normalizado sin acentos y en minúsculas.
+ */
+export const TAX_TYPE_MATCHERS: Record<string, string[][]> = {
+  iva: [['iva']],
+  iva_mensual: [['iva']],
+  isr_mensual: [['isr']],
+  // "ISR ANUAL" no debe contar como el trimestral.
+  isr_trimestral: [['isr', 'trim'], ['renta', 'trim']],
+  // Nombre oficial de la SAT: "IMPUESTO DE SOLIDARIDAD".
+  iso: [['iso'], ['solidaridad']],
+  iso_trimestral: [['iso'], ['solidaridad']],
+  retencion_iva: [['ret', 'iva']],
+  retenciones_iva: [['ret', 'iva']],
+  retencion_isr: [['ret', 'isr']],
+  retenciones_isr: [['ret', 'isr']],
+  isr_anual: [['isr', 'anual']],
+};
+
+const normalizeText = (v: string) =>
+  v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+/** ¿El formulario (tax_type libre) corresponde al impuesto de la configuración? */
+export function taxFormMatchesConfig(formTaxType: string | null | undefined, configTaxType: string): boolean {
+  if (!formTaxType) return false;
+  const normalized = normalizeText(formTaxType);
+  const alternatives = TAX_TYPE_MATCHERS[configTaxType] ?? [[configTaxType.toLowerCase()]];
+  return alternatives.some((tokens) => tokens.every((token) => normalized.includes(token)));
+}
+
+/** Configuración de impuesto trimestral (vence el mes siguiente al cierre del trimestre). */
+export function isQuarterlyConfig(config: Pick<TaxDueDateConfig, 'reference_period'>): boolean {
+  return config.reference_period === 'quarter_end_next_month';
+}
+
+/**
+ * Período que cubre un vencimiento. En los trimestrales, periodMonth es el mes de
+ * INICIO del trimestre (1, 4, 7, 10), igual que en tab_tax_forms.
+ */
+export function coveredPeriodForDueDate(
+  config: Pick<TaxDueDateConfig, 'reference_period'>,
+  dueDate: Date,
+): { periodMonth: number; periodYear: number } {
+  const { periodMonth, periodYear } = derivePeriodCovered(dueDate);
+  if (!isQuarterlyConfig(config)) return { periodMonth, periodYear };
+  return { periodMonth: Math.floor((periodMonth - 1) / 3) * 3 + 1, periodYear };
+}
+
+export interface PresentedTaxForm {
+  tax_type: string | null;
+  period_month: number | null;
+  period_year: number | null;
+  period_type?: string | null;
+}
+
+/** ¿Ya se presentó el formulario de ese impuesto y período? */
+export function isFormPresented(
+  form: PresentedTaxForm,
+  config: Pick<TaxDueDateConfig, 'tax_type' | 'reference_period'>,
+  covered: { periodMonth: number; periodYear: number },
+): boolean {
+  if (!taxFormMatchesConfig(form.tax_type, config.tax_type)) return false;
+  if (form.period_year !== covered.periodYear || form.period_month == null) return false;
+  if (isQuarterlyConfig(config)) {
+    const periodType = normalizeText(form.period_type ?? '');
+    if (periodType === 'anual' || periodType === 'mensual') return false;
+    return form.period_month >= covered.periodMonth && form.period_month <= covered.periodMonth + 2;
+  }
+  return form.period_month === covered.periodMonth;
+}
+
+export interface PendingDeadline {
+  label: string;
+  taxType: string;
+  dueDate: Date;
+  daysUntil: number;
+  isOverdue: boolean;
+  /** 0 a 3 días. */
+  isUrgent: boolean;
+  /** 4 a 7 días. */
+  isImportant: boolean;
+  /** "Septiembre 2026" o "Julio - Septiembre 2026". */
+  periodLabel: string;
+}
+
+/** Etiqueta del período cubierto. */
+export function periodLabelFor(
+  config: Pick<TaxDueDateConfig, 'reference_period'>,
+  covered: { periodMonth: number; periodYear: number },
+): string {
+  if (isQuarterlyConfig(config)) {
+    return `${MONTH_NAMES_ES[covered.periodMonth]} - ${MONTH_NAMES_ES[covered.periodMonth + 2]} ${covered.periodYear}`;
+  }
+  return `${MONTH_NAMES_ES[covered.periodMonth]} ${covered.periodYear}`;
+}
+
+/**
+ * Vencimientos pendientes por impuesto: para cada configuración activa se calculan
+ * los vencimientos de los meses ancla −4…+4 alrededor de `today`, se descartan los ya
+ * presentados y los vencidos hace más de `lookbackDays`, y se toma el más próximo.
+ * inWindow = vencidos o a `windowDays` días o menos (vencidos primero, el más vencido
+ * antes; luego por fecha); next = el resto por fecha.
+ */
+export function computePendingDeadlines({
+  configs,
+  holidays,
+  forms,
+  today,
+  windowDays = DEADLINE_WINDOW_DAYS,
+  lookbackDays = OVERDUE_LOOKBACK_DAYS,
+}: {
+  configs: TaxDueDateConfig[];
+  holidays: Date[];
+  forms: PresentedTaxForm[];
+  today: Date;
+  windowDays?: number;
+  lookbackDays?: number;
+}): { inWindow: PendingDeadline[]; next: PendingDeadline[] } {
+  const pending: PendingDeadline[] = [];
+
+  for (const config of configs) {
+    if (!config.is_active) continue;
+    const seen = new Set<string>();
+    let best: PendingDeadline | null = null;
+    for (let k = -4; k <= 4; k++) {
+      const anchor = new Date(today.getFullYear(), today.getMonth() + k, 1);
+      const dueDate = calculateDueDate(anchor, config, holidays);
+      const key = toDateOnlyString(dueDate);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const daysUntil = getDaysUntil(dueDate, today);
+      if (daysUntil < -lookbackDays) continue;
+      const covered = coveredPeriodForDueDate(config, dueDate);
+      if (forms.some((f) => isFormPresented(f, config, covered))) continue;
+
+      if (!best || dueDate.getTime() < best.dueDate.getTime()) {
+        best = {
+          label: config.tax_label,
+          taxType: config.tax_type,
+          dueDate,
+          daysUntil,
+          isOverdue: daysUntil < 0,
+          isUrgent: daysUntil >= 0 && daysUntil <= 3,
+          isImportant: daysUntil >= 4 && daysUntil <= 7,
+          periodLabel: periodLabelFor(config, covered),
+        };
+      }
+    }
+    if (best) pending.push(best);
+  }
+
+  const byDate = (a: PendingDeadline, b: PendingDeadline) =>
+    a.dueDate.getTime() - b.dueDate.getTime() || a.label.localeCompare(b.label, 'es');
+  const inWindow = pending
+    .filter((d) => d.isOverdue || d.daysUntil <= windowDays)
+    .sort((a, b) => (a.isOverdue === b.isOverdue ? byDate(a, b) : a.isOverdue ? -1 : 1));
+  const next = pending.filter((d) => !d.isOverdue && d.daysUntil > windowDays).sort(byDate);
+  return { inWindow, next };
+}
+
+/**
+ * Feriados del año anterior, el actual y el siguiente (los recurrentes se repiten en
+ * cada uno): un vencimiento de enero del año siguiente también respeta los feriados.
+ */
+export function parseHolidaysForYears(holidays: Holiday[], year: number): Date[] {
+  return [
+    ...parseHolidays(holidays, year - 1),
+    ...parseHolidays(holidays, year),
+    ...parseHolidays(holidays, year + 1),
+  ];
+}
+
+/**
+ * Une etiquetas en español: "A y B" ("A e B" si B empieza con sonido i), o "A, B, C"
+ * con tres o más.
+ */
+export function joinLabelsEs(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? '';
+  if (labels.length === 2) {
+    const second = normalizeText(labels[1]);
+    const conj = /^(i|hi)/.test(second) && !/^(hie|hia)/.test(second) ? 'e' : 'y';
+    return `${labels[0]} ${conj} ${labels[1]}`;
+  }
+  return labels.join(', ');
 }
