@@ -134,3 +134,45 @@ export function formTypeToPeriodType(formType: TaxFormType): "mensual" | "trimes
 export function periodMonthForForm(formType: TaxFormType, month: number): number {
   return formTypeToPeriodType(formType) === "trimestral" ? quarterStartMonth(month) : month;
 }
+
+/** Campos del resultado guardado de IVA General que usa el Dashboard. */
+export interface IvaGeneralResultFields {
+  debitoFiscal: number;
+  creditoFiscal: number;
+  creditoRemanente: number;
+  exencionIVA: number;
+  ivaAPagar: number;
+  creditoRemanenteProximoMes: number;
+}
+
+/** Lee el `result` (jsonb) de un cálculo IVA_GENERAL; 0 en cada campo ausente o inválido. */
+export function parseIvaGeneralResult(result: unknown): IvaGeneralResultFields {
+  const r = isRecord(result) ? result : {};
+  return {
+    debitoFiscal: num(r.debitoFiscal),
+    creditoFiscal: num(r.creditoFiscal),
+    creditoRemanente: num(r.creditoRemanente),
+    exencionIVA: num(r.exencionIVA),
+    ivaAPagar: num(r.ivaAPagar),
+    creditoRemanenteProximoMes: num(r.creditoRemanenteProximoMes),
+  };
+}
+
+/** Campos del resultado guardado de IVA Pequeño Contribuyente. */
+export interface IvaPequenoResultFields {
+  totalIngresos: number;
+  tasaImpuesto: number;
+  retencionIVARealizada: number;
+  impuestoAPagar: number;
+}
+
+/** Lee el `result` (jsonb) de un cálculo IVA_PEQUENO; 0 en cada campo ausente o inválido. */
+export function parseIvaPequenoResult(result: unknown): IvaPequenoResultFields {
+  const r = isRecord(result) ? result : {};
+  return {
+    totalIngresos: num(r.totalIngresos),
+    tasaImpuesto: num(r.tasaImpuesto),
+    retencionIVARealizada: num(r.retencionIVARealizada),
+    impuestoAPagar: num(r.impuestoAPagar),
+  };
+}

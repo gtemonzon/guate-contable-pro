@@ -2,6 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { getPreviousCompletedMonth, QUARTER_MONTH_RANGES } from "@/constants/dashboardCards";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
+import { fetchSuggestedVatCredit } from "@/utils/vatCreditCarryover";
+import { parseIvaGeneralResult, parseIvaPequenoResult } from "@/utils/declarationCalculations";
+import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
 
 export interface TaxConfig {
   id: number;
@@ -12,13 +15,33 @@ export interface TaxConfig {
 
 export interface IVAData {
   regime: 'general' | 'pequeno' | null;
+  /** IVA débito/crédito del mes según libros (en vivo). */
   salesVat: number;
   purchasesVat: number;
+  /** General: impuesto por pagar (> 0) o crédito para el mes siguiente (< 0). */
   ivaBalance: number;
+  /** Ingresos del mes según libros (en vivo). */
   totalIngresos: number;
   impuestoPequeno: number;
   salesCount: number;
   purchasesCount: number;
+  /** 'saved' = último cálculo guardado del Generador; 'estimate' = libros + remanente contable. */
+  source: 'saved' | 'estimate';
+  /** Débito, crédito e ingresos que se muestran (del cálculo guardado o de libros). */
+  debit: number;
+  credit: number;
+  ingresos: number;
+  carryoverIn: number;
+  exemption: number;
+  ivaToPay: number;
+  carryoverOut: number;
+  savedAt: string | null;
+  savedCalcId: number | null;
+  /** Los libros cambiaron desde el cálculo guardado. */
+  stale: boolean;
+  /** Pequeño contribuyente: tasa y retención. */
+  rate: number;
+  retention: number;
 }
 
 export interface ISRMensualData {
@@ -157,26 +180,81 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       }, 0);
 
 
+      // Último cálculo guardado del Generador de Declaraciones para el mes de referencia:
+      // si existe, manda (incluye remanente y ajustes manuales).
+      const fetchSavedCalc = async (formType: 'IVA_GENERAL' | 'IVA_PEQUENO') => {
+        const { data, error } = await supabase
+          .from("tab_declaration_calculations")
+          .select("id, created_at, result")
+          .eq("enterprise_id", enterpriseId)
+          .eq("form_type", formType)
+          .eq("period_year", refYear)
+          .eq("period_month", refMonth)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) console.error("Error cargando cálculo guardado de IVA:", error);
+        return data ?? null;
+      };
+
       // IVA Data
       let ivaData: IVAData | null = null;
       if (hasIvaGeneral) {
+        const savedRow = await fetchSavedCalc('IVA_GENERAL');
+        const saved = savedRow
+          ? { id: savedRow.id, createdAt: savedRow.created_at, ...parseIvaGeneralResult(savedRow.result) }
+          : null;
+        // Sin cálculo guardado: remanente contable sugerido (saldo de IVA por cobrar al cierre del mes anterior).
+        const suggestedCarryover = saved ? 0 : await fetchSuggestedVatCredit(enterpriseId, refYear, refMonth);
+        const summary = buildIvaGeneralSummary({ salesVat, purchasesVat, saved, suggestedCarryover });
         ivaData = {
           regime: 'general',
           salesVat, purchasesVat,
-          ivaBalance: salesVat - purchasesVat,
+          ivaBalance: summary.ivaBalance,
           totalIngresos, impuestoPequeno: 0,
           salesCount: salesData.length,
           purchasesCount: purchasesData.length,
+          source: summary.source,
+          debit: summary.debit,
+          credit: summary.credit,
+          ingresos: totalIngresos,
+          carryoverIn: summary.carryoverIn,
+          exemption: summary.exemption,
+          ivaToPay: summary.ivaToPay,
+          carryoverOut: summary.carryoverOut,
+          savedAt: summary.savedAt,
+          savedCalcId: summary.savedCalcId,
+          stale: summary.stale,
+          rate: 0,
+          retention: 0,
         };
       } else if (hasIvaPequeno) {
         const rate = taxConfigs.find(c => c.tax_form_type === 'IVA_PEQUENO')?.tax_rate ?? 5;
+        const savedRow = await fetchSavedCalc('IVA_PEQUENO');
+        const saved = savedRow
+          ? { id: savedRow.id, createdAt: savedRow.created_at, ...parseIvaPequenoResult(savedRow.result) }
+          : null;
+        const summary = buildIvaPequenoSummary({ liveIngresos: totalIngresos, rate, saved });
         ivaData = {
           regime: 'pequeno',
           salesVat: 0, purchasesVat: 0, ivaBalance: 0,
           totalIngresos,
-          impuestoPequeno: totalIngresos * (rate / 100),
+          impuestoPequeno: summary.tax,
           salesCount: salesData.length,
           purchasesCount: 0,
+          source: summary.source,
+          debit: 0,
+          credit: 0,
+          ingresos: summary.ingresos,
+          carryoverIn: 0,
+          exemption: 0,
+          ivaToPay: summary.tax,
+          carryoverOut: 0,
+          savedAt: summary.savedAt,
+          savedCalcId: summary.savedCalcId,
+          stale: summary.stale,
+          rate: summary.rate,
+          retention: summary.retention,
         };
       }
 
