@@ -1,46 +1,30 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarClock, AlertTriangle, ArrowRight } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarClock, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  calculateDueDate,
-  parseHolidays,
-  getDaysUntil,
+  computePendingDeadlines,
+  parseHolidaysForYears,
   formatDueDate,
-  getReferenceDate,
+  joinLabelsEs,
+  DEADLINE_WINDOW_DAYS,
   type TaxDueDateConfig,
   type Holiday,
+  type PresentedTaxForm,
+  type PendingDeadline,
 } from "@/utils/dueDateCalculations";
-import { subDays, getMonth, getYear } from "date-fns";
 import { cn } from "@/lib/utils";
-
-const TAX_TYPE_MATCHERS: Record<string, string[]> = {
-  iva: ['iva'],
-  iva_mensual: ['iva'],
-  isr_mensual: ['isr'],
-  isr_trimestral: ['isr'],
-  iso: ['iso'],
-  iso_trimestral: ['iso'],
-  retencion_iva: ['ret', 'iva'],
-  retenciones_iva: ['ret', 'iva'],
-  retencion_isr: ['ret', 'isr'],
-  retenciones_isr: ['ret', 'isr'],
-  isr_anual: ['isr', 'anual'],
-};
-
-function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
-  if (!formTaxType) return false;
-  const normalized = formTaxType.toLowerCase().trim();
-  const matchers = TAX_TYPE_MATCHERS[configTaxType] ?? [configTaxType.toLowerCase()];
-  if (matchers.length === 1) return normalized.includes(matchers[0]);
-  return matchers.every((token) => normalized.includes(token));
-}
 
 interface DashboardTaxDeadlinesProps {
   enterpriseId: number | null;
+}
+
+interface DeadlinesData {
+  hasConfigs: boolean;
+  inWindow: PendingDeadline[];
+  next: PendingDeadline[];
 }
 
 export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesProps) {
@@ -48,8 +32,8 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-tax-deadlines", enterpriseId],
-    queryFn: async () => {
-      if (!enterpriseId) return [];
+    queryFn: async (): Promise<DeadlinesData> => {
+      if (!enterpriseId) return { hasConfigs: false, inWindow: [], next: [] };
 
       const [configRes, holidaysRes, presentedRes] = await Promise.all([
         supabase
@@ -63,77 +47,44 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
           .eq("enterprise_id", enterpriseId),
         supabase
           .from("tab_tax_forms")
-          .select("tax_type, period_month, period_year")
+          .select("tax_type, period_month, period_year, period_type")
           .eq("enterprise_id", enterpriseId)
           .eq("is_active", true),
       ]);
 
-      const configs = (configRes.data || []) as any[];
-      const holidays = parseHolidays(
-        (holidaysRes.data || []) as Holiday[],
-        new Date().getFullYear()
-      );
-      const presentedForms = (presentedRes.data || []) as Array<{
-        tax_type: string | null;
-        period_month: number;
-        period_year: number;
-      }>;
+      const today = new Date();
+      const configs: TaxDueDateConfig[] = (configRes.data || []).map((cfg) => ({
+        tax_type: cfg.tax_type,
+        tax_label: cfg.tax_label,
+        calculation_type: cfg.calculation_type as TaxDueDateConfig["calculation_type"],
+        days_value: cfg.days_value || 0,
+        reference_period: cfg.reference_period as TaxDueDateConfig["reference_period"],
+        consider_holidays: cfg.consider_holidays ?? true,
+        is_active: true,
+      }));
+      // Feriados del año anterior, actual y siguiente (los vencimientos de enero
+      // del año siguiente también respetan los recurrentes).
+      const holidays = parseHolidaysForYears((holidaysRes.data || []) as Holiday[], today.getFullYear());
+      const forms = (presentedRes.data || []) as PresentedTaxForm[];
 
-      const now = new Date();
-      const currentPeriod = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const isFormAlreadyPresented = (
-        configTaxType: string,
-        periodMonth: number,
-        periodYear: number,
-      ): boolean =>
-        presentedForms.some((f) =>
-          f.period_month === periodMonth &&
-          f.period_year === periodYear &&
-          taxFormMatchesType(f.tax_type, configTaxType)
-        );
-
-      const deadlines = configs
-        .map((cfg) => {
-          const config: TaxDueDateConfig = {
-            tax_type: cfg.tax_type,
-            tax_label: cfg.tax_label,
-            calculation_type: cfg.calculation_type,
-            days_value: cfg.days_value || 0,
-            reference_period: cfg.reference_period,
-            consider_holidays: cfg.consider_holidays ?? true,
-            is_active: true,
-          };
-
-          const dueDate = calculateDueDate(currentPeriod, config, holidays);
-          const daysUntil = getDaysUntil(dueDate);
-
-          // Periodo cubierto = mes anterior al de referencia del vencimiento
-          const refDate = getReferenceDate(currentPeriod, config.reference_period);
-          const periodCovered = subDays(new Date(getYear(refDate), getMonth(refDate), 1), 1);
-          const periodMonth = getMonth(periodCovered) + 1;
-          const periodYear = getYear(periodCovered);
-          const alreadyPresented = isFormAlreadyPresented(cfg.tax_type, periodMonth, periodYear);
-
-          return {
-            label: cfg.tax_label,
-            dueDate,
-            dueDateStr: formatDueDate(dueDate),
-            daysUntil,
-            isOverdue: daysUntil < 0,
-            isUrgent: daysUntil >= 0 && daysUntil <= 3,
-            isImportant: daysUntil > 3 && daysUntil <= 7,
-            alreadyPresented,
-          };
-        })
-        .filter((d) => !d.alreadyPresented);
-
-      // Sort by due date ascending
-      return deadlines.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+      const { inWindow, next } = computePendingDeadlines({ configs, holidays, forms, today });
+      return { hasConfigs: configs.length > 0, inWindow, next };
     },
     enabled: !!enterpriseId,
     refetchInterval: 5 * 60 * 1000,
   });
+
+  // Siguiente vencimiento fuera de la ventana: todos los impuestos con la fecha más cercana.
+  const nextGroup = (() => {
+    const first = data?.next[0];
+    if (!first) return null;
+    const sameDay = data.next.filter((d) => d.dueDate.getTime() === first.dueDate.getTime());
+    return {
+      labels: joinLabelsEs(sameDay.map((d) => d.label)),
+      dateStr: formatDueDate(first.dueDate),
+      daysUntil: first.daysUntil,
+    };
+  })();
 
   return (
     <Card
@@ -153,11 +104,12 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-full" />
           </div>
-        ) : data && data.length > 0 ? (
+        ) : data && data.inWindow.length > 0 ? (
           <div className="space-y-2">
-            {data.slice(0, 5).map((deadline, idx) => (
+            {data.inWindow.slice(0, 5).map((deadline) => (
               <div
-                key={idx}
+                key={`${deadline.taxType}-${formatDueDate(deadline.dueDate)}`}
+                title={`Período: ${deadline.periodLabel}`}
                 className={cn(
                   "flex items-center justify-between text-xs p-1.5 rounded",
                   deadline.isOverdue && "bg-destructive/10",
@@ -174,7 +126,7 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
                   <span className="truncate">{deadline.label}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-muted-foreground">{deadline.dueDateStr}</span>
+                  <span className="text-muted-foreground">{formatDueDate(deadline.dueDate)}</span>
                   <span className={cn(
                     "font-semibold min-w-[3rem] text-right",
                     deadline.isOverdue ? "text-destructive" : 
@@ -188,6 +140,18 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
                 </div>
               </div>
             ))}
+          </div>
+        ) : data?.hasConfigs ? (
+          <div className="py-3 text-center space-y-1">
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              Sin vencimientos en los próximos {DEADLINE_WINDOW_DAYS} días
+            </p>
+            {nextGroup && (
+              <p className="text-[11px] text-muted-foreground">
+                Siguiente: {nextGroup.labels} — {nextGroup.dateStr} ({nextGroup.daysUntil} d)
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground py-4 text-center">
