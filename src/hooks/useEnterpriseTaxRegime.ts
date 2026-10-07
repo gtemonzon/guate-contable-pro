@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { getFiscalBookStrategy, type FiscalBookStrategy } from "@/services/fiscalBookStrategy";
+import { resolveTaxRegimeAsOf } from "@/utils/taxRegime";
 
 interface UseEnterpriseTaxRegimeResult {
   regime: string | null;
@@ -45,33 +45,10 @@ export function useEnterpriseTaxRegime(
 
       setLoading(true);
       const enterpriseId = parseInt(id);
-
-      if (asOfDate) {
-        const { data: historyRows } = await supabase
-          .from("tab_enterprise_tax_regime_history")
-          .select("tax_regime")
-          .eq("enterprise_id", enterpriseId)
-          .lte("effective_from", asOfDate)
-          .order("effective_from", { ascending: false })
-          .limit(1);
-
-        if (historyRows && historyRows.length > 0) {
-          if (!cancelled) {
-            setRegime(historyRows[0].tax_regime);
-            setLoading(false);
-          }
-          return;
-        }
-      }
-
-      const { data } = await supabase
-        .from("tab_enterprises")
-        .select("tax_regime")
-        .eq("id", enterpriseId)
-        .maybeSingle();
+      const { regime: resolved } = await resolveTaxRegimeAsOf(enterpriseId, asOfDate);
 
       if (!cancelled) {
-        setRegime(data?.tax_regime ?? null);
+        setRegime(resolved);
         setLoading(false);
       }
     };

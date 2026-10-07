@@ -4,7 +4,8 @@ import { getPreviousCompletedMonth, QUARTER_MONTH_RANGES } from "@/constants/das
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { fetchSuggestedVatCredit } from "@/utils/vatCreditCarryover";
 import { parseIvaGeneralResult, parseIvaPequenoResult, parseIsrMensualResult } from "@/utils/declarationCalculations";
-import { buildIsrMensualSummary } from "@/utils/dashboardIsrMensualSummary";
+import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "@/utils/dashboardIsrMensualSummary";
+import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
 
 export interface TaxConfig {
@@ -46,7 +47,7 @@ export interface IVAData {
 }
 
 export interface ISRMensualData {
-  /** Ingresos netos (del cálculo guardado o de libros sin documentos exentos). */
+  /** Ingresos netos (del cálculo guardado o de libros: todas las ventas, como el generador). */
   ingresosBrutos: number;
   /** IMPUESTO del primer tramo (5% hasta Q30,000), no la base. */
   primerTramo: number;
@@ -125,8 +126,20 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       const hasIsrMensual = taxConfigs.some(c => c.tax_form_type === 'ISR_MENSUAL');
       const hasIsrTrimestral = taxConfigs.some(c => c.tax_form_type === 'ISR_TRIMESTRAL');
 
-      // Fallback: inferir el régimen IVA si no hay config explícita
-      if (!hasIvaGeneral && !hasIvaPequeno) {
+      // El régimen vigente en el mes de referencia (historial de régimen) decide el tipo de
+      // IVA: una empresa puede tener activos IVA_GENERAL e IVA_PEQUENO en la configuración
+      // y haber cambiado de régimen a mitad de año. Sin régimen conocido (o exenta_ong),
+      // se decide como antes con la configuración y los vencimientos.
+      const { regime: regimeAsOfMonth } = await resolveTaxRegimeAsOf(
+        enterpriseId,
+        regimeAsOfDateForMonth(refYear, refMonth),
+      );
+      const regimeIvaType = ivaFormTypeForRegime(regimeAsOfMonth);
+      if (regimeIvaType) {
+        hasIvaGeneral = regimeIvaType === 'IVA_GENERAL';
+        hasIvaPequeno = regimeIvaType === 'IVA_PEQUENO';
+      } else if (!hasIvaGeneral && !hasIvaPequeno) {
+        // Fallback: inferir el régimen IVA si no hay config explícita
         const hasIvaDueDate = dueDateConfigs.some(c =>
           c.tax_type === 'iva_mensual' || c.tax_type === 'iva'
         );
@@ -189,10 +202,6 @@ export function useDashboardTaxData(enterpriseId: number | null) {
         (s, r) => s + Number(r.total_amount || 0) * getSign(r.fel_document_type),
         0,
       );
-      const ingresosBrutosNet = salesData.reduce((s, r) => {
-        if (EXEMPT_DOC_TYPES.has(r.fel_document_type)) return s;
-        return s + Number(r.net_amount || 0) * getSign(r.fel_document_type);
-      }, 0);
 
 
       // Último cálculo guardado del Generador de Declaraciones para el mes de referencia:
@@ -276,28 +285,16 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       // ISR Mensual Data
       let isrMensualData: ISRMensualData | null = null;
       if (hasIsrMensual) {
-        const UMBRAL = 30000;
-        let primerTramo = 0, segundoTramo = 0, isrCalculado = 0;
-        if (ingresosBrutosNet <= UMBRAL) {
-          primerTramo = ingresosBrutosNet * 0.05;
-          isrCalculado = primerTramo;
-        } else {
-          primerTramo = 1500; // 30000 * 0.05
-          segundoTramo = (ingresosBrutosNet - UMBRAL) * 0.07;
-          isrCalculado = primerTramo + segundoTramo;
-        }
-        // Ingresos con la definición del generador (todas las ventas, con el signo de
-        // cada documento) para saber si el cálculo guardado sigue vigente.
-        const liveComparable = salesData.reduce(
-          (s, r) => s + Number(r.net_amount || 0) * getSign(r.fel_document_type),
-          0,
-        );
+        // Ingresos con la definición del generador: TODAS las ventas (incluidos los
+        // documentos exentos de IVA, como FPEQ), con el signo de cada documento. Sirven
+        // para la estimación y para saber si el cálculo guardado sigue vigente.
+        const liveComparable = isrMensualIngresos(salesData, getSign);
         const savedRow = await fetchSavedCalc('ISR_MENSUAL');
         const saved = savedRow
           ? { id: savedRow.id, createdAt: savedRow.created_at, ...parseIsrMensualResult(savedRow.result) }
           : null;
         const summary = buildIsrMensualSummary({
-          estimate: { ingresosBrutos: ingresosBrutosNet, primerTramo, segundoTramo, isrCalculado },
+          estimate: estimateIsrMensual(liveComparable),
           liveComparable,
           saved,
         });

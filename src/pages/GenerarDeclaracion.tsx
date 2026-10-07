@@ -5,13 +5,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Calculator, AlertCircle, History, RotateCcw, FileCheck } from "lucide-react";
+import { Loader2, Calculator, AlertCircle, History, RotateCcw, FileCheck, Trash2 } from "lucide-react";
 import { useDeclaracionCalculo, TaxFormType, OtroValorISR } from "@/hooks/useDeclaracionCalculo";
 import { useCertificatePeriodTotals } from "@/hooks/useTaxCertificates";
 import { DeclaracionPreview } from "@/components/declaraciones/DeclaracionPreview";
 import { ExportAnexoButton } from "@/components/declaraciones/ExportAnexoButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import {
   DeclarationCalculationRow,
@@ -22,6 +27,7 @@ import {
   periodMonthForForm,
 } from "@/utils/declarationCalculations";
 import TaxFormDialog, { type TaxFormPrefill } from "@/components/impuestos/TaxFormDialog";
+import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -58,6 +64,14 @@ export default function GenerarDeclaracion() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedFormType, setSelectedFormType] = useState<TaxFormType | null>(null);
+  // ¿El usuario eligió el tipo de formulario a mano? Entonces no se preselecciona.
+  const [formTypeTouched, setFormTypeTouched] = useState(false);
+  // Régimen de IVA vigente en el mes elegido (historial de régimen).
+  const [regimeInfo, setRegimeInfo] = useState<{
+    key: string;
+    regime: string | null;
+    effectiveFrom: string | null;
+  } | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [creditoRemanente, setCreditoRemanente] = useState<number>(0);
   const [exencionIVA, setExencionIVA] = useState<number>(0);
@@ -72,6 +86,10 @@ export default function GenerarDeclaracion() {
   const [periodYears, setPeriodYears] = useState<number[]>([]);
   const [pendingSave, setPendingSave] = useState(false);
   const [savedCalculations, setSavedCalculations] = useState<DeclarationCalculationRow[]>([]);
+  // Cálculos ligados a un formulario activo (id del cálculo → número de formulario): no se eliminan.
+  const [linkedFormByCalc, setLinkedFormByCalc] = useState<Record<number, string>>({});
+  const [calcToDelete, setCalcToDelete] = useState<DeclarationCalculationRow | null>(null);
+  const [deletingCalc, setDeletingCalc] = useState(false);
   const [activeCalc, setActiveCalc] = useState<ActiveCalc | null>(null);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -141,15 +159,37 @@ export default function GenerarDeclaracion() {
         }
       });
   }, [enterpriseId]);
-  // Auto-select form type based on config
+  // Régimen vigente en el mes elegido (último día del mes, como Libros Fiscales).
+  const regimeKey = enterpriseId ? `${enterpriseId}:${selectedYear}-${selectedMonth}` : "";
   useEffect(() => {
-    if (taxConfigs.length > 0 && !selectedFormType) {
+    if (!enterpriseId) return;
+    let cancelled = false;
+    const key = `${enterpriseId}:${selectedYear}-${selectedMonth}`;
+    resolveTaxRegimeAsOf(enterpriseId, regimeAsOfDateForMonth(selectedYear, selectedMonth))
+      .then((r) => { if (!cancelled) setRegimeInfo({ key, ...r }); })
+      .catch((e) => console.error("Error resolviendo el régimen vigente:", e));
+    return () => { cancelled = true; };
+  }, [enterpriseId, selectedYear, selectedMonth]);
+  const currentRegime = regimeInfo && regimeInfo.key === regimeKey ? regimeInfo : null;
+  const regimeFormType = ivaFormTypeForRegime(currentRegime?.regime);
+
+  // Auto-select form type: el IVA del régimen vigente en el mes (si está configurado);
+  // si no, como antes (IVA_GENERAL o la primera configuración activa).
+  useEffect(() => {
+    if (taxConfigs.length === 0 || formTypeTouched) return;
+    const isIvaOrEmpty = !selectedFormType || selectedFormType === 'IVA_GENERAL' || selectedFormType === 'IVA_PEQUENO';
+    if (!isIvaOrEmpty) return;
+    if (regimeFormType && taxConfigs.some(c => c.is_active && c.tax_form_type === regimeFormType)) {
+      if (selectedFormType !== regimeFormType) setSelectedFormType(regimeFormType);
+      return;
+    }
+    if (!selectedFormType) {
       // Prefer IVA_GENERAL or first active config
       const ivaGeneral = taxConfigs.find(c => c.tax_form_type === 'IVA_GENERAL');
       const firstActive = taxConfigs.find(c => c.is_active);
       setSelectedFormType(ivaGeneral?.tax_form_type || firstActive?.tax_form_type || null);
     }
-  }, [taxConfigs, selectedFormType]);
+  }, [taxConfigs, selectedFormType, regimeFormType, formTypeTouched]);
 
   const currentResult = useMemo((): Record<string, unknown> | null => {
     switch (selectedFormType) {
@@ -161,6 +201,26 @@ export default function GenerarDeclaracion() {
       default: return null;
     }
   }, [selectedFormType, ivaGeneralCalculo, ivaPequenoCalculo, isrMensualCalculo, isoCalculo, isrTrimestralCalculo]);
+
+  /** Formularios activos ligados a estos cálculos (id del cálculo → número de formulario). */
+  const fetchLinkedForms = async (calcIds: number[]): Promise<Record<number, string>> => {
+    if (calcIds.length === 0) return {};
+    const { data, error: linkError } = await supabase
+      .from("tab_tax_forms")
+      .select("id, form_number, declaration_calculation_id")
+      .in("declaration_calculation_id", calcIds)
+      .eq("is_active", true);
+    if (linkError) {
+      console.error("Error verificando formularios ligados:", linkError);
+      // Por seguridad, si no se puede verificar, se tratan como ligados.
+      return Object.fromEntries(calcIds.map((id) => [id, "(no verificado)"]));
+    }
+    const map: Record<number, string> = {};
+    for (const f of data ?? []) {
+      if (f.declaration_calculation_id != null) map[f.declaration_calculation_id] = f.form_number;
+    }
+    return map;
+  };
 
   const fetchSavedCalculations = useCallback(async () => {
     if (!enterpriseId || !selectedFormType) {
@@ -180,7 +240,9 @@ export default function GenerarDeclaracion() {
       console.error("Error cargando cálculos guardados:", fetchError);
       return;
     }
-    setSavedCalculations((data ?? []) as DeclarationCalculationRow[]);
+    const rows = (data ?? []) as DeclarationCalculationRow[];
+    setSavedCalculations(rows);
+    setLinkedFormByCalc(await fetchLinkedForms(rows.map((r) => r.id)));
   }, [enterpriseId, selectedFormType, selectedYear, selectedMonth]);
 
   useEffect(() => {
@@ -287,6 +349,48 @@ export default function GenerarDeclaracion() {
       calculationCreatedAt: calc.createdAt,
     });
     setRegisterOpen(true);
+  };
+
+  /** Elimina un cálculo guardado que no esté ligado a un formulario activo. */
+  const handleDeleteCalc = async () => {
+    const row = calcToDelete;
+    if (!row || !enterpriseId) return;
+    setDeletingCalc(true);
+    try {
+      // Se vuelve a verificar al confirmar: pudo registrarse un formulario mientras tanto.
+      const linked = await fetchLinkedForms([row.id]);
+      if (linked[row.id]) {
+        setLinkedFormByCalc((prev) => ({ ...prev, ...linked }));
+        toast({
+          title: "No se puede eliminar",
+          description: `El cálculo está ligado al formulario ${linked[row.id]}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      const { data: deleted, error: deleteError } = await supabase
+        .from("tab_declaration_calculations")
+        .delete()
+        .eq("id", row.id)
+        .eq("enterprise_id", enterpriseId)
+        .select("id");
+      if (deleteError) throw deleteError;
+      // Sin filas borradas (sin permiso o ya no existía): no se reporta como éxito.
+      if (!deleted || deleted.length === 0) throw new Error("El cálculo no se eliminó (sin permiso o ya no existe).");
+      setSavedCalculations((prev) => prev.filter((r) => r.id !== row.id));
+      setActiveCalc((prev) => (prev?.id === row.id ? null : prev));
+      toast({ title: "Cálculo eliminado" });
+    } catch (e) {
+      console.error("Error eliminando cálculo:", e);
+      toast({
+        title: "No se pudo eliminar el cálculo",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingCalc(false);
+      setCalcToDelete(null);
+    }
   };
 
   const handleLoadSaved = (row: DeclarationCalculationRow) => {
@@ -401,7 +505,10 @@ export default function GenerarDeclaracion() {
               <Label>Tipo de Formulario</Label>
               <Select
                 value={selectedFormType || ''}
-                onValueChange={(v) => setSelectedFormType(v as TaxFormType)}
+                onValueChange={(v) => {
+                  setFormTypeTouched(true);
+                  setSelectedFormType(v as TaxFormType);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar formulario" />
@@ -440,6 +547,19 @@ export default function GenerarDeclaracion() {
               </Button>
             </div>
           </div>
+
+          {(selectedFormType === 'IVA_GENERAL' || selectedFormType === 'IVA_PEQUENO') &&
+            regimeFormType && selectedFormType !== regimeFormType && (
+            <Alert className="mt-4 border-warning/50 bg-warning/10">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                En {MONTHS[selectedMonth - 1]?.label} {selectedYear} esta empresa era{" "}
+                {regimeFormType === 'IVA_PEQUENO' ? "Pequeño Contribuyente" : "Contribuyente General"}
+                {currentRegime?.effectiveFrom ? ` (vigente desde ${currentRegime.effectiveFrom})` : ""}.
+                {" "}Estás generando {getFormTypeLabel(selectedFormType)}.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {taxConfigs.length === 0 && (
             <Alert className="mt-4">
@@ -521,6 +641,47 @@ export default function GenerarDeclaracion() {
         </div>
       )}
 
+      <AlertDialog
+        open={calcToDelete !== null}
+        onOpenChange={(open) => { if (!open && !deletingCalc) setCalcToDelete(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este cálculo?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                {calcToDelete && (
+                  <p className="font-medium text-foreground">
+                    {new Date(calcToDelete.created_at).toLocaleString("es-GT")}
+                    {(() => {
+                      const total = getCalculationTotal(calcToDelete.form_type, calcToDelete.result);
+                      return total !== null
+                        ? ` · Total a pagar: Q${total.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : "";
+                    })()}
+                  </p>
+                )}
+                <p>Se borra de forma definitiva; no afecta a ningún formulario registrado.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel autoFocus disabled={deletingCalc}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteCalc();
+              }}
+              disabled={deletingCalc}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingCalc && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar cálculo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {enterpriseId && (
         <TaxFormDialog
           open={registerOpen}
@@ -590,15 +751,47 @@ export default function GenerarDeclaracion() {
                               </p>
                             )}
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => handleLoadSaved(row)}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Cargar
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={() => handleLoadSaved(row)}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                              Cargar
+                            </Button>
+                            {linkedFormByCalc[row.id] ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    {/* span: un botón deshabilitado no dispara el tooltip */}
+                                    <span tabIndex={0}>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled
+                                        aria-label="Eliminar cálculo"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Ligado al formulario {linkedFormByCalc[row.id]}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Eliminar cálculo"
+                                aria-label="Eliminar cálculo"
+                                onClick={() => setCalcToDelete(row)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}

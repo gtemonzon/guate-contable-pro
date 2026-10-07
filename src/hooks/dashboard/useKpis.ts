@@ -80,6 +80,7 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
       let effectiveEnd = endDate;
       let effectivePrevEnd = prevEndDate;
       let lastEntryDate: string | null = null;
+      let lastEntryInPeriod: string | null = null;
       if (enterpriseId) {
         const [{ data: globalRow }, { data: lastRow }] = await Promise.all([
           supabase
@@ -103,6 +104,7 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
             .maybeSingle(),
         ]);
         lastEntryDate = globalRow?.entry_date ?? null;
+        lastEntryInPeriod = lastRow?.entry_date ?? null;
         if (lastRow?.entry_date) {
           effectiveEnd = lastRow.entry_date;
           const d = new Date(effectiveEnd);
@@ -170,6 +172,7 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
         asOfDate: effectiveEnd,
         lastEntryDate,
         lastEntryOutsidePeriod: !!lastEntryDate && (lastEntryDate > endDate || lastEntryDate < startDate),
+        lastEntryInPeriod,
 
       };
     },
