@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Receipt } from "lucide-react";
+import { Receipt, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import type { IVAData } from "@/hooks/useDashboardTaxData";
@@ -13,6 +13,39 @@ interface DashboardIVASummaryProps {
 
 const formatNumber = (num: number): string =>
   Math.round(num).toLocaleString("es-GT", { maximumFractionDigits: 0 });
+
+/** "dd/MM/yyyy HH:mm" en hora local. */
+const formatSavedAt = (iso: string): string => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/** Pie: de dónde salen los números y si los libros cambiaron desde el cálculo guardado. */
+function SourceFooter({ ivaData }: { ivaData: IVAData }) {
+  if (ivaData.source === "saved" && ivaData.savedAt) {
+    return (
+      <div className="space-y-1 pt-1">
+        <p className="text-[10px] text-muted-foreground leading-tight">
+          Según cálculo del {formatSavedAt(ivaData.savedAt)}
+        </p>
+        {ivaData.stale && (
+          <p className="flex items-start gap-1 text-[10px] leading-tight text-warning">
+            <AlertTriangle className="h-3 w-3 shrink-0 text-warning" />
+            Los libros cambiaron desde ese cálculo. Vuelve a generarlo.
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <p className="text-[10px] text-muted-foreground leading-tight pt-1">
+      {ivaData.regime === "general" && ivaData.carryoverIn > 0
+        ? `Estimación basada en libros y en el remanente contable (Q ${formatNumber(ivaData.carryoverIn)}). No incluye ajustes manuales del Generador de Declaraciones.`
+        : "Estimación basada en libros. No incluye remanente ni ajustes manuales del Generador de Declaraciones."}
+    </p>
+  );
+}
 
 
 export function DashboardIVASummary({ ivaData, loading, monthName, year }: DashboardIVASummaryProps) {
@@ -47,27 +80,46 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">IVA Débito (Ventas)</span>
-                <span className="font-semibold text-success financial-number">Q {formatNumber(ivaData.salesVat)}</span>
+                <span className="font-semibold text-success financial-number">Q {formatNumber(ivaData.debit)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">IVA Crédito (Compras)</span>
-                <span className="font-semibold text-destructive financial-number">Q {formatNumber(ivaData.purchasesVat)}</span>
+                <span className="font-semibold text-destructive financial-number">Q {formatNumber(ivaData.credit)}</span>
               </div>
+              {ivaData.carryoverIn > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Remanente mes anterior</span>
+                  <span className="financial-number">Q {formatNumber(ivaData.carryoverIn)}</span>
+                </div>
+              )}
+              {ivaData.exemption > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Exención IVA</span>
+                  <span className="financial-number">Q {formatNumber(ivaData.exemption)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-medium">
-                  {ivaData.ivaBalance >= 0 ? "IVA por Pagar" : "Crédito Fiscal"}
-                </span>
-                <span className={`font-bold financial-number ${ivaData.ivaBalance >= 0 ? "text-destructive" : "text-success"}`}>
-                  Q {formatNumber(Math.abs(ivaData.ivaBalance))}
-                </span>
+                {ivaData.ivaToPay <= 0 && ivaData.carryoverOut > 0 ? (
+                  <>
+                    <span className="font-medium">Crédito para el mes siguiente</span>
+                    <span className="font-bold financial-number text-success">
+                      Q {formatNumber(ivaData.carryoverOut)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium">IVA por Pagar</span>
+                    <span className="font-bold financial-number text-destructive">
+                      Q {formatNumber(ivaData.ivaToPay)}
+                    </span>
+                  </>
+                )}
               </div>
 
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} ventas / {ivaData.purchasesCount} compras</span>
               </div>
-              <p className="text-[10px] text-muted-foreground leading-tight pt-1">
-                Estimación basada en libros. No incluye remanente ni ajustes manuales del Generador de Declaraciones.
-              </p>
+              <SourceFooter ivaData={ivaData} />
 
             </div>
           ) : (
@@ -75,10 +127,16 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Ingresos del Mes</span>
-                <span className="font-semibold financial-number">Q {formatNumber(ivaData.totalIngresos)}</span>
+                <span className="font-semibold financial-number">Q {formatNumber(ivaData.ingresos)}</span>
               </div>
+              {ivaData.retention > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Retención IVA</span>
+                  <span className="financial-number">Q {formatNumber(ivaData.retention)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t">
-                <span className="font-medium">Impuesto (5%)</span>
+                <span className="font-medium">Impuesto ({ivaData.rate.toLocaleString("es-GT", { maximumFractionDigits: 2 })}%)</span>
                 <span className="font-bold text-destructive financial-number">
                   Q {formatNumber(ivaData.impuestoPequeno)}
                 </span>
@@ -86,6 +144,7 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} documentos</span>
               </div>
+              <SourceFooter ivaData={ivaData} />
             </div>
           )
         ) : (
