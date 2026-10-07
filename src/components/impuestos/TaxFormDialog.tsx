@@ -134,6 +134,8 @@ export default function TaxFormDialog({
   const [suggestedCalc, setSuggestedCalc] = useState<DeclarationCalculationRow | null>(null);
   const [calcSuggestionDismissed, setCalcSuggestionDismissed] = useState(false);
   const [linkedCalcId, setLinkedCalcId] = useState<number | null>(null);
+  // Total a pagar que trajo el análisis del PDF (null = el PDF no lo trae).
+  const [pdfAmount, setPdfAmount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const taxTypeInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -266,6 +268,7 @@ export default function TaxFormDialog({
     setSuggestedCalc(null);
     setCalcSuggestionDismissed(false);
     setLinkedCalcId(null);
+    setPdfAmount(null);
   };
 
   // NIT verification helpers
@@ -365,6 +368,7 @@ export default function TaxFormDialog({
     if (!target) return;
 
     setIsAnalyzing(true);
+    setPdfAmount(null);
     try {
       // Extract text from PDF client-side (works for digital PDFs)
       const pdfText = await extractTextFromPdf(target);
@@ -416,6 +420,8 @@ export default function TaxFormDialog({
       }
       if (extractedData.amountPaid !== undefined) {
         setAmountPaid(extractedData.amountPaid.toString());
+        // El PDF manda: ya no se ofrece "Usar monto" del cálculo guardado.
+        setPdfAmount(extractedData.amountPaid);
       }
 
       toast({
@@ -886,6 +892,18 @@ export default function TaxFormDialog({
                   if (editingForm || calcSuggestionDismissed || !suggestedCalc) return null;
                   const total = getCalculationTotal(suggestedCalc.form_type, suggestedCalc.result);
                   if (total === null) return null;
+                  const fmt = (v: number) =>
+                    v.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  if (pdfAmount !== null) {
+                    // El PDF trae el total a pagar: se usa ese. Solo se informa si el
+                    // cálculo guardado difiere en más de Q1.
+                    if (Math.abs(total - pdfAmount) <= 1) return null;
+                    return (
+                      <div className="rounded-md border border-muted-foreground/30 bg-muted/40 p-2 text-xs">
+                        El cálculo guardado indica Q{fmt(total)}; el PDF indica Q{fmt(pdfAmount)}. Se usó el del PDF.
+                      </div>
+                    );
+                  }
                   return (
                     <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-xs space-y-2">
                       <p>

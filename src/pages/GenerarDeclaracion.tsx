@@ -49,6 +49,9 @@ export default function GenerarDeclaracion() {
   const [retencionISR, setRetencionISR] = useState<number>(0);
   const [retencionIVAPequeno, setRetencionIVAPequeno] = useState<number>(0);
   const [inventarioFinalEstimado, setInventarioFinalEstimado] = useState<number>(0);
+  // ¿El usuario editó (o cargó de un cálculo guardado) el inventario final? Si no, el
+  // campo sigue al sugerido por contabilidad.
+  const [inventarioFinalTocado, setInventarioFinalTocado] = useState(false);
   const [otrosValores, setOtrosValores] = useState<OtroValorISR[]>([]);
   const [isrPagadoAnterior, setIsrPagadoAnterior] = useState<number>(0);
   const [periodYears, setPeriodYears] = useState<number[]>([]);
@@ -77,6 +80,16 @@ export default function GenerarDeclaracion() {
   );
 
   const { data: certTotals } = useCertificatePeriodTotals(enterpriseId, selectedMonth, selectedYear);
+
+  // Prellenado: mientras no se haya tocado, el inventario final estimado = sugerido.
+  const inventarioFinalSugerido = isrTrimestralCalculo.inventarioFinalSugerido;
+  useEffect(() => {
+    if (!inventarioFinalTocado) setInventarioFinalEstimado(inventarioFinalSugerido);
+  }, [inventarioFinalSugerido, inventarioFinalTocado]);
+  // El guardado espera a que el prellenado se aplique (no se guarda un 0 mientras en
+  // pantalla se ve el sugerido).
+  const inventarioPrellenadoPendiente =
+    !inventarioFinalTocado && inventarioFinalEstimado !== inventarioFinalSugerido;
 
   // Load active enterprise
   useEffect(() => {
@@ -164,6 +177,7 @@ export default function GenerarDeclaracion() {
   // Guarda el snapshot automáticamente al terminar el cálculo
   useEffect(() => {
     if (!pendingSave || loading || !enterpriseId || !selectedFormType || !currentResult) return;
+    if (selectedFormType === 'ISR_TRIMESTRAL' && inventarioPrellenadoPendiente) return;
     if (error) {
       setPendingSave(false);
       return;
@@ -207,7 +221,7 @@ export default function GenerarDeclaracion() {
   }, [pendingSave, loading, error, enterpriseId, selectedFormType, currentResult,
       selectedMonth, selectedYear, creditoRemanente, exencionIVA, retencionISR,
       retencionIVAPequeno, inventarioFinalEstimado, otrosValores, isrPagadoAnterior,
-      toast, fetchSavedCalculations]);
+      inventarioPrellenadoPendiente, toast, fetchSavedCalculations]);
 
   const handleLoadSaved = (row: DeclarationCalculationRow) => {
     const inputs = parseCalculationInputs(row.inputs);
@@ -215,6 +229,7 @@ export default function GenerarDeclaracion() {
     setExencionIVA(inputs.exencion_iva);
     setRetencionISR(inputs.retencion_isr);
     setRetencionIVAPequeno(inputs.retencion_iva_pequeno);
+    setInventarioFinalTocado(true);
     setInventarioFinalEstimado(inputs.inventario_final_estimado);
     setOtrosValores(inputs.otros_valores);
     setIsrPagadoAnterior(inputs.isr_pagado_anterior);
@@ -399,7 +414,14 @@ export default function GenerarDeclaracion() {
           vatRetenidoTercerosInfo={certTotals?.vatRetainedReceived ?? 0}
           vatRetenidoEmitidoInfo={certTotals?.vatRetainedIssued ?? 0}
           inventarioFinalEstimado={inventarioFinalEstimado}
-          onInventarioFinalEstimadoChange={setInventarioFinalEstimado}
+          onInventarioFinalEstimadoChange={(value) => {
+            setInventarioFinalTocado(true);
+            setInventarioFinalEstimado(value);
+          }}
+          onInventarioFinalSugeridoReset={() => {
+            setInventarioFinalTocado(false);
+            setInventarioFinalEstimado(inventarioFinalSugerido);
+          }}
           otrosValores={otrosValores}
           onOtrosValoresChange={setOtrosValores}
           isrPagadoAnterior={isrPagadoAnterior}
