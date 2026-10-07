@@ -4,7 +4,7 @@
 /* eslint-disable */
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { buildIsrMensualSummary } from "./dashboardIsrMensualSummary";
+import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "./dashboardIsrMensualSummary";
 import { parseIsrMensualResult } from "./declarationCalculations";
 
 const SAVED = {
@@ -54,5 +54,35 @@ describe("buildIsrMensualSummary", () => {
     for (const v of [null, undefined, "x", 7, [], { ingresosBrutos: "45000", isrAPagar: NaN }]) {
       expect(parseIsrMensualResult(v)).toEqual(zeros);
     }
+  });
+});
+
+describe("estimación con la definición del generador", () => {
+  const SIGN = { NCRE: -1 };
+  const signOf = (t) => SIGN[t] ?? 1;
+  it("mes solo con FPEQ por 3,550 => ISR 177.50 (antes 0 al excluir exentos)", () => {
+    const sales = Array.from({ length: 9 }, (_, i) => ({ net_amount: i === 0 ? 350 : 400, fel_document_type: "FPEQ" }));
+    const ingresos = isrMensualIngresos(sales, signOf);
+    expect(ingresos).toBe(3550);
+    const est = estimateIsrMensual(ingresos);
+    expect(est.primerTramo).toBeCloseTo(177.5, 6);
+    expect(est.segundoTramo).toBe(0);
+    const s = buildIsrMensualSummary({ estimate: est, liveComparable: ingresos, saved: null });
+    expect(s.tax1).toBeCloseTo(177.5, 6);
+    expect(s.tax2).toBe(0);
+    expect(s.isrToPay).toBeCloseTo(177.5, 6);
+  });
+  it("notas de crédito restan", () => {
+    expect(isrMensualIngresos([
+      { net_amount: 1000, fel_document_type: "FACT" },
+      { net_amount: "200", fel_document_type: "NCRE" },
+      { net_amount: null, fel_document_type: "FACT" },
+    ], signOf)).toBe(800);
+  });
+  it("escala: 45,000 => 1,500 + 1,050", () => {
+    expect(estimateIsrMensual(45000)).toMatchObject({ ingresosBrutos: 45000, primerTramo: 1500 });
+    expect(estimateIsrMensual(45000).segundoTramo).toBeCloseTo(1050, 6);
+    expect(estimateIsrMensual(45000).isrCalculado).toBeCloseTo(2550, 6);
+    expect(estimateIsrMensual(30000)).toEqual({ ingresosBrutos: 30000, primerTramo: 1500, segundoTramo: 0, isrCalculado: 1500 });
   });
 });

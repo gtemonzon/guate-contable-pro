@@ -17,6 +17,30 @@ export interface IsrMensualEstimate {
   isrCalculado: number;
 }
 
+/**
+ * Ingresos del mes para el ISR mensual con la definición del Generador de
+ * Declaraciones: TODAS las ventas (incluidos los documentos exentos de IVA, p. ej.
+ * FPEQ) por net_amount con el signo de cada tipo de documento.
+ */
+export function isrMensualIngresos(
+  sales: ReadonlyArray<{ net_amount: number | string | null; fel_document_type: string | null }>,
+  signOf: (docType: string | null) => number,
+): number {
+  return sales.reduce((s, r) => s + Number(r.net_amount || 0) * signOf(r.fel_document_type), 0);
+}
+
+/** Estimación con la escala del ISR mensual: 5% hasta Q30,000 y 7% el excedente. */
+export function estimateIsrMensual(ingresos: number): IsrMensualEstimate {
+  const UMBRAL = 30000;
+  if (ingresos <= UMBRAL) {
+    const primerTramo = ingresos * TASA_PRIMER_TRAMO;
+    return { ingresosBrutos: ingresos, primerTramo, segundoTramo: 0, isrCalculado: primerTramo };
+  }
+  const primerTramo = UMBRAL * TASA_PRIMER_TRAMO; // 1,500
+  const segundoTramo = (ingresos - UMBRAL) * TASA_SEGUNDO_TRAMO;
+  return { ingresosBrutos: ingresos, primerTramo, segundoTramo, isrCalculado: primerTramo + segundoTramo };
+}
+
 export interface IsrMensualSummary {
   source: "saved" | "estimate";
   ingresos: number;

@@ -458,13 +458,19 @@ const Dashboard = () => {
       )}
 
       {/* KPIs */}
-      {kpiData?.asOfDate && (
+      {kpiData && (kpiData.lastEntryInPeriod || kpiData.lastEntryDate) && (
         <p className="text-xs text-muted-foreground -mb-2">
-          Saldos acumulados al{" "}
-          <span className="font-semibold text-foreground">
-            {new Date(kpiData.asOfDate + "T00:00:00").toLocaleDateString("es-GT", { day: "2-digit", month: "long", year: "numeric" })}
-          </span>{" "}
-          (fecha de la última partida registrada)
+          {kpiData.lastEntryInPeriod ? (
+            <>
+              Saldos acumulados al{" "}
+              <span className="font-semibold text-foreground">
+                {new Date(kpiData.lastEntryInPeriod + "T00:00:00").toLocaleDateString("es-GT", { day: "2-digit", month: "long", year: "numeric" })}
+              </span>{" "}
+              (fecha de la última partida registrada)
+            </>
+          ) : (
+            "Sin partidas contabilizadas hasta el fin del período activo."
+          )}
           {kpiData.lastEntryOutsidePeriod && kpiData.lastEntryDate && (
             <span className="ml-2 text-warning font-medium">
               ⚠ Última partida de la empresa:{" "}
@@ -472,6 +478,11 @@ const Dashboard = () => {
               {activePeriod ? ` — fuera del período activo (${activePeriod.year})` : " — fuera del período activo"}
             </span>
           )}
+        </p>
+      )}
+      {kpiData && !kpiData.lastEntryInPeriod && !kpiData.lastEntryDate && (
+        <p className="text-xs text-muted-foreground -mb-2">
+          Esta empresa aún no tiene partidas contabilizadas; los saldos aparecerán al registrar la primera.
         </p>
       )}
 

@@ -39,6 +39,11 @@ export interface KPIData {
   lastEntryDate: string | null;
   /** true si esa última partida cae fuera del rango del período activo */
   lastEntryOutsidePeriod: boolean;
+  /**
+   * Fecha de la última partida contabilizada con fecha <= fin del período activo
+   * (la que fija asOfDate); null si no hay ninguna.
+   */
+  lastEntryInPeriod?: string | null;
 }
 
 
