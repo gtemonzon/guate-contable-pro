@@ -11,19 +11,14 @@ import { Loader2, Save } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeValidity, isValidityRangeOk } from "@/utils/taxConfigValidity";
 import { hasValidityColumns } from "@/utils/taxConfigValidityColumns";
+import { TAX_FORM_TYPE_OPTIONS } from "@/constants/taxFormTypes";
 
 interface EnterpriseTaxFormsProps {
   enterpriseId: number;
 }
 
 /** Formularios de declaración que ofrecen el Generador y las tarjetas del Dashboard. */
-const FORM_TYPES = [
-  { type: "IVA_GENERAL", label: "IVA General", defaultRate: 12 },
-  { type: "IVA_PEQUENO", label: "IVA Pequeño Contribuyente", defaultRate: 5 },
-  { type: "ISR_MENSUAL", label: "ISR Mensual (opción simplificada)", defaultRate: 5 },
-  { type: "ISR_TRIMESTRAL", label: "ISR Trimestral", defaultRate: 25 },
-  { type: "ISO_TRIMESTRAL", label: "ISO Trimestral", defaultRate: 1 },
-] as const;
+const FORM_TYPES = TAX_FORM_TYPE_OPTIONS;
 
 interface FormRow {
   /** Ya existe una fila en tab_enterprise_tax_config (activa o no). */
@@ -177,6 +172,10 @@ export function EnterpriseTaxForms({ enterpriseId }: EnterpriseTaxFormsProps) {
           Formularios que ofrece el Generador de Declaraciones y que muestran las tarjetas del Dashboard, con su
           tasa y su vigencia.
         </CardDescription>
+        <p className="text-xs text-muted-foreground">
+          Para dejar de usar un formulario desmarca 'Aplica': la configuración y sus fechas se conservan. Cada
+          formulario tiene una sola vigencia (desde-hasta).
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
