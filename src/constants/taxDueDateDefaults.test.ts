@@ -6,12 +6,13 @@
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { DEFAULT_TAXES } from "./taxDueDateDefaults";
-import { getDefaultTaxConfigs } from "@/utils/dueDateCalculations";
+import { getDefaultTaxConfigs, getDefaultDueDateConfigs } from "@/utils/dueDateCalculations";
 
 const QUARTERLY = ["isr_trimestral", "iso", "iso_trimestral"];
 const LISTS = {
   DEFAULT_TAXES,
   getDefaultTaxConfigs: getDefaultTaxConfigs(),
+  getDefaultDueDateConfigs: getDefaultDueDateConfigs(),
 };
 const ref = (taxType: string) => DEFAULT_TAXES.find((t) => t.tax_type === taxType)?.reference_period;
 
@@ -35,5 +36,23 @@ describe("valores por defecto de vencimientos", () => {
     expect(DEFAULT_TAXES.map((t) => t.tax_type)).toEqual([
       "iva_mensual", "isr_trimestral", "iso_trimestral", "retencion_isr", "retencion_iva", "isr_anual",
     ]);
+  });
+
+  it("(d) lista única: getDefaultTaxConfigs y getDefaultDueDateConfigs salen de DEFAULT_TAXES", () => {
+    const keys = DEFAULT_TAXES.map((t) => t.tax_type);
+    expect(getDefaultTaxConfigs().map((t) => t.tax_type)).toEqual(keys);
+    expect(getDefaultDueDateConfigs().map((t) => t.tax_type)).toEqual(keys);
+    for (const c of getDefaultTaxConfigs()) expect("is_active" in c).toBe(false);
+    // days_value null => 0; las retenciones conservan sus días (IVA 15, ISR 10).
+    const byType = Object.fromEntries(getDefaultTaxConfigs().map((c) => [c.tax_type, c]));
+    expect(byType.iva_mensual.days_value).toBe(0);
+    expect(byType.retencion_iva.days_value).toBe(15);
+    expect(byType.retencion_isr.days_value).toBe(10);
+    expect(byType.isr_anual).toMatchObject({ calculation_type: "fixed_day", days_value: 31 });
+  });
+
+  it("(e) getDefaultDueDateConfigs conserva los estados: solo IVA mensual e ISR trimestral activos", () => {
+    expect(getDefaultDueDateConfigs().filter((c) => c.is_active).map((c) => c.tax_type))
+      .toEqual(["iva_mensual", "isr_trimestral"]);
   });
 });

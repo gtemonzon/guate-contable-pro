@@ -10,7 +10,9 @@ import {
   parseDateOnly,
   TaxDueDateConfig,
   Holiday,
-  getDefaultTaxConfigs,
+  getDefaultDueDateConfigs,
+  isCalculationType,
+  isReferencePeriod,
   parseHolidaysForYears,
   computeDueDateAlerts,
   isTaxAlertStale,
@@ -45,15 +47,6 @@ type ModuleFlag = Pick<
 type AlertPriority = ReturnType<typeof getPriorityFromDays>;
 const isAlertPriority = (value: unknown): value is AlertPriority =>
   value === 'urgente' || value === 'importante' || value === 'informativa';
-
-// tab_tax_due_date_config.calculation_type/reference_period are free-text
-// columns in the DB, but the only writer (TaxDueDateConfig.tsx) constrains
-// them to these literals via a <Select>. Guard defensively in case a row
-// was ever written outside that form.
-const isCalculationType = (value: string): value is TaxDueDateConfig['calculation_type'] =>
-  value === 'last_business_day' || value === 'business_days_after' || value === 'fixed_day';
-const isReferencePeriod = (value: string): value is TaxDueDateConfig['reference_period'] =>
-  value === 'current_month' || value === 'next_month' || value === 'quarter_end_next_month';
 
 /**
  * Guard global (a nivel de módulo) para evitar que dos componentes
@@ -177,7 +170,9 @@ export function useAlertGenerator() {
             effective_from: c.effective_from ?? null,
             effective_to: c.effective_to ?? null,
           }))
-        : getDefaultTaxConfigs().map(c => ({ ...c, is_active: true }));
+        // Sin filas propias: valores por defecto con sus estados (solo IVA mensual e
+        // ISR trimestral activos).
+        : getDefaultDueDateConfigs();
 
       // Formularios presentados (activos): con period_type para distinguir los
       // trimestrales (period_month = mes de inicio del trimestre).

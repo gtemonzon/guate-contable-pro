@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   computePendingDeadlines, taxFormMatchesConfig, isFormPresented, coveredPeriodForDueDate,
   parseHolidaysForYears, joinLabelsEs, calculateDueDate, toDateOnlyString,
-  computeDueDateAlerts, isTaxAlertStale, getDefaultTaxConfigs,
+  computeDueDateAlerts, isTaxAlertStale, getDefaultTaxConfigs, getDefaultDueDateConfigs,
 } from "./dueDateCalculations";
 
 // Configuración real de la empresa 26.
@@ -256,16 +256,23 @@ describe("computeDueDateAlerts (alertas de vencimiento)", () => {
     expect(alerts(day(2026, 10, 27), [], [{ ...IVA, is_active: false }])).toEqual([]);
   });
 
-  it("6. con getDefaultTaxConfigs, 'iso' es trimestral (sin alertas mensuales)", () => {
+  it("6. con getDefaultTaxConfigs, 'iso_trimestral' es trimestral (sin alertas mensuales)", () => {
     const defaults = getDefaultTaxConfigs().map((c) => ({ ...c, is_active: true }));
-    expect(defaults.find((c) => c.tax_type === "iso").reference_period).toBe("quarter_end_next_month");
+    expect(defaults.find((c) => c.tax_type === "iso_trimestral").reference_period).toBe("quarter_end_next_month");
     // 27/11/2026: el IVA de octubre vence el 30/11; el ISO ya no.
     const nov = alerts(day(2026, 11, 27), [], defaults);
-    expect(nov.some((a) => a.taxType === "iso")).toBe(false);
-    expect(nov.some((a) => a.taxType === "iva")).toBe(true);
+    expect(nov.some((a) => a.taxType === "iso_trimestral")).toBe(false);
+    expect(nov.some((a) => a.taxType === "iva_mensual")).toBe(true);
     // 26/10/2026: el ISO del tercer trimestre sí.
-    const oct = alerts(day(2026, 10, 26), [], defaults).filter((a) => a.taxType === "iso");
+    const oct = alerts(day(2026, 10, 26), [], defaults).filter((a) => a.taxType === "iso_trimestral");
     expect(oct.map((a) => [ymd(a), a.periodLabel])).toEqual([["2026-10-30", "Julio - Septiembre 2026"]]);
+  });
+
+  it("empresa sin filas (getDefaultDueDateConfigs): solo IVA mensual e ISR trimestral", () => {
+    const oct = alerts(day(2026, 10, 26), [], getDefaultDueDateConfigs());
+    expect([...new Set(oct.map((a) => a.taxType))].sort()).toEqual(["isr_trimestral", "iva_mensual"]);
+    // Las retenciones (10–15 días hábiles de noviembre) no alertan aunque estén en la lista.
+    expect(alerts(day(2026, 11, 10), [], getDefaultDueDateConfigs()).some((a) => a.taxType.startsWith("retencion"))).toBe(false);
   });
 });
 
