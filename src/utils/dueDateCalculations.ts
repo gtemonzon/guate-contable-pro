@@ -1,5 +1,6 @@
 import { addDays, subDays, endOfMonth, startOfMonth, isWeekend, isSameDay, format, getMonth, getYear, addMonths } from 'date-fns';
 import { isTaxConfigValidForMonth, isTaxConfigValidForRange } from './taxConfigValidity';
+import { DEFAULT_TAXES } from '../constants/taxDueDateDefaults';
 
 export interface TaxDueDateConfig {
   tax_type: string;
@@ -229,60 +230,35 @@ export const MONTH_NAMES_ES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
+// tab_tax_due_date_config.calculation_type/reference_period son texto libre en la
+// base; las pantallas solo escriben estos literales. Guardas por si alguna fila se
+// escribió por fuera.
+export const isCalculationType = (value: string): value is TaxDueDateConfig['calculation_type'] =>
+  value === 'last_business_day' || value === 'business_days_after' || value === 'fixed_day';
+export const isReferencePeriod = (value: string): value is TaxDueDateConfig['reference_period'] =>
+  value === 'current_month' || value === 'next_month' || value === 'quarter_end_next_month';
+
 /**
- * Get default tax due date configurations for Guatemala
+ * Valores por defecto de vencimientos (lista canónica DEFAULT_TAXES), con sus estados
+ * activos: solo IVA mensual e ISR trimestral vienen activos.
+ */
+export function getDefaultDueDateConfigs(): TaxDueDateConfig[] {
+  return DEFAULT_TAXES.map((t) => ({
+    tax_type: t.tax_type,
+    tax_label: t.tax_label,
+    calculation_type: isCalculationType(t.calculation_type) ? t.calculation_type : 'last_business_day',
+    days_value: t.days_value ?? 0,
+    reference_period: isReferencePeriod(t.reference_period) ? t.reference_period : 'current_month',
+    consider_holidays: t.consider_holidays,
+    is_active: t.is_active,
+  }));
+}
+
+/**
+ * Get default tax due date configurations for Guatemala (DEFAULT_TAXES, sin is_active).
  */
 export function getDefaultTaxConfigs(): Omit<TaxDueDateConfig, 'is_active'>[] {
-  return [
-    {
-      tax_type: 'iva',
-      tax_label: 'IVA Mensual',
-      calculation_type: 'last_business_day',
-      days_value: 0,
-      reference_period: 'current_month',
-      consider_holidays: true,
-    },
-    {
-      tax_type: 'isr_trimestral',
-      tax_label: 'ISR Trimestral',
-      calculation_type: 'last_business_day',
-      days_value: 0,
-      reference_period: 'quarter_end_next_month',
-      consider_holidays: true,
-    },
-    {
-      tax_type: 'iso',
-      tax_label: 'ISO Trimestral',
-      calculation_type: 'last_business_day',
-      days_value: 0,
-      reference_period: 'quarter_end_next_month',
-      consider_holidays: true,
-    },
-    {
-      tax_type: 'isr_mensual',
-      tax_label: 'ISR Mensual (Retenciones)',
-      calculation_type: 'business_days_after',
-      days_value: 10,
-      reference_period: 'next_month',
-      consider_holidays: true,
-    },
-    {
-      tax_type: 'retenciones_iva',
-      tax_label: 'Retención IVA',
-      calculation_type: 'business_days_after',
-      days_value: 10,
-      reference_period: 'next_month',
-      consider_holidays: true,
-    },
-    {
-      tax_type: 'retenciones_isr',
-      tax_label: 'Retención ISR',
-      calculation_type: 'business_days_after',
-      days_value: 10,
-      reference_period: 'next_month',
-      consider_holidays: true,
-    },
-  ];
+  return getDefaultDueDateConfigs().map(({ is_active: _isActive, ...config }) => config);
 }
 
 // ─── Próximos vencimientos (Dashboard) ─────────────────────────────────────

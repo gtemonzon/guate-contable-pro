@@ -23,7 +23,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Plus, Trash2 } from 'lucide-react';
-import { getDefaultTaxConfigs, type TaxDueDateConfig as TaxDueDateConfigType } from '@/utils/dueDateCalculations';
+import { getDefaultDueDateConfigs, type TaxDueDateConfig as TaxDueDateConfigType } from '@/utils/dueDateCalculations';
 
 interface TaxConfigRow extends TaxDueDateConfigType {
   id?: number;
@@ -78,10 +78,7 @@ export function TaxDueDateConfig() {
           })));
         } else {
           // Load defaults if no config exists
-          setConfigs(getDefaultTaxConfigs().map((c, i) => ({
-            ...c,
-            is_active: true,
-          })));
+          setConfigs(getDefaultDueDateConfigs());
         }
       } catch (error) {
         console.error('Error fetching tax configs:', error);
