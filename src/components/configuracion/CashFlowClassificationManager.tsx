@@ -91,7 +91,6 @@ export function CashFlowClassificationManager() {
 
   useEffect(() => {
     if (enterpriseId) loadData(enterpriseId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enterpriseId]);
 
   const updateCategory = async (accountId: number, category: CashFlowCategory | null) => {

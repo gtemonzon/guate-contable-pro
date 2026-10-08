@@ -138,7 +138,6 @@ const Cuentas = () => {
       .eq('id', accountId);
 
     const ms = Math.round(performance.now() - start);
-    // eslint-disable-next-line no-console
     console.debug('[inline-edit]', { accountId, field, oldValue, newValue, ms, error: error?.message });
 
     if (error) {

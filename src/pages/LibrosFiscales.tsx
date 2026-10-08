@@ -300,7 +300,7 @@ export default function LibrosFiscales() {
     try { return localStorage.getItem("librosFiscales_showBreakdown") === "1"; } catch { return false; }
   });
   useEffect(() => {
-    try { localStorage.setItem("librosFiscales_showBreakdown", showBreakdown ? "1" : "0"); } catch {}
+    try { localStorage.setItem("librosFiscales_showBreakdown", showBreakdown ? "1" : "0"); } catch { /* localStorage no disponible: la preferencia solo no se recuerda */ }
   }, [showBreakdown]);
   const [highlightedInvoiceId, setHighlightedInvoiceId] = useState<number | null>(null);
   const [journalType, setJournalType] = useState<"mes" | "banco" | "documento">("mes");

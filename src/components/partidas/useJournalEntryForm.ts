@@ -297,7 +297,6 @@ export function useJournalEntryForm(
     if (periods.length === 0) return;
     const match = periods.find(p => entryDate >= p.start_date && entryDate <= p.end_date);
     setPeriodId(match ? match.id : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryDate, periods, open, isLoadingEntry, isReadOnly]);
 
   useEffect(() => {

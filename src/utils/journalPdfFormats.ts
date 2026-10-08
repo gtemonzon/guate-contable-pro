@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from 'jspdf';
 import { formatCurrency } from '@/lib/utils';
 import type { AuthorizationLegend } from './reportExport';
