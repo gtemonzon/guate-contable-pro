@@ -6,15 +6,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   computePendingDeadlines,
-  parseHolidaysForYears,
   formatDueDate,
   joinLabelsEs,
   DEADLINE_WINDOW_DAYS,
   type TaxDueDateConfig,
-  type Holiday,
   type PresentedTaxForm,
   type PendingDeadline,
 } from "@/utils/dueDateCalculations";
+import { fetchEnterpriseHolidayDates } from "@/utils/enterpriseHolidays";
 import { cn } from "@/lib/utils";
 
 interface DashboardTaxDeadlinesProps {
@@ -35,16 +34,16 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
     queryFn: async (): Promise<DeadlinesData> => {
       if (!enterpriseId) return { hasConfigs: false, inWindow: [], next: [] };
 
-      const [configRes, holidaysRes, presentedRes] = await Promise.all([
+      const today = new Date();
+      const [configRes, holidays, presentedRes] = await Promise.all([
         supabase
           .from("tab_tax_due_date_config")
           .select("*")
           .eq("enterprise_id", enterpriseId)
           .eq("is_active", true),
-        supabase
-          .from("tab_holidays")
-          .select("holiday_date, description, is_recurring")
-          .eq("enterprise_id", enterpriseId),
+        // Feriados del año anterior, actual y siguiente (los vencimientos de enero
+        // del año siguiente también respetan los recurrentes).
+        fetchEnterpriseHolidayDates(enterpriseId, today),
         supabase
           .from("tab_tax_forms")
           .select("tax_type, period_month, period_year, period_type")
@@ -52,7 +51,6 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
           .eq("is_active", true),
       ]);
 
-      const today = new Date();
       const configs: TaxDueDateConfig[] = (configRes.data || []).map((cfg) => ({
         tax_type: cfg.tax_type,
         tax_label: cfg.tax_label,
@@ -62,9 +60,6 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
         consider_holidays: cfg.consider_holidays ?? true,
         is_active: true,
       }));
-      // Feriados del año anterior, actual y siguiente (los vencimientos de enero
-      // del año siguiente también respetan los recurrentes).
-      const holidays = parseHolidaysForYears((holidaysRes.data || []) as Holiday[], today.getFullYear());
       const forms = (presentedRes.data || []) as PresentedTaxForm[];
 
       const { inWindow, next } = computePendingDeadlines({ configs, holidays, forms, today });
