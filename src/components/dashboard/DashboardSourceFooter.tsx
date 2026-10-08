@@ -42,3 +42,26 @@ export function DashboardSourceFooter({ source, savedAt, stale, estimateText }: 
     </p>
   );
 }
+
+/** 'YYYY-MM-DD' → 'dd/MM/yyyy'. */
+const formatDateOnly = (value: string): string => {
+  const [y, m, d] = value.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+};
+
+interface DashboardPresentedLineProps {
+  presented: { formNumber: string; amountPaid: number; paymentDate: string | null } | null;
+  /** Formato del monto (cada tarjeta usa el suyo). */
+  formatAmount: (value: number) => string;
+}
+
+/** "Presentado el dd/MM/yyyy — Q<monto> (formulario <número>)" cuando el formulario ya está registrado. */
+export function DashboardPresentedLine({ presented, formatAmount }: DashboardPresentedLineProps) {
+  if (!presented) return null;
+  return (
+    <p className="text-xs text-success">
+      Presentado{presented.paymentDate ? ` el ${formatDateOnly(presented.paymentDate)}` : ""} — Q{formatAmount(presented.amountPaid)}
+      {" "}(formulario {presented.formNumber})
+    </p>
+  );
+}

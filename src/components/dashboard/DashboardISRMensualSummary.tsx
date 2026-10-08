@@ -3,7 +3,7 @@ import { Receipt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import type { ISRMensualData } from "@/hooks/useDashboardTaxData";
-import { DashboardSourceFooter } from "./DashboardSourceFooter";
+import { DashboardSourceFooter, DashboardPresentedLine } from "./DashboardSourceFooter";
 
 interface DashboardISRMensualSummaryProps {
   data: ISRMensualData | null;
@@ -67,6 +67,7 @@ export function DashboardISRMensualSummary({ data, loading, monthName, year }: D
                 Q {formatNumber(data.isrCalculado)}
               </span>
             </div>
+            <DashboardPresentedLine presented={data.presented} formatAmount={formatNumber} />
             <div className="flex justify-between text-xs text-muted-foreground pt-1">
               <span>{data.salesCount} documentos</span>
             </div>
