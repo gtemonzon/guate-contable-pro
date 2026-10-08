@@ -19,6 +19,7 @@ import { EnterpriseIssuanceProfiles } from "@/components/empresas/EnterpriseIssu
 import { EnterpriseTaxForms } from "@/components/empresas/EnterpriseTaxForms";
 import { describeValidity, isValidityRangeOk } from "@/utils/taxConfigValidity";
 import { hasValidityColumns } from "@/utils/taxConfigValidityColumns";
+import { DEFAULT_TAXES } from "@/constants/taxDueDateDefaults";
 
 interface EnterpriseTaxesProps {
   enterpriseId: number;
@@ -37,66 +38,6 @@ interface TaxConfig {
   effective_from?: string | null;
   effective_to?: string | null;
 }
-
-// Default tax configurations for Guatemala
-// calculation_type values: 'last_business_day', 'business_days_after', 'fixed_day'
-// reference_period values: 'current_month', 'next_month', 'quarter_end_next_month'
-const DEFAULT_TAXES: Omit<TaxConfig, 'id'>[] = [
-  {
-    tax_type: "iva_mensual",
-    tax_label: "IVA Mensual",
-    calculation_type: "last_business_day",
-    days_value: null,
-    reference_period: "current_month",
-    consider_holidays: true,
-    is_active: true,
-  },
-  {
-    tax_type: "isr_trimestral",
-    tax_label: "ISR Trimestral",
-    calculation_type: "last_business_day",
-    days_value: null,
-    reference_period: "next_month",
-    consider_holidays: true,
-    is_active: true,
-  },
-  {
-    tax_type: "iso_trimestral",
-    tax_label: "ISO Trimestral",
-    calculation_type: "last_business_day",
-    days_value: null,
-    reference_period: "current_month",
-    consider_holidays: true,
-    is_active: false,
-  },
-  {
-    tax_type: "retencion_isr",
-    tax_label: "Retención ISR",
-    calculation_type: "business_days_after",
-    days_value: 10,
-    reference_period: "next_month",
-    consider_holidays: true,
-    is_active: false,
-  },
-  {
-    tax_type: "retencion_iva",
-    tax_label: "Retención IVA",
-    calculation_type: "business_days_after",
-    days_value: 15,
-    reference_period: "next_month",
-    consider_holidays: true,
-    is_active: false,
-  },
-  {
-    tax_type: "isr_anual",
-    tax_label: "ISR Anual",
-    calculation_type: "fixed_day",
-    days_value: 31,
-    reference_period: "next_month",
-    consider_holidays: true,
-    is_active: false,
-  },
-];
 
 const CALCULATION_TYPE_LABELS: Record<string, string> = {
   last_business_day: "Último día hábil del mes",
