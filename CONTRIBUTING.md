@@ -44,8 +44,9 @@ bun run dev
 Before pushing, run the same checks the CI pipeline enforces:
 
 ```bash
-# Type-check
-bun run tsc --noEmit
+# Type-check (tsconfig.app.json: the root tsconfig.json only has references,
+# so `tsc --noEmit` at the root checks zero files)
+bun run typecheck
 
 # Lint
 bun run lint
@@ -115,7 +116,7 @@ Push / PR
 │  1. Check for committed .env files          → fail  │
 │  2. Scan for secret patterns                → fail  │
 │  3. bun install --frozen-lockfile                    │
-│  4. tsc --noEmit (type check)               → fail  │
+│  4. bun run typecheck (type check)          → fail  │
 │  5. bun run lint (ESLint)                   → fail  │
 │  6. bun run build                           → fail  │
 │  7. Build size report                                │
@@ -180,7 +181,7 @@ ls supabase/migrations/
 
 Before opening a PR, confirm:
 
-- [ ] `bun run tsc --noEmit` passes
+- [ ] `bun run typecheck` passes
 - [ ] `bun run lint` passes  
 - [ ] `bun run build` succeeds
 - [ ] No `.env` files staged

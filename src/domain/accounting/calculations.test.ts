@@ -2,8 +2,7 @@
  * Unit tests for core accounting domain functions.
  * Run with: bunx vitest run src/domain/accounting/calculations.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
+import { describe, it, expect } from "vitest";
 import {
   computeAccountBalance,
   aggregateMovements,
@@ -19,7 +18,7 @@ import {
   formatGTQ,
   formatChange,
 } from './calculations';
-import type { AccountRecord, MovementRecord } from './types';
+import type { AccountBalance, AccountRecord, MovementRecord } from './types';
 
 // ---------------------------------------------------------------------------
 // computeAccountBalance
@@ -64,6 +63,8 @@ describe('aggregateMovements', () => {
     expect(aggregateMovements([])).toEqual(new Map());
   });
   it('treats null/undefined amounts as zero', () => {
+    // Datos sucios a propósito: montos null/undefined como llegan de la base.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const movements = [{ account_id: 1, debit_amount: null as any, credit_amount: undefined as any }];
     const map = aggregateMovements(movements);
     expect(map.get(1)).toEqual({ debits: 0, credits: 0 });
@@ -98,7 +99,7 @@ describe('applyMovementsToAccounts', () => {
 // sumBalancesByType
 // ---------------------------------------------------------------------------
 describe('sumBalancesByType', () => {
-  const balances = [
+  const balances: AccountBalance[] = [
     { id: 1, account_code: '1', account_name: 'A', account_type: 'activo', balance_type: null, balance: 5000 },
     { id: 2, account_code: '2', account_name: 'B', account_type: 'activo', balance_type: null, balance: 3000 },
     { id: 3, account_code: '3', account_name: 'C', account_type: 'pasivo', balance_type: null, balance: 2000 },

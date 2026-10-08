@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/taxConfigValidity.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import {
   isTaxConfigValidForMonth, isTaxConfigValidForRange, isTaxConfigValidOn, describeValidity, isValidityRangeOk,

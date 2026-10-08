@@ -2,8 +2,6 @@
  * Valores por defecto de vencimientos: los impuestos trimestrales usan referencia trimestral.
  * Run with: bunx vitest run src/constants/taxDueDateDefaults.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { DEFAULT_TAXES } from "./taxDueDateDefaults";
 import { getDefaultTaxConfigs, getDefaultDueDateConfigs } from "@/utils/dueDateCalculations";

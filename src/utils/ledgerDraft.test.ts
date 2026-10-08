@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/ledgerDraft.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import {
   ledgerDraftKey, saveLedgerDraft, readLedgerDraft, clearLedgerDraft, formatDraftTimestamp, LEDGER_DRAFT_TTL_MS,

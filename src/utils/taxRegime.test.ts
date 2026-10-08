@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/taxRegime.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { ivaFormTypeForRegime, regimeAsOfDateForMonth } from "./taxRegime";
 

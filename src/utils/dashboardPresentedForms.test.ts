@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/dashboardPresentedForms.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { findPresentedMonthlyForm, computeTotalTaxEstimate } from "./dashboardPresentedForms";
 
