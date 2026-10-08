@@ -141,7 +141,17 @@ export default function ReporteVariaciones() {
       if (comparedBsRes.error) throw comparedBsRes.error;
       if (comparedPnlRes.error) throw comparedPnlRes.error;
 
-      const toMap = (bsRows: any[], pnlRows: any[]): Map<number, AccountBalance> => {
+      // Campos comunes de las filas de get_balance_sheet y get_pnl.
+      type RpcAccountRow = {
+        account_id: number;
+        account_code: string;
+        account_name: string;
+        account_type: string;
+        level: number;
+        parent_account_id: number | null;
+        balance: number;
+      };
+      const toMap = (bsRows: RpcAccountRow[], pnlRows: RpcAccountRow[]): Map<number, AccountBalance> => {
         const m = new Map<number, AccountBalance>();
         for (const r of bsRows) {
           m.set(Number(r.account_id), {

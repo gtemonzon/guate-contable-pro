@@ -32,7 +32,7 @@ async function fetchLedgerSummary(
     console.warn(`[useYearlyCharts] fallback for ${ledger} ${year}:`, error.message);
     return [];
   }
-  return (data ?? []).map((r: any) => ({ month_num: Number(r.month_num), total: Number(r.total) }));
+  return (data ?? []).map((r) => ({ month_num: Number(r.month_num), total: Number(r.total) }));
 }
 
 export function useYearlyCharts(enterpriseId: number | null, selectedYears: number[]) {

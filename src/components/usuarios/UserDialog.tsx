@@ -65,10 +65,20 @@ interface EnterpriseRole {
   role: string;
 }
 
+/** Datos del usuario que el diálogo lee al editar. */
+interface UserDialogUser {
+  id: string;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  is_tenant_admin?: boolean;
+  tenant_id?: number | null;
+}
+
 interface UserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: any | null;
+  user: UserDialogUser | null;
   onClose: () => void;
 }
 

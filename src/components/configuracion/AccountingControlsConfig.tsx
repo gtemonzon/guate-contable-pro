@@ -22,7 +22,7 @@ export function AccountingControlsConfig() {
     if (!enterpriseId) return;
     (async () => {
       setLoading(true);
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("tab_enterprise_config")
         .select("allow_reopen_posted_entries")
         .eq("enterprise_id", enterpriseId)
@@ -42,13 +42,13 @@ export function AccountingControlsConfig() {
       .eq("enterprise_id", enterpriseId)
       .maybeSingle();
 
-    const payload: any = {
+    const payload: { enterprise_id: number; allow_reopen_posted_entries: boolean } = {
       enterprise_id: enterpriseId,
       allow_reopen_posted_entries: value,
     };
     const { error } = existing
-      ? await (supabase as any).from("tab_enterprise_config").update(payload).eq("enterprise_id", enterpriseId)
-      : await (supabase as any).from("tab_enterprise_config").insert(payload);
+      ? await supabase.from("tab_enterprise_config").update(payload).eq("enterprise_id", enterpriseId)
+      : await supabase.from("tab_enterprise_config").insert(payload);
 
     if (error) {
       toast.error("Error al guardar la configuración");

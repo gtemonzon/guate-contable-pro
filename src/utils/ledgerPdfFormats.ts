@@ -61,7 +61,7 @@ export interface LegalLedgerPdfInput {
 }
 
 const SHORT_DESC_LEN = 90;
-const REF_REGEX = /(?:^|[\s|;,(\[])\s*(?:Ref(?:erencia)?\.?|REF)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_./]*)/i;
+const REF_REGEX = /(?:^|[\s|;,([])\s*(?:Ref(?:erencia)?\.?|REF)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_./]*)/i;
 
 function extractReference(raw: string | null | undefined): { ref: string; description: string } {
   const text = (raw ?? "").trim();

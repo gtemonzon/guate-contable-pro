@@ -168,7 +168,7 @@ export function InvoiceSearchDialog({
           month: date.getMonth() + 1,
           year: date.getFullYear(),
           batch_reference: p.batch_reference,
-          bank_account_name: (p.bank_account as any)?.account_name || null,
+          bank_account_name: (p.bank_account as unknown as { account_name: string | null } | null)?.account_name || null,
         });
       });
 

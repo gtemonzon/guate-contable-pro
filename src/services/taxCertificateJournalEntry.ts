@@ -141,7 +141,6 @@ export async function generateJournalEntryFromCertificate(
   // 6. Header
   const { data: header, error: hErr } = await supabase
     .from("tab_journal_entries")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .insert({
       enterprise_id: cert.enterprise_id,
       entry_number: numData as string,

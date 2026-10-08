@@ -28,7 +28,7 @@ interface UserCardProps {
       };
     }>;
   };
-  onEdit: (user: any) => void;
+  onEdit: (user: UserCardProps["user"]) => void;
 }
 
 const UserCard = ({ user, onEdit }: UserCardProps) => {

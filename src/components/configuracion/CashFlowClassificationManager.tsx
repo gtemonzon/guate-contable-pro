@@ -59,12 +59,12 @@ export function CashFlowClassificationManager() {
     setLoading(true);
     try {
       const [{ data: config }, { data: accountData, error }] = await Promise.all([
-        (supabase as any)
+        supabase
           .from("tab_enterprise_config")
           .select("period_result_account_id, retained_earnings_account_id")
           .eq("enterprise_id", entId)
           .maybeSingle(),
-        (supabase as any)
+        supabase
           .from("tab_accounts")
           .select("id, account_code, account_name, account_type, parent_account_id, is_bank_account, cash_flow_category")
           .eq("enterprise_id", entId)
@@ -91,12 +91,11 @@ export function CashFlowClassificationManager() {
 
   useEffect(() => {
     if (enterpriseId) loadData(enterpriseId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enterpriseId]);
 
   const updateCategory = async (accountId: number, category: CashFlowCategory | null) => {
     setSavingId(accountId);
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from("tab_accounts")
       .update({ cash_flow_category: category })
       .eq("id", accountId);
@@ -139,7 +138,7 @@ export function CashFlowClassificationManager() {
     setSuggesting(true);
     try {
       // Se necesitan también las cuentas padre (no de detalle) para recorrer la jerarquía
-      const { data: allAccounts } = await (supabase as any)
+      const { data: allAccounts } = await supabase
         .from("tab_accounts")
         .select("id, account_code, account_name, account_type, parent_account_id, is_bank_account, cash_flow_category")
         .eq("enterprise_id", enterpriseId);
@@ -176,7 +175,7 @@ export function CashFlowClassificationManager() {
         });
 
       for (const update of updates) {
-        await (supabase as any)
+        await supabase
           .from("tab_accounts")
           .update({ cash_flow_category: update.category })
           .eq("id", update.id);

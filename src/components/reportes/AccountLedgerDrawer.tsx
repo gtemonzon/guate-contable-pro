@@ -23,6 +23,25 @@ interface LedgerRow {
   running_balance: number;
 }
 
+/** Montos de una línea de partida (saldo inicial). */
+interface DetailAmountRow {
+  debit_amount: number | null;
+  credit_amount: number | null;
+}
+
+/** Línea de partida con su encabezado, tal como la trae la consulta del mayor. */
+interface LedgerDetailRow extends DetailAmountRow {
+  description: string | null;
+  journal_entry_id: number;
+  account_id: number;
+  tab_journal_entries: {
+    id: number;
+    entry_number: string;
+    entry_date: string;
+    description: string | null;
+  };
+}
+
 interface AccountLedgerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -134,7 +153,7 @@ export default function AccountLedgerDrawer({
       // restates every prior-year balance, so ignoring the floor double-counts it.
       let openingBalance = 0;
       if (lowerBound) {
-        const prevData = await fetchAllRecords<any>(() => {
+        const prevData = await fetchAllRecords<DetailAmountRow>(() => {
           const q = supabase
             .from("tab_journal_entry_details")
             .select(`
@@ -157,7 +176,7 @@ export default function AccountLedgerDrawer({
         });
 
         openingBalance = (prevData || []).reduce(
-          (sum: number, r: any) => sum + (Number(r.debit_amount) || 0) - (Number(r.credit_amount) || 0),
+          (sum: number, r) => sum + (Number(r.debit_amount) || 0) - (Number(r.credit_amount) || 0),
           0
         );
       }
@@ -196,10 +215,10 @@ export default function AccountLedgerDrawer({
         return q;
       };
 
-      const data = await fetchAllRecords<any>(buildQuery);
+      const data = await fetchAllRecords<LedgerDetailRow>(buildQuery);
 
       let runningBalance = openingBalance;
-      const ledgerRows: LedgerRow[] = (data || []).map((row: any) => {
+      const ledgerRows: LedgerRow[] = (data || []).map((row) => {
         const debit = Number(row.debit_amount) || 0;
         const credit = Number(row.credit_amount) || 0;
         runningBalance += debit - credit;

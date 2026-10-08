@@ -38,7 +38,7 @@ export function ExchangeRatesManager() {
   const [filterCurrency, setFilterCurrency] = useState<string>("all");
   const [openDialog, setOpenDialog] = useState(false);
   const [editing, setEditing] = useState<ExchangeRate | null>(null);
-  const [confirm, setConfirm] = useState<{ open: boolean; count: number; payload: any } | null>(null);
+  const [confirm, setConfirm] = useState<{ open: boolean; count: number; payload: Parameters<typeof upsert>[0] } | null>(null);
   const [toDelete, setToDelete] = useState<ExchangeRate | null>(null);
 
   const [form, setForm] = useState({

@@ -180,11 +180,11 @@ export function AppSidebar() {
   useEffect(() => {
     if (activeGroupTitle && activeGroupTitle !== openGroup) {
       setOpenGroup(activeGroupTitle);
-      try { localStorage.setItem(STORAGE_KEY, activeGroupTitle); } catch {}
+      try { localStorage.setItem(STORAGE_KEY, activeGroupTitle); } catch { /* localStorage no disponible (modo privado o bloqueado): recordar el menú es opcional */ }
     }
     if (activeSubgroupTitle && activeSubgroupTitle !== openSubgroup) {
       setOpenSubgroup(activeSubgroupTitle);
-      try { localStorage.setItem(STORAGE_SUBGROUP_KEY, activeSubgroupTitle); } catch {}
+      try { localStorage.setItem(STORAGE_SUBGROUP_KEY, activeSubgroupTitle); } catch { /* localStorage no disponible (modo privado o bloqueado): recordar el menú es opcional */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeGroupTitle, activeSubgroupTitle]);
@@ -195,7 +195,7 @@ export function AppSidebar() {
       try {
         if (next) localStorage.setItem(STORAGE_KEY, next);
         else localStorage.removeItem(STORAGE_KEY);
-      } catch {}
+      } catch { /* localStorage no disponible (modo privado o bloqueado): recordar el menú es opcional */ }
       return next;
     });
   }, []);
@@ -206,7 +206,7 @@ export function AppSidebar() {
       try {
         if (next) localStorage.setItem(STORAGE_SUBGROUP_KEY, next);
         else localStorage.removeItem(STORAGE_SUBGROUP_KEY);
-      } catch {}
+      } catch { /* localStorage no disponible (modo privado o bloqueado): recordar el menú es opcional */ }
       return next;
     });
   }, []);
@@ -361,7 +361,7 @@ export function AppSidebar() {
                           onClick={() => {
                             setOpen(true);
                             setOpenGroup(section.title);
-                            try { localStorage.setItem(STORAGE_KEY, section.title); } catch {}
+                            try { localStorage.setItem(STORAGE_KEY, section.title); } catch { /* localStorage no disponible (modo privado o bloqueado): recordar el menú es opcional */ }
                           }}
                           className={buildNavClass(isActiveSection)}
                           aria-label={section.title}

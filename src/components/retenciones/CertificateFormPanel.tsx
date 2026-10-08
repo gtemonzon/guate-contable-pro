@@ -120,7 +120,6 @@ export function CertificateFormPanel({ open, onOpenChange, certificate }: Props)
     if (form.document_type === "vat_exemption") return;
     const tax = +(Number(form.base_amount) * (Number(form.percentage) / 100)).toFixed(2);
     setForm((f) => ({ ...f, tax_amount: tax }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.base_amount, form.percentage, form.document_type]);
 
   const handleSubmit = async () => {

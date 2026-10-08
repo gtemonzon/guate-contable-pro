@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { fetchAllRecords } from '@/utils/supabaseHelpers';
@@ -70,9 +71,9 @@ export function useEnterpriseBackup() {
 
       // 5. Journal Entry Details (need to fetch based on entries)
       if (entries.length > 0) {
-        const entryIds = entries.map((e: any) => e.id);
+        const entryIds = entries.map((e) => e.id);
         // Fetch in batches if too many
-        const allDetails: any[] = [];
+        const allDetails: Tables<'tab_journal_entry_details'>[] = [];
         const batchSize = 500;
         for (let i = 0; i < entryIds.length; i += batchSize) {
           const batch = entryIds.slice(i, i + batchSize);

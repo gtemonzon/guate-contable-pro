@@ -19,7 +19,7 @@ interface UserRow {
 
 interface Props {
   users: UserRow[];
-  onEdit: (user: any) => void;
+  onEdit: (user: UserRow) => void;
 }
 
 type SortKey = "full_name" | "email" | "tenant" | "enterprises" | "is_active" | "last_activity_at";

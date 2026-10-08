@@ -82,7 +82,7 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as any, { onSuccess: () => setOpen(false) })} disabled={!form.code || !form.name || upsert.isPending}>
+            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as Partial<FixedAssetLocation> & { enterprise_id: number }, { onSuccess: () => setOpen(false) })} disabled={!form.code || !form.name || upsert.isPending}>
               {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Guardar
             </Button>
           </DialogFooter>

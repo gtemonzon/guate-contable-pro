@@ -79,7 +79,7 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
 
         if (accountsError) throw accountsError;
 
-        const accountIds = (accountsData || []).map((a: any) => a.account_id);
+        const accountIds = (accountsData || []).map((a) => a.account_id);
         const accountDetailsMap = new Map<number, { account_code: string; account_name: string }>();
 
         if (accountIds.length > 0) {
@@ -90,7 +90,7 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
 
           if (accountDetailsError) throw accountDetailsError;
 
-          (accountDetails || []).forEach((acc: any) => {
+          (accountDetails || []).forEach((acc) => {
             accountDetailsMap.set(acc.id, {
               account_code: acc.account_code,
               account_name: acc.account_name,
@@ -105,7 +105,7 @@ export function useFinancialStatementFormat(enterpriseId: number | null, formatT
           section_type: section.section_type as SectionType,
           display_order: section.display_order,
           show_in_report: section.show_in_report,
-          accounts: (accountsData || []).map((a: any) => {
+          accounts: (accountsData || []).map((a) => {
             const details = accountDetailsMap.get(a.account_id);
             return {
               id: a.id,

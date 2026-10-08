@@ -25,6 +25,12 @@ interface RpcBalanceRow {
   balance: number;
 }
 
+/** Campos de get_pnl que suma la utilidad del período. */
+interface RpcPnlRow {
+  account_type: string;
+  balance: number | null;
+}
+
 function normaliseRpcRows(rows: RpcBalanceRow[]) {
   return rows.map((r) => ({
     id:           r.account_id,
@@ -136,16 +142,16 @@ export function useKpis(enterpriseId: number | null, activePeriod: ActivePeriod 
 
       // get_pnl rows: parents have zero direct movements (only leaves carry value),
       // so a straight sum is safe and matches the Balance General "Resultado del Período".
-      const sumProfit = (rows: any[]) =>
-        rows.reduce((sum: number, r: any) => {
+      const sumProfit = (rows: RpcPnlRow[]) =>
+        rows.reduce((sum: number, r) => {
           const t = r.account_type;
           const bal = Number(r.balance ?? 0);
           if (t === 'ingreso') return sum + bal;
           if (t === 'gasto' || t === 'costo') return sum - bal;
           return sum;
         }, 0);
-      const profit     = sumProfit((pnlCurr.data ?? []) as any[]);
-      const prevProfit = sumProfit((pnlPrev.data ?? []) as any[]);
+      const profit     = sumProfit((pnlCurr.data ?? []) as RpcPnlRow[]);
+      const prevProfit = sumProfit((pnlPrev.data ?? []) as RpcPnlRow[]);
 
       const totalActivos = sumBalancesByType(curr, 'activo');
       const totalPasivos = sumBalancesByType(curr, 'pasivo');
