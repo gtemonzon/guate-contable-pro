@@ -116,7 +116,7 @@ jobs:
 
       # ── Code quality checks ───────────────────────────────────────────────
       - name: TypeScript type check
-        run: bun run tsc --noEmit
+        run: bun run typecheck
 
       # Run ESLint once with JSON output for accurate counting + a human-readable
       # stylish report for log inspection. We never `grep` for the word "error"
