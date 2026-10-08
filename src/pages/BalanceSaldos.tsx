@@ -156,7 +156,7 @@ export default function BalanceSaldos() {
 
       if (rpcError) throw rpcError;
 
-      const accountsWithBalances: Account[] = (rpcData || []).map((row: any) => ({
+      const accountsWithBalances: Account[] = (rpcData || []).map((row) => ({
         id:               Number(row.account_id),
         account_code:     row.account_code,
         account_name:     row.account_name,

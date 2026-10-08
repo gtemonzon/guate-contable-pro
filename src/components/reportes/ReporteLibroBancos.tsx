@@ -41,6 +41,40 @@ interface BankDocRow {
   source: "document" | "journal";
 }
 
+/** Montos de una línea de partida (saldo inicial sugerido). */
+interface MovementAmounts {
+  debit_amount: number | null;
+  credit_amount: number | null;
+}
+
+/** Documento bancario con el número de su partida, como lo trae la consulta. */
+interface BankDocumentQueryRow {
+  document_date: string;
+  document_number: string;
+  beneficiary_name: string | null;
+  concept: string | null;
+  void_date: string | null;
+  void_reason: string | null;
+  direction: string;
+  status: string;
+  journal_entry_id: number | null;
+  journal_entry: { entry_number: string } | null;
+}
+
+/** Línea de partida de la cuenta bancaria con su encabezado. */
+interface BankMovementQueryRow extends MovementAmounts {
+  description: string | null;
+  journal_entry: {
+    id: number;
+    entry_number: string;
+    entry_date: string;
+    description: string | null;
+    bank_reference: string | null;
+    beneficiary_name: string | null;
+    bank_direction: string | null;
+  } | null;
+}
+
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Borrador",
   ISSUED: "Emitido",
@@ -137,7 +171,7 @@ export default function ReporteLibroBancos() {
       try {
         const fiscalFloor = await getFiscalFloorDate(parseInt(enterpriseId), dateFrom);
 
-        const priorMovements = await fetchAllRecords<any>(
+        const priorMovements = await fetchAllRecords<MovementAmounts>(
           applyFiscalFloor(
             supabase
               .from("tab_journal_entry_details")
@@ -202,7 +236,7 @@ export default function ReporteLibroBancos() {
           docQuery = docQuery.eq("status", statusFilter);
         }
 
-        const docs = await fetchAllRecords<any>(docQuery);
+        const docs = await fetchAllRecords<BankDocumentQueryRow>(docQuery);
 
         for (const doc of docs) {
           const isVoid = doc.status === "VOID";
@@ -241,7 +275,7 @@ export default function ReporteLibroBancos() {
           .lte("journal_entry.entry_date", dateTo)
           .order("journal_entry(entry_date)");
 
-        const movements = await fetchAllRecords<any>(jeQuery);
+        const movements = await fetchAllRecords<BankMovementQueryRow>(jeQuery);
 
         // Track which journal entries are already represented by documents
         const docEntryNumbers = new Set(allRows.filter(r => r.journal_entry_number).map(r => r.journal_entry_number));
