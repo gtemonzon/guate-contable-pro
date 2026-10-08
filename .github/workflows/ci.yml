@@ -186,7 +186,7 @@ jobs:
           du -sh dist/ 2>/dev/null || echo "(dist folder not found)"
           ls -lh dist/ 2>/dev/null || true
 
-  # ── Unit tests (runs if test files exist) ─────────────────────────────────
+  # ── Unit tests (vitest; the job fails if any test fails) ──────────────────
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -205,4 +205,4 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run unit tests
-        run: bun run test --run 2>/dev/null || echo "ℹ️  No test runner configured yet — skipping."
+        run: bun run test

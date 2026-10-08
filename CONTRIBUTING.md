@@ -53,11 +53,25 @@ bun run lint
 # Build (catches bundler errors)
 bun run build
 
-# Unit tests (if configured)
-bun run test --run
+# Unit tests
+bun run test
 ```
 
 All four must pass before a PR will be merged.
+
+### Pruebas
+
+Las pruebas unitarias usan [vitest](https://vitest.dev) (`vitest.config.ts`; archivos `src/**/*.test.ts`).
+
+```bash
+# Todas las pruebas (una sola ejecución, sin modo vigilancia)
+bun run test
+
+# Una sola prueba
+bunx vitest run src/utils/dueDateRules.test.ts
+```
+
+El CI las ejecuta en cada push y pull request (job `unit-tests`) y falla si falla alguna prueba.
 
 ---
 
