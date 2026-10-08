@@ -3,48 +3,32 @@ import { supabase } from '@/integrations/supabase/client';
 import { fetchLedgerNamesMap } from '@/utils/collectionLedger';
 import type { Database } from '@/integrations/supabase/types';
 import {
-  calculateDueDate,
-  parseHolidays,
   getDaysUntil,
   getPriorityFromDays,
   formatDueDate,
   toDateOnlyString,
   parseDateOnly,
-  derivePeriodCovered,
-  MONTH_NAMES_ES,
   TaxDueDateConfig,
   Holiday,
   getDefaultTaxConfigs,
+  parseHolidaysForYears,
+  computeDueDateAlerts,
+  isTaxAlertStale,
+  PresentedTaxForm,
 } from '@/utils/dueDateCalculations';
 import { addMonths, subDays, differenceInDays } from 'date-fns';
 
-/**
- * Map tax_type code (from tab_tax_due_date_config) to substrings that
- * may appear in tab_tax_forms.tax_type (free-text written by users).
- * Match is case-insensitive and includes any of the listed tokens.
- */
-const TAX_TYPE_MATCHERS: Record<string, string[]> = {
-  iva: ['iva'],
-  iva_mensual: ['iva'],
-  isr_mensual: ['isr'],
-  isr_trimestral: ['isr'],
-  iso: ['iso'],
-  iso_trimestral: ['iso'],
-  retencion_iva: ['ret', 'iva'],
-  retenciones_iva: ['ret', 'iva'],
-  retencion_isr: ['ret', 'isr'],
-  retenciones_isr: ['ret', 'isr'],
-  isr_anual: ['isr', 'anual'],
-};
-
-function taxFormMatchesType(formTaxType: string | null | undefined, configTaxType: string): boolean {
-  if (!formTaxType) return false;
-  const normalized = formTaxType.toLowerCase().trim();
-  const matchers = TAX_TYPE_MATCHERS[configTaxType] ?? [configTaxType.toLowerCase()];
-  // For combined matchers (e.g. retenciones_iva needs BOTH 'ret' and 'iva'),
-  // require all tokens to appear; for single-token matchers, just one.
-  if (matchers.length === 1) return normalized.includes(matchers[0]);
-  return matchers.every((token) => normalized.includes(token));
+/** Fila de tab_tax_due_date_config leída con select('*'); la vigencia puede no existir aún. */
+interface TaxDueDateConfigRow {
+  tax_type: string;
+  tax_label: string;
+  calculation_type: string;
+  days_value: number;
+  reference_period: string;
+  consider_holidays: boolean;
+  is_active: boolean;
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 interface AlertConfig {
@@ -112,9 +96,9 @@ export function useAlertGenerator() {
       if (holidaysError) console.error('[alerts] error cargando tab_holidays:', holidaysError);
 
 
-      const parsedHolidays = parseHolidays((holidays || []) as Holiday[]);
       const today = new Date();
-      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      // Feriados del año anterior, el actual y el siguiente (vencimientos de enero/diciembre).
+      const parsedHolidays = parseHolidaysForYears((holidays || []) as Holiday[], today.getFullYear());
 
       // Helper to get alert config
       const getAlertConfig = (type: string): AlertConfig => {
@@ -180,8 +164,9 @@ export function useAlertGenerator() {
 
 
       // 1. Generate tax due date alerts
-      const effectiveTaxConfigs: TaxDueDateConfig[] = (taxConfigs && taxConfigs.length > 0)
-        ? taxConfigs.map((c) => ({
+      const taxConfigRows = (taxConfigs || []) as unknown as TaxDueDateConfigRow[];
+      const effectiveTaxConfigs: TaxDueDateConfig[] = taxConfigRows.length > 0
+        ? taxConfigRows.map((c) => ({
             tax_type: c.tax_type,
             tax_label: c.tax_label,
             calculation_type: isCalculationType(c.calculation_type) ? c.calculation_type : 'last_business_day',
@@ -189,39 +174,25 @@ export function useAlertGenerator() {
             reference_period: isReferencePeriod(c.reference_period) ? c.reference_period : 'current_month',
             consider_holidays: c.consider_holidays,
             is_active: c.is_active,
+            effective_from: c.effective_from ?? null,
+            effective_to: c.effective_to ?? null,
           }))
         : getDefaultTaxConfigs().map(c => ({ ...c, is_active: true }));
 
-      // Pre-fetch presented tax forms (active) for this enterprise to skip
-      // alerts whose underlying tax form has already been filed.
-      const { data: presentedForms, error: presentedFormsError } = await supabase
+      // Formularios presentados (activos): con period_type para distinguir los
+      // trimestrales (period_month = mes de inicio del trimestre).
+      const { data: presentedFormsData, error: presentedFormsError } = await supabase
         .from('tab_tax_forms')
-        .select('tax_type, period_month, period_year')
+        .select('tax_type, period_month, period_year, period_type')
         .eq('enterprise_id', enterpriseId)
         .eq('is_active', true);
       if (presentedFormsError) console.error('[alerts] error cargando tab_tax_forms:', presentedFormsError);
+      const presentedForms: PresentedTaxForm[] = presentedFormsData || [];
 
-      const isFormAlreadyPresented = (
-        configTaxType: string,
-        periodMonth: number,
-        periodYear: number,
-      ): boolean => {
-        return (presentedForms || []).some((f) =>
-          f.period_month === periodMonth &&
-          f.period_year === periodYear &&
-          taxFormMatchesType(f.tax_type, configTaxType)
-        );
-      };
-
-      // 1a. Auto-sanado GLOBAL de alertas de vencimiento fiscal: el ciclo de
-      // abajo solo evalúa el mes en curso (currentMonth), así que sin este
-      // bloque las alertas de meses anteriores (ej. IVA de enero cuando ya
-      // vamos en septiembre) nunca se vuelven a revisar y quedan huérfanas
-      // para siempre, aunque el formulario correspondiente ya esté
-      // presentado. A diferencia de la limpieza puntual de más abajo (que
-      // solo borra la del due date del mes actual), este bloque revisa
-      // TODAS las no leídas de tipo vencimiento_* sin importar su
-      // event_date — mismo criterio que el auto-sanado de periodo_pendiente.
+      // 1a. Auto-sanado GLOBAL de alertas de vencimiento fiscal no leídas, sin
+      // importar su event_date: se borran si el formulario del período que cubren
+      // ya se presentó, si la config ya no está activa o su vigencia no cubre ese
+      // período, o si vencieron hace más de 60 días.
       // vencimiento_cxc/vencimiento_cxp quedan excluidas: ya tienen su
       // propio manejo de "una sola viva a la vez" en la sección 4b.
       const NON_TAX_VENCIMIENTO_TYPES = new Set(['vencimiento_cxc', 'vencimiento_cxp']);
@@ -237,17 +208,13 @@ export function useAlertGenerator() {
       for (const alert of (unreadTaxAlerts || [])) {
         if (NON_TAX_VENCIMIENTO_TYPES.has(alert.notification_type)) continue;
         if (!alert.event_date) continue;
-
-        const taxType = alert.notification_type.slice('vencimiento_'.length);
-        const alertDueDate = parseDateOnly(alert.event_date);
-        const { periodMonth, periodYear } = derivePeriodCovered(alertDueDate);
-
-        const formPresented = isFormAlreadyPresented(taxType, periodMonth, periodYear);
-        // Red de seguridad: una alerta de vencimiento de hace más de 60 días
-        // no aporta nada aunque, por algún otro motivo, el formulario no
-        // haya quedado registrado como presentado — solo genera ruido.
-        const daysSinceEvent = differenceInDays(today, alertDueDate);
-        if (formPresented || daysSinceEvent > 60) {
+        if (isTaxAlertStale({
+          notificationType: alert.notification_type,
+          eventDate: alert.event_date,
+          configs: effectiveTaxConfigs,
+          forms: presentedForms,
+          today,
+        })) {
           staleTaxAlertIds.push(alert.id);
         }
       }
@@ -255,41 +222,45 @@ export function useAlertGenerator() {
         await supabase.from('tab_notifications').delete().in('id', staleTaxAlertIds);
       }
 
-      for (const taxConfig of effectiveTaxConfigs) {
-        const alertConfig = getAlertConfig(`vencimiento_${taxConfig.tax_type}`);
-        if (!alertConfig.is_enabled) continue;
+      // 1b. Vencimientos de los meses alrededor de hoy (no solo el mes en curso).
+      const alertConfigFor = (taxType: string) => getAlertConfig(`vencimiento_${taxType}`);
+      const dueDateAlerts = computeDueDateAlerts({
+        configs: effectiveTaxConfigs,
+        holidays: parsedHolidays,
+        forms: presentedForms,
+        today,
+        alertConfigFor,
+      });
 
-        const dueDate = calculateDueDate(currentMonth, taxConfig, parsedHolidays);
-        const daysUntil = getDaysUntil(dueDate);
+      // Los que solo faltan por tener el formulario presentado: se limpia su
+      // notificación (leída o no) para ese impuesto y fecha.
+      const alertKey = (a: { taxType: string; dueDate: Date }) => `${a.taxType}|${toDateOnlyString(a.dueDate)}`;
+      const pendingKeys = new Set(dueDateAlerts.map(alertKey));
+      const presentedCandidates = computeDueDateAlerts({
+        configs: effectiveTaxConfigs,
+        holidays: parsedHolidays,
+        forms: [],
+        today,
+        alertConfigFor,
+      }).filter((a) => !pendingKeys.has(alertKey(a)));
+      for (const presented of presentedCandidates) {
+        await supabase
+          .from('tab_notifications')
+          .delete()
+          .eq('enterprise_id', enterpriseId)
+          .eq('notification_type', `vencimiento_${presented.taxType}`)
+          .eq('event_date', toDateOnlyString(presented.dueDate));
+      }
 
-        if (daysUntil <= alertConfig.days_before && daysUntil >= -1) {
-          // Tax forms typically cover the month BEFORE the due-date reference month
-          // (e.g. IVA con vencimiento 30/04 corresponde al período de marzo).
-          const { periodMonth, periodYear } = derivePeriodCovered(dueDate);
-
-          // Skip alert if the corresponding tax form has already been filed.
-          if (isFormAlreadyPresented(taxConfig.tax_type, periodMonth, periodYear)) {
-            // Also clean up any stale notifications previously generated for this due date.
-            await supabase
-              .from('tab_notifications')
-              .delete()
-              .eq('enterprise_id', enterpriseId)
-              .eq('notification_type', `vencimiento_${taxConfig.tax_type}`)
-              .eq('event_date', toDateOnlyString(dueDate));
-            continue;
-          }
-
-          const priority = getPriorityFromDays(daysUntil);
-
-          await createAlert(
-            `vencimiento_${taxConfig.tax_type}`,
-            `Vencimiento ${taxConfig.tax_label} — ${MONTH_NAMES_ES[periodMonth]} ${periodYear}`,
-            `Fecha límite: ${formatDueDate(dueDate)}`,
-            dueDate,
-            priority,
-            '/generar-declaracion'
-          );
-        }
+      for (const alert of dueDateAlerts) {
+        await createAlert(
+          `vencimiento_${alert.taxType}`,
+          `Vencimiento ${alert.label} — ${alert.periodLabel}`,
+          `Fecha límite: ${formatDueDate(alert.dueDate)}`,
+          alert.dueDate,
+          alert.priority,
+          '/generar-declaracion'
+        );
       }
 
       // 2. Check for unclosed accounting periods
