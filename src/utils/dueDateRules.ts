@@ -102,3 +102,10 @@ export function planDueDateSave<T extends { tax_type: string }>(
     removedTypes: [...new Set(existingTaxTypes)].filter((t) => !kept.has(t)),
   };
 }
+
+/** ¿El error de Supabase es de permisos (RLS / 42501)? */
+export function isPermissionError(error: { code?: string | null; message?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.code === '42501') return true;
+  return /row[- ]level security|permission denied/i.test(error.message ?? '');
+}

@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { describeDueDateRule, validateDueDateRows, planDueDateSave } from "./dueDateRules";
+import { describeDueDateRule, validateDueDateRows, planDueDateSave, isPermissionError } from "./dueDateRules";
 
 const rule = (calculation_type, days_value, reference_period) =>
   describeDueDateRule({ calculation_type, days_value, reference_period });
@@ -83,5 +83,17 @@ describe("planDueDateSave", () => {
   });
   it("empresa sin filas: nada que quitar", () => {
     expect(planDueDateSave([], [{ tax_type: "iva_mensual" }]).removedTypes).toEqual([]);
+  });
+});
+
+describe("isPermissionError", () => {
+  it("42501 o mensaje de RLS", () => {
+    expect(isPermissionError({ code: "42501", message: "x" })).toBe(true);
+    expect(isPermissionError({ code: "PGRST", message: 'new row violates row-level security policy for table "tab_tax_due_date_config"' })).toBe(true);
+    expect(isPermissionError({ message: "permission denied for table tab_tax_due_date_config" })).toBe(true);
+  });
+  it("otros errores o sin error", () => {
+    expect(isPermissionError({ code: "23505", message: "duplicate key value" })).toBe(false);
+    expect(isPermissionError(null)).toBe(false);
   });
 });
