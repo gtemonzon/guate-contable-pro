@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/dashboardIvaSummary.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "./dashboardIvaSummary";
 import { parseIvaGeneralResult, parseIvaPequenoResult } from "./declarationCalculations";

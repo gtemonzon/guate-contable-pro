@@ -3,8 +3,6 @@
  * paso final del importador.
  * Run with: bunx vitest run src/utils/taxExemption.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { calculateMixedTax, applyMixedTaxToRow, rowNeedsRecalc } from "./purchaseTaxCalculation";
 import { resolveExemption, findActiveExemptionWindow, exemptionBadgeLabel } from "./taxExemption";

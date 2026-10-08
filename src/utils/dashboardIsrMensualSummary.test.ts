@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/utils/dashboardIsrMensualSummary.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "./dashboardIsrMensualSummary";
 import { parseIsrMensualResult } from "./declarationCalculations";

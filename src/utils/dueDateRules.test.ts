@@ -2,8 +2,6 @@
  * Reglas de vencimiento: texto, validación y plan de guardado.
  * Run with: bunx vitest run src/utils/dueDateRules.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { describeDueDateRule, validateDueDateRows, planDueDateSave, isPermissionError } from "./dueDateRules";
 

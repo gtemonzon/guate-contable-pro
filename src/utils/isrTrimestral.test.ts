@@ -2,8 +2,6 @@
  * ISR Trimestral (SAT-1341): piso fiscal, compras brutas e inventario final sugerido.
  * Run with: bunx vitest run src/utils/isrTrimestral.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import {
   accountBalanceAt, excludeCostClosingEntries, grossPurchases, inventarioFinalCorte,

@@ -1,10 +1,8 @@
 /**
  * Run with: bunx vitest run src/utils/ledgerMinimum.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { isMinimallyComplete, isMinimallyCompleteForEdit, ledgerBaselineOf, missingFieldsMessage } from "./ledgerMinimum";
+import { isMinimallyComplete, isMinimallyCompleteForEdit, ledgerBaselineOf, missingFieldsMessage, type LedgerMinimumRow } from "./ledgerMinimum";
 
 const base = { invoice_date: "2026-10-05", invoice_number: "123", supplier_nit: "CF", total_amount: 100 };
 
@@ -44,7 +42,7 @@ describe("isMinimallyCompleteForEdit (filas ya guardadas)", () => {
   const baseline = ledgerBaselineOf(venta, "sale");
 
   it("NIT VARIOS sin cambio => ok (solo se cambió la cuenta)", () => {
-    expect(isMinimallyCompleteForEdit({ ...venta, income_account_id: 9 }, baseline, "sale")).toEqual({ ok: true, missing: [] });
+    expect(isMinimallyCompleteForEdit({ ...venta, income_account_id: 9 } as LedgerMinimumRow, baseline, "sale")).toEqual({ ok: true, missing: [] });
   });
   it("NIT cambiado a ABC => NIT válido", () => {
     expect(isMinimallyCompleteForEdit({ ...venta, customer_nit: "ABC" }, baseline, "sale").missing).toEqual(["NIT válido"]);

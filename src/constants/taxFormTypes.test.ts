@@ -1,8 +1,6 @@
 /**
  * Run with: bunx vitest run src/constants/taxFormTypes.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import { TAX_FORM_TYPE_OPTIONS } from "./taxFormTypes";
 

@@ -2,8 +2,7 @@
  * Unit tests for Fixed Assets depreciation domain functions.
  * Run with: bunx vitest run src/domain/fixedAssets/calculations.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
+import { describe, it, expect } from "vitest";
 import {
   computeMonthlyDepreciation,
   generateDepreciationSchedule,

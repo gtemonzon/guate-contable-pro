@@ -1,14 +1,13 @@
 /**
  * Run with: bunx vitest run src/utils/declarationCalculations.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import {
   quarterStartMonth, formTypeToTaxType, formTypeToPeriodType, periodMonthForForm, mapTaxTypeToFormType,
 } from "./declarationCalculations";
+import type { TaxFormType } from "@/hooks/useDeclaracionCalculo";
 
-const TYPES = ["IVA_GENERAL", "IVA_PEQUENO", "ISR_MENSUAL", "ISR_TRIMESTRAL", "ISO_TRIMESTRAL"];
+const TYPES: TaxFormType[] = ["IVA_GENERAL", "IVA_PEQUENO", "ISR_MENSUAL", "ISR_TRIMESTRAL", "ISO_TRIMESTRAL"];
 
 describe("quarterStartMonth", () => {
   it("1-3 → 1, 4-6 → 4, 7-9 → 7, 10-12 → 10", () => {
@@ -32,13 +31,13 @@ describe("formTypeToTaxType", () => {
 
 describe("formTypeToPeriodType / periodMonthForForm", () => {
   it("mensuales", () => {
-    for (const t of ["IVA_GENERAL", "IVA_PEQUENO", "ISR_MENSUAL"]) {
+    for (const t of ["IVA_GENERAL", "IVA_PEQUENO", "ISR_MENSUAL"] as TaxFormType[]) {
       expect(formTypeToPeriodType(t)).toBe("mensual");
       expect(periodMonthForForm(t, 9)).toBe(9);
     }
   });
   it("trimestrales usan el mes de inicio", () => {
-    for (const t of ["ISR_TRIMESTRAL", "ISO_TRIMESTRAL"]) {
+    for (const t of ["ISR_TRIMESTRAL", "ISO_TRIMESTRAL"] as TaxFormType[]) {
       expect(formTypeToPeriodType(t)).toBe("trimestral");
       expect(periodMonthForForm(t, 9)).toBe(7);
       expect(periodMonthForForm(t, 12)).toBe(10);

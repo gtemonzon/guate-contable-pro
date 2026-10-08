@@ -2,19 +2,18 @@
  * Próximos vencimientos (Dashboard): ventana de 30 días y períodos trimestrales.
  * Run with: bunx vitest run src/utils/dueDateCalculations.test.ts
  */
-/* eslint-disable */
-// @ts-nocheck
 import { describe, it, expect } from "vitest";
 import {
   computePendingDeadlines, taxFormMatchesConfig, isFormPresented, coveredPeriodForDueDate,
   parseHolidaysForYears, joinLabelsEs, calculateDueDate, toDateOnlyString,
   computeDueDateAlerts, isTaxAlertStale, getDefaultTaxConfigs, getDefaultDueDateConfigs,
+  type TaxDueDateConfig, type PresentedTaxForm,
 } from "./dueDateCalculations";
 
 // Configuración real de la empresa 26.
-const ISO = { tax_type: "iso", tax_label: "ISO Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
-const ISR = { tax_type: "isr_trimestral", tax_label: "ISR Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
-const IVA = { tax_type: "iva", tax_label: "IVA Mensual", calculation_type: "last_business_day", days_value: 0, reference_period: "current_month", consider_holidays: true, is_active: true };
+const ISO: TaxDueDateConfig = { tax_type: "iso", tax_label: "ISO Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
+const ISR: TaxDueDateConfig = { tax_type: "isr_trimestral", tax_label: "ISR Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
+const IVA: TaxDueDateConfig = { tax_type: "iva", tax_label: "IVA Mensual", calculation_type: "last_business_day", days_value: 0, reference_period: "current_month", consider_holidays: true, is_active: true };
 const CONFIGS = [ISO, ISR, IVA];
 
 const ISR_Q3 = { tax_type: "ISR TRIMESTRAL", period_type: "trimestral", period_month: 7, period_year: 2026 };
@@ -172,8 +171,8 @@ describe("joinLabelsEs", () => {
 });
 
 describe("computePendingDeadlines con vigencia", () => {
-  const ISR_MENSUAL = { tax_type: "isr_mensual", tax_label: "ISR Mensual", calculation_type: "business_days_after", days_value: 10, reference_period: "next_month", consider_holidays: true, is_active: true };
-  const IVA_M = { tax_type: "iva", tax_label: "IVA Mensual", calculation_type: "last_business_day", days_value: 0, reference_period: "current_month", consider_holidays: true, is_active: true };
+  const ISR_MENSUAL: TaxDueDateConfig = { tax_type: "isr_mensual", tax_label: "ISR Mensual", calculation_type: "business_days_after", days_value: 10, reference_period: "next_month", consider_holidays: true, is_active: true };
+  const IVA_M: TaxDueDateConfig = { tax_type: "iva", tax_label: "IVA Mensual", calculation_type: "last_business_day", days_value: 0, reference_period: "current_month", consider_holidays: true, is_active: true };
   const today = new Date(2026, 9, 8, 9, 30);
 
   it("config válida hasta 2026-04-30 y hoy 08/10/2026 => sin vencimiento para esa config", () => {
@@ -202,7 +201,7 @@ describe("computePendingDeadlines con vigencia", () => {
     expect([...inWindow, ...next].map((d) => d.periodLabel)).toEqual(["Mayo 2026"]);
   });
   it("trimestral: vigencia sobre el rango del trimestre cubierto", () => {
-    const ISO_T = { tax_type: "iso", tax_label: "ISO Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
+    const ISO_T: TaxDueDateConfig = { tax_type: "iso", tax_label: "ISO Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
     const hastaMayo = computePendingDeadlines({ configs: [{ ...ISO_T, effective_to: "2026-05-15" }], holidays: [], forms: [], today: new Date(2026, 6, 10) });
     expect([...hastaMayo.inWindow, ...hastaMayo.next].map((d) => d.periodLabel)).toEqual(["Abril - Junio 2026"]);
     const hastaMarzo = computePendingDeadlines({ configs: [{ ...ISO_T, effective_to: "2026-03-31" }], holidays: [], forms: [], today: new Date(2026, 6, 10) });
@@ -277,7 +276,13 @@ describe("computeDueDateAlerts (alertas de vencimiento)", () => {
 });
 
 describe("isTaxAlertStale", () => {
-  const stale = (notificationType, eventDate, { configs = CONFIGS, forms = [], today = day(2026, 10, 27), staleDays } = {}) =>
+  const stale = (
+    notificationType: string,
+    eventDate: string,
+    { configs = CONFIGS, forms = [], today = day(2026, 10, 27), staleDays }: {
+      configs?: TaxDueDateConfig[]; forms?: PresentedTaxForm[]; today?: Date; staleDays?: number;
+    } = {},
+  ) =>
     isTaxAlertStale({ notificationType, eventDate, configs, forms, today, staleDays });
 
   it("vigente y sin presentar: no sobra", () => {
