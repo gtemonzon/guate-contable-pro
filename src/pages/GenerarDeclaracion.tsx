@@ -28,6 +28,7 @@ import {
 } from "@/utils/declarationCalculations";
 import TaxFormDialog, { type TaxFormPrefill } from "@/components/impuestos/TaxFormDialog";
 import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
+import { validFormTypesForPeriod, chooseAutoFormType, describeValidity } from "@/utils/taxConfigValidity";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -173,23 +174,26 @@ export default function GenerarDeclaracion() {
   const currentRegime = regimeInfo && regimeInfo.key === regimeKey ? regimeInfo : null;
   const regimeFormType = ivaFormTypeForRegime(currentRegime?.regime);
 
-  // Auto-select form type: el IVA del régimen vigente en el mes (si está configurado);
-  // si no, como antes (IVA_GENERAL o la primera configuración activa).
+  // Formularios con configuración vigente en el período elegido (trimestrales: el
+  // trimestre que contiene el mes). Sin ninguna fila de configuración se conserva el
+  // comportamiento anterior (lista fija de formularios).
+  const validFormTypes = useMemo(
+    () => validFormTypesForPeriod(taxConfigs, selectedYear, selectedMonth) as TaxFormType[],
+    [taxConfigs, selectedYear, selectedMonth],
+  );
+
+  // Auto-select form type (sin elección manual): el IVA del régimen vigente en el mes si
+  // está vigente en la configuración; si no, el actual si sigue vigente o el primero vigente.
   useEffect(() => {
     if (taxConfigs.length === 0 || formTypeTouched) return;
-    const isIvaOrEmpty = !selectedFormType || selectedFormType === 'IVA_GENERAL' || selectedFormType === 'IVA_PEQUENO';
-    if (!isIvaOrEmpty) return;
-    if (regimeFormType && taxConfigs.some(c => c.is_active && c.tax_form_type === regimeFormType)) {
-      if (selectedFormType !== regimeFormType) setSelectedFormType(regimeFormType);
-      return;
-    }
-    if (!selectedFormType) {
-      // Prefer IVA_GENERAL or first active config
-      const ivaGeneral = taxConfigs.find(c => c.tax_form_type === 'IVA_GENERAL');
-      const firstActive = taxConfigs.find(c => c.is_active);
-      setSelectedFormType(ivaGeneral?.tax_form_type || firstActive?.tax_form_type || null);
-    }
-  }, [taxConfigs, selectedFormType, regimeFormType, formTypeTouched]);
+    const next = chooseAutoFormType({ current: selectedFormType, validTypes: validFormTypes, regimeFormType }) as TaxFormType | null;
+    if (next !== selectedFormType) setSelectedFormType(next);
+  }, [taxConfigs, validFormTypes, selectedFormType, regimeFormType, formTypeTouched]);
+
+  // Elección manual de un formulario que no está vigente en el período (aviso, no bloquea).
+  const selectedNotValid =
+    taxConfigs.length > 0 && !!selectedFormType && !validFormTypes.includes(selectedFormType);
+  const selectedConfig = selectedFormType ? taxConfigs.find(c => c.tax_form_type === selectedFormType) : undefined;
 
   const currentResult = useMemo((): Record<string, unknown> | null => {
     switch (selectedFormType) {
@@ -515,11 +519,24 @@ export default function GenerarDeclaracion() {
                 </SelectTrigger>
                 <SelectContent>
                   {taxConfigs.length > 0 ? (
-                    taxConfigs.filter(c => c.is_active).map((config) => (
-                      <SelectItem key={config.tax_form_type} value={config.tax_form_type}>
-                        {getFormTypeLabel(config.tax_form_type)}
-                      </SelectItem>
-                    ))
+                    <>
+                      {validFormTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {getFormTypeLabel(type)}
+                        </SelectItem>
+                      ))}
+                      {/* El elegido a mano sigue visible aunque no esté vigente en el período. */}
+                      {selectedNotValid && selectedFormType && (
+                        <SelectItem key={selectedFormType} value={selectedFormType}>
+                          {getFormTypeLabel(selectedFormType)} (no vigente)
+                        </SelectItem>
+                      )}
+                      {validFormTypes.length === 0 && !selectedNotValid && (
+                        <SelectItem value="__none__" disabled>
+                          Sin formularios vigentes en este período
+                        </SelectItem>
+                      )}
+                    </>
                   ) : (
                     <>
                       <SelectItem value="IVA_GENERAL">SAT-2237 IVA Régimen General</SelectItem>
@@ -557,6 +574,20 @@ export default function GenerarDeclaracion() {
                 {regimeFormType === 'IVA_PEQUENO' ? "Pequeño Contribuyente" : "Contribuyente General"}
                 {currentRegime?.effectiveFrom ? ` (vigente desde ${currentRegime.effectiveFrom})` : ""}.
                 {" "}Estás generando {getFormTypeLabel(selectedFormType)}.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {selectedNotValid && selectedFormType && (
+            <Alert className="mt-4 border-warning/50 bg-warning/10">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Esta empresa no tiene configurado {getFormTypeLabel(selectedFormType)} como vigente en{" "}
+                {MONTHS[selectedMonth - 1]?.label} {selectedYear} (
+                {selectedConfig
+                  ? (selectedConfig.is_active ? describeValidity(selectedConfig) : "inactivo")
+                  : "sin configuración"}
+                ).
               </AlertDescription>
             </Alert>
           )}

@@ -15,6 +15,9 @@ export interface TaxConfig {
   tax_form_type: TaxFormType;
   tax_rate: number;
   is_active: boolean;
+  /** Vigencia ('YYYY-MM-DD'); NULL/ausente = sin límite. La tasa se toma de la fila aunque no esté vigente. */
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 export interface SaleRecord {
@@ -197,7 +200,8 @@ export function useDeclaracionCalculo(
         .select("*")
         .eq("enterprise_id", enterpriseId)
         .eq("is_active", true);
-      if (data) setTaxConfigs(data as TaxConfig[]);
+      // "*" incluye effective_from/effective_to (vigencia) cuando existen.
+      if (data) setTaxConfigs(data as unknown as TaxConfig[]);
     };
     fetchConfigs();
   }, [enterpriseId]);

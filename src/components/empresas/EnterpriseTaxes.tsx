@@ -1,9 +1,12 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Loader2, Save, Info } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,6 +16,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EnterpriseIssuanceProfiles } from "@/components/empresas/EnterpriseIssuanceProfiles";
+import { EnterpriseTaxForms } from "@/components/empresas/EnterpriseTaxForms";
+import { describeValidity, isValidityRangeOk } from "@/utils/taxConfigValidity";
+import { hasValidityColumns } from "@/utils/taxConfigValidityColumns";
 
 interface EnterpriseTaxesProps {
   enterpriseId: number;
@@ -27,6 +33,9 @@ interface TaxConfig {
   reference_period: string;
   consider_holidays: boolean;
   is_active: boolean;
+  /** Vigencia ('YYYY-MM-DD'); null = sin límite. */
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 // Default tax configurations for Guatemala
@@ -106,6 +115,9 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [taxes, setTaxes] = useState<TaxConfig[]>([]);
+  // Columnas de vigencia disponibles (migración aplicada).
+  const [withValidity, setWithValidity] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     fetchTaxConfigs();
@@ -114,15 +126,23 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
   const fetchTaxConfigs = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('tab_tax_due_date_config')
-        .select('*')
-        .eq('enterprise_id', enterpriseId);
+      const [columnsOk, { data, error }] = await Promise.all([
+        hasValidityColumns('tab_tax_due_date_config'),
+        supabase
+          .from('tab_tax_due_date_config')
+          .select('*')
+          .eq('enterprise_id', enterpriseId),
+      ]);
 
       if (error) throw error;
+      setWithValidity(columnsOk);
 
       if (data && data.length > 0) {
-        setTaxes(data.map(item => ({
+        // "*" trae effective_from/effective_to cuando existen.
+        const rows = data as unknown as Array<(typeof data)[number] & {
+          effective_from?: string | null; effective_to?: string | null;
+        }>;
+        setTaxes(rows.map(item => ({
           id: item.id,
           tax_type: item.tax_type,
           tax_label: item.tax_label,
@@ -131,6 +151,8 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
           reference_period: item.reference_period,
           consider_holidays: item.consider_holidays ?? true,
           is_active: item.is_active ?? true,
+          effective_from: item.effective_from ?? null,
+          effective_to: item.effective_to ?? null,
         })));
       } else {
         // Use default configuration if none exists
@@ -155,7 +177,26 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
     ));
   };
 
+  const handleValidityChange = (taxType: string, field: 'effective_from' | 'effective_to', value: string) => {
+    setTaxes(prev => prev.map(tax =>
+      tax.tax_type === taxType ? { ...tax, [field]: value || null } : tax
+    ));
+  };
+
   const handleSave = async () => {
+    // Validar ANTES de borrar: "Hasta" no puede ser anterior a "Vigente desde".
+    if (withValidity) {
+      const invalid = taxes.find(t => t.is_active && !isValidityRangeOk(t));
+      if (invalid) {
+        toast({
+          variant: "destructive",
+          title: "Vigencia inválida",
+          description: `${invalid.tax_label}: "Hasta" no puede ser anterior a "Vigente desde".`,
+        });
+        return;
+      }
+    }
+
     try {
       setSaving(true);
 
@@ -176,11 +217,16 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
         consider_holidays: tax.consider_holidays,
         is_active: tax.is_active,
         display_order: index + 1,
+        // El guardado borra e inserta: la vigencia debe ir en el INSERT para no perderse.
+        ...(withValidity
+          ? { effective_from: tax.effective_from ?? null, effective_to: tax.effective_to ?? null }
+          : {}),
       }));
 
+      // Conversión explícita: los tipos generados aún no incluyen effective_from/effective_to.
       const { error } = await supabase
         .from('tab_tax_due_date_config')
-        .insert(configsToInsert);
+        .insert(configsToInsert as unknown as TablesInsert<'tab_tax_due_date_config'>[]);
 
       if (error) throw error;
 
@@ -193,6 +239,7 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
       window.dispatchEvent(new CustomEvent("taxesChanged", {
         detail: { enterpriseId }
       }));
+      queryClient.invalidateQueries({ queryKey: ["dashboard-tax-data", enterpriseId] });
 
       // Refetch to get the new IDs
       fetchTaxConfigs();
@@ -237,10 +284,10 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Impuestos Aplicables</CardTitle>
+          <CardTitle className="text-base">Vencimientos y alertas</CardTitle>
           <CardDescription>
-            Selecciona los impuestos a los que está sujeta esta empresa. 
-            Solo se generarán alertas de vencimiento para los impuestos activos.
+            Define de qué impuestos se generan alertas de vencimiento. Los formularios que ofrece el Generador de
+            Declaraciones se definen en 'Formularios de declaración'.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -277,6 +324,12 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
                           Vencimiento: {getVencimientoDescription(tax)}
                           {tax.consider_holidays && " (considera días feriados)"}
                         </p>
+                        {tax.tax_type === 'isr_mensual' && (
+                          <p className="text-sm mt-1">
+                            Es el vencimiento de las retenciones, no el ISR de opción simplificada (5%/7%); ese
+                            formulario se configura en 'Formularios de declaración'.
+                          </p>
+                        )}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -284,6 +337,31 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
                 <p className="text-xs text-muted-foreground">
                   {getVencimientoDescription(tax)}
                 </p>
+                {tax.is_active && withValidity && (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor={`${tax.tax_type}-from`} className="text-xs text-muted-foreground">Vigente desde</Label>
+                      <Input
+                        id={`${tax.tax_type}-from`}
+                        type="date"
+                        value={tax.effective_from ?? ""}
+                        onChange={(e) => handleValidityChange(tax.tax_type, 'effective_from', e.target.value)}
+                        className="h-8 w-40"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor={`${tax.tax_type}-to`} className="text-xs text-muted-foreground">Hasta</Label>
+                      <Input
+                        id={`${tax.tax_type}-to`}
+                        type="date"
+                        value={tax.effective_to ?? ""}
+                        onChange={(e) => handleValidityChange(tax.tax_type, 'effective_to', e.target.value)}
+                        className="h-8 w-40"
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{describeValidity(tax)}</span>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -303,6 +381,8 @@ export function EnterpriseTaxes({ enterpriseId }: EnterpriseTaxesProps) {
           Guardar Configuración
         </Button>
       </div>
+
+      <EnterpriseTaxForms enterpriseId={enterpriseId} />
     </div>
   );
 }

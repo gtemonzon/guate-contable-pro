@@ -51,7 +51,11 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
           .eq("is_active", true),
       ]);
 
-      const configs: TaxDueDateConfig[] = (configRes.data || []).map((cfg) => ({
+      // "*" trae effective_from/effective_to (vigencia) cuando existen.
+      const rows = (configRes.data || []) as unknown as Array<
+        NonNullable<typeof configRes.data>[number] & { effective_from?: string | null; effective_to?: string | null }
+      >;
+      const configs: TaxDueDateConfig[] = rows.map((cfg) => ({
         tax_type: cfg.tax_type,
         tax_label: cfg.tax_label,
         calculation_type: cfg.calculation_type as TaxDueDateConfig["calculation_type"],
@@ -59,6 +63,8 @@ export function DashboardTaxDeadlines({ enterpriseId }: DashboardTaxDeadlinesPro
         reference_period: cfg.reference_period as TaxDueDateConfig["reference_period"],
         consider_holidays: cfg.consider_holidays ?? true,
         is_active: true,
+        effective_from: cfg.effective_from ?? null,
+        effective_to: cfg.effective_to ?? null,
       }));
       const forms = (presentedRes.data || []) as PresentedTaxForm[];
 

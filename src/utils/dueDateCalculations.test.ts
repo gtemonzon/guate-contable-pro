@@ -169,3 +169,42 @@ describe("joinLabelsEs", () => {
     expect(joinLabelsEs(["A", "B", "C"])).toBe("A, B, C");
   });
 });
+
+describe("computePendingDeadlines con vigencia", () => {
+  const ISR_MENSUAL = { tax_type: "isr_mensual", tax_label: "ISR Mensual", calculation_type: "business_days_after", days_value: 10, reference_period: "next_month", consider_holidays: true, is_active: true };
+  const IVA_M = { tax_type: "iva", tax_label: "IVA Mensual", calculation_type: "last_business_day", days_value: 0, reference_period: "current_month", consider_holidays: true, is_active: true };
+  const today = new Date(2026, 9, 8, 9, 30);
+
+  it("config válida hasta 2026-04-30 y hoy 08/10/2026 => sin vencimiento para esa config", () => {
+    const { inWindow, next } = computePendingDeadlines({ configs: [{ ...IVA_M, effective_to: "2026-04-30" }], holidays: [], forms: [], today });
+    expect([...inWindow, ...next]).toEqual([]);
+  });
+  it("config sin fechas => igual que hoy", () => {
+    const sinFechas = computePendingDeadlines({ configs: [IVA_M], holidays: [], forms: [], today });
+    const conNull = computePendingDeadlines({ configs: [{ ...IVA_M, effective_from: null, effective_to: null }], holidays: [], forms: [], today });
+    expect(conNull).toEqual(sinFechas);
+    expect(sinFechas.inWindow.length + sinFechas.next.length).toBe(1);
+  });
+  it("vigente hasta 30/04: cuenta el que cubre abril (se paga en mayo); el de mayo no", () => {
+    const cfg = { ...IVA_M, effective_to: "2026-04-30" };
+    const ivaForm = (m) => ({ tax_type: "IVA GENERAL", period_type: "mensual", period_month: m, period_year: 2026 });
+    const may = computePendingDeadlines({ configs: [cfg], holidays: [], forms: [ivaForm(2), ivaForm(3)], today: new Date(2026, 4, 10) });
+    const all = [...may.inWindow, ...may.next];
+    expect(all).toHaveLength(1);
+    expect(all[0].periodLabel).toBe("Abril 2026");
+    const jun = computePendingDeadlines({ configs: [cfg], holidays: [], forms: [ivaForm(3), ivaForm(4)], today: new Date(2026, 5, 10) });
+    expect([...jun.inWindow, ...jun.next]).toEqual([]);
+  });
+  it("vigente desde 01/05: el que cubre abril no cuenta", () => {
+    const cfg = { ...ISR_MENSUAL, effective_from: "2026-05-01" };
+    const { inWindow, next } = computePendingDeadlines({ configs: [cfg], holidays: [], forms: [], today: new Date(2026, 4, 3) });
+    expect([...inWindow, ...next].map((d) => d.periodLabel)).toEqual(["Mayo 2026"]);
+  });
+  it("trimestral: vigencia sobre el rango del trimestre cubierto", () => {
+    const ISO_T = { tax_type: "iso", tax_label: "ISO Trimestral", calculation_type: "last_business_day", days_value: 0, reference_period: "quarter_end_next_month", consider_holidays: true, is_active: true };
+    const hastaMayo = computePendingDeadlines({ configs: [{ ...ISO_T, effective_to: "2026-05-15" }], holidays: [], forms: [], today: new Date(2026, 6, 10) });
+    expect([...hastaMayo.inWindow, ...hastaMayo.next].map((d) => d.periodLabel)).toEqual(["Abril - Junio 2026"]);
+    const hastaMarzo = computePendingDeadlines({ configs: [{ ...ISO_T, effective_to: "2026-03-31" }], holidays: [], forms: [], today: new Date(2026, 6, 10) });
+    expect([...hastaMarzo.inWindow, ...hastaMarzo.next]).toEqual([]);
+  });
+});
