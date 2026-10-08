@@ -18,12 +18,16 @@ import {
 import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "@/utils/dashboardIsrMensualSummary";
 import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
+import { isTaxConfigValidForMonth, isTaxConfigValidForRange } from "@/utils/taxConfigValidity";
 
 export interface TaxConfig {
   id: number;
   tax_form_type: string;
   tax_rate: number;
   is_active: boolean;
+  /** Vigencia ('YYYY-MM-DD'); NULL/ausente = sin límite. */
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 export interface IVAData {
@@ -120,14 +124,15 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       // 2) tab_tax_due_date_config (vencimientos configurados desde la empresa)
       // 3) tab_enterprises.tax_regime (régimen general / pequeño contribuyente)
       const [taxConfigsRes, dueDateConfigsRes, enterpriseRes] = await Promise.all([
+        // "*" incluye effective_from/effective_to (vigencia) cuando existen.
         supabase
           .from("tab_enterprise_tax_config")
-          .select("id, tax_form_type, tax_rate, is_active")
+          .select("*")
           .eq("enterprise_id", enterpriseId)
           .eq("is_active", true),
         supabase
           .from("tab_tax_due_date_config")
-          .select("tax_type, is_active")
+          .select("*")
           .eq("enterprise_id", enterpriseId)
           .eq("is_active", true),
         supabase
@@ -137,14 +142,26 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           .maybeSingle(),
       ]);
 
-      const taxConfigs = (taxConfigsRes.data || []) as TaxConfig[];
-      const dueDateConfigs = (dueDateConfigsRes.data || []) as Array<{ tax_type: string }>;
+      const taxConfigs = (taxConfigsRes.data || []) as unknown as TaxConfig[];
+      const dueDateConfigs = (dueDateConfigsRes.data || []) as unknown as Array<{
+        tax_type: string; is_active: boolean; effective_from?: string | null; effective_to?: string | null;
+      }>;
       const enterpriseRegime = (enterpriseRes.data?.tax_regime || '').toLowerCase();
 
-      let hasIvaGeneral = taxConfigs.some(c => c.tax_form_type === 'IVA_GENERAL');
-      let hasIvaPequeno = taxConfigs.some(c => c.tax_form_type === 'IVA_PEQUENO');
-      const hasIsrMensual = taxConfigs.some(c => c.tax_form_type === 'ISR_MENSUAL');
-      const hasIsrTrimestral = taxConfigs.some(c => c.tax_form_type === 'ISR_TRIMESTRAL');
+      // Vigencia por fechas: cada formulario cuenta solo si su configuración aplica al
+      // período que se muestra (mensuales: el mes de referencia; ISR trimestral: el
+      // trimestre pendiente).
+      const validForRefMonth = (type: string) =>
+        taxConfigs.some(c => c.tax_form_type === type && isTaxConfigValidForMonth(c, refYear, refMonth));
+      const pendingQuarter = lastCompletedQuarter(new Date());
+
+      let hasIvaGeneral = validForRefMonth('IVA_GENERAL');
+      let hasIvaPequeno = validForRefMonth('IVA_PEQUENO');
+      const hasIsrMensual = validForRefMonth('ISR_MENSUAL');
+      const hasIsrTrimestral = taxConfigs.some(c =>
+        c.tax_form_type === 'ISR_TRIMESTRAL' &&
+        isTaxConfigValidForRange(c, pendingQuarter.year, pendingQuarter.startMonth, pendingQuarter.endMonth)
+      );
 
       // El régimen vigente en el mes de referencia (historial de régimen) decide el tipo de
       // IVA: una empresa puede tener activos IVA_GENERAL e IVA_PEQUENO en la configuración
@@ -161,7 +178,8 @@ export function useDashboardTaxData(enterpriseId: number | null) {
       } else if (!hasIvaGeneral && !hasIvaPequeno) {
         // Fallback: inferir el régimen IVA si no hay config explícita
         const hasIvaDueDate = dueDateConfigs.some(c =>
-          c.tax_type === 'iva_mensual' || c.tax_type === 'iva'
+          (c.tax_type === 'iva_mensual' || c.tax_type === 'iva') &&
+          isTaxConfigValidForMonth(c, refYear, refMonth)
         );
         if (hasIvaDueDate) {
           if (enterpriseRegime.includes('pequeñ') || enterpriseRegime.includes('pequen')) {
@@ -390,10 +408,13 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           : null;
         const presentedForm = findPresentedIsrTrimestralForm(formsRes.data || [], q.year, q.startMonth);
 
-        // Vencimiento: solo con configuración activa de 'isr_trimestral'.
+        // Vencimiento: solo con configuración activa de 'isr_trimestral' vigente para el
+        // trimestre pendiente.
         let dueDate: Date | null = null;
-        const cfg = dueCfgRes.data;
-        if (cfg) {
+        const cfg = dueCfgRes.data as unknown as (typeof dueCfgRes.data & {
+          effective_from?: string | null; effective_to?: string | null;
+        }) | null;
+        if (cfg && isTaxConfigValidForRange({ is_active: true, effective_from: cfg.effective_from, effective_to: cfg.effective_to }, q.year, q.startMonth, q.endMonth)) {
           const dueConfig: TaxDueDateConfig = {
             tax_type: cfg.tax_type,
             tax_label: cfg.tax_label,
@@ -402,6 +423,8 @@ export function useDashboardTaxData(enterpriseId: number | null) {
             reference_period: cfg.reference_period as TaxDueDateConfig["reference_period"],
             consider_holidays: cfg.consider_holidays ?? true,
             is_active: true,
+            effective_from: cfg.effective_from ?? null,
+            effective_to: cfg.effective_to ?? null,
           };
           const holidays = await fetchEnterpriseHolidayDates(enterpriseId, today);
           dueDate = calculateDueDate(new Date(q.year, q.startMonth - 1, 1), dueConfig, holidays);

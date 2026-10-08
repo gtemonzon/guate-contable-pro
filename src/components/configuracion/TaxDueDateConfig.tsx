@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { getDefaultTaxConfigs, type TaxDueDateConfig as TaxDueDateConfigType } from '@/utils/dueDateCalculations';
@@ -72,6 +73,8 @@ export function TaxDueDateConfig() {
             reference_period: c.reference_period,
             consider_holidays: c.consider_holidays,
             is_active: c.is_active,
+            // Vigencia: se conserva tal cual (el guardado borra e inserta todas las filas).
+            ...('effective_from' in c ? { effective_from: c.effective_from, effective_to: c.effective_to } : {}),
           })));
         } else {
           // Load defaults if no config exists
@@ -116,11 +119,16 @@ export function TaxDueDateConfig() {
         consider_holidays: c.consider_holidays,
         is_active: c.is_active,
         display_order: i,
+        // Conservar la vigencia definida en Editar Empresa > Impuestos (solo si la fila la trae).
+        ...(c.effective_from !== undefined || c.effective_to !== undefined
+          ? { effective_from: c.effective_from ?? null, effective_to: c.effective_to ?? null }
+          : {}),
       }));
 
+      // Conversión explícita: los tipos generados aún no incluyen effective_from/effective_to.
       const { error } = await supabase
         .from('tab_tax_due_date_config')
-        .insert(toInsert);
+        .insert(toInsert as unknown as TablesInsert<'tab_tax_due_date_config'>[]);
 
       if (error) throw error;
 

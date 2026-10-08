@@ -1,4 +1,5 @@
 import { addDays, subDays, endOfMonth, startOfMonth, isWeekend, isSameDay, format, getMonth, getYear, addMonths } from 'date-fns';
+import { isTaxConfigValidForMonth, isTaxConfigValidForRange } from './taxConfigValidity';
 
 export interface TaxDueDateConfig {
   tax_type: string;
@@ -8,6 +9,9 @@ export interface TaxDueDateConfig {
   reference_period: 'current_month' | 'next_month' | 'quarter_end_next_month';
   consider_holidays: boolean;
   is_active: boolean;
+  /** Vigencia sobre el PERÍODO CUBIERTO ('YYYY-MM-DD'); NULL/ausente = sin límite. */
+  effective_from?: string | null;
+  effective_to?: string | null;
 }
 
 export interface Holiday {
@@ -424,6 +428,12 @@ export function computePendingDeadlines({
       const daysUntil = getDaysUntil(dueDate, today);
       if (daysUntil < -lookbackDays) continue;
       const covered = coveredPeriodForDueDate(config, dueDate);
+      // Vigencia: el vencimiento solo cuenta si la config aplica al período que cubre
+      // (p. ej. vigente hasta 30/04: cuenta el que cubre abril, que se paga en mayo).
+      const validForCovered = isQuarterlyConfig(config)
+        ? isTaxConfigValidForRange(config, covered.periodYear, covered.periodMonth, covered.periodMonth + 2)
+        : isTaxConfigValidForMonth(config, covered.periodYear, covered.periodMonth);
+      if (!validForCovered) continue;
       if (forms.some((f) => isFormPresented(f, config, covered))) continue;
 
       if (!best || dueDate.getTime() < best.dueDate.getTime()) {

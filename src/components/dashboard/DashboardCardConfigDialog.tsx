@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CARD_REGISTRY, DEFAULT_VISIBLE_CARDS, type DashboardCardDefinition } from "@/constants/dashboardCards";
 import { supabase } from "@/integrations/supabase/client";
+import { isFormConfigValidForDashboard } from "@/utils/taxConfigValidity";
 import { toast } from "sonner";
 import type { TaxConfig } from "@/hooks/useDashboardTaxData";
 
@@ -46,7 +47,12 @@ export function DashboardCardConfigDialog({
     setSelected(currentVisibleCards);
   }, [currentVisibleCards, open]);
 
-  const activeTaxTypes = taxConfigs.map(c => c.tax_form_type);
+  // Solo los formularios vigentes para el período que muestra el Dashboard (mensuales:
+  // mes anterior; trimestrales: último trimestre terminado).
+  const today = new Date();
+  const activeTaxTypes = taxConfigs
+    .filter(c => isFormConfigValidForDashboard(c, today))
+    .map(c => c.tax_form_type);
 
   const isCardAvailable = (card: DashboardCardDefinition): boolean => {
     if (!card.requiresTaxConfig) return true;
