@@ -202,3 +202,32 @@ export function parseIsrMensualResult(result: unknown): IsrMensualResultFields {
     isrAPagar: num(r.isrAPagar),
   };
 }
+
+/** Campos del resultado guardado de ISR Trimestral (SAT-1341) que usa el Dashboard. */
+export interface IsrTrimestralResultFields {
+  ingresos: number;
+  costoVentas: number;
+  gastosOperacion: number;
+  rentaImponible: number;
+  isrCalculado: number;
+  isrPagadoAnterior: number;
+  isrAPagar: number;
+  tasaImpuesto: number;
+  trimestre: number;
+}
+
+/** Lee el `result` (jsonb) de un cálculo ISR_TRIMESTRAL; 0 en cada campo ausente o inválido. */
+export function parseIsrTrimestralResult(result: unknown): IsrTrimestralResultFields {
+  const r = isRecord(result) ? result : {};
+  return {
+    ingresos: num(r.ingresos),
+    costoVentas: num(r.costoVentas),
+    gastosOperacion: num(r.gastosOperacion),
+    rentaImponible: num(r.rentaImponible),
+    isrCalculado: num(r.isrCalculado),
+    isrPagadoAnterior: num(r.isrPagadoAnterior),
+    isrAPagar: num(r.isrAPagar),
+    tasaImpuesto: num(r.tasaImpuesto),
+    trimestre: num(r.trimestre),
+  };
+}

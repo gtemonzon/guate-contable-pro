@@ -11,7 +11,7 @@ import { DashboardIVASummary } from "@/components/dashboard/DashboardIVASummary"
 import { DashboardBankBalances } from "@/components/dashboard/DashboardBankBalances";
 import { DashboardTaxDeadlines } from "@/components/dashboard/DashboardTaxDeadlines";
 import { DashboardISRMensualSummary } from "@/components/dashboard/DashboardISRMensualSummary";
-import { DashboardISRTrimestralProjection } from "@/components/dashboard/DashboardISRTrimestralProjection";
+import { DashboardISRTrimestral } from "@/components/dashboard/DashboardISRTrimestral";
 import { DashboardTaxSummary } from "@/components/dashboard/DashboardTaxSummary";
 import { DashboardCardConfigDialog } from "@/components/dashboard/DashboardCardConfigDialog";
 import { DashboardLoadingOverlay } from "@/components/dashboard/DashboardLoadingOverlay";
@@ -517,7 +517,7 @@ const Dashboard = () => {
         {visibleCards.includes('resumen_iva')              && <DashboardIVASummary ivaData={taxData.ivaData} loading={taxData.loading} monthName={taxData.monthName} year={taxData.referenceYear} />}
         {visibleCards.includes('proximos_vencimientos')    && <DashboardTaxDeadlines enterpriseId={currentEntId} />}
         {visibleCards.includes('resumen_isr_mensual')      && <DashboardISRMensualSummary data={taxData.isrMensualData} loading={taxData.loading} monthName={taxData.monthName} year={taxData.referenceYear} />}
-        {visibleCards.includes('proyeccion_isr_trimestral')&& <DashboardISRTrimestralProjection data={taxData.isrTrimestralData} loading={taxData.loading} />}
+        {visibleCards.includes('proyeccion_isr_trimestral')&& <DashboardISRTrimestral data={taxData.isrTrimestralData} loading={taxData.loading} />}
         {visibleCards.includes('resumen_impuestos')        && <DashboardTaxSummary taxSummary={taxData.taxSummary} totalTaxEstimate={taxData.totalTaxEstimate} loading={taxData.loading} />}
       </div>
 

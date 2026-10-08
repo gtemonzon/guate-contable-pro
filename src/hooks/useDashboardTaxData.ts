@@ -3,7 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { getPreviousCompletedMonth, QUARTER_MONTH_RANGES } from "@/constants/dashboardCards";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { fetchSuggestedVatCredit } from "@/utils/vatCreditCarryover";
-import { parseIvaGeneralResult, parseIvaPequenoResult, parseIsrMensualResult } from "@/utils/declarationCalculations";
+import {
+  parseIvaGeneralResult, parseIvaPequenoResult, parseIsrMensualResult, parseIsrTrimestralResult,
+} from "@/utils/declarationCalculations";
+import {
+  lastCompletedQuarter, findPresentedIsrTrimestralForm, buildIsrTrimestralSummary,
+  type IsrTrimestralSummary,
+} from "@/utils/dashboardIsrTrimestral";
+import { calculateDueDate, type TaxDueDateConfig } from "@/utils/dueDateCalculations";
+import { fetchEnterpriseHolidayDates } from "@/utils/enterpriseHolidays";
 import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "@/utils/dashboardIsrMensualSummary";
 import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
@@ -68,17 +76,19 @@ export interface ISRMensualData {
   stale: boolean;
 }
 
-export interface ISRTrimestralData {
-  currentQuarter: number;
+/**
+ * ISR Trimestral pendiente: el último trimestre terminado, con el cálculo guardado del
+ * Generador (acumulado enero → fin del trimestre, menos el ISR ya pagado) o el
+ * formulario ya presentado. No es una proyección.
+ */
+export interface ISRTrimestralData extends IsrTrimestralSummary {
+  /** Trimestre (1 a 4) y año del trimestre pendiente. */
+  quarter: number;
+  year: number;
+  /** "Jul - Sep" (QUARTER_MONTH_RANGES). */
   quarterLabel: string;
-  completedMonths: number;
-  actualSales: number;
-  actualCosts: number;
-  projectedSales: number;
-  projectedCosts: number;
-  projectedProfit: number;
-  isrEstimado: number;
-  usesCoefficient: boolean;
+  /** Mes de inicio del trimestre (1, 4, 7, 10). */
+  quarterStartMonth: number;
 }
 
 export interface TaxSummaryItem {
@@ -313,91 +323,73 @@ export function useDashboardTaxData(enterpriseId: number | null) {
         };
       }
 
-      // ISR Trimestral Projection
+      // ISR Trimestral: el trimestre pendiente de declarar (último terminado), con el
+      // cálculo guardado del generador o el formulario ya presentado.
       let isrTrimestralData: ISRTrimestralData | null = null;
       if (hasIsrTrimestral) {
-        const now = new Date();
-        const currentMonthIdx = now.getMonth(); // 0-indexed
-        const currentQuarter = Math.floor(currentMonthIdx / 3) + 1;
-        const quarterStartMonthIdx = (currentQuarter - 1) * 3;
-        const quarterLabel = QUARTER_MONTH_RANGES[currentQuarter];
+        const today = new Date();
+        const q = lastCompletedQuarter(today);
 
-        // Completed months in current quarter (months before current month)
-        const completedMonths = currentMonthIdx - quarterStartMonthIdx;
-
-        let actualSales = 0, actualCosts = 0;
-
-        // Fetch data for each completed month in the quarter
-        for (let i = 0; i < completedMonths; i++) {
-          const mIdx = quarterStartMonthIdx + i;
-          const mYear = now.getFullYear();
-          const mStart = `${mYear}-${String(mIdx + 1).padStart(2, '0')}-01`;
-          const mEnd = new Date(mYear, mIdx + 1, 0).toISOString().split('T')[0];
-
-          const [sRes, pRes] = await Promise.all([
-            supabase.from("tab_sales_ledger")
-              .select("net_amount")
-              .eq("enterprise_id", enterpriseId)
-              .eq("is_annulled", false)
-              .is("deleted_at", null)
-              .gte("invoice_date", mStart).lte("invoice_date", mEnd),
-            supabase.from("tab_purchase_ledger")
-              .select("net_amount")
-              .eq("enterprise_id", enterpriseId)
-              .is("deleted_at", null)
-              .gte("invoice_date", mStart).lte("invoice_date", mEnd),
-          ]);
-
-          actualSales += (sRes.data || []).reduce((s, r) => s + Number(r.net_amount || 0), 0);
-          actualCosts += (pRes.data || []).reduce((s, r) => s + Number(r.net_amount || 0), 0);
-        }
-
-        const remainingMonths = 3 - completedMonths;
-        let projectedSales = actualSales;
-        let projectedCosts = actualCosts;
-
-        if (completedMonths > 0) {
-          const avgSales = actualSales / completedMonths;
-          const avgCosts = actualCosts / completedMonths;
-          projectedSales += avgSales * remainingMonths;
-          projectedCosts += avgCosts * remainingMonths;
-        }
-
-        // Check for coefficient-based cost of sales
-        let usesCoefficient = false;
-        const { data: configData } = await supabase
-          .from("tab_enterprise_config")
-          .select("cost_of_sales_method")
-          .eq("enterprise_id", enterpriseId)
-          .maybeSingle();
-
-        if (configData?.cost_of_sales_method === 'coeficiente') {
-          const { data: closingData } = await supabase
-            .from("tab_period_inventory_closing")
-            .select("cost_of_sales_amount")
+        const [savedRes, formsRes, dueCfgRes] = await Promise.all([
+          supabase
+            .from("tab_declaration_calculations")
+            .select("id, created_at, result")
             .eq("enterprise_id", enterpriseId)
-            .eq("status", "contabilizado")
-            .order("calculated_at", { ascending: false })
+            .eq("form_type", "ISR_TRIMESTRAL")
+            .eq("period_year", q.year)
+            // period_month guarda el mes ELEGIDO dentro del trimestre.
+            .gte("period_month", q.startMonth)
+            .lte("period_month", q.endMonth)
+            .order("created_at", { ascending: false })
             .limit(1)
-            .maybeSingle();
+            .maybeSingle(),
+          supabase
+            .from("tab_tax_forms")
+            .select("tax_type, period_type, period_month, period_year, form_number, amount_paid, payment_date, is_active")
+            .eq("enterprise_id", enterpriseId)
+            .eq("period_year", q.year)
+            .eq("is_active", true),
+          supabase
+            .from("tab_tax_due_date_config")
+            .select("*")
+            .eq("enterprise_id", enterpriseId)
+            .eq("tax_type", "isr_trimestral")
+            .eq("is_active", true)
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        if (savedRes.error) console.error("Error cargando cálculo guardado (ISR_TRIMESTRAL):", savedRes.error);
 
-          if (closingData?.cost_of_sales_amount && projectedSales > 0) {
-            // Use ratio from last posted period
-            const ratio = Number(closingData.cost_of_sales_amount) / projectedSales;
-            projectedCosts = projectedSales * Math.min(ratio, 1);
-            usesCoefficient = true;
-          }
+        const saved = savedRes.data
+          ? { id: savedRes.data.id, createdAt: savedRes.data.created_at, ...parseIsrTrimestralResult(savedRes.data.result) }
+          : null;
+        const presentedForm = findPresentedIsrTrimestralForm(formsRes.data || [], q.year, q.startMonth);
+
+        // Vencimiento: solo con configuración activa de 'isr_trimestral'.
+        let dueDate: Date | null = null;
+        const cfg = dueCfgRes.data;
+        if (cfg) {
+          const dueConfig: TaxDueDateConfig = {
+            tax_type: cfg.tax_type,
+            tax_label: cfg.tax_label,
+            calculation_type: cfg.calculation_type as TaxDueDateConfig["calculation_type"],
+            days_value: cfg.days_value || 0,
+            reference_period: cfg.reference_period as TaxDueDateConfig["reference_period"],
+            consider_holidays: cfg.consider_holidays ?? true,
+            is_active: true,
+          };
+          const holidays = await fetchEnterpriseHolidayDates(enterpriseId, today);
+          dueDate = calculateDueDate(new Date(q.year, q.startMonth - 1, 1), dueConfig, holidays);
         }
 
-        const projectedProfit = Math.max(0, projectedSales - projectedCosts);
-        const isrRate = taxConfigs.find(c => c.tax_form_type === 'ISR_TRIMESTRAL')?.tax_rate ?? 25;
-        const isrEstimado = projectedProfit * (isrRate / 100);
-
+        const rate = taxConfigs.find(c => c.tax_form_type === 'ISR_TRIMESTRAL')?.tax_rate ?? 25;
+        const summary = buildIsrTrimestralSummary({ quarter: q, saved, presentedForm, dueDate, today, rate });
         isrTrimestralData = {
-          currentQuarter, quarterLabel, completedMonths,
-          actualSales, actualCosts,
-          projectedSales, projectedCosts,
-          projectedProfit, isrEstimado, usesCoefficient,
+          ...summary,
+          quarter: q.quarter,
+          year: q.year,
+          quarterLabel: QUARTER_MONTH_RANGES[q.quarter],
+          quarterStartMonth: q.startMonth,
         };
       }
 
@@ -429,10 +421,11 @@ export function useDashboardTaxData(enterpriseId: number | null) {
         });
       }
 
-      if (isrTrimestralData) {
+      // ISR trimestral: solo el trimestre pendiente con cálculo guardado (no proyecciones).
+      if (isrTrimestralData && isrTrimestralData.state === 'pending' && isrTrimestralData.hasSaved) {
         taxSummary.push({
-          label: `ISR Q${isrTrimestralData.currentQuarter} ${now.getFullYear()} (est.)`,
-          amount: isrTrimestralData.isrEstimado,
+          label: `ISR T${isrTrimestralData.quarter} ${isrTrimestralData.year}`,
+          amount: isrTrimestralData.isrAPagar,
           period: isrTrimestralData.quarterLabel,
         });
       }
@@ -451,8 +444,6 @@ export function useDashboardTaxData(enterpriseId: number | null) {
     enabled: !!enterpriseId,
     refetchInterval: 5 * 60 * 1000,
   });
-
-  const now = new Date();
 
   return {
     loading: query.isLoading,
