@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   computePendingDeadlines, taxFormMatchesConfig, isFormPresented, coveredPeriodForDueDate,
   parseHolidaysForYears, joinLabelsEs, calculateDueDate, toDateOnlyString,
+  computeDueDateAlerts, isTaxAlertStale, getDefaultTaxConfigs,
 } from "./dueDateCalculations";
 
 // Configuración real de la empresa 26.
@@ -206,5 +207,93 @@ describe("computePendingDeadlines con vigencia", () => {
     expect([...hastaMayo.inWindow, ...hastaMayo.next].map((d) => d.periodLabel)).toEqual(["Abril - Junio 2026"]);
     const hastaMarzo = computePendingDeadlines({ configs: [{ ...ISO_T, effective_to: "2026-03-31" }], holidays: [], forms: [], today: new Date(2026, 6, 10) });
     expect([...hastaMarzo.inWindow, ...hastaMarzo.next]).toEqual([]);
+  });
+});
+
+describe("computeDueDateAlerts (alertas de vencimiento)", () => {
+  const on = () => ({ is_enabled: true, days_before: 5 });
+  const alerts = (today, forms, configs, alertConfigFor = on) =>
+    computeDueDateAlerts({ configs, holidays: [], forms, today, alertConfigFor });
+
+  it("1. ISR trimestral: alerta 30/10/2026 por Julio - Septiembre; con el formulario, ninguna", () => {
+    const out = alerts(day(2026, 10, 26), [], [ISR]);
+    expect(out).toHaveLength(1);
+    expect(ymd(out[0])).toBe("2026-10-30");
+    expect(out[0]).toMatchObject({ taxType: "isr_trimestral", label: "ISR Trimestral", daysUntil: 4, priority: "importante", periodLabel: "Julio - Septiembre 2026" });
+    expect(alerts(day(2026, 10, 26), [ISR_Q3], [ISR])).toEqual([]);
+  });
+
+  it("2. ISO con formulario 'IMPUESTO DE SOLIDARIDAD' (julio 2026): ninguna", () => {
+    expect(alerts(day(2026, 10, 26), [], [ISO])).toHaveLength(1);
+    expect(alerts(day(2026, 10, 26), [ISO_Q3], [ISO])).toEqual([]);
+  });
+
+  it("3. IVA mensual: alerta 30/10 por Septiembre; presentado, ninguna; −1 día sí; 02/11 no", () => {
+    const out = alerts(day(2026, 10, 27), [], [IVA]);
+    expect(out.map(ymd)).toEqual(["2026-10-30"]);
+    expect(out[0].periodLabel).toBe("Septiembre 2026");
+    expect(alerts(day(2026, 10, 27), [ivaForm(9)], [IVA])).toEqual([]);
+    const late = alerts(day(2026, 10, 31), [], [IVA]);
+    expect(late.map(ymd)).toEqual(["2026-10-30"]);
+    expect(late[0]).toMatchObject({ daysUntil: -1, priority: "urgente" });
+    expect(alerts(day(2026, 11, 2), [], [IVA])).toEqual([]);
+  });
+
+  it("4. IVA vigente hasta 30/04/2026: alerta por Abril en mayo; en junio ninguna", () => {
+    const iva = { ...IVA, effective_to: "2026-04-30" };
+    const may = alerts(day(2026, 5, 27), [], [iva]);
+    expect(may.map(ymd)).toEqual(["2026-05-29"]);
+    expect(may[0].periodLabel).toBe("Abril 2026");
+    expect(alerts(day(2026, 6, 26), [], [iva])).toEqual([]);
+    expect(alerts(day(2026, 6, 26), [], [IVA])).toHaveLength(1);
+  });
+
+  it("5. alerta deshabilitada: ninguna", () => {
+    expect(alerts(day(2026, 10, 27), [], [IVA], () => ({ is_enabled: false, days_before: 5 }))).toEqual([]);
+  });
+
+  it("config inactiva: ninguna", () => {
+    expect(alerts(day(2026, 10, 27), [], [{ ...IVA, is_active: false }])).toEqual([]);
+  });
+
+  it("6. con getDefaultTaxConfigs, 'iso' es trimestral (sin alertas mensuales)", () => {
+    const defaults = getDefaultTaxConfigs().map((c) => ({ ...c, is_active: true }));
+    expect(defaults.find((c) => c.tax_type === "iso").reference_period).toBe("quarter_end_next_month");
+    // 27/11/2026: el IVA de octubre vence el 30/11; el ISO ya no.
+    const nov = alerts(day(2026, 11, 27), [], defaults);
+    expect(nov.some((a) => a.taxType === "iso")).toBe(false);
+    expect(nov.some((a) => a.taxType === "iva")).toBe(true);
+    // 26/10/2026: el ISO del tercer trimestre sí.
+    const oct = alerts(day(2026, 10, 26), [], defaults).filter((a) => a.taxType === "iso");
+    expect(oct.map((a) => [ymd(a), a.periodLabel])).toEqual([["2026-10-30", "Julio - Septiembre 2026"]]);
+  });
+});
+
+describe("isTaxAlertStale", () => {
+  const stale = (notificationType, eventDate, { configs = CONFIGS, forms = [], today = day(2026, 10, 27), staleDays } = {}) =>
+    isTaxAlertStale({ notificationType, eventDate, configs, forms, today, staleDays });
+
+  it("vigente y sin presentar: no sobra", () => {
+    expect(stale("vencimiento_iva", "2026-10-30")).toBe(false);
+    expect(stale("vencimiento_isr_trimestral", "2026-10-30")).toBe(false);
+  });
+  it("formulario presentado (mensual y trimestral)", () => {
+    expect(stale("vencimiento_iva", "2026-10-30", { forms: [ivaForm(9)] })).toBe(true);
+    expect(stale("vencimiento_isr_trimestral", "2026-10-30", { forms: [ISR_Q3] })).toBe(true);
+    expect(stale("vencimiento_iso", "2026-10-30", { forms: [ISO_Q3] })).toBe(true);
+  });
+  it("config inexistente o inactiva", () => {
+    expect(stale("vencimiento_retenciones_iva", "2026-10-15")).toBe(true);
+    expect(stale("vencimiento_iva", "2026-10-30", { configs: [{ ...IVA, is_active: false }] })).toBe(true);
+  });
+  it("vigencia que ya no cubre el período", () => {
+    const configs = [{ ...IVA, effective_to: "2026-04-30" }];
+    expect(stale("vencimiento_iva", "2026-05-29", { configs, today: day(2026, 5, 27) })).toBe(false);
+    expect(stale("vencimiento_iva", "2026-06-30", { configs, today: day(2026, 6, 26) })).toBe(true);
+  });
+  it("vencida hace más de staleDays días", () => {
+    expect(stale("vencimiento_iva", "2026-08-31", { today: day(2026, 10, 30) })).toBe(false); // 60 días
+    expect(stale("vencimiento_iva", "2026-08-31", { today: day(2026, 10, 31) })).toBe(true); // 61 días
+    expect(stale("vencimiento_iva", "2026-10-01", { staleDays: 20 })).toBe(true);
   });
 });

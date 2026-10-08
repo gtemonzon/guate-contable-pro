@@ -255,7 +255,7 @@ export function getDefaultTaxConfigs(): Omit<TaxDueDateConfig, 'is_active'>[] {
       tax_label: 'ISO Trimestral',
       calculation_type: 'last_business_day',
       days_value: 0,
-      reference_period: 'current_month',
+      reference_period: 'quarter_end_next_month',
       consider_holidays: true,
     },
     {
@@ -390,6 +390,16 @@ export function periodLabelFor(
   return `${MONTH_NAMES_ES[covered.periodMonth]} ${covered.periodYear}`;
 }
 
+/** ¿La vigencia de la config cubre el período (mes, o trimestre completo si es trimestral)? */
+function isConfigValidForCovered(
+  config: TaxDueDateConfig,
+  covered: { periodMonth: number; periodYear: number },
+): boolean {
+  return isQuarterlyConfig(config)
+    ? isTaxConfigValidForRange(config, covered.periodYear, covered.periodMonth, covered.periodMonth + 2)
+    : isTaxConfigValidForMonth(config, covered.periodYear, covered.periodMonth);
+}
+
 /**
  * Vencimientos pendientes por impuesto: para cada configuración activa se calculan
  * los vencimientos de los meses ancla −4…+4 alrededor de `today`, se descartan los ya
@@ -430,10 +440,7 @@ export function computePendingDeadlines({
       const covered = coveredPeriodForDueDate(config, dueDate);
       // Vigencia: el vencimiento solo cuenta si la config aplica al período que cubre
       // (p. ej. vigente hasta 30/04: cuenta el que cubre abril, que se paga en mayo).
-      const validForCovered = isQuarterlyConfig(config)
-        ? isTaxConfigValidForRange(config, covered.periodYear, covered.periodMonth, covered.periodMonth + 2)
-        : isTaxConfigValidForMonth(config, covered.periodYear, covered.periodMonth);
-      if (!validForCovered) continue;
+      if (!isConfigValidForCovered(config, covered)) continue;
       if (forms.some((f) => isFormPresented(f, config, covered))) continue;
 
       if (!best || dueDate.getTime() < best.dueDate.getTime()) {
@@ -459,6 +466,102 @@ export function computePendingDeadlines({
     .sort((a, b) => (a.isOverdue === b.isOverdue ? byDate(a, b) : a.isOverdue ? -1 : 1));
   const next = pending.filter((d) => !d.isOverdue && d.daysUntil > windowDays).sort(byDate);
   return { inWindow, next };
+}
+
+export interface DueDateAlert {
+  taxType: string;
+  label: string;
+  dueDate: Date;
+  daysUntil: number;
+  priority: 'urgente' | 'importante' | 'informativa';
+  /** "Septiembre 2026" o "Julio - Septiembre 2026". */
+  periodLabel: string;
+}
+
+/**
+ * Alertas de vencimiento: para cada configuración activa se revisan los vencimientos
+ * de los meses ancla −4…+4 alrededor de `today` (sin repetir fechas). Hay una alerta
+ * por (impuesto, fecha) si la vigencia cubre el período, el formulario de ese período
+ * no se ha presentado, la alerta del tipo está habilitada y faltan entre −1 y
+ * `days_before` días.
+ */
+export function computeDueDateAlerts({
+  configs,
+  holidays,
+  forms,
+  today,
+  alertConfigFor,
+}: {
+  configs: TaxDueDateConfig[];
+  holidays: Date[];
+  forms: PresentedTaxForm[];
+  today: Date;
+  alertConfigFor: (taxType: string) => { is_enabled: boolean; days_before: number };
+}): DueDateAlert[] {
+  const alerts: DueDateAlert[] = [];
+  for (const config of configs) {
+    if (!config.is_active) continue;
+    const alertConfig = alertConfigFor(config.tax_type);
+    if (!alertConfig.is_enabled) continue;
+    const seen = new Set<string>();
+    for (let k = -4; k <= 4; k++) {
+      const anchor = new Date(today.getFullYear(), today.getMonth() + k, 1);
+      const dueDate = calculateDueDate(anchor, config, holidays);
+      const key = toDateOnlyString(dueDate);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const daysUntil = getDaysUntil(dueDate, today);
+      if (daysUntil > alertConfig.days_before || daysUntil < -1) continue;
+      const covered = coveredPeriodForDueDate(config, dueDate);
+      if (!isConfigValidForCovered(config, covered)) continue;
+      if (forms.some((f) => isFormPresented(f, config, covered))) continue;
+
+      alerts.push({
+        taxType: config.tax_type,
+        label: config.tax_label,
+        dueDate,
+        daysUntil,
+        priority: getPriorityFromDays(daysUntil),
+        periodLabel: periodLabelFor(config, covered),
+      });
+    }
+  }
+  return alerts.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+}
+
+/**
+ * ¿Sobra una alerta de vencimiento ya creada ('vencimiento_<tax_type>' con
+ * event_date = fecha límite)? Sí si el formulario del período que cubre ya se
+ * presentó, la config no existe o no está activa, su vigencia ya no cubre ese
+ * período, o la fecha límite pasó hace más de `staleDays` días.
+ */
+export function isTaxAlertStale({
+  notificationType,
+  eventDate,
+  configs,
+  forms,
+  today,
+  staleDays = OVERDUE_LOOKBACK_DAYS,
+}: {
+  notificationType: string;
+  eventDate: string | null;
+  configs: TaxDueDateConfig[];
+  forms: PresentedTaxForm[];
+  today: Date;
+  staleDays?: number;
+}): boolean {
+  const taxType = notificationType.startsWith('vencimiento_')
+    ? notificationType.slice('vencimiento_'.length)
+    : notificationType;
+  const config = configs.find((c) => c.tax_type === taxType && c.is_active);
+  if (!config) return true;
+  if (!eventDate) return false;
+  const dueDate = parseDateOnly(eventDate.slice(0, 10));
+  const covered = coveredPeriodForDueDate(config, dueDate);
+  if (forms.some((f) => isFormPresented(f, config, covered))) return true;
+  if (!isConfigValidForCovered(config, covered)) return true;
+  return getDaysUntil(dueDate, today) < -staleDays;
 }
 
 /**
