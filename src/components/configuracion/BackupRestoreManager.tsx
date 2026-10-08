@@ -21,6 +21,7 @@ import { useEnterpriseBackup } from '@/hooks/useEnterpriseBackup';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import type { Tables } from '@/integrations/supabase/types';
 
 function RestoreResultSummary({ result, onDownloadErrors }: { result: RestoreResult; onDownloadErrors: () => void }) {
   const successRate = result.recordsProcessed > 0
@@ -79,7 +80,7 @@ function RestoreResultSummary({ result, onDownloadErrors }: { result: RestoreRes
 }
 
 function BackupHistoryList({ enterpriseId }: { enterpriseId: number | null }) {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<Tables<'tab_backup_history'>[]>([]);
 
   useEffect(() => {
     if (!enterpriseId) return;

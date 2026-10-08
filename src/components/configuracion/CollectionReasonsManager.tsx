@@ -37,7 +37,7 @@ export function CollectionReasonsManager() {
       .eq("enterprise_id", enterpriseId)
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true });
-    setItems((data || []) as any);
+    setItems((data || []) as unknown as Reason[]);
     setLoading(false);
   };
 
@@ -51,7 +51,7 @@ export function CollectionReasonsManager() {
       direction: newDir,
       is_active: true,
       sort_order: items.length,
-    } as any);
+    });
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     setNewText("");
     setNewDir("both");
@@ -59,7 +59,7 @@ export function CollectionReasonsManager() {
   };
 
   const toggle = async (id: number, next: boolean) => {
-    await supabase.from("tab_collection_reasons").update({ is_active: next } as any).eq("id", id);
+    await supabase.from("tab_collection_reasons").update({ is_active: next }).eq("id", id);
     await load();
   };
 
@@ -119,7 +119,7 @@ export function CollectionReasonsManager() {
           </div>
           <div className="w-40">
             <label className="text-xs text-muted-foreground">Aplica a</label>
-            <Select value={newDir} onValueChange={(v) => setNewDir(v as any)}>
+            <Select value={newDir} onValueChange={(v) => setNewDir(v as Reason["direction"])}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="both">Ambos</SelectItem>

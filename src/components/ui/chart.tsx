@@ -89,9 +89,45 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
+/** Elemento del payload de Recharts que leen el tooltip y la leyenda. */
+interface ChartPayloadItem {
+  name?: string | number;
+  dataKey?: string | number;
+  value?: string | number;
+  color?: string;
+  payload?: { fill?: string } & Record<string, unknown>;
+}
+
+/**
+ * Props que usa ChartTooltipContent. En recharts 3 las props del Tooltip ya no incluyen
+ * active/payload (las recibe el contenido), por eso se declaran aquí.
+ */
+interface ChartTooltipContentProps {
+  active?: boolean;
+  payload?: ChartPayloadItem[];
+  className?: string;
+  indicator?: "line" | "dot" | "dashed";
+  hideLabel?: boolean;
+  hideIndicator?: boolean;
+  label?: unknown;
+  labelFormatter?: (value: unknown, payload: ChartPayloadItem[]) => React.ReactNode;
+  labelClassName?: string;
+  formatter?: (
+    value: string | number,
+    name: string | number,
+    item: ChartPayloadItem,
+    index: number,
+    payload: ChartPayloadItem["payload"],
+  ) => React.ReactNode;
+  color?: string;
+  nameKey?: string;
+  labelKey?: string;
+}
+
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+  Omit<React.ComponentProps<typeof RechartsPrimitive.Tooltip>, keyof ChartTooltipContentProps> &
+    ChartTooltipContentProps &
     React.ComponentProps<"div"> & {
       hideLabel?: boolean;
       hideIndicator?: boolean;
@@ -115,10 +151,10 @@ const ChartTooltipContent = React.forwardRef<
       color,
       nameKey,
       labelKey,
-    }: any,
+    }: ChartTooltipContentProps,
     ref,
   ) => {
-    const payload = payloadProp as any[] | undefined;
+    const payload = payloadProp as ChartPayloadItem[] | undefined;
     const { config } = useChart();
 
     const tooltipLabel = React.useMemo(() => {
@@ -231,14 +267,14 @@ const ChartLegend = RechartsPrimitive.Legend;
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
-    payload?: any[];
+    payload?: ChartPayloadItem[];
     verticalAlign?: "top" | "middle" | "bottom";
     hideIcon?: boolean;
     nameKey?: string;
   }
 >(({ className, hideIcon = false, payload: payloadProp, verticalAlign = "bottom", nameKey }, ref) => {
   const { config } = useChart();
-  const payload = payloadProp as any[] | undefined;
+  const payload = payloadProp as ChartPayloadItem[] | undefined;
 
   if (!payload?.length) {
     return null;

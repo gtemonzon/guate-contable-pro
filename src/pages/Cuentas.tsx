@@ -11,7 +11,7 @@ import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
 import { CopyAccountsCatalogDialog } from "@/components/cuentas/CopyAccountsCatalogDialog";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
@@ -125,7 +125,7 @@ const Cuentas = () => {
     const start = performance.now();
     const current = accounts.find((a) => a.id === accountId);
     if (!current) return { ok: false, message: "Cuenta no encontrada" };
-    const oldValue = (current as any)[field];
+    const oldValue = current[field];
 
     // Optimistic patch — mutate only the affected node.
     setAccounts((prev) =>
@@ -134,7 +134,7 @@ const Cuentas = () => {
 
     const { error } = await supabase
       .from('tab_accounts')
-      .update({ [field]: newValue } as any)
+      .update({ [field]: newValue } as TablesUpdate<'tab_accounts'>)
       .eq('id', accountId);
 
     const ms = Math.round(performance.now() - start);

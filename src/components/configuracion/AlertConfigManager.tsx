@@ -53,7 +53,7 @@ export function AlertConfigManager() {
           .select('*')
           .eq('enterprise_id', parseInt(enterpriseId));
 
-        const configMap = new Map((data || []).map((c: any) => [c.alert_type, c]));
+        const configMap = new Map((data || []).map((c) => [c.alert_type, c]));
 
         const mergedConfigs = defaultAlertTypes.map(type => {
           const saved = configMap.get(type.alert_type);

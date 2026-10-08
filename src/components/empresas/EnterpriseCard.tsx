@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Tables } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 type Enterprise = Database['public']['Tables']['tab_enterprises']['Row'];
@@ -62,7 +62,7 @@ export function EnterpriseCard({ enterprise, onEdit, onDelete, onOpenWizard }: E
   const [isSelected, setIsSelected] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [documentsCount, setDocumentsCount] = useState(0);
-  const [activePeriod, setActivePeriod] = useState<any>(null);
+  const [activePeriod, setActivePeriod] = useState<Tables<'tab_accounting_periods'> | null>(null);
   const [activeTaxes, setActiveTaxes] = useState<string[]>([]);
   const [lastTaxForm, setLastTaxForm] = useState<LastTaxFormInfo | null>(null);
 

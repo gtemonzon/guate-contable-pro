@@ -61,7 +61,7 @@ export function DashboardBankBalances({ enterpriseId, activePeriod }: DashboardB
                 .lte("tab_journal_entries.entry_date", activePeriod.end_date);
             }
 
-            const movements = await fetchAllRecords<any>(movQuery);
+            const movements = await fetchAllRecords<{ debit_amount: number | null; credit_amount: number | null }>(movQuery);
             balance = movements.reduce(
               (sum, m) => sum + Number(m.debit_amount || 0) - Number(m.credit_amount || 0),
               0

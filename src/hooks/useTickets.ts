@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -337,14 +338,14 @@ export function useUpdateTicket() {
       assigned_to_user_id?: string | null;
       priority?: TicketPriority;
     }) => {
-      const updateData: Record<string, any> = {};
+      const updateData: TablesUpdate<"tickets"> = {};
       if (input.status) updateData.status = input.status;
       if (input.assigned_to_user_id !== undefined) updateData.assigned_to_user_id = input.assigned_to_user_id;
       if (input.priority) updateData.priority = input.priority;
 
       const { error } = await supabase
         .from("tickets")
-        .update(updateData as any)
+        .update(updateData)
         .eq("id", input.ticketId);
 
       if (error) throw error;

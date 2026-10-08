@@ -77,7 +77,7 @@ export default function Soporte() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 flex-wrap">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as TicketStatus | "all")}>
               <SelectTrigger className="w-[160px] h-8 text-xs">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
@@ -88,7 +88,7 @@ export default function Soporte() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as any)}>
+            <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as TicketPriority | "all")}>
               <SelectTrigger className="w-[140px] h-8 text-xs">
                 <SelectValue placeholder="Prioridad" />
               </SelectTrigger>
@@ -99,7 +99,7 @@ export default function Soporte() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v as any)}>
+            <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v as TicketCategory | "all")}>
               <SelectTrigger className="w-[150px] h-8 text-xs">
                 <SelectValue placeholder="Categoría" />
               </SelectTrigger>

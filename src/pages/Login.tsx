@@ -74,7 +74,7 @@ const Login = () => {
 
       // Filtrar solo empresas activas
       const activeEnterprises = userEnterprises?.filter(
-        (ue) => ue.tab_enterprises && (ue.tab_enterprises as any).is_active
+        (ue) => ue.tab_enterprises && ue.tab_enterprises.is_active
       ) || [];
 
       if (activeEnterprises.length === 0) {

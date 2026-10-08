@@ -8,7 +8,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShieldCheck, AlertTriangle, AlertCircle, Info, ChevronDown, Play, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAccountingIntegrity, type ValidationSummary } from '@/hooks/useAccountingIntegrity';
+import { useAccountingIntegrity, type ValidationSummary, type ValidationResult } from '@/hooks/useAccountingIntegrity';
+import type { Tables } from '@/integrations/supabase/types';
 
 const CATEGORY_LABELS: Record<string, string> = {
   A: 'Integridad de Partidas',
@@ -28,9 +29,9 @@ const severityConfig = {
 
 export function IntegrityValidationPanel() {
   const { runValidation, isRunning, progress, summary } = useAccountingIntegrity();
-  const [periods, setPeriods] = useState<any[]>([]);
+  const [periods, setPeriods] = useState<Pick<Tables<'tab_accounting_periods'>, 'id' | 'year' | 'status'>[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
-  const [lastValidation, setLastValidation] = useState<any>(null);
+  const [lastValidation, setLastValidation] = useState<Tables<'tab_integrity_validations'> | null>(null);
 
   const currentEnterpriseIdStr = localStorage.getItem('currentEnterpriseId');
   const currentEntId = currentEnterpriseIdStr ? parseInt(currentEnterpriseIdStr) : null;
@@ -78,7 +79,7 @@ export function IntegrityValidationPanel() {
     totalWarnings: lastValidation.total_warnings,
     totalInfo: lastValidation.total_info,
     healthScore: Number(lastValidation.health_score),
-    results: (lastValidation.results as any[]) || [],
+    results: (lastValidation.results as unknown as ValidationResult[]) || [],
     runAt: lastValidation.run_at,
     categories: {},
   } : null);
@@ -86,7 +87,7 @@ export function IntegrityValidationPanel() {
   // Rebuild categories from flat results if loading from DB
   const categorizedResults = displaySummary ? (() => {
     if (Object.keys(displaySummary.categories).length > 0) return displaySummary.categories;
-    const cats: Record<string, { errors: number; warnings: number; info: number; results: any[] }> = {};
+    const cats: Record<string, { errors: number; warnings: number; info: number; results: ValidationResult[] }> = {};
     Object.keys(CATEGORY_LABELS).forEach(cat => {
       const catResults = displaySummary.results.filter(r => r.category === cat);
       cats[cat] = {
