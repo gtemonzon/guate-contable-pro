@@ -12,6 +12,9 @@ import {
 } from "@/utils/dashboardIsrTrimestral";
 import { calculateDueDate, type TaxDueDateConfig } from "@/utils/dueDateCalculations";
 import { fetchEnterpriseHolidayDates } from "@/utils/enterpriseHolidays";
+import {
+  findPresentedMonthlyForm, computeTotalTaxEstimate, type PresentedFormInfo, type PresentedFormRow,
+} from "@/utils/dashboardPresentedForms";
 import { buildIsrMensualSummary, estimateIsrMensual, isrMensualIngresos } from "@/utils/dashboardIsrMensualSummary";
 import { resolveTaxRegimeAsOf, ivaFormTypeForRegime, regimeAsOfDateForMonth } from "@/utils/taxRegime";
 import { buildIvaGeneralSummary, buildIvaPequenoSummary } from "@/utils/dashboardIvaSummary";
@@ -52,6 +55,8 @@ export interface IVAData {
   /** Pequeño contribuyente: tasa y retención. */
   rate: number;
   retention: number;
+  /** Formulario de IVA del mes ya registrado (tab_tax_forms), si existe. */
+  presented: PresentedFormInfo | null;
 }
 
 export interface ISRMensualData {
@@ -70,6 +75,8 @@ export interface ISRMensualData {
   isrBruto: number;
   /** Retención ISR realizada (solo con cálculo guardado). */
   retention: number;
+  /** Formulario de ISR mensual del mes ya registrado (tab_tax_forms), si existe. */
+  presented: PresentedFormInfo | null;
   savedAt: string | null;
   savedCalcId: number | null;
   /** Los libros cambiaron desde el cálculo guardado. */
@@ -93,8 +100,11 @@ export interface ISRTrimestralData extends IsrTrimestralSummary {
 
 export interface TaxSummaryItem {
   label: string;
+  /** Monto calculado (con formulario presentado, el pagado en el ISR trimestral). */
   amount: number;
   period: string;
+  /** Formulario ya presentado: no cuenta en el total estimado. */
+  presented?: PresentedFormInfo | null;
 }
 
 export function useDashboardTaxData(enterpriseId: number | null) {
@@ -216,6 +226,18 @@ export function useDashboardTaxData(enterpriseId: number | null) {
 
       // Último cálculo guardado del Generador de Declaraciones para el mes de referencia:
       // si existe, manda (incluye remanente y ajustes manuales).
+      // Formularios ya presentados del mes de referencia (IVA e ISR mensual).
+      const { data: monthFormsData, error: monthFormsError } = await supabase
+        .from("tab_tax_forms")
+        .select("id, tax_type, period_type, period_month, period_year, form_number, amount_paid, payment_date, is_active")
+        .eq("enterprise_id", enterpriseId)
+        .eq("period_year", refYear)
+        .eq("period_month", refMonth);
+      if (monthFormsError) console.error("Error cargando formularios presentados:", monthFormsError);
+      const monthForms = (monthFormsData || []) as PresentedFormRow[];
+      const presentedIva = findPresentedMonthlyForm(monthForms, 'IVA', refYear, refMonth);
+      const presentedIsrMensual = findPresentedMonthlyForm(monthForms, 'ISR_MENSUAL', refYear, refMonth);
+
       const fetchSavedCalc = async (formType: 'IVA_GENERAL' | 'IVA_PEQUENO' | 'ISR_MENSUAL') => {
         const { data, error } = await supabase
           .from("tab_declaration_calculations")
@@ -261,6 +283,7 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           stale: summary.stale,
           rate: 0,
           retention: 0,
+          presented: presentedIva,
         };
       } else if (hasIvaPequeno) {
         const rate = taxConfigs.find(c => c.tax_form_type === 'IVA_PEQUENO')?.tax_rate ?? 5;
@@ -289,6 +312,7 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           stale: summary.stale,
           rate: summary.rate,
           retention: summary.retention,
+          presented: presentedIva,
         };
       }
 
@@ -320,6 +344,7 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           savedAt: summary.savedAt,
           savedCalcId: summary.savedCalcId,
           stale: summary.stale,
+          presented: presentedIsrMensual,
         };
       }
 
@@ -403,12 +428,14 @@ export function useDashboardTaxData(enterpriseId: number | null) {
             label: `IVA ${capitalize(monthName)} ${refYear}`,
             amount: ivaData.ivaBalance,
             period: `${monthName} ${refYear}`,
+            presented: ivaData.presented,
           });
         } else {
           taxSummary.push({
             label: `IVA Peq. Contrib. ${capitalize(monthName)} ${refYear}`,
             amount: ivaData.impuestoPequeno,
             period: `${monthName} ${refYear}`,
+            presented: ivaData.presented,
           });
         }
       }
@@ -418,11 +445,20 @@ export function useDashboardTaxData(enterpriseId: number | null) {
           label: `ISR ${capitalize(monthName)} ${refYear}`,
           amount: isrMensualData.isrCalculado,
           period: `${monthName} ${refYear}`,
+          presented: isrMensualData.presented,
         });
       }
 
       // ISR trimestral: solo el trimestre pendiente con cálculo guardado (no proyecciones).
-      if (isrTrimestralData && isrTrimestralData.state === 'pending' && isrTrimestralData.hasSaved) {
+      if (isrTrimestralData && isrTrimestralData.state === 'presented' && isrTrimestralData.presentedForm) {
+        // Ya presentado: se muestra con lo pagado y fuera del total.
+        taxSummary.push({
+          label: `ISR T${isrTrimestralData.quarter} ${isrTrimestralData.year}`,
+          amount: isrTrimestralData.presentedForm.amountPaid,
+          period: isrTrimestralData.quarterLabel,
+          presented: isrTrimestralData.presentedForm,
+        });
+      } else if (isrTrimestralData && isrTrimestralData.state === 'pending' && isrTrimestralData.hasSaved) {
         taxSummary.push({
           label: `ISR T${isrTrimestralData.quarter} ${isrTrimestralData.year}`,
           amount: isrTrimestralData.isrAPagar,
@@ -430,7 +466,8 @@ export function useDashboardTaxData(enterpriseId: number | null) {
         });
       }
 
-      const totalTaxEstimate = taxSummary.reduce((s, t) => s + Math.max(0, t.amount), 0);
+      // Solo lo pendiente: los impuestos con formulario presentado no suman.
+      const totalTaxEstimate = computeTotalTaxEstimate(taxSummary);
 
       return {
         taxConfigs,

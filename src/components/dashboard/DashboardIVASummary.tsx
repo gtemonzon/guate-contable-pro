@@ -3,7 +3,7 @@ import { Receipt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import type { IVAData } from "@/hooks/useDashboardTaxData";
-import { DashboardSourceFooter } from "./DashboardSourceFooter";
+import { DashboardSourceFooter, DashboardPresentedLine } from "./DashboardSourceFooter";
 
 interface DashboardIVASummaryProps {
   ivaData: IVAData | null;
@@ -98,6 +98,7 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
                   </>
                 )}
               </div>
+              <DashboardPresentedLine presented={ivaData.presented} formatAmount={formatNumber} />
 
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} ventas / {ivaData.purchasesCount} compras</span>
@@ -124,6 +125,7 @@ export function DashboardIVASummary({ ivaData, loading, monthName, year }: Dashb
                   Q {formatNumber(ivaData.impuestoPequeno)}
                 </span>
               </div>
+              <DashboardPresentedLine presented={ivaData.presented} formatAmount={formatNumber} />
               <div className="flex justify-between text-xs text-muted-foreground pt-1">
                 <span>{ivaData.salesCount} documentos</span>
               </div>
