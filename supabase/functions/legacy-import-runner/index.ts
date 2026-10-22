@@ -2574,16 +2574,31 @@ Deno.serve(async (req) => {
         });
       }
 
-      let allowed = jobRow.created_by === user.id;
-      if (!allowed) {
-        const { data: link } = await adminClient
-          .from("tab_user_enterprises")
-          .select("user_id")
-          .eq("user_id", user.id)
-          .eq("enterprise_id", jobRow.enterprise_id)
-          .maybeSingle();
-        allowed = !!link;
-      }
+      // Ejecutar la importación (que contabiliza partidas) es una acción
+      // privilegiada: solo super-admins o administradores del tenant dueño.
+      const { data: callerRow } = await adminClient
+        .from("tab_users")
+        .select("is_super_admin, is_tenant_admin, tenant_id, is_active")
+        .eq("id", user.id)
+        .maybeSingle();
+      const { data: entRow } = await adminClient
+        .from("tab_enterprises")
+        .select("tenant_id")
+        .eq("id", jobRow.enterprise_id)
+        .maybeSingle();
+      const caller = callerRow as {
+        is_super_admin: boolean | null;
+        is_tenant_admin: boolean | null;
+        tenant_id: number | null;
+        is_active: boolean | null;
+      } | null;
+      const allowed =
+        !!caller &&
+        caller.is_active !== false &&
+        (caller.is_super_admin === true ||
+          (caller.is_tenant_admin === true &&
+            caller.tenant_id != null &&
+            caller.tenant_id === (entRow as { tenant_id: number | null } | null)?.tenant_id));
 
       if (!allowed) {
         return new Response(JSON.stringify({ error: "Sin acceso a este job" }), {
