@@ -118,7 +118,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   };
 
   const openAttachment = async (attachment: AssetAttachment) => {
-    const { data, error } = await supabase.storage.from("fixed-asset-attachments").createSignedUrl(attachment.file_path, 3600);
+    const { data, error } = await supabase.storage.from("fixed-asset-attachments").createSignedUrl(attachment.file_path, 60);
     if (error || !data?.signedUrl) {
       toast({ title: "No se pudo abrir el archivo", description: error?.message, variant: "destructive" });
       return;

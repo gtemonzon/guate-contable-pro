@@ -231,7 +231,7 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
     try {
       const { data, error } = await supabase.storage
         .from('enterprise-documents')
-        .createSignedUrl(document.file_path, 3600); // 1 hour
+        .createSignedUrl(document.file_path, 60); // short-lived: access revocation takes effect quickly
 
       if (error) throw error;
       if (!data?.signedUrl) throw new Error("No se pudo generar URL de descarga");

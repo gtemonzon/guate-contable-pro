@@ -94,7 +94,22 @@ export function EnterpriseDialog({
   const [legacyJobActive, setLegacyJobActive] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentUserEmail(data.user?.email ?? null));
+    // La función de importación legada solo se habilita si el correo está
+    // confirmado Y la cuenta es super-admin según tab_users (dato del servidor).
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      if (!user?.email || !user.email_confirmed_at) {
+        setCurrentUserEmail(null);
+        return;
+      }
+      const { data: row } = await supabase
+        .from("tab_users")
+        .select("is_super_admin, is_active")
+        .eq("id", user.id)
+        .maybeSingle();
+      setCurrentUserEmail(row?.is_super_admin === true && row?.is_active !== false ? user.email : null);
+    })();
   }, []);
 
   // Detectar si hay un job de importación legado en curso para esta empresa

@@ -2469,6 +2469,24 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Un clearJobId suministrado debe pertenecer a la empresa solicitada.
+      if (requestedClearJobId) {
+        const { data: clearJob } = await adminClient
+          .from("tab_legacy_import_jobs")
+          .select("id, enterprise_id")
+          .eq("id", requestedClearJobId)
+          .maybeSingle();
+        if (!clearJob || Number(clearJob.enterprise_id) !== enterpriseId) {
+          return new Response(
+            JSON.stringify({ error: "Job no válido para esta empresa" }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      }
+
       let progressJobId = requestedClearJobId;
       if (!progressJobId) {
         const { data: progressJob, error: progJobErr } = await adminClient
