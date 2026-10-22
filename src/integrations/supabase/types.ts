@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -2236,6 +2236,8 @@ export type Database = {
       tab_enterprise_tax_config: {
         Row: {
           created_at: string | null
+          effective_from: string | null
+          effective_to: string | null
           enterprise_id: number
           id: number
           is_active: boolean | null
@@ -2244,6 +2246,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
           enterprise_id: number
           id?: number
           is_active?: boolean | null
@@ -2252,6 +2256,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
           enterprise_id?: number
           id?: number
           is_active?: boolean | null
@@ -4700,6 +4706,8 @@ export type Database = {
           created_at: string | null
           days_value: number | null
           display_order: number | null
+          effective_from: string | null
+          effective_to: string | null
           enterprise_id: number | null
           id: number
           is_active: boolean | null
@@ -4713,6 +4721,8 @@ export type Database = {
           created_at?: string | null
           days_value?: number | null
           display_order?: number | null
+          effective_from?: string | null
+          effective_to?: string | null
           enterprise_id?: number | null
           id?: never
           is_active?: boolean | null
@@ -4726,6 +4736,8 @@ export type Database = {
           created_at?: string | null
           days_value?: number | null
           display_order?: number | null
+          effective_from?: string | null
+          effective_to?: string | null
           enterprise_id?: number | null
           id?: never
           is_active?: boolean | null
