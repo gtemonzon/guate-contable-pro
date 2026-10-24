@@ -29,3 +29,26 @@ export function percentOfBase(amount: number, base: number | null | undefined): 
 export function formatPercent(p: number | null): string {
   return p === null ? "—" : `${p.toLocaleString("es-GT", { minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false })}%`;
 }
+
+export interface VariationPercentBases {
+  balance: { cur: number; cmp: number };
+  resultados: { cur: number; cmp: number };
+}
+
+export function variationPercentBases(roots: { accountType: string; currentBalance: number; comparedBalance: number }[]): VariationPercentBases {
+  const bases: VariationPercentBases = { balance: { cur: 0, cmp: 0 }, resultados: { cur: 0, cmp: 0 } };
+  for (const root of roots) {
+    const target = root.accountType === 'activo' ? bases.balance
+      : root.accountType === 'ingreso' ? bases.resultados : null;
+    if (target) {
+      target.cur += root.currentBalance;
+      target.cmp += root.comparedBalance;
+    }
+  }
+  return bases;
+}
+
+export function variationPercentBase(bases: VariationPercentBases, accountType: string, date: "cur" | "cmp"): number | null {
+  return ['activo', 'pasivo', 'capital'].includes(accountType) ? bases.balance[date]
+    : ['ingreso', 'costo', 'gasto'].includes(accountType) ? bases.resultados[date] : null;
+}

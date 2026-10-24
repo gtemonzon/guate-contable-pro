@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ReportLine } from "@/components/reportes/reportTypes";
-import { findPercentBase, percentOfBase, formatPercent } from "./commonSize";
+import { findPercentBase, percentOfBase, formatPercent, variationPercentBases, variationPercentBase } from "./commonSize";
+import { toSteppedExcelData } from "@/components/reportes/SteppedReportView";
 
 describe("percentOfBase", () => {
   it("calcula 50 sobre 200 como 25%", () => expect(percentOfBase(50, 200)).toBe(25));
@@ -59,4 +60,50 @@ describe("findPercentBase", () => {
     expect(findPercentBase([{ type: "section", label: "INGRESOS", amount: 0 }], "resultados")).toBeNull();
   });
   it("devuelve null en balance sin total", () => expect(findPercentBase(results, "balance")).toBeNull());
+});
+
+describe("porcentajes de Variaciones", () => {
+  const bases = variationPercentBases([
+    { accountType: 'activo', currentBalance: 150, comparedBalance: 50 },
+    { accountType: 'activo', currentBalance: 50, comparedBalance: 50 },
+    { accountType: 'ingreso', currentBalance: -400, comparedBalance: 200 },
+    { accountType: 'pasivo', currentBalance: 900, comparedBalance: 700 },
+    { accountType: 'gasto', currentBalance: 800, comparedBalance: 300 },
+  ]);
+  it("suma todas las raíces de activo e ingreso sin sumar otros tipos", () => {
+    expect(bases).toEqual({ balance: { cur: 200, cmp: 100 }, resultados: { cur: -400, cmp: 200 } });
+  });
+  for (const type of ['activo', 'pasivo', 'capital']) {
+    it(`${type} usa Total Activo en cada fecha`, () => {
+      expect(variationPercentBase(bases, type, 'cur')).toBe(200);
+      expect(variationPercentBase(bases, type, 'cmp')).toBe(100);
+    });
+  }
+  for (const type of ['ingreso', 'costo', 'gasto']) {
+    it(`${type} usa Total Ingresos en cada fecha`, () => {
+      expect(variationPercentBase(bases, type, 'cur')).toBe(-400);
+      expect(variationPercentBase(bases, type, 'cmp')).toBe(200);
+    });
+  }
+  it("una raíz filtrada no pasa a 100% y conserva bases por fecha", () => {
+    expect(percentOfBase(50, variationPercentBase(bases, 'activo', 'cur'))).toBe(25);
+    expect(percentOfBase(50, variationPercentBase(bases, 'activo', 'cmp'))).toBe(50);
+  });
+  it("base cero se muestra sin porcentaje", () => {
+    expect(formatPercent(percentOfBase(50, variationPercentBase(variationPercentBases([]), 'activo', 'cur')))).toBe('—');
+  });
+});
+
+describe("Excel escalonado", () => {
+  const lines: ReportLine[] = [
+    { type: 'section', label: 'INGRESOS', amount: 0 },
+    { type: 'account', label: 'Ventas', amount: 50, accountLevel: 1 },
+    { type: 'subtotal', label: 'TOTAL INGRESOS', amount: 200 },
+  ];
+  it("apagado conserva datos y columnas sin porcentaje", () => {
+    expect(toSteppedExcelData(lines)).toEqual({ headers: ['Concepto', 'Nivel 1'], data: [['INGRESOS', ''], ['  Ventas', 'Q 50.00'], ['TOTAL INGRESOS', 'Q 200.00']] });
+  });
+  it("encendido agrega porcentajes y deja secciones vacías", () => {
+    expect(toSteppedExcelData(lines, undefined, 200).data).toEqual([['INGRESOS', '', ''], ['  Ventas', 'Q 50.00', '25.0%'], ['TOTAL INGRESOS', 'Q 200.00', '100.0%']]);
+  });
 });

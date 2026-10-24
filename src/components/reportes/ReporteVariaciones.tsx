@@ -11,7 +11,7 @@ import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
 import ReportPercentToggle, { useReportPercent } from "./ReportPercentToggle";
-import { percentOfBase, formatPercent } from "@/utils/commonSize";
+import { percentOfBase, formatPercent, variationPercentBases, variationPercentBase } from "@/utils/commonSize";
 
 interface AccountBalance {
   id: number;
@@ -82,9 +82,7 @@ export default function ReporteVariaciones() {
   const percentToggle = useReportPercent("variaciones");
   const [percentBases, setPercentBases] = useState({ balance: { cur: 0, cmp: 0 }, resultados: { cur: 0, cmp: 0 } });
   const verticalPercent = (line: VariationLine, date: "cur" | "cmp") => {
-    const base = ['activo', 'pasivo', 'capital'].includes(line.accountType)
-      ? percentBases.balance[date]
-      : ['ingreso', 'costo', 'gasto'].includes(line.accountType) ? percentBases.resultados[date] : null;
+    const base = variationPercentBase(percentBases, line.accountType, date);
     return formatPercent(percentOfBase(date === "cur" ? line.currentBalance : line.comparedBalance, base));
   };
   const [loading, setLoading] = useState(false);
@@ -268,17 +266,10 @@ export default function ReporteVariaciones() {
         .sort((a, b) => a.account_code.localeCompare(b.account_code));
 
       // Common-size bases use all aggregated roots before any account/detail filter.
-      const bases = { balance: { cur: 0, cmp: 0 }, resultados: { cur: 0, cmp: 0 } };
-      for (const root of roots) {
-        const target = root.account_type === 'activo' ? bases.balance
-          : root.account_type === 'ingreso' ? bases.resultados : null;
-        if (target) {
-          const agg = getAgg(root.id);
-          target.cur += agg.cur;
-          target.cmp += agg.cmp;
-        }
-      }
-      setPercentBases(bases);
+      setPercentBases(variationPercentBases(roots.map(root => {
+        const agg = getAgg(root.id);
+        return { accountType: root.account_type, currentBalance: agg.cur, comparedBalance: agg.cmp };
+      })));
 
       if (rootAccountId !== "all") {
         const rid = parseInt(rootAccountId);
