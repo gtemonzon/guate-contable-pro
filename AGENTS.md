@@ -1,0 +1,2 @@
+# Project rules
+- Private document preview actions reauthorize through a per-request URL resolver; downloads use blobs so cross-origin storage links save correctly without extending signed URL lifetimes.

@@ -1,6 +1,7 @@
 import type jsPDF from "jspdf";
+import type { PreviewFile } from "@/lib/previewActions";
 
-export interface PdfPreviewRequest {
+export interface PdfPreviewRequest extends PreviewFile {
   /** Blob URL u URL firmada del PDF a mostrar */
   url: string;
   /** Nombre sugerido al descargar */
