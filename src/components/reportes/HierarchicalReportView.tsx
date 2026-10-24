@@ -2,12 +2,14 @@ import { useState } from "react";
 import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 import CopyAmountButton from "./CopyAmountButton";
+import { percentOfBase, formatPercent } from "@/utils/commonSize";
 
 interface HierarchicalReportViewProps {
   lines: ReportLine[];
   expanded: Set<number>;
   toggleExpand: (accountId: number) => void;
   onAccountClick?: (line: ReportLine) => void;
+  percentBase?: number | null;
 }
 
 /**
@@ -17,7 +19,7 @@ interface HierarchicalReportViewProps {
  * - Double click on label opens the ledger panel.
  * - BookOpen icon also opens the ledger panel.
  */
-export default function HierarchicalReportView({ lines, expanded, toggleExpand, onAccountClick }: HierarchicalReportViewProps) {
+export default function HierarchicalReportView({ lines, expanded, toggleExpand, onAccountClick, percentBase }: HierarchicalReportViewProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   return (
@@ -33,7 +35,8 @@ export default function HierarchicalReportView({ lines, expanded, toggleExpand, 
           <div
             key={idx}
             className={[
-              'grid grid-cols-[1fr_auto] gap-4 py-1.5 items-center group',
+              'grid gap-4 py-1.5 items-center group',
+              percentBase !== undefined ? 'grid-cols-[minmax(0,1fr)_auto_5rem]' : 'grid-cols-[1fr_auto]',
               line.isBold ? 'font-bold' : '',
               line.showLine ? 'border-t border-border' : '',
               isSelected ? 'bg-accent/50 rounded' : '',
@@ -73,7 +76,7 @@ export default function HierarchicalReportView({ lines, expanded, toggleExpand, 
                   if (isAccount && line.accountId) setSelectedId(line.accountId);
                 }}
                 onDoubleClick={() => {
-                  if (isClickable) onAccountClick!(line);
+                    if (isClickable) onAccountClick?.(line);
                 }}
               >
                 {line.label}
@@ -84,7 +87,7 @@ export default function HierarchicalReportView({ lines, expanded, toggleExpand, 
                   className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-accent"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onAccountClick!(line);
+                    onAccountClick?.(line);
                   }}
                   title="Ver Mayor"
                   aria-label="Abrir libro mayor"
@@ -101,6 +104,11 @@ export default function HierarchicalReportView({ lines, expanded, toggleExpand, 
                 </>
               ) : ''}
             </div>
+            {percentBase !== undefined && (
+              <div className="w-20 text-xs text-muted-foreground text-right whitespace-nowrap">
+                {line.type !== 'section' ? formatPercent(percentOfBase(line.amount, percentBase)) : ''}
+              </div>
+            )}
           </div>
         );
       })}

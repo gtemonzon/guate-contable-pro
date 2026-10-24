@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronRight, ChevronDown, BookOpen } from "lucide-react";
 import type { ReportLine } from "./reportTypes";
 import CopyAmountButton from "./CopyAmountButton";
+import { percentOfBase, formatPercent } from "@/utils/commonSize";
 
 interface SteppedReportViewProps {
   lines: ReportLine[];
@@ -9,17 +10,18 @@ interface SteppedReportViewProps {
   expanded: Set<number>;
   toggleExpand: (accountId: number) => void;
   onAccountClick?: (line: ReportLine) => void;
+  percentBase?: number | null;
 }
 
 const formatAmount = (amount: number) =>
   `Q ${amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick }: SteppedReportViewProps) {
+export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expanded, toggleExpand, onAccountClick, percentBase }: SteppedReportViewProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
-    ? Math.max(...accountLines.map(l => l.accountLevel!))
+    ? Math.max(...accountLines.map(l => l.accountLevel ?? 1))
     : 1;
   const maxLevel = Math.min(maxLevelProp ?? computedMax, 5);
 
@@ -41,6 +43,9 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                 {h}
               </th>
             ))}
+            {percentBase !== undefined && (
+              <th className="px-2 py-2 border-b-2 border-border text-right text-xs text-muted-foreground w-20 min-w-20 whitespace-nowrap">% vertical</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -103,7 +108,7 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                         isSelected ? 'text-primary' : '',
                       ].join(' ')}
                       onClick={() => { if (isAccount && line.accountId) setSelectedId(line.accountId); }}
-                      onDoubleClick={() => { if (isClickable) onAccountClick!(line); }}
+                      onDoubleClick={() => { if (isClickable) onAccountClick?.(line); }}
                     >
                       {line.label}
                     </span>
@@ -113,7 +118,7 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                         className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-accent"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onAccountClick!(line);
+                          onAccountClick?.(line);
                         }}
                         title="Ver Mayor"
                       >
@@ -149,6 +154,11 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
                     </td>
                   );
                 })}
+                {percentBase !== undefined && (
+                  <td className="px-2 py-1.5 text-right text-xs text-muted-foreground w-20 min-w-20 whitespace-nowrap">
+                    {!isSection ? formatPercent(percentOfBase(line.amount, percentBase)) : ''}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -161,16 +171,17 @@ export default function SteppedReportView({ lines, maxLevel: maxLevelProp, expan
 /**
  * Converts report lines to stepped Excel data.
  */
-export function toSteppedExcelData(lines: ReportLine[], maxLevel?: number): { headers: string[]; data: string[][] } {
+export function toSteppedExcelData(lines: ReportLine[], maxLevel?: number, percentBase?: number | null): { headers: string[]; data: string[][] } {
   const accountLines = lines.filter(l => l.type === 'account' && l.accountLevel);
   const computedMax = accountLines.length > 0
-    ? Math.max(...accountLines.map(l => l.accountLevel!))
+    ? Math.max(...accountLines.map(l => l.accountLevel ?? 1))
     : 1;
   const levels = Math.min(maxLevel ?? computedMax, 5);
 
   const headers = [
     'Concepto',
     ...Array.from({ length: levels }, (_, i) => `Nivel ${levels - i}`),
+    ...(percentBase !== undefined ? ['% vertical'] : []),
   ];
 
   const data = lines.map((line) => {
@@ -192,6 +203,7 @@ export function toSteppedExcelData(lines: ReportLine[], maxLevel?: number): { he
       }
     }
 
+    if (percentBase !== undefined) row.push(line.type === 'section' ? '' : formatPercent(percentOfBase(line.amount, percentBase)));
     return row;
   });
 
