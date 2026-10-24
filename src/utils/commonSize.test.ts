@@ -101,9 +101,9 @@ describe("Excel escalonado", () => {
     { type: 'subtotal', label: 'TOTAL INGRESOS', amount: 200 },
   ];
   it("apagado conserva datos y columnas sin porcentaje", () => {
-    expect(toSteppedExcelData(lines)).toEqual({ headers: ['Concepto', 'Nivel 1'], data: [['INGRESOS', ''], ['  Ventas', 'Q 50.00'], ['TOTAL INGRESOS', 'Q 200.00']] });
+    expect(toSteppedExcelData(lines)).toEqual({ headers: ['Concepto', 'Nivel 1'], data: [['INGRESOS', ''], ['  Ventas', '50.00'], ['TOTAL INGRESOS', '200.00']] });
   });
   it("encendido agrega porcentajes y deja secciones vacías", () => {
-    expect(toSteppedExcelData(lines, undefined, 200).data).toEqual([['INGRESOS', '', ''], ['  Ventas', 'Q 50.00', '25.0%'], ['TOTAL INGRESOS', 'Q 200.00', '100.0%']]);
+    expect(toSteppedExcelData(lines, undefined, 200).data).toEqual([['INGRESOS', '', ''], ['  Ventas', '50.00', '25.0%'], ['TOTAL INGRESOS', '200.00', '100.0%']]);
   });
 });
