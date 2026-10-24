@@ -118,15 +118,20 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   };
 
   const openAttachment = async (attachment: AssetAttachment) => {
+    const resolveUrl = async () => {
+      const { data, error } = await supabase.storage.from("fixed-asset-attachments").createSignedUrl(attachment.file_path, 60);
+      if (error || !data?.signedUrl) throw new Error(error?.message || "No se pudo abrir el archivo");
+      return data.signedUrl;
+    };
     const { data, error } = await supabase.storage.from("fixed-asset-attachments").createSignedUrl(attachment.file_path, 60);
     if (error || !data?.signedUrl) {
       toast({ title: "No se pudo abrir el archivo", description: error?.message, variant: "destructive" });
       return;
     }
     if (attachment.file_type === "application/pdf") {
-      showPdfPreview({ url: data.signedUrl, fileName: attachment.file_name });
+      showPdfPreview({ url: data.signedUrl, resolveUrl, fileName: attachment.file_name });
     } else if (attachment.file_type?.startsWith("image/")) {
-      showImagePreview({ url: data.signedUrl, fileName: attachment.file_name });
+      showImagePreview({ url: data.signedUrl, resolveUrl, fileName: attachment.file_name });
     } else {
       const link = document.createElement("a");
       link.href = data.signedUrl;

@@ -229,14 +229,17 @@ export const EnterpriseDocuments = ({ enterpriseId }: EnterpriseDocumentsProps) 
 
   const handleDownload = async (document: EnterpriseDocument) => {
     try {
+      const resolveUrl = async () => {
       const { data, error } = await supabase.storage
         .from('enterprise-documents')
         .createSignedUrl(document.file_path, 60); // short-lived: access revocation takes effect quickly
 
       if (error) throw error;
       if (!data?.signedUrl) throw new Error("No se pudo generar URL de descarga");
+        return data.signedUrl;
+      };
 
-      showPdfPreview({ url: data.signedUrl, fileName: document.file_name || 'documento.pdf' });
+      showPdfPreview({ url: await resolveUrl(), resolveUrl, fileName: document.file_name || 'documento.pdf' });
 
     } catch (error: unknown) {
       toast({

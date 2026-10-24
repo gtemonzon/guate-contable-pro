@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink, Printer } from "lucide-react";
 import { subscribePdfPreview, type PdfPreviewRequest } from "@/lib/pdfPreview";
+import { downloadPreviewFile, openPreviewFile } from "@/lib/previewActions";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Visor global de PDF. Se monta una sola vez y escucha las solicitudes
@@ -11,6 +13,8 @@ import { subscribePdfPreview, type PdfPreviewRequest } from "@/lib/pdfPreview";
 export default function PdfPreviewHost() {
   const [request, setRequest] = useState<PdfPreviewRequest | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => subscribePdfPreview((req) => setRequest(req)), []);
 
@@ -19,14 +23,16 @@ export default function PdfPreviewHost() {
     setRequest(null);
   };
 
-  const handleDownload = () => {
-    if (!request) return;
-    const a = document.createElement("a");
-    a.href = request.url;
-    a.download = request.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleAction = async (action: (file: PdfPreviewRequest) => Promise<void>) => {
+    if (!request || busy) return;
+    setBusy(true);
+    try {
+      await action(request);
+    } catch (error) {
+      toast({ title: "No se pudo abrir el archivo", description: error instanceof Error ? error.message : "Intente nuevamente.", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -39,7 +45,7 @@ export default function PdfPreviewHost() {
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={handleDownload} className="gap-2">
+          <Button size="sm" disabled={busy} onClick={() => void handleAction(downloadPreviewFile)} className="gap-2">
             <Download className="h-4 w-4" /> Descargar
           </Button>
           <Button
@@ -50,10 +56,8 @@ export default function PdfPreviewHost() {
           >
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
-          <Button size="sm" variant="outline" asChild className="gap-2">
-            <a href={request?.url} target="_blank" rel="noopener noreferrer">
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void handleAction(openPreviewFile)} className="gap-2">
               <ExternalLink className="h-4 w-4" /> Abrir en pestaña nueva
-            </a>
           </Button>
         </div>
 
