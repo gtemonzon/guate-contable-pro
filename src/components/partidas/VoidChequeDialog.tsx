@@ -225,6 +225,8 @@ export default function VoidChequeDialog({
         parts.push(`Borrador de reemplazo ${result.replacement_entry_number} (documento ${result.replacement_document_number}).`);
       } else if (result.replacement_document_number && result.mode === "draft") {
         parts.push(`La partida ahora usa el documento ${result.replacement_document_number}.`);
+      } else if (result.mode === "draft") {
+        parts.push("El borrador se conserva sin ese número; puede asignarle uno nuevo al editarlo.");
       }
       const unlinked = result.unlinked_purchase_ids?.length ?? 0;
       if (unlinked > 0) {
