@@ -547,7 +547,9 @@ export default function ReporteBalanceGeneral() {
 
         <div className="space-y-2">
           <ReportLayoutToggle value={layout} onChange={setLayout} />
-          <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} disabled={!!percentDisabledReason} disabledReason={percentDisabledReason} />
+          {reportLines.length > 0 && (
+            <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} disabled={!!percentDisabledReason} disabledReason={percentDisabledReason} />
+          )}
         </div>
 
         <div className="flex items-end">

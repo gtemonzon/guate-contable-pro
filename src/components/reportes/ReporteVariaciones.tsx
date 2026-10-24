@@ -507,7 +507,9 @@ export default function ReporteVariaciones() {
           <Label htmlFor="sig-filter" className="text-sm">Solo cambios significativos</Label>
         </div>
 
-        <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} />
+        {lines.length > 0 && (
+          <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} />
+        )}
 
         {filterSignificant && (
           <div className="w-28">
