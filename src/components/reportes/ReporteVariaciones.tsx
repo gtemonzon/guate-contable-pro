@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, exportToPDF } from "@/utils/reportExport";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
+import ReportPercentToggle, { useReportPercent } from "./ReportPercentToggle";
+import { percentOfBase, formatPercent } from "@/utils/commonSize";
 
 interface AccountBalance {
   id: number;
@@ -22,6 +24,7 @@ interface AccountBalance {
 }
 
 interface VariationLine {
+  accountType: string;
   id: number;
   code: string;
   name: string;
@@ -76,6 +79,14 @@ export default function ReporteVariaciones() {
   const [rootAccountId, setRootAccountId] = useState<string>("all");
   const [rootAccounts, setRootAccounts] = useState<{ id: number; code: string; name: string }[]>([]);
   const [lines, setLines] = useState<VariationLine[]>([]);
+  const percentToggle = useReportPercent("variaciones");
+  const [percentBases, setPercentBases] = useState({ balance: { cur: 0, cmp: 0 }, resultados: { cur: 0, cmp: 0 } });
+  const verticalPercent = (line: VariationLine, date: "cur" | "cmp") => {
+    const base = ['activo', 'pasivo', 'capital'].includes(line.accountType)
+      ? percentBases.balance[date]
+      : ['ingreso', 'costo', 'gasto'].includes(line.accountType) ? percentBases.resultados[date] : null;
+    return formatPercent(percentOfBase(date === "cur" ? line.currentBalance : line.comparedBalance, base));
+  };
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -190,7 +201,8 @@ export default function ReporteVariaciones() {
       for (const id of allIds) {
         const cur = currentMap.get(id);
         const cmp = comparedMap.get(id);
-        allAccounts.push(cur || cmp!);
+        const account = cur ?? cmp;
+        if (account) allAccounts.push(account);
       }
 
       // Build children map
@@ -233,6 +245,7 @@ export default function ReporteVariaciones() {
 
         result.push({
           id: acc.id,
+          accountType: acc.account_type,
           code: acc.account_code,
           name: acc.account_name,
           level: acc.level,
@@ -253,6 +266,19 @@ export default function ReporteVariaciones() {
       let roots = allAccounts
         .filter(a => a.parent_account_id == null)
         .sort((a, b) => a.account_code.localeCompare(b.account_code));
+
+      // Common-size bases use all aggregated roots before any account/detail filter.
+      const bases = { balance: { cur: 0, cmp: 0 }, resultados: { cur: 0, cmp: 0 } };
+      for (const root of roots) {
+        const target = root.account_type === 'activo' ? bases.balance
+          : root.account_type === 'ingreso' ? bases.resultados : null;
+        if (target) {
+          const agg = getAgg(root.id);
+          target.cur += agg.cur;
+          target.cmp += agg.cmp;
+        }
+      }
+      setPercentBases(bases);
 
       if (rootAccountId !== "all") {
         const rid = parseInt(rootAccountId);
@@ -367,11 +393,13 @@ export default function ReporteVariaciones() {
   };
 
   const handleExportExcel = () => {
-    const headers = ["Cuenta", "Saldo Actual", "Saldo Comparado", "Variación", "Variación %"];
+    const headers = ["Cuenta", "Saldo Actual", ...(percentToggle.checked ? ["% Actual"] : []), "Saldo Comparado", ...(percentToggle.checked ? ["% Comp."] : []), "Variación", "Variación %"];
     const data = visibleLines.map(l => [
       `${"  ".repeat(l.level - 1)}${l.code} - ${l.name}`,
       l.currentBalance.toFixed(2),
+      ...(percentToggle.checked ? [verticalPercent(l, "cur")] : []),
       l.comparedBalance.toFixed(2),
+      ...(percentToggle.checked ? [verticalPercent(l, "cmp")] : []),
       l.variationAmount.toFixed(2),
       l.variationPercent !== null ? `${l.variationPercent.toFixed(1)}%` : "N/A",
     ]);
@@ -386,11 +414,13 @@ export default function ReporteVariaciones() {
   };
 
   const handleExportPDF = () => {
-    const headers = ["Cuenta", "Saldo Actual", "Saldo Comparado", "Variación", "Var %"];
+    const headers = ["Cuenta", "Saldo Actual", ...(percentToggle.checked ? ["% Actual"] : []), "Saldo Comparado", ...(percentToggle.checked ? ["% Comp."] : []), "Variación", "Var %"];
     const data = visibleLines.map(l => [
       `${"  ".repeat(l.level - 1)}${l.code} - ${l.name}`,
       fmtQ(l.currentBalance),
+      ...(percentToggle.checked ? [verticalPercent(l, "cur")] : []),
       fmtQ(l.comparedBalance),
+      ...(percentToggle.checked ? [verticalPercent(l, "cmp")] : []),
       fmtQ(l.variationAmount),
       fmtPct(l.variationPercent),
     ]);
@@ -486,6 +516,8 @@ export default function ReporteVariaciones() {
           <Label htmlFor="sig-filter" className="text-sm">Solo cambios significativos</Label>
         </div>
 
+        <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} />
+
         {filterSignificant && (
           <div className="w-28">
             <Label>Umbral</Label>
@@ -528,11 +560,18 @@ export default function ReporteVariaciones() {
             </p>
           </div>
 
+          {percentToggle.checked && (
+            <p className="text-xs text-muted-foreground text-center mb-3">% sobre Total Activo (balance) y Total Ingresos (resultados)</p>
+          )}
+          <div className="overflow-x-auto">
+          <div className={percentToggle.checked ? "min-w-[960px]" : undefined}>
           {/* Header */}
-          <div className="grid grid-cols-[1fr_repeat(4,_auto)] gap-2 py-2 border-b border-border font-semibold text-xs text-muted-foreground">
+          <div className={`grid ${percentToggle.checked ? "grid-cols-[1fr_repeat(6,_auto)]" : "grid-cols-[1fr_repeat(4,_auto)]"} gap-2 py-2 border-b border-border font-semibold text-xs text-muted-foreground`}>
             <div>Cuenta</div>
             <div className="text-right w-28">Saldo Actual</div>
+            {percentToggle.checked && <div className="text-right w-20">% Actual</div>}
             <div className="text-right w-28">Saldo Comparado</div>
+            {percentToggle.checked && <div className="text-right w-20">% Comp.</div>}
             <div className="text-right w-28">Variación</div>
             <div className="text-right w-20">Var %</div>
           </div>
@@ -547,7 +586,8 @@ export default function ReporteVariaciones() {
                 <div
                   key={line.id}
                   className={[
-                    "grid grid-cols-[1fr_repeat(4,_auto)] gap-2 py-1.5 items-center group",
+                    "grid gap-2 py-1.5 items-center group",
+                    percentToggle.checked ? "grid-cols-[1fr_repeat(6,_auto)]" : "grid-cols-[1fr_repeat(4,_auto)]",
                     line.hasChildren ? "font-semibold" : "",
                     isSelected ? "bg-accent/50 rounded" : "",
                   ].join(" ")}
@@ -592,7 +632,9 @@ export default function ReporteVariaciones() {
                     </button>
                   </div>
                   <div className="text-right w-28 whitespace-nowrap">{fmtQ(line.currentBalance)}</div>
+                  {percentToggle.checked && <div className="text-right w-20 whitespace-nowrap text-xs text-muted-foreground">{verticalPercent(line, "cur")}</div>}
                   <div className="text-right w-28 whitespace-nowrap">{fmtQ(line.comparedBalance)}</div>
+                  {percentToggle.checked && <div className="text-right w-20 whitespace-nowrap text-xs text-muted-foreground">{verticalPercent(line, "cmp")}</div>}
                   <div className={`text-right w-28 whitespace-nowrap flex items-center justify-end gap-1 ${getVariationColor(line.variationAmount)}`}>
                     {getVariationIcon(line.variationAmount)}
                     {fmtQ(line.variationAmount)}
@@ -603,6 +645,8 @@ export default function ReporteVariaciones() {
                 </div>
               );
             })}
+          </div>
+          </div>
           </div>
         </div>
       )}
