@@ -24,6 +24,8 @@ import HierarchicalReportView from "./HierarchicalReportView";
 import AccountLedgerDrawer from "./AccountLedgerDrawer";
 import { FolioExportDialog, FolioExportOptions } from "./FolioExportDialog";
 import type { ReportLine } from "./reportTypes";
+import ReportPercentToggle, { useReportPercent } from "./ReportPercentToggle";
+import { findPercentBase, percentOfBase, formatPercent } from "@/utils/commonSize";
 import { collectDescendantIds } from "./collectDescendantIds";
 import { useReportTreeState } from "./useReportTreeState";
 
@@ -130,6 +132,7 @@ export default function ReporteEstadoResultados() {
   const [displayLevel, setDisplayLevel] = useState<number>(0);
   const [cdvBreakdown, setCdvBreakdown] = useState<CdvBreakdown | null>(null);
   const [layout, setLayout] = useState<ReportLayout>('hierarchical');
+  const percentToggle = useReportPercent("resultados");
   const [drawerAccount, setDrawerAccount] = useState<{ id: number; code: string; name: string; ids?: number[] } | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [periodIsOpen, setPeriodIsOpen] = useState<boolean>(false);
@@ -563,19 +566,23 @@ export default function ReporteEstadoResultados() {
     let data: string[][];
 
     if (layout === 'stepped') {
-      const result = toSteppedExcelData(filteredReportLines);
+      const result = toSteppedExcelData(filteredReportLines, undefined, percentBase);
       headers = result.headers;
       data = result.data;
+      if (percentBase !== undefined && percentBaseInfo) headers[headers.length - 1] = `% sobre ${percentBaseInfo.label}`;
     } else {
-      headers = ["Concepto", "Monto"];
+      headers = ["Concepto", "Monto", ...(percentBase !== undefined && percentBaseInfo ? [`% sobre ${percentBaseInfo.label}`] : [])];
       data = filteredReportLines.map(line => [
         line.type === 'account' ? `  ${line.label}` : line.label,
         line.amount.toFixed(2),
+        ...(percentBase !== undefined ? [line.type === 'section' ? '' : formatPercent(percentOfBase(line.amount, percentBase))] : []),
       ]);
     }
 
     // Append CDV breakdown
-    data.push(...getCdvExportLines());
+    data.push(...getCdvExportLines().map(row => percentBase === undefined
+      ? row
+      : [...row, ...Array<string>(Math.max(0, headers.length - row.length)).fill('')]));
 
     exportToExcel({
       filename: `Estado_Resultados_${dateFrom}_${dateTo}`,
@@ -693,6 +700,14 @@ export default function ReporteEstadoResultados() {
     ? applyProjectionTransform(baseFilteredLines, estimatedCogs.estimatedCostOfSales as number)
     : baseFilteredLines;
 
+  const percentBaseInfo = findPercentBase(projectionMode && estimatedCogs.estimatedCostOfSales !== null
+    ? applyProjectionTransform(reportLines, estimatedCogs.estimatedCostOfSales)
+    : reportLines, "resultados");
+  const percentDisabledReason = !percentBaseInfo
+    ? "Este formato no tiene una línea de Total Ingresos"
+    : Math.abs(percentBaseInfo.amount) < 0.005 ? "La base es cero" : undefined;
+  const percentBase = percentToggle.checked && !percentDisabledReason ? percentBaseInfo?.amount : undefined;
+
   const { expanded, toggleExpand, visibleLines } = useReportTreeState(filteredReportLines);
 
   const handleAccountClick = (line: ReportLine) => {
@@ -743,7 +758,10 @@ export default function ReporteEstadoResultados() {
           </Select>
         </div>
 
-        <ReportLayoutToggle value={layout} onChange={setLayout} />
+        <div className="space-y-2">
+          <ReportLayoutToggle value={layout} onChange={setLayout} />
+          <ReportPercentToggle checked={percentToggle.checked} onCheckedChange={percentToggle.onCheckedChange} disabled={!!percentDisabledReason} disabledReason={percentDisabledReason} />
+        </div>
 
         <div className="flex items-end">
           <Button onClick={generateReport} disabled={loading || formatLoading} className="w-full">
@@ -810,10 +828,16 @@ export default function ReporteEstadoResultados() {
             </Alert>
           )}
 
+          {percentBase !== undefined && percentBaseInfo && (
+            <p className="text-xs text-muted-foreground text-center mb-3">
+              Base 100%: {percentBaseInfo.label} (Q {percentBaseInfo.amount.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+            </p>
+          )}
+
           {layout === 'stepped' ? (
-            <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
+            <SteppedReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} percentBase={percentBase} />
           ) : (
-            <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} />
+            <HierarchicalReportView lines={visibleLines} expanded={expanded} toggleExpand={toggleExpand} onAccountClick={handleAccountClick} percentBase={percentBase} />
           )}
 
           {/* CDV Breakdown Section — official, posted closing */}
