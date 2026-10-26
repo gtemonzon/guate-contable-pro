@@ -26,6 +26,7 @@ export const TAX_CATEGORIES = [
   { code: "ELECTRICITY_TAX", label: "Impuestos sobre Electricidad" },
   { code: "FISCAL_STAMP", label: "Timbres Fiscales" },
   { code: "OTHER", label: "Otros impuestos no acreditables" },
+  { code: "EXEMPT", label: "Compras exentas de IVA" },
 ] as const;
 
 export type TaxCategoryCode = (typeof TAX_CATEGORIES)[number]["code"];
