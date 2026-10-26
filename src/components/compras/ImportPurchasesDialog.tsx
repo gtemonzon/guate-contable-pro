@@ -46,7 +46,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 import {
-  finalizeImportedPurchase, stripImportInternals, type FinalizedImport, type SatVatDifference,
+  finalizeImportedPurchase, stripImportInternals, type FinalizedImport, type SatVatDifference, type ImportedPurchaseInternal,
 } from "@/utils/purchaseImportTax";
 
 // Configure PDF.js worker (bundled via Vite)
@@ -92,11 +92,20 @@ interface ValidPurchase {
 }
 
 /**
- * __sourceRow, __satVat y __satIdp son internos: se eliminan antes del insert.
+ * __sourceRow, __satVat, __satIdp y __satVatSource son internos: se eliminan antes del insert.
  * __satVat / __satIdp = IVA y petróleo tal como vienen en el archivo SAT (undefined
  * si la fuente no los trae de forma confiable).
  */
-type ValidPurchaseWithSourceRow = ValidPurchase & { __sourceRow: number; __satVat?: number; __satIdp?: number };
+type ValidPurchaseWithSourceRow = ValidPurchase & ImportedPurchaseInternal & { __sourceRow: number };
+
+function DerivedExemptBadge({ finalized }: { finalized?: FinalizedImport<ValidPurchaseWithSourceRow> }) {
+  if (finalized?.derivedExempt == null) return null;
+  return (
+    <Badge variant="outline" className="text-[9px] h-auto px-1 shrink-0 border-primary/40 text-primary" title="Exento deducido del IVA del archivo SAT">
+      {Math.abs(finalized.record.base_amount) <= 0.005 && Math.abs(finalized.record.vat_amount) <= 0.005 ? "Exento" : "Exento parcial"}
+    </Badge>
+  );
+}
 
 interface PurchaseDuplicateRecord {
   id: number;
@@ -357,10 +366,13 @@ export function ImportPurchasesDialog({
     ];
     const warnings = toImport.filter((f) => f.warning);
     const differences = toImport.map((f) => f.satDifference).filter(Boolean) as SatVatDifference[];
+    const derivedExemptInvoices = toImport.filter(f => f.derivedExempt !== null);
     return {
       validFinal,
       exemptedCount: toImport.filter((f) => f.exempted).length,
       warnings,
+      derivedExemptInvoices,
+      derivedExemptCount: derivedExemptInvoices.length,
       differences,
       differencesWithZeroSatVat: differences.filter((d) => Math.abs(d.satVat) <= 0.005).length,
     };
@@ -595,7 +607,7 @@ export function ImportPurchasesDialog({
         // Get document type first (needed for VAT calculation)
         const tipoDoc = sanitizeCSVField(String(values[colIndices.tipo_documento] || "FACT"));
         
-        // Parse total and calculate VAT from it (ignore SAT's IVA column as it may be incorrect)
+        // El cálculo inicial usa el total; la revisión final separa líneas exentas con el IVA SAT.
         const total = parseNumber(values[colIndices.total]);
         
         // Check for IDP (Impuesto a Distribución de Petróleo) - fuel invoices
@@ -627,8 +639,7 @@ export function ImportPurchasesDialog({
         const vatAmount = mixed.vat;
         const baseAmount = mixed.base;
 
-        // IVA y petróleo tal como vienen en el archivo (no se usan para el cálculo:
-        // solo para la exención sin tipo Combustible y el control de diferencias).
+        // IVA y petróleo del archivo: exenciones, derivación de líneas exentas y diferencias.
         const rawSatVat = colIndices.iva !== undefined && colIndices.iva !== -1 ? values[colIndices.iva] : undefined;
         const satVat = rawSatVat !== undefined && rawSatVat !== null && String(rawSatVat).trim() !== ""
           ? parseNumber(rawSatVat)
@@ -697,6 +708,7 @@ export function ImportPurchasesDialog({
           exempt_amount: nonVatTotal > 0 ? nonVatTotal : 0,
           tax_category: nonVatCategory,
           __satVat: satVat,
+          ...(useSATFormat && satVat !== undefined ? { __satVatSource: "xls" as const } : {}),
           __satIdp: satIdp,
         });
       }
@@ -1594,6 +1606,7 @@ export function ImportPurchasesDialog({
                                 <span className="flex-1 truncate" title={record.supplier_name}>
                                   {record.supplier_name}
                                 </span>
+                                <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
                               </div>
                             );
                           })}
@@ -1716,6 +1729,47 @@ export function ImportPurchasesDialog({
                 </Collapsible>
               )}
 
+              {taxReview && taxReview.derivedExemptCount > 0 && (
+                <Collapsible>
+                  <div className="border border-primary/30 rounded-md overflow-hidden">
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full h-auto bg-primary/5 px-4 py-2 border-b flex items-center justify-between gap-2 rounded-none whitespace-normal">
+                        <span className="flex items-center gap-2 text-left text-sm font-medium">
+                          <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                          {taxReview.derivedExemptCount} factura(s) con líneas exentas: se separó la porción exenta deduciéndola del IVA del archivo SAT
+                        </span>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="max-h-[220px] overflow-auto">
+                        <Table>
+                          <TableHeader><TableRow>
+                            <TableHead>Serie-No.</TableHead><TableHead>Proveedor</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">IVA SAT</TableHead>
+                            <TableHead className="text-right">Exento derivado</TableHead>
+                            <TableHead className="text-right">IVA final</TableHead>
+                          </TableRow></TableHeader>
+                          <TableBody>
+                            {taxReview.derivedExemptInvoices.map((f, i) => (
+                              <TableRow key={i}>
+                                <TableCell className="font-mono text-xs">{f.record.invoice_series ? `${f.record.invoice_series}-` : ""}{f.record.invoice_number}</TableCell>
+                                <TableCell className="text-xs max-w-[200px] truncate" title={f.record.supplier_name}>{f.record.supplier_name}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(f.record.total_amount)}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(f.record.__satVat ?? 0)}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(f.derivedExempt ?? 0)}</TableCell>
+                                <TableCell className="text-xs text-right font-mono">Q{formatCurrency(f.record.vat_amount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              )}
+
               {taxReview && taxReview.differences.length > 0 && (
                 <Collapsible>
                   <div className="border rounded-lg overflow-hidden">
@@ -1805,6 +1859,7 @@ export function ImportPurchasesDialog({
                           <TableRow key={idx} className={overwriteDuplicates ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}>
                             <TableCell className="font-mono text-xs">
                               {dup.invoice_series ? `${dup.invoice_series}-` : ''}{dup.invoice_number}
+                              <DerivedExemptBadge finalized={finalizeRecord(dup)} />
                             </TableCell>
                             <TableCell className="font-mono text-xs">{dup.supplier_nit}</TableCell>
                             <TableCell className="text-xs max-w-[200px] truncate" title={dup.supplier_name}>
@@ -1945,6 +2000,7 @@ export function ImportPurchasesDialog({
                                     {operationTypes.find(o => o.id === record.operation_type_id)?.code || ""}
                                   </Badge>
                                 )}
+                                <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
                                 {taxReview?.validFinal[idx]?.exempted && (
                                   <Badge variant="outline" className="text-[9px] h-3.5 px-1 shrink-0 border-emerald-500/50 text-emerald-700 dark:text-emerald-400" title="IVA 0, base = total, sin IDP">
                                     Exonerado

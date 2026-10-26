@@ -19,7 +19,7 @@ import { useEnterpriseConfig } from "@/hooks/useEnterpriseConfig";
 import { validateNIT } from "@/utils/nitValidation";
 import { PurchaseInvoiceList } from "@/components/compras/PurchaseInvoiceList";
 import type { PurchaseEntry } from "@/components/compras/PurchaseCard";
-import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
+import { calculateMixedTax, persistedTaxCategory } from "@/utils/purchaseTaxCalculation";
 import { resolveExemption } from "@/utils/taxExemption";
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 
@@ -595,6 +595,8 @@ export default function LinkedPurchasesModal({
         net_amount: p.base_amount,
         base_amount: p.base_amount,
         vat_amount: p.vat_amount,
+        exempt_amount: p.exempt_amount || 0,
+        tax_category: persistedTaxCategory(p.tax_category),
         operation_type_id: p.operation_type_id || null,
         expense_account_id: p.expense_account_id || null,
         bank_account_id: bankAccountId || null,

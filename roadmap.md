@@ -1,4 +1,5 @@
 # Monitoring corrections
+- [x] Purchases SAT CSV/XLS: derive exempt lines from file VAT, add category and review summary; audit consumers; 55 regressions pass and automatic build OK. Database constraint excludes EXEMPT, so write boundaries preserve amounts and persist OTHER; declarations keep existing document/operation grouping.
 - [x] Inventory: negative warnings, sorting, filters, regularization and report styling; existing costing logic verified unchanged; 10 unit tests pass, scoped lint clean, automatic build OK.
 - [ ] Verify negative inventory movement end-to-end with real data: the authenticated account's selected enterprise has inventory disabled and no products; the single visual check found no runtime errors but could not exercise a movement.
 - [ ] Record already-applied inventory SQL: direct writes to managed migrations are refused; applying it is prohibited by the user.

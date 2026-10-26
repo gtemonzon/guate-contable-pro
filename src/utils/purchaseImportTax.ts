@@ -8,10 +8,10 @@
  *     SAT trae IVA 0 y petróleo 0 en un documento que normalmente genera IVA, no se
  *     recalcula (IVA 0, base = total) y el registro queda con advertencia.
  *  d) Control general (solo advertencia): IVA del archivo SAT vs. IVA calculado.
- *
- * Fuera de las ventanas de exención el cálculo no cambia.
+ *  e) CSV/XLS SAT: separa líneas exentas deduciéndolas del IVA del archivo,
+ *     después de b/c y antes del control de diferencias.
  */
-import { NO_VAT_DOCUMENT_TYPES, calculateMixedTax } from "./purchaseTaxCalculation";
+import { NO_VAT_DOCUMENT_TYPES, calculateMixedTax, persistedTaxCategory } from "./purchaseTaxCalculation";
 import {
   resolveExemption, findActiveExemptionWindow, exemptionBadgeLabel, type TaxExemptionRule,
 } from "./taxExemption";
@@ -20,6 +20,8 @@ import {
 export interface ImportedPurchaseInternal {
   /** IVA leído del archivo SAT; undefined si la fuente no trae IVA confiable. */
   __satVat?: number;
+  /** Solo CSV/XLS en formato SAT permite deducir líneas exentas del IVA. */
+  __satVatSource?: "xls";
   /** Petróleo (IDP) leído del archivo SAT; undefined si la fuente no trae la columna. */
   __satIdp?: number;
 }
@@ -57,6 +59,8 @@ export interface FinalizedImport<T> {
   warning: string | null;
   /** Diferencia del caso d (|IVA SAT − IVA final| > 0.05). */
   satDifference: SatVatDifference | null;
+  /** Porción exenta deducida del IVA del CSV/XLS SAT (caso e). */
+  derivedExempt: number | null;
 }
 
 const SAT_VAT_TOLERANCE = 0.05;
@@ -76,6 +80,7 @@ export function finalizeImportedPurchase<T extends ImportedPurchaseLike>(
   const exemption = resolveExemption(ctx.rules, opCode, record.invoice_date);
   let next: T = { ...record, vat_rate_applied: null, exemption_rule_code: null };
   let warning: string | null = null;
+  let derivedExempt: number | null = null;
 
   if (exemption) {
     // b) Exención: IVA 0, base = total − No afecto (IDP en 0 si la regla lo exonera).
@@ -119,6 +124,26 @@ export function finalizeImportedPurchase<T extends ImportedPurchaseLike>(
         legalReference: window.legal_reference, name: window.name,
       }).replace(/^Exonerado\s*/, "") || window.name;
       warning = `IVA 0 en el archivo SAT dentro de la vigencia del ${decree}: asigne tipo de operación Combustible si corresponde`;
+    } else if (generatesVat && record.__satVatSource === "xls" && record.__satVat !== undefined
+      && Number(next.vat_amount) - record.__satVat > SAT_VAT_TOLERANCE) {
+      // e) No afecta existente + líneas exentas deducidas del IVA SAT.
+      const total = Number(record.total_amount) || 0;
+      const currentExempt = Number(next.exempt_amount) || 0;
+      const remaining = Math.max(0, total - currentExempt);
+      const rounded = Math.round((remaining - record.__satVat * 1.12 / 0.12 + Number.EPSILON) * 100) / 100;
+      const derived = Math.min(remaining, Math.max(0, rounded));
+      if (derived > SAT_VAT_TOLERANCE) {
+        const taxCategory = record.tax_category ?? "EXEMPT";
+        const r = calculateMixedTax({
+          totalAmount: total,
+          exemptAmount: currentExempt + derived,
+          documentType: record.fel_document_type,
+          taxCategory,
+        });
+        derivedExempt = derived;
+        next = { ...next, base_amount: r.base, net_amount: r.base, vat_amount: r.vat,
+          exempt_amount: r.exempt, tax_category: taxCategory };
+      }
     }
   }
 
@@ -137,13 +162,14 @@ export function finalizeImportedPurchase<T extends ImportedPurchaseLike>(
     }
   }
 
-  return { record: next, exempted: !!exemption, warning, satDifference };
+  return { record: next, exempted: !!exemption, warning, satDifference, derivedExempt };
 }
 
-/** Quita los campos internos (__sourceRow, __satVat, __satIdp) antes del insert. */
-export function stripImportInternals<T extends ImportedPurchaseInternal & { __sourceRow?: number }>(
+/** Quita los campos internos del importador antes del insert. */
+export function stripImportInternals<T extends ImportedPurchaseInternal & { __sourceRow?: number; tax_category?: string | null }>(
   record: T,
-): Omit<T, "__sourceRow" | "__satVat" | "__satIdp"> {
-  const { __sourceRow: _row, __satVat: _vat, __satIdp: _idp, ...rest } = record;
+): Omit<T, "__sourceRow" | "__satVat" | "__satIdp" | "__satVatSource"> {
+  const { __sourceRow: _row, __satVat: _vat, __satIdp: _idp, __satVatSource: _source, ...rest } = record;
+  if (rest.tax_category === "EXEMPT") rest.tax_category = persistedTaxCategory(rest.tax_category);
   return rest;
 }

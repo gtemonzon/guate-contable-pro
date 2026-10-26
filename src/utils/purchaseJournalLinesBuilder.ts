@@ -43,6 +43,7 @@ export function resolveNonVatAccount(
     ELECTRICITY_TAX: mapping.account_non_vat_electricity_id,
     FISCAL_STAMP: mapping.account_non_vat_fiscal_stamp_id,
     OTHER: mapping.account_non_vat_other_id,
+    EXEMPT: mapping.account_non_vat_other_id,
   };
   const id = map[category];
   return id != null ? Number(id) : null;

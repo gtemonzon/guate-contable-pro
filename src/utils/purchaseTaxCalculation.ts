@@ -26,6 +26,7 @@ export const TAX_CATEGORIES = [
   { code: "ELECTRICITY_TAX", label: "Impuestos sobre Electricidad" },
   { code: "FISCAL_STAMP", label: "Timbres Fiscales" },
   { code: "OTHER", label: "Otros impuestos no acreditables" },
+  { code: "EXEMPT", label: "Compras exentas de IVA" },
 ] as const;
 
 export type TaxCategoryCode = (typeof TAX_CATEGORIES)[number]["code"];
@@ -165,6 +166,11 @@ export function calculateMixedTax(input: MixedTaxInput): MixedTaxResult {
 export function getTaxCategoryLabel(code: string | null | undefined): string {
   if (!code) return "—";
   return TAX_CATEGORIES.find((c) => c.code === code)?.label ?? code;
+}
+
+/** La restricción vigente solo admite OTHER: EXEMPT conserva su cálculo, no su código al guardar. */
+export function persistedTaxCategory(code: string | null | undefined): string | null {
+  return code === "EXEMPT" ? "OTHER" : (code ?? null);
 }
 
 /**
