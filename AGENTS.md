@@ -1,3 +1,4 @@
 # Project rules
 - Private document preview actions reauthorize through a per-request URL resolver; downloads use blobs so cross-origin storage links save correctly without extending signed URL lifetimes.
 - Voiding a saved draft without replacement atomically detaches its unusable reference and matching line/purchase references in the existing authorized RPC; the draft, links, voided document and audit trail remain intact.
+- Inventory catalog and current-balance sorting share the pure inventorySort utility; historical balances continue to use inventoryBalanceAsOf so UI ordering cannot alter valuation or exports.

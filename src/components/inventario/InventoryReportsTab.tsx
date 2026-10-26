@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { FileDown, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 import type { InventoryItem, InventoryMovement, InventoryWarehouse } from "./InventoryPage";
+import { cn } from "@/lib/utils";
 
 const VALUATION_METHOD = "Método de valuación: Promedio Ponderado";
 
@@ -113,6 +114,7 @@ export function InventoryReportsTab({
     () => Math.round((cutoffRows ?? []).reduce((s, r) => s + r.balance.value, 0) * 100) / 100,
     [cutoffRows]
   );
+  const cutoffNegativeCount = (cutoffRows ?? []).filter(r => r.balance.quantity < 0).length;
 
   const generateCutoff = async () => {
     if (!cutoffDate) return;
@@ -374,6 +376,12 @@ export function InventoryReportsTab({
 
           {cutoffRows && (
             <>
+              {cutoffNegativeCount > 0 && (
+                <Alert className="border-warning/50 bg-warning/10">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <AlertDescription>{cutoffNegativeCount} producto(s) con existencia negativa a la fecha de corte: regularícelos antes de presentar el reporte semestral de inventarios</AlertDescription>
+                </Alert>
+              )}
               <p className="text-sm text-muted-foreground">
                 Saldos al {formatDateGt(cutoffGeneratedFor)} · Valorización total {formatCurrency(cutoffTotal)}
               </p>
@@ -400,7 +408,7 @@ export function InventoryReportsTab({
                         <TableCell className="font-medium">{r.item.name}</TableCell>
                         <TableCell>{warehouseName(r.item.warehouse_id)}</TableCell>
                         <TableCell>{r.item.unit_of_measure}</TableCell>
-                        <TableCell className="text-right">{formatQty(r.balance.quantity)}</TableCell>
+                        <TableCell className={cn("text-right", r.balance.quantity < 0 && "text-destructive font-semibold")}>{formatQty(r.balance.quantity)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.balance.unitCost)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.balance.value)}</TableCell>
                       </TableRow>
@@ -482,7 +490,7 @@ export function InventoryReportsTab({
                       {r.isDecrease ? "-" : "+"}{formatQty(Number(r.movement.quantity))}
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(Number(r.movement.unit_cost))}</TableCell>
-                    <TableCell className="text-right">{formatQty(r.balance)}</TableCell>
+                    <TableCell className={cn("text-right", r.balance < 0 && "text-destructive font-semibold")}>{formatQty(r.balance)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -558,13 +566,13 @@ export function InventoryReportsTab({
                       <TableRow key={r.itemId} className={r.reconciles ? undefined : "bg-destructive/5"}>
                         <TableCell className="font-mono text-xs">{item?.sku ?? r.itemId}</TableCell>
                         <TableCell className="font-medium">{item?.name ?? "—"}</TableCell>
-                        <TableCell className="text-right">{formatQty(r.opening.quantity)}</TableCell>
+                        <TableCell className={cn("text-right", r.opening.quantity < 0 && "text-destructive font-semibold")}>{formatQty(r.opening.quantity)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.opening.value)}</TableCell>
                         <TableCell className="text-right">{formatQty(r.inQuantity)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.inValue)}</TableCell>
                         <TableCell className="text-right">{formatQty(r.outQuantity)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.outValue)}</TableCell>
-                        <TableCell className="text-right">{formatQty(r.closing.quantity)}</TableCell>
+                        <TableCell className={cn("text-right", r.closing.quantity < 0 && "text-destructive font-semibold")}>{formatQty(r.closing.quantity)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.closing.value)}</TableCell>
                       </TableRow>
                     );
