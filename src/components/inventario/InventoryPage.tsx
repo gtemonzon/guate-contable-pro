@@ -27,6 +27,8 @@ import { cn } from "@/lib/utils";
 import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse, Upload } from "lucide-react";
 import { ImportItemsWizard } from "./ImportItemsWizard";
 import { InventoryReportsTab } from "./InventoryReportsTab";
+import { sortInventoryItems, type InventorySortKey } from "@/utils/inventorySort";
+import { AlertTriangle, ListFilter, Wrench } from "lucide-react";
 
 
 
@@ -57,6 +59,36 @@ export interface InventoryItem {
 
 type MovementType = "entrada" | "salida" | "ajuste";
 type AdjustmentDirection = "positivo" | "negativo";
+
+interface MovementInitial {
+  itemId?: number;
+  type?: MovementType;
+  direction?: AdjustmentDirection;
+  quantity?: number;
+  reference?: string;
+  notes?: string;
+}
+
+function InventorySortSelect({ value, onChange, id }: {
+  value: InventorySortKey;
+  onChange: (key: InventorySortKey) => void;
+  id: string;
+}) {
+  return (
+    <div className="space-y-1 min-w-0">
+      <Label htmlFor={id}>Ordenar por</Label>
+      <Select value={value} onValueChange={(key) => onChange(key as InventorySortKey)}>
+        <SelectTrigger id={id} className="w-full sm:w-[240px]"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="code">Código (A–Z)</SelectItem>
+          <SelectItem value="name">Nombre (A–Z)</SelectItem>
+          <SelectItem value="quantity-asc">Existencia: menor a mayor</SelectItem>
+          <SelectItem value="quantity-desc">Existencia: mayor a menor</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export interface InventoryMovement {
   id: number;
@@ -350,19 +382,24 @@ toast({ title: warehouse ? "Bodega actualizada" : "Bodega creada" });
 // ---------- Movement dialog ----------
 
 function MovementDialog({
-  enterpriseId, items, onClose,
-}: { enterpriseId: number; items: InventoryItem[]; onClose: (saved: boolean) => void }) {
-  const [itemId, setItemId] = useState<string>("");
-  const [type, setType] = useState<MovementType>("entrada");
-  const [direction, setDirection] = useState<AdjustmentDirection>("positivo");
-  const [quantity, setQuantity] = useState("");
+  enterpriseId, items, onClose, initial,
+}: { enterpriseId: number; items: InventoryItem[]; onClose: (saved: boolean) => void; initial?: MovementInitial }) {
+  const [itemId, setItemId] = useState<string>(initial?.itemId === undefined ? "" : String(initial.itemId));
+  const [type, setType] = useState<MovementType>(initial?.type ?? "entrada");
+  const [direction, setDirection] = useState<AdjustmentDirection>(initial?.direction ?? "positivo");
+  const [quantity, setQuantity] = useState(initial?.quantity === undefined ? "" : String(initial.quantity));
   const [unitCost, setUnitCost] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
+  const [reference, setReference] = useState(initial?.reference ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
   const selected = items.find((i) => String(i.id) === itemId) || null;
+  const isDecrease = type === "salida" || (type === "ajuste" && direction === "negativo");
+  const projectedQuantity = selected
+    ? Math.round((Number(selected.current_quantity) - Number(quantity)) * 10000) / 10000
+    : 0;
+  const warnsNegative = selected && isDecrease && Number(quantity) > 0 && projectedQuantity < 0;
 
   const save = async () => {
     if (!selected) {
@@ -398,7 +435,15 @@ function MovementDialog({
       toast({ title: "No se pudo registrar el movimiento", description: errorMessage(error), variant: "destructive" });
       return;
     }
-    toast({ title: "Movimiento registrado" });
+    const { data: updatedItem } = await supabase.from("tab_inventory_items")
+      .select("current_quantity").eq("enterprise_id", enterpriseId).eq("id", selected.id).maybeSingle();
+    const resultingQuantity = updatedItem ? Number(updatedItem.current_quantity) : null;
+    toast({
+      title: "Movimiento registrado",
+      description: resultingQuantity !== null && resultingQuantity < 0
+        ? `El producto quedó con existencia negativa (−${formatQty(Math.abs(resultingQuantity))})`
+        : undefined,
+    });
     onClose(true);
   };
 
@@ -417,7 +462,7 @@ function MovementDialog({
             <Select value={itemId} onValueChange={setItemId}>
               <SelectTrigger><SelectValue placeholder="Selecciona un producto" /></SelectTrigger>
               <SelectContent>
-                {items.filter((i) => i.is_active).map((i) => (
+                {items.filter((i) => i.is_active || i.id === initial?.itemId).map((i) => (
                   <SelectItem key={i.id} value={String(i.id)}>
                     {i.sku} — {i.name}
                   </SelectItem>
@@ -484,6 +529,15 @@ function MovementDialog({
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           )}
+          {warnsNegative && (
+            <Alert className="border-warning/50 bg-warning/10">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <AlertDescription>
+                Esta salida dejará la existencia en −{formatQty(Math.abs(projectedQuantity))} {selected.unit_of_measure}
+                {" "}(disponible: {formatQty(Number(selected.current_quantity))}). Se permite: regularice el inventario cuando registre la compra o un ajuste.
+              </AlertDescription>
+            </Alert>
+          )}
           <div>
             <Label>Referencia (opcional)</Label>
             <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="No. de factura o documento" />
@@ -520,6 +574,10 @@ export default function InventoryPage() {
 
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [onlyNegative, setOnlyNegative] = useState(false);
+  const [catalogSort, setCatalogSort] = useState<InventorySortKey>("code");
+  const [balanceSort, setBalanceSort] = useState<InventorySortKey>("code");
+  const [movementInitial, setMovementInitial] = useState<MovementInitial>();
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [showItemDialog, setShowItemDialog] = useState(false);
   const [showMovementDialog, setShowMovementDialog] = useState(false);
@@ -645,16 +703,26 @@ return () => { cancelled = true; };
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((i) => {
+    return sortInventoryItems(items.filter((i) => {
       if (!showInactive && !i.is_active) return false;
+      if (onlyNegative && Number(i.current_quantity) >= 0) return false;
       if (!q) return true;
       return (
         i.sku.toLowerCase().includes(q) ||
         i.name.toLowerCase().includes(q) ||
         (i.category || "").toLowerCase().includes(q)
       );
-    });
-  }, [items, search, showInactive]);
+    }), catalogSort);
+  }, [items, search, showInactive, onlyNegative, catalogSort]);
+
+  const negativeItems = useMemo(() => items.filter(i => Number(i.current_quantity) < 0), [items]);
+  const negativeValue = useMemo(() => negativeItems.reduce((sum, i) =>
+    sum + Math.round(Number(i.current_quantity) * Number(i.unit_cost) * 100) / 100, 0), [negativeItems]);
+  const viewNegatives = () => {
+    setOnlyNegative(true);
+    setCatalogSort("quantity-asc");
+    setShowInactive(true);
+  };
 
   // Kardex: saldo acumulado por producto en orden cronológico
   const kardexRows = useMemo(() => {
@@ -683,6 +751,15 @@ return () => { cancelled = true; };
     const total = list.reduce((s, r) => s + r.value, 0);
     return { list, total: Math.round(total * 100) / 100 };
   }, [items]);
+
+  const sortedBalances = useMemo(() => {
+    const rowsById = new Map(balances.list.map(row => [row.item.id, row]));
+    return sortInventoryItems(balances.list.map(row => row.item), balanceSort)
+      .flatMap(item => {
+        const row = rowsById.get(item.id);
+        return row ? [row] : [];
+      });
+  }, [balances.list, balanceSort]);
 
   const exportBalancesPdf = () => {
     exportToPDF({
@@ -766,7 +843,7 @@ return () => { cancelled = true; };
             <Button
               variant="outline"
               size={isCompact ? "sm" : "default"}
-              onClick={() => setShowMovementDialog(true)}
+              onClick={() => { setMovementInitial(undefined); setShowMovementDialog(true); }}
               disabled={items.length === 0}
             >
               <Plus className="h-4 w-4 mr-1" /> Movimiento
@@ -798,9 +875,9 @@ return () => { cancelled = true; };
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList>
           <TabsTrigger value="bodegas">Bodegas</TabsTrigger>
-          <TabsTrigger value="catalogo">Catálogo de Productos</TabsTrigger>
+          <TabsTrigger value="catalogo">Catálogo de Productos{negativeItems.length > 0 && <Badge variant="destructive" className="ml-2">{negativeItems.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="kardex">Movimientos (Kardex)</TabsTrigger>
-          <TabsTrigger value="saldos">Saldos Actuales</TabsTrigger>
+          <TabsTrigger value="saldos">Saldos Actuales{negativeItems.length > 0 && <Badge variant="destructive" className="ml-2">{negativeItems.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="reportes">Reportes</TabsTrigger>
 
         </TabsList>
@@ -881,7 +958,8 @@ return () => { cancelled = true; };
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 flex-wrap">
               <CardTitle className="text-base">Productos ({filteredItems.length})</CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-end gap-2 min-w-0">
+                <InventorySortSelect id="catalog-sort" value={catalogSort} onChange={setCatalogSort} />
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -893,6 +971,9 @@ return () => { cancelled = true; };
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setShowInactive((v) => !v)}>
                   {showInactive ? "Ocultar inactivos" : "Ver inactivos"}
+                </Button>
+                <Button variant={onlyNegative ? "secondary" : "outline"} size="sm" aria-pressed={onlyNegative} onClick={() => setOnlyNegative(v => !v)}>
+                  <ListFilter className="h-4 w-4 mr-1" /> Solo existencia negativa ({negativeItems.length})
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setShowImportWizard(true)}>
                   <Upload className="h-4 w-4 mr-1" /> Importar desde Excel
@@ -907,6 +988,15 @@ return () => { cancelled = true; };
 
             </CardHeader>
             <CardContent>
+              {negativeItems.length > 0 && (
+                <Alert className="mb-3 border-warning/50 bg-warning/10">
+                  <AlertTriangle className="h-4 w-4 text-warning" />
+                  <AlertDescription className="flex flex-wrap items-center gap-2">
+                    <span>{negativeItems.length} producto(s) con existencia negativa. Ordena por existencia o usa el filtro para verlos. Regularice registrando la compra o un ajuste positivo.</span>
+                    <Button size="sm" variant="outline" onClick={viewNegatives}>Ver negativos</Button>
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -939,10 +1029,21 @@ return () => { cancelled = true; };
                         <TableCell>{warehouseName(i.warehouse_id)}</TableCell>
                         <TableCell>{i.unit_of_measure}</TableCell>
                         <TableCell>{i.category || "—"}</TableCell>
-                        <TableCell className="text-right">{formatQty(Number(i.current_quantity))}</TableCell>
+                        <TableCell className={cn("text-right", Number(i.current_quantity) < 0 && "text-destructive font-semibold")}>
+                          {formatQty(Number(i.current_quantity))}
+                          {Number(i.current_quantity) < 0 && <Badge variant="destructive" className="ml-2">Negativo</Badge>}
+                        </TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(i.unit_cost))}</TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(i.suggested_price))}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
+                          {Number(i.current_quantity) < 0 && (
+                            <Button variant="ghost" size="sm" title="Regularizar" aria-label={`Regularizar ${i.sku}`} onClick={() => {
+                              setMovementInitial({ itemId: i.id, type: "ajuste", direction: "positivo", quantity: Math.abs(Number(i.current_quantity)), reference: "Regularización", notes: "Regularización de existencia negativa" });
+                              setShowMovementDialog(true);
+                            }}>
+                              <Wrench className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" onClick={() => { setEditItem(i); setShowItemDialog(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -1035,7 +1136,7 @@ return () => { cancelled = true; };
                           </TableCell>
                           <TableCell className="text-right">{r.isDecrease ? "-" : "+"}{formatQty(Number(r.quantity))}</TableCell>
                           <TableCell className="text-right">{formatCurrency(Number(r.unit_cost))}</TableCell>
-                          <TableCell className="text-right font-medium">{formatQty(r.balance)}</TableCell>
+                          <TableCell className={cn("text-right font-medium", r.balance < 0 && "text-destructive font-semibold")}>{formatQty(r.balance)}</TableCell>
                           <TableCell>{r.reference || "—"}</TableCell>
                           <TableCell className="max-w-[220px] truncate">{r.notes || "—"}</TableCell>
                         </TableRow>
@@ -1051,10 +1152,14 @@ return () => { cancelled = true; };
         {/* --- Saldos --- */}
         <TabsContent value="saldos" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
-              <CardTitle className="text-base">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+              <div>
+                <CardTitle className="text-base">
                 Saldos actuales ({balances.list.length}) · Valorización {formatCurrency(balances.total)}
-              </CardTitle>
+                </CardTitle>
+                {negativeItems.length > 0 && <p className="text-sm text-destructive mt-1">Existencias negativas: {negativeItems.length} producto(s), valorización {formatCurrency(negativeValue)} (incluida en el total)</p>}
+              </div>
+              <InventorySortSelect id="balance-sort" value={balanceSort} onChange={setBalanceSort} />
               <Button variant="outline" size="sm" onClick={exportBalancesPdf} disabled={balances.list.length === 0}>
                 <FileDown className="h-4 w-4 mr-1" /> Exportar PDF
               </Button>
@@ -1077,13 +1182,16 @@ return () => { cancelled = true; };
                     {balances.list.length === 0 && (
                       <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Sin existencias.</TableCell></TableRow>
                     )}
-                    {balances.list.map((r) => (
+                    {sortedBalances.map((r) => (
                       <TableRow key={r.item.id}>
                         <TableCell className="font-mono text-xs">{r.item.sku}</TableCell>
                         <TableCell className="font-medium">{r.item.name}</TableCell>
                         <TableCell>{warehouseName(r.item.warehouse_id)}</TableCell>
                         <TableCell>{r.item.unit_of_measure}</TableCell>
-                        <TableCell className="text-right">{formatQty(Number(r.item.current_quantity))}</TableCell>
+                        <TableCell className={cn("text-right", Number(r.item.current_quantity) < 0 && "text-destructive font-semibold")}>
+                          {formatQty(Number(r.item.current_quantity))}
+                          {Number(r.item.current_quantity) < 0 && <Badge variant="destructive" className="ml-2">Negativo</Badge>}
+                        </TableCell>
                         <TableCell className="text-right">{formatCurrency(Number(r.item.unit_cost))}</TableCell>
                         <TableCell className="text-right">{formatCurrency(r.value)}</TableCell>
                       </TableRow>
@@ -1144,7 +1252,8 @@ return () => { cancelled = true; };
         <MovementDialog
           enterpriseId={selectedEnterprise.id}
           items={items}
-          onClose={(saved) => { setShowMovementDialog(false); if (saved) load(); }}
+          initial={movementInitial}
+          onClose={(saved) => { setShowMovementDialog(false); setMovementInitial(undefined); if (saved) load(); }}
         />
       )}
     </div>
