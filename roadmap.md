@@ -1,5 +1,6 @@
 # Monitoring corrections
-- [ ] Inventory: negative warnings, sorting, filters, regularization, report balances and tests.
+- [x] Inventory: negative warnings, sorting, filters, regularization and report styling; existing costing logic verified unchanged; 10 unit tests pass, scoped lint clean, automatic build OK.
+- [ ] Verify negative inventory movement end-to-end with real data: the authenticated account's selected enterprise has inventory disabled and no products; the single visual check found no runtime errors but could not exercise a movement.
 - [ ] Record already-applied inventory SQL: direct writes to managed migrations are refused; applying it is prohibited by the user.
 - [x] Verify and correct expired document preview actions without extending signed-link lifetime; real PDF download and new tab passed after 65 seconds.
 - [x] Verify and correct cheque voiding for drafts without replacement; deployed function detaches the reference and preserves draft/audit/VOID reservation.
