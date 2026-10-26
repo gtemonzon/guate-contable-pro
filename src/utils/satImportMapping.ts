@@ -76,6 +76,47 @@ export const SAT_PURCHASES_MAPPING: Record<string, string[]> = {
   petroleo: ["petroleo monto de este impuesto", "petroleo"],  // IDP - Impuesto a Distribución de Petróleo
 };
 
+/**
+ * Columnas de "otros impuestos" del reporte SAT de compras. Su monto es No afecto
+ * (se excluye de la base del IVA). Se usan solo encabezados completos normalizados
+ * para evitar coincidencias parciales ambiguas.
+ */
+export const SAT_OTHER_TAX_COLUMNS: Record<string, { names: string[]; category: string }> = {
+  petroleo: { names: ["petroleo monto de este impuesto"], category: "IDP" },
+  turismo_hospedaje: { names: ["turismo hospedaje monto de este impuesto"], category: "TOURISM_TAX" },
+  turismo_pasajes: { names: ["turismo pasajes monto de este impuesto"], category: "TOURISM_TAX" },
+  timbre_prensa: { names: ["timbre de prensa monto de este impuesto"], category: "FISCAL_STAMP" },
+  bomberos: { names: ["bomberos monto de este impuesto"], category: "OTHER" },
+  tasa_municipal: { names: ["tasa municipal monto de este impuesto"], category: "ELECTRICITY_TAX" },
+  bebidas_alcoholicas: { names: ["bebidas alcoholicas monto de este impuesto"], category: "OTHER" },
+  tabaco: { names: ["tabaco monto de este impuesto"], category: "OTHER" },
+  cemento: { names: ["cemento monto de este impuesto"], category: "OTHER" },
+  bebidas_no_alcoholicas: { names: ["bebidas no alcoholicas monto de este impuesto"], category: "OTHER" },
+  tarifa_portuaria: { names: ["tarifa portuaria monto de este impuesto"], category: "OTHER" },
+};
+
+/**
+ * Suma los montos (> 0) de otros impuestos y devuelve la categoría de mayor monto.
+ * `amounts` usa las claves de SAT_OTHER_TAX_COLUMNS.
+ */
+export function computeNonVatTaxes(amounts: Record<string, number>): { total: number; category: string | null } {
+  const byCategory = new Map<string, number>();
+  let total = 0;
+  for (const [key, raw] of Object.entries(amounts)) {
+    const amount = Number(raw) || 0;
+    if (amount <= 0) continue;
+    const category = SAT_OTHER_TAX_COLUMNS[key]?.category ?? "OTHER";
+    total += amount;
+    byCategory.set(category, (byCategory.get(category) ?? 0) + amount);
+  }
+  let category: string | null = null;
+  let max = 0;
+  for (const [cat, amt] of byCategory) {
+    if (amt > max) { max = amt; category = cat; }
+  }
+  return { total: Math.round(total * 10000) / 10000, category };
+}
+
 // SAT column mappings for sales (receptor data for SALES we're the emisor, so we need receptor)
 export const SAT_SALES_MAPPING: Record<string, string[]> = {
   fecha: ["fecha de emision", "fecha de emisión"],

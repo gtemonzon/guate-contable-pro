@@ -26,8 +26,10 @@ import {
   parseNumber,
   isSATFormat,
   isAnulado,
-  calculateVATFromTotal,
+  SAT_OTHER_TAX_COLUMNS,
+  computeNonVatTaxes,
 } from "@/utils/satImportMapping";
+import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -520,6 +522,12 @@ export function ImportPurchasesDialog({
           nit_receptor: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.nit_receptor),
           petroleo: findSATColumnIndex(normalizedHeaders, SAT_PURCHASES_MAPPING.petroleo),
         };
+        // Otros impuestos (No afecto). El petróleo conserva su columna existente.
+        for (const [key, def] of Object.entries(SAT_OTHER_TAX_COLUMNS)) {
+          if (key === "petroleo") continue;
+          const idx = findSATColumnIndex(normalizedHeaders, def.names);
+          colIndices[`othertax_${key}`] = idx !== -1 && normalizedHeaders[idx] ? idx : -1;
+        }
 
         // Validate enterprise NIT from file matches active enterprise
         if (enterpriseNit && colIndices.nit_receptor !== -1 && rows.length > 1) {
@@ -607,7 +615,17 @@ export function ImportPurchasesDialog({
 
         // Calculate VAT based on document type - pass IDP for fuel invoices
         // For fuel: IVA = (Total - IDP) / 1.12 * 12%
-        const { vatAmount, baseAmount } = calculateVATFromTotal(total, tipoDoc, 0.12, idpAmount);
+        // Otros impuestos (tasa municipal, turismo, bomberos, etc.) + petróleo = No afecto.
+        const otherTaxAmounts: Record<string, number> = { petroleo: idpAmount };
+        for (const key of Object.keys(SAT_OTHER_TAX_COLUMNS)) {
+          if (key === "petroleo") continue;
+          const idx = colIndices[`othertax_${key}`];
+          otherTaxAmounts[key] = idx !== undefined && idx !== -1 ? parseNumber(values[idx]) : 0;
+        }
+        const { total: nonVatTotal, category: nonVatCategory } = computeNonVatTaxes(otherTaxAmounts);
+        const mixed = calculateMixedTax({ totalAmount: total, exemptAmount: nonVatTotal, documentType: tipoDoc });
+        const vatAmount = mixed.vat;
+        const baseAmount = mixed.base;
 
         // IVA y petróleo tal como vienen en el archivo (no se usan para el cálculo:
         // solo para la exención sin tipo Combustible y el control de diferencias).
@@ -676,8 +694,8 @@ export function ImportPurchasesDialog({
           vat_amount: vatAmount,
           net_amount: baseAmount,
           total_amount: total,
-          exempt_amount: idpAmount > 0 ? idpAmount : 0,
-          tax_category: idpAmount > 0 ? 'IDP' : null,
+          exempt_amount: nonVatTotal > 0 ? nonVatTotal : 0,
+          tax_category: nonVatCategory,
           __satVat: satVat,
           __satIdp: satIdp,
         });
@@ -1269,6 +1287,7 @@ export function ImportPurchasesDialog({
                   <li><strong>Nombre completo del emisor:</strong> Nombre del proveedor</li>
                   <li><strong>Gran Total (Moneda Original):</strong> Monto total</li>
                   <li><strong>IVA (monto de este impuesto):</strong> Monto del IVA</li>
+                  <li><strong>Otros impuestos (Tasa municipal, turismo, bomberos, etc.):</strong> se tratan como No afecto y se excluyen de la base del IVA</li>
                   <li><strong>Marca de anulado:</strong> Se excluyen facturas anuladas (S/Si/No)</li>
                 </ul>
                 <p className="text-xs text-primary mt-2 font-medium">
