@@ -11,7 +11,7 @@
  *  e) CSV/XLS SAT: separa líneas exentas deduciéndolas del IVA del archivo,
  *     después de b/c y antes del control de diferencias.
  */
-import { NO_VAT_DOCUMENT_TYPES, calculateMixedTax } from "./purchaseTaxCalculation";
+import { NO_VAT_DOCUMENT_TYPES, calculateMixedTax, persistedTaxCategory } from "./purchaseTaxCalculation";
 import {
   resolveExemption, findActiveExemptionWindow, exemptionBadgeLabel, type TaxExemptionRule,
 } from "./taxExemption";
@@ -166,9 +166,10 @@ export function finalizeImportedPurchase<T extends ImportedPurchaseLike>(
 }
 
 /** Quita los campos internos del importador antes del insert. */
-export function stripImportInternals<T extends ImportedPurchaseInternal & { __sourceRow?: number }>(
+export function stripImportInternals<T extends ImportedPurchaseInternal & { __sourceRow?: number; tax_category?: string | null }>(
   record: T,
 ): Omit<T, "__sourceRow" | "__satVat" | "__satIdp" | "__satVatSource"> {
   const { __sourceRow: _row, __satVat: _vat, __satIdp: _idp, __satVatSource: _source, ...rest } = record;
+  if (rest.tax_category === "EXEMPT") rest.tax_category = persistedTaxCategory(rest.tax_category);
   return rest;
 }

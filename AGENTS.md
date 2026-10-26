@@ -3,3 +3,4 @@
 - Voiding a saved draft without replacement atomically detaches its unusable reference and matching line/purchase references in the existing authorized RPC; the draft, links, voided document and audit trail remain intact.
 - Inventory catalog and current-balance sorting share the pure inventorySort utility; historical balances continue to use inventoryBalanceAsOf so UI ordering cannot alter valuation or exports.
 - SAT purchase exemption derivation is centralized in finalizeImportedPurchase and gated by the stripped CSV/XLS source marker; EXEMPT uses the existing OTHER account mapping to preserve shared non-VAT accounting behavior.
+- Purchase write boundaries normalize EXEMPT through persistedTaxCategory to OTHER while the existing database category constraint excludes EXEMPT; derived amounts remain unchanged and no schema change is implied.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { finalizeImportedPurchase, stripImportInternals, type ImportedPurchaseLike } from "./purchaseImportTax";
-import { calculateMixedTax, getTaxCategoryLabel } from "./purchaseTaxCalculation";
+import { calculateMixedTax, getTaxCategoryLabel, persistedTaxCategory } from "./purchaseTaxCalculation";
 import { buildPurchaseLines, resolveNonVatAccount } from "./purchaseJournalLinesBuilder";
 import type { TaxExemptionRule } from "./taxExemption";
 
@@ -97,6 +97,14 @@ describe("finalizeImportedPurchase: líneas exentas CSV/XLS SAT", () => {
 });
 
 describe("EXEMPT como porción no afecta equivalente a OTHER", () => {
+  it("guarda OTHER sin modificar montos por la restricción vigente", () => {
+    const finalized = finalizeImportedPurchase(purchase(259.35, 6.8625), context);
+    const stored = stripImportInternals(finalized.record);
+    expect(finalized.record.tax_category).toBe("EXEMPT");
+    expect(stored).toMatchObject({ tax_category: "OTHER", exempt_amount: 195.30, vat_amount: 6.86, base_amount: 57.19 });
+    expect(persistedTaxCategory("IDP")).toBe("IDP");
+    expect(persistedTaxCategory("ELECTRICITY_TAX")).toBe("ELECTRICITY_TAX");
+  });
   it("muestra la etiqueta elegida", () => {
     expect(getTaxCategoryLabel("EXEMPT")).toBe("Compras exentas de IVA");
   });
