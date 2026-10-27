@@ -915,8 +915,17 @@ return () => { cancelled = true; };
                     {!loading && warehouses.length === 0 && (
                       <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Sin bodegas registradas.</TableCell></TableRow>
                     )}
-                    {warehouses.map((w) => (
-                      <TableRow key={w.id} className={w.is_active ? "" : "opacity-60"}>
+                    {warehouses.map((w) => {
+                      const rowProps = getClickableRowProps(
+                        () => { setEditWarehouse(w); setShowWarehouseDialog(true); },
+                        `Editar bodega ${w.name}`,
+                      );
+                      return (
+                      <TableRow
+                        key={w.id}
+                        {...rowProps}
+                        className={cn(w.is_active ? "" : "opacity-60", rowProps.className)}
+                      >
                         <TableCell className="font-mono text-xs">{w.code}</TableCell>
                         <TableCell className="font-medium">
                           {w.name}
@@ -925,10 +934,11 @@ return () => { cancelled = true; };
                         <TableCell className="max-w-[280px] truncate">{w.address || "—"}</TableCell>
                         <TableCell className="text-right">{itemCountByWarehouse.get(w.id) ?? 0}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                          <Button variant="ghost" size="sm" onClick={() => { setEditWarehouse(w); setShowWarehouseDialog(true); }}>
+                          <Button data-row-action variant="ghost" size="sm" onClick={() => { setEditWarehouse(w); setShowWarehouseDialog(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
+                            data-row-action
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleWarehouseActive(w)}
@@ -942,7 +952,8 @@ return () => { cancelled = true; };
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
