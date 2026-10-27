@@ -1,4 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { formatDMY, localTodayISO, validateOpeningDate } from "@/utils/inventoryOpeningDate";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -99,6 +102,7 @@ export function downloadTemplate(warehouses: InventoryWarehouse[]) {
     ["warehouse_code", "Sí", "Código de una bodega ACTIVA ya creada en la pestaña Bodegas."],
     ["initial_quantity", "No", "Existencia inicial. Numérico mayor o igual a 0. Vacío = 0."],
     ["initial_unit_cost", "Condicional", "Costo unitario inicial. Obligatorio solo si initial_quantity es mayor a 0."],
+    ["Fecha del saldo inicial", "—", "Fecha del saldo inicial: se indica en el asistente al importar (no va en el archivo); aplica a todas las filas con existencia inicial."],
     [""],
     ["IMPORTANTE: la primera hoja incluye una FILA DE EJEMPLO. Bórrala antes de importar."],
     [""],
@@ -134,9 +138,36 @@ export function ImportItemsWizard({
   const validRows = useMemo(() => rows.filter((r) => r.errors.length === 0), [rows]);
   const invalidCount = rows.length - validRows.length;
 
+  const today = useMemo(() => localTodayISO(), []);
+  const [openingDate, setOpeningDate] = useState<string>(today);
+  const [earliestMovementDate, setEarliestMovementDate] = useState<string | null>(null);
+  const openingCheck = useMemo(
+    () => validateOpeningDate(openingDate, today, earliestMovementDate),
+    [openingDate, today, earliestMovementDate],
+  );
+  const openingWarningAlert = openingCheck.warning ? (
+    <Alert className="border-amber-500/50 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-600">
+      <AlertTriangle className="h-4 w-4" />
+      <AlertDescription>{openingCheck.warning}</AlertDescription>
+    </Alert>
+  ) : null;
+
+  const loadEarliestMovement = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("tab_inventory_movements")
+      .select("movement_date")
+      .eq("enterprise_id", enterpriseId)
+      .order("movement_date", { ascending: true })
+      .limit(1);
+    if (!error) setEarliestMovementDate(data && data.length > 0 ? String(data[0].movement_date) : null);
+  }, [enterpriseId]);
+
+  useEffect(() => { void loadEarliestMovement(); }, [loadEarliestMovement]);
+
   const handleFile = useCallback(async (file: File) => {
     setParsing(true);
     setOutcome(null);
+    void loadEarliestMovement();
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: true });
@@ -246,7 +277,8 @@ export function ImportItemsWizard({
     try {
       const { data: userData } = await supabase.auth.getUser();
       const createdBy = userData.user?.id ?? null;
-      const today = new Date().toISOString().slice(0, 10);
+      if (openingCheck.error) return;
+      const movementDate = openingDate;
 
       const payload = validRows.map((r) => ({
         enterprise_id: enterpriseId,
@@ -391,6 +423,15 @@ export function ImportItemsWizard({
                 </div>
               )}
             </div>
+            <div className="space-y-1 max-w-sm">
+              <Label htmlFor="opening-date">Fecha del saldo inicial *</Label>
+              <Input id="opening-date" type="date" required max={today} value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                Fecha del conteo o cierre al que corresponden las existencias iniciales. Debe ser anterior al primer movimiento del producto.
+              </p>
+              {openingCheck.error && <p className="text-xs text-destructive">{openingCheck.error}</p>}
+            </div>
+            {openingWarningAlert}
             {rows.length > 0 && (
               <div className="rounded-md border max-h-[45vh] overflow-y-auto min-h-0">
                 <Table>
@@ -445,9 +486,11 @@ export function ImportItemsWizard({
                     {invalidCount > 0
                       ? `${invalidCount} fila(s) con error serán omitidas.`
                       : "Todas las filas del archivo son válidas."}
-                    {" "}Las filas con existencia inicial generarán un movimiento de entrada con referencia “Importación inicial”.
+                    {" "}Las filas con existencia inicial generarán un movimiento de entrada con referencia «Importación inicial» y fecha {openingDate && !openingCheck.error ? formatDMY(openingDate) : "—"}.
                   </AlertDescription>
                 </Alert>
+                {openingWarningAlert}
+                {openingCheck.error && <p className="text-sm text-destructive">{openingCheck.error}</p>}
               </>
             )}
             {finished && outcome && (
@@ -516,12 +559,12 @@ export function ImportItemsWizard({
                 <Button onClick={() => setStep(2)} disabled={activeWarehouses.length === 0}>Continuar</Button>
               )}
               {step === 2 && (
-                <Button onClick={() => setStep(3)} disabled={validRows.length === 0}>
+                <Button onClick={() => setStep(3)} disabled={validRows.length === 0 || !!openingCheck.error}>
                   Continuar ({validRows.length} válidas)
                 </Button>
               )}
               {step === 3 && (
-                <Button onClick={runImport} disabled={importing || validRows.length === 0}>
+                <Button onClick={runImport} disabled={importing || validRows.length === 0 || !!openingCheck.error}>
                   {importing && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
                   Confirmar importación de {validRows.length} productos
                 </Button>
