@@ -27,7 +27,8 @@ function withSelection(selection: string, run: () => void) {
 describe("shouldIgnoreRowClick", () => {
   it("ignora el clic cuando hay texto seleccionado", () => {
     expect(shouldIgnoreRowClick(node(false), "texto seleccionado")).toBe(true);
-    expect(shouldIgnoreRowClick(node(false), "   ")).toBe(true);
+    // Una selección de solo espacios no cuenta como selección.
+    expect(shouldIgnoreRowClick(node(false), "   ")).toBe(false);
   });
 
   it("ignora el clic dentro de un control interactivo", () => {
