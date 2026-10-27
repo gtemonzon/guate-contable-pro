@@ -28,6 +28,7 @@ import { Package, Plus, Search, ShieldAlert, FileDown, Pencil, Power, Warehouse,
 import { ImportItemsWizard } from "./ImportItemsWizard";
 import { InventoryReportsTab } from "./InventoryReportsTab";
 import { sortInventoryItems, type InventorySortKey } from "@/utils/inventorySort";
+import { getClickableRowProps } from "@/utils/clickableRow";
 import { AlertTriangle, ListFilter, Wrench } from "lucide-react";
 
 
@@ -915,8 +916,17 @@ return () => { cancelled = true; };
                     {!loading && warehouses.length === 0 && (
                       <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Sin bodegas registradas.</TableCell></TableRow>
                     )}
-                    {warehouses.map((w) => (
-                      <TableRow key={w.id} className={w.is_active ? "" : "opacity-60"}>
+                    {warehouses.map((w) => {
+                      const rowProps = getClickableRowProps(
+                        () => { setEditWarehouse(w); setShowWarehouseDialog(true); },
+                        `Editar bodega ${w.name}`,
+                      );
+                      return (
+                      <TableRow
+                        key={w.id}
+                        {...rowProps}
+                        className={cn(w.is_active ? "" : "opacity-60", rowProps.className)}
+                      >
                         <TableCell className="font-mono text-xs">{w.code}</TableCell>
                         <TableCell className="font-medium">
                           {w.name}
@@ -925,10 +935,11 @@ return () => { cancelled = true; };
                         <TableCell className="max-w-[280px] truncate">{w.address || "—"}</TableCell>
                         <TableCell className="text-right">{itemCountByWarehouse.get(w.id) ?? 0}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                          <Button variant="ghost" size="sm" onClick={() => { setEditWarehouse(w); setShowWarehouseDialog(true); }}>
+                          <Button data-row-action variant="ghost" size="sm" onClick={() => { setEditWarehouse(w); setShowWarehouseDialog(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
+                            data-row-action
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleWarehouseActive(w)}
@@ -942,7 +953,8 @@ return () => { cancelled = true; };
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -1019,8 +1031,17 @@ return () => { cancelled = true; };
                     {!loading && filteredItems.length === 0 && (
                       <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Sin productos registrados.</TableCell></TableRow>
                     )}
-                    {filteredItems.map((i) => (
-                      <TableRow key={i.id} className={i.is_active ? "" : "opacity-60"}>
+                    {filteredItems.map((i) => {
+                      const rowProps = getClickableRowProps(
+                        () => { setEditItem(i); setShowItemDialog(true); },
+                        `Editar producto ${i.name}`,
+                      );
+                      return (
+                      <TableRow
+                        key={i.id}
+                        {...rowProps}
+                        className={cn(i.is_active ? "" : "opacity-60", rowProps.className)}
+                      >
                         <TableCell className="font-mono text-xs">{i.sku}</TableCell>
                         <TableCell className="font-medium">
                           {i.name}
@@ -1037,17 +1058,18 @@ return () => { cancelled = true; };
                         <TableCell className="text-right">{formatCurrency(Number(i.suggested_price))}</TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           {Number(i.current_quantity) < 0 && (
-                            <Button variant="ghost" size="sm" title="Regularizar" aria-label={`Regularizar ${i.sku}`} onClick={() => {
+                            <Button data-row-action variant="ghost" size="sm" title="Regularizar" aria-label={`Regularizar ${i.sku}`} onClick={() => {
                               setMovementInitial({ itemId: i.id, type: "ajuste", direction: "positivo", quantity: Math.abs(Number(i.current_quantity)), reference: "Regularización", notes: "Regularización de existencia negativa" });
                               setShowMovementDialog(true);
                             }}>
                               <Wrench className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => { setEditItem(i); setShowItemDialog(true); }}>
+                          <Button data-row-action variant="ghost" size="sm" onClick={() => { setEditItem(i); setShowItemDialog(true); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
+                            data-row-action
                             variant="ghost"
                             size="sm"
                             onClick={() => toggleActive(i)}
@@ -1061,7 +1083,8 @@ return () => { cancelled = true; };
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
