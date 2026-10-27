@@ -1125,6 +1125,19 @@ return () => { cancelled = true; };
                   Limpiar
                 </Button>
               </div>
+              {(() => {
+                const fi = filterItemId === "all" ? null : items.find((i) => String(i.id) === filterItemId);
+                return fi ? (
+                  <div>
+                    <Badge variant="secondary" className="gap-1">
+                      Producto: {fi.sku} — {fi.name}
+                      <button type="button" aria-label="Quitar filtro de producto" title="Quitar filtro de producto" className="ml-1 rounded-sm hover:text-destructive" onClick={() => setFilterItemId("all")}>
+                        ×
+                      </button>
+                    </Badge>
+                  </div>
+                ) : null;
+              })()}
             </CardHeader>
             <CardContent>
               <div className="rounded-md border overflow-x-auto">
@@ -1206,7 +1219,13 @@ return () => { cancelled = true; };
                       <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Sin existencias.</TableCell></TableRow>
                     )}
                     {sortedBalances.map((r) => (
-                      <TableRow key={r.item.id}>
+                      <TableRow
+                        key={r.item.id}
+                        {...getClickableRowProps(
+                          () => { setFilterItemId(String(r.item.id)); setDateFrom(""); setDateTo(""); setActiveTab("kardex"); },
+                          `Ver kardex de ${r.item.name}`,
+                        )}
+                      >
                         <TableCell className="font-mono text-xs">{r.item.sku}</TableCell>
                         <TableCell className="font-medium">{r.item.name}</TableCell>
                         <TableCell>{warehouseName(r.item.warehouse_id)}</TableCell>
