@@ -268,7 +268,7 @@ export function ImportItemsWizard({
     } finally {
       setParsing(false);
     }
-  }, [enterpriseId, activeWarehouses]);
+  }, [enterpriseId, activeWarehouses, loadEarliestMovement]);
 
   const runImport = async () => {
     if (validRows.length === 0) return;
