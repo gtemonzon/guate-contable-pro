@@ -1,14 +1,11 @@
 import { describe, it, expect } from "vitest";
-import {
-  getClickableRowProps,
-  shouldIgnoreRowClick,
-  type ClosestCandidate,
-} from "./clickableRow";
+import { getClickableRowProps, shouldIgnoreRowClick } from "./clickableRow";
 
 // Simula un nodo de DOM: `inside` indica si el ancestro buscado existe (p. ej. un botón).
-const node = (inside: boolean): ClosestCandidate => ({
-  closest: () => (inside ? { tagName: "BUTTON" } : null),
-});
+const node = (inside: boolean) =>
+  Object.assign(new EventTarget(), {
+    closest: () => (inside ? { tagName: "BUTTON" } : null),
+  });
 
 // En el entorno node de las pruebas no existe window: se simula la selección de texto.
 function withSelection(selection: string, run: () => void) {
