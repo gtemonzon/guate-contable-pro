@@ -41,9 +41,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [isTenantActive, setIsTenantActive] = useState(true);
   const [enabledModules, setEnabledModules] = useState<string[]>([]);
 
-  const fetchTenantData = async () => {
+  const fetchTenantData = async (silent = false) => {
     try {
-      setIsLoading(true);
+      // En refrescos silenciosos no se activa isLoading para no desmontar pantallas.
+      if (!silent) setIsLoading(true);
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -133,7 +134,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshTenants = async () => {
-    await fetchTenantData();
+    await fetchTenantData(true);
   };
 
   useEffect(() => {
