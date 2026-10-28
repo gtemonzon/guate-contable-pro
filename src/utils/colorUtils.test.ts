@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveTenantPaletteVars, DEFAULT_TENANT_PRIMARY, DEFAULT_TENANT_SECONDARY } from "./colorUtils";
+import { normalizeHex, deriveTenantPaletteVars, DEFAULT_TENANT_PRIMARY, DEFAULT_TENANT_SECONDARY } from "./colorUtils";
 
 describe("deriveTenantPaletteVars", () => {
   it("colores por defecto => {}", () => {
