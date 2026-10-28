@@ -2,17 +2,21 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Upload, Download, BookOpen, Copy } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Plus, Search, Upload, Download, BookOpen, Copy, X } from "lucide-react";
 import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
 import { CopyAccountsCatalogDialog } from "@/components/cuentas/CopyAccountsCatalogDialog";
 import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { filterCatalog, getRootChips } from "@/utils/accountCatalogView";
+
+const PILL_CLASS =
+  "rounded-full border px-3 h-8 data-[state=on]:bg-foreground data-[state=on]:text-background data-[state=on]:border-foreground";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
@@ -30,7 +34,8 @@ const Cuentas = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [rootId, setRootId] = useState<number | null>(null);
+  const [levelValue, setLevelValue] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
@@ -348,36 +353,11 @@ const Cuentas = () => {
     });
   };
 
-  const filteredAccounts = (() => {
-    const hasSearch = !!searchQuery.trim();
-    const hasTypeFilter = typeFilter !== "all";
-    if (!hasSearch && !hasTypeFilter) return accounts;
-
-    // Cuentas que coinciden directamente con los filtros aplicados
-    const matchingAccounts = accounts.filter((account) => {
-      const matchesSearch = !hasSearch
-        ? true
-        : account.account_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          account.account_name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesType = !hasTypeFilter ? true : account.account_type === typeFilter;
-      return matchesSearch && matchesType;
-    });
-
-    // Incluir todos los ancestros para mantener el árbol navegable
-    const accountsToShow = new Set<number>();
-    matchingAccounts.forEach((account) => {
-      accountsToShow.add(account.id);
-      let currentAccount = account;
-      while (currentAccount.parent_account_id) {
-        accountsToShow.add(currentAccount.parent_account_id);
-        const parent = accounts.find((acc) => acc.id === currentAccount.parent_account_id);
-        if (!parent) break;
-        currentAccount = parent;
-      }
-    });
-
-    return accounts.filter((account) => accountsToShow.has(account.id));
-  })();
+  const filtered = filterCatalog(accounts, { query: searchQuery, rootId });
+  const rootChips = getRootChips(accounts);
+  const maxLevel = Math.min(6, accounts.reduce((m, a) => Math.max(m, a.level), 0));
+  const levelOptions = Array.from({ length: maxLevel }, (_, i) => i + 1);
+  const autoExpandAll = searchQuery.trim() !== "" || rootId !== null;
 
   if (loading) {
     return (
@@ -402,15 +382,13 @@ const Cuentas = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-7rem)] lg:min-h-0">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Catálogo de Cuentas</h1>
-          <p className="text-muted-foreground">
-            Gestiona el plan de cuentas contable
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Catálogo de Cuentas</h1>
+          <p className="text-sm text-muted-foreground">Gestiona el plan de cuentas contable</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setCopyDialogOpen(true)}>
             <Copy className="mr-2 h-4 w-4" />
             Copiar Catálogo
@@ -430,43 +408,81 @@ const Cuentas = () => {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Buscar Cuentas</CardTitle>
-          <CardDescription>
-            Filtra por código, nombre o tipo de cuenta
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3">
+      {accounts.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar cuenta..."
+                placeholder="Buscar por código o nombre (ej. «sueldos», «6.2.1»)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 pr-9"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Tipo de cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value="activo">Activo</SelectItem>
-                <SelectItem value="pasivo">Pasivo</SelectItem>
-                <SelectItem value="capital">Patrimonio</SelectItem>
-                <SelectItem value="ingreso">Ingreso</SelectItem>
-                <SelectItem value="gasto">Gasto</SelectItem>
-                <SelectItem value="costo">Costo</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Ver hasta el nivel:</span>
+              <ToggleGroup
+                type="single"
+                value={levelValue}
+                onValueChange={(v) => v && setLevelValue(v)}
+                className="flex-wrap justify-start"
+              >
+                {levelOptions.map((n) => (
+                  <ToggleGroupItem key={n} value={String(n)} size="sm" className={PILL_CLASS}>
+                    Nivel {n}
+                  </ToggleGroupItem>
+                ))}
+                <ToggleGroupItem value="all" size="sm" className={PILL_CLASS}>
+                  Todos
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap gap-1.5">
+            {[{ id: null as number | null, code: "", label: "Todas" }, ...rootChips].map((chip) => {
+              const active = rootId === chip.id;
+              return (
+                <button
+                  key={chip.id ?? "all"}
+                  type="button"
+                  onClick={() => setRootId(chip.id)}
+                  aria-pressed={active}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+                    active ? "bg-foreground text-background border-foreground" : "bg-card hover:bg-muted"
+                  }`}
+                >
+                  {chip.code && (
+                    <span
+                      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
+                        active ? "bg-background text-foreground" : "bg-muted text-foreground"
+                      }`}
+                    >
+                      {chip.code}
+                    </span>
+                  )}
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {filtered.matchedDetail} de {filtered.totalDetail} cuentas de detalle
+          </p>
+        </div>
+      )}
 
-      {filteredAccounts.length === 0 ? (
+      {accounts.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
@@ -487,22 +503,22 @@ const Cuentas = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Estructura del Catálogo</CardTitle>
-            <CardDescription>
-              Vista jerárquica de las cuentas contables
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Card className="overflow-hidden min-h-[420px] max-h-[70dvh] h-[70dvh] lg:h-auto lg:max-h-none lg:flex-1 lg:min-h-0">
+          {filtered.visible.length === 0 ? (
+            <div className="flex h-full items-center justify-center p-8 text-sm text-muted-foreground">
+              No hay cuentas que coincidan con los filtros.
+            </div>
+          ) : (
             <AccountTreeView
-              accounts={filteredAccounts}
+              accounts={filtered.visible}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onQuickCreate={handleQuickCreate}
               onInlineUpdate={handleInlineUpdate}
+              levelLimit={levelValue === "all" ? null : Number(levelValue)}
+              autoExpandAll={autoExpandAll}
             />
-          </CardContent>
+          )}
         </Card>
       )}
 
