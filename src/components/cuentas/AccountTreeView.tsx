@@ -556,6 +556,10 @@ export function AccountTreeView({
   useEffect(() => {
     setExpanded(null);
   }, [levelLimit, autoExpandAll]);
+  // Con búsqueda o rubro activos, cada nuevo resultado vuelve a expandir todo.
+  useEffect(() => {
+    if (autoExpandAll) setExpanded(null);
+  }, [accounts, autoExpandAll]);
 
   const expandedSet = expanded ?? derivedExpanded;
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Plus, Search, Upload, Download, BookOpen, Copy, X } from "lucide-react";
+import { Plus, Search, Upload, BookOpen, Copy, X } from "lucide-react";
 import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
@@ -330,31 +330,11 @@ const Cuentas = () => {
     }
   };
 
-  const handleExportTemplate = () => {
-    const csvContent = "codigo_cuenta,nombre_cuenta,tipo_cuenta,cuenta_padre,nivel,permite_movimiento,requiere_centro_costo\n" +
-      "1,ACTIVO,activo,,1,false,false\n" +
-      "1.1,ACTIVO CORRIENTE,activo,1,2,false,false\n" +
-      "1.1.1,Caja y Bancos,activo,1.1,3,false,false\n" +
-      "1.1.1.01,Caja General,activo,1.1.1,4,true,false\n";
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_cuentas.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    toast({
-      title: "Plantilla descargada",
-      description: "Usa esta plantilla para importar tu catálogo de cuentas",
-    });
-  };
-
-  const filtered = filterCatalog(accounts, { query: searchQuery, rootId });
-  const rootChips = getRootChips(accounts);
+  const filtered = useMemo(
+    () => filterCatalog(accounts, { query: searchQuery, rootId }),
+    [accounts, searchQuery, rootId],
+  );
+  const rootChips = useMemo(() => getRootChips(accounts), [accounts]);
   const maxLevel = Math.min(6, accounts.reduce((m, a) => Math.max(m, a.level), 0));
   const levelOptions = Array.from({ length: maxLevel }, (_, i) => i + 1);
   const autoExpandAll = searchQuery.trim() !== "" || rootId !== null;
@@ -392,10 +372,6 @@ const Cuentas = () => {
           <Button variant="outline" onClick={() => setCopyDialogOpen(true)}>
             <Copy className="mr-2 h-4 w-4" />
             Copiar Catálogo
-          </Button>
-          <Button variant="outline" onClick={handleExportTemplate}>
-            <Download className="mr-2 h-4 w-4" />
-            Plantilla
           </Button>
           <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
             <Upload className="mr-2 h-4 w-4" />

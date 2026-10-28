@@ -56,7 +56,8 @@ export function filterCatalog<T extends CatalogAccount>(
 ): CatalogFilterResult<T> {
   const totalDetail = accounts.filter((a) => a.allows_movement === true).length;
   const q = normalizeText(query);
-  const scope = rootId != null ? accounts.filter((a) => subtreeIds(accounts, rootId).has(a.id)) : accounts;
+  const rootScope = rootId != null ? subtreeIds(accounts, rootId) : null;
+  const scope = rootScope ? accounts.filter((a) => rootScope.has(a.id)) : accounts;
 
   if (!q) {
     return {
@@ -68,7 +69,7 @@ export function filterCatalog<T extends CatalogAccount>(
 
   const byId = new Map<number, T>();
   for (const a of accounts) byId.set(a.id, a);
-  const scopeIds = new Set(scope.map((a) => a.id));
+  const scopeIds = rootScope ?? new Set(accounts.map((a) => a.id));
 
   const matches = scope.filter(
     (a) => normalizeText(a.account_code).includes(q) || normalizeText(a.account_name).includes(q),
