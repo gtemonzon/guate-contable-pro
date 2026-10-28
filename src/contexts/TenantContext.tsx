@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { DEFAULT_TENANT_PRIMARY, TENANT_PALETTE_VARS, deriveTenantPaletteVars, hexToHsl, hslToCssTriplet, normalizeHex } from "@/utils/colorUtils";
+import { DEFAULT_TENANT_PRIMARY, TENANT_PALETTE_VARS, TENANT_THEME_VARS, deriveTenantPaletteVars, deriveTenantThemeVars, hexToHsl, hslToCssTriplet, normalizeHex } from "@/utils/colorUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Tenant {
@@ -186,6 +186,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const vars = deriveTenantPaletteVars(currentTenant?.primary_color, currentTenant?.secondary_color);
     const clear = () => {
       for (const name of TENANT_PALETTE_VARS) root.style.removeProperty(name);
+    };
+    clear();
+    for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
+    return clear;
+  }, [currentTenant]);
+
+  // Tema global (primario/acento) derivado de los colores del tenant
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = deriveTenantThemeVars(currentTenant?.primary_color, currentTenant?.secondary_color);
+    const clear = () => {
+      for (const name of TENANT_THEME_VARS) root.style.removeProperty(name);
     };
     clear();
     for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
