@@ -207,7 +207,7 @@ export function TenantColorFields({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Estas acciones solo cambian los campos de color; se guardan con «Guardar Cambios». Restablece los colores por defecto del sistema con «Usar colores por defecto».
+        Restablece los colores por defecto del sistema. Ambas acciones solo cambian los campos; se guardan con «Guardar Cambios».
       </p>
 
       {palette && (

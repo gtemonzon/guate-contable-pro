@@ -59,3 +59,15 @@ describe("deriveTenantThemeVars", () => {
     expect(v["--tenant-accent-fg-dark"]).toBe("0 0% 82%");
   });
 });
+
+describe("normalizeHex (validación de colores del tenant)", () => {
+  it("expande #abc y acepta hex sin #", () => {
+    expect(normalizeHex("#abc")).toBe("#aabbcc");
+    expect(normalizeHex("1e40af")).toBe("#1e40af");
+  });
+  it("rechaza valores inválidos", () => {
+    expect(normalizeHex("#12345")).toBeNull();
+    expect(normalizeHex("verde")).toBeNull();
+    expect(normalizeHex("")).toBeNull();
+  });
+});
