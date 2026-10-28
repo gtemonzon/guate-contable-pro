@@ -20,9 +20,9 @@ All colors MUST be HSL.
     --popover-foreground: 240 5% 10%;
 
     /* Institutional Blue (#2563eb) */
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 217 91% 50%;
+    --primary: var(--tenant-primary, 217 91% 60%);
+    --primary-foreground: var(--tenant-primary-fg, 0 0% 100%);
+    --primary-hover: var(--tenant-primary-hover, 217 91% 50%);
 
     /* Subtle backgrounds */
     --secondary: 240 5% 33%;
@@ -31,8 +31,8 @@ All colors MUST be HSL.
     --muted: 240 4% 83%;
     --muted-foreground: 240 5% 10%;
 
-    --accent: 269 100% 98%;
-    --accent-foreground: 270 91% 65%;
+    --accent: var(--tenant-accent, 269 100% 98%);
+    --accent-foreground: var(--tenant-accent-fg, 270 91% 65%);
 
     /* Alert colors */
     --success: 142 76% 36%;
@@ -46,7 +46,7 @@ All colors MUST be HSL.
 
     --border: 240 4% 83%;
     --input: 240 4% 83%;
-    --ring: 217 91% 60%;
+    --ring: var(--tenant-primary, 217 91% 60%);
 
     --radius: 0.5rem;
 
@@ -75,7 +75,7 @@ All colors MUST be HSL.
     --sidebar-ring: 220 20% 95%;
 
     /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 91% 70%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--tenant-primary, 217 91% 60%)) 0%, hsl(var(--tenant-primary, 217 91% 70%) / var(--tenant-primary-gradient-alpha, 1)) 100%);
     --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(214 32% 98%) 100%);
 
     /* Shadows */
@@ -123,8 +123,8 @@ All colors MUST be HSL.
     --popover: 240 5% 26%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 255 91% 76%;
-    --primary-foreground: 261 72% 22%;
+    --primary: var(--tenant-primary-dark, 255 91% 76%);
+    --primary-foreground: var(--tenant-primary-fg-dark, 261 72% 22%);
 
     --secondary: 240 3% 46%;
     --secondary-foreground: 0 0% 98%;
@@ -132,15 +132,15 @@ All colors MUST be HSL.
     --muted: 240 3% 46%;
     --muted-foreground: 0 0% 98%;
 
-    --accent: 273 86% 20%;
-    --accent-foreground: 270 95% 75%;
+    --accent: var(--tenant-accent-dark, 273 86% 20%);
+    --accent-foreground: var(--tenant-accent-fg-dark, 270 95% 75%);
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 85% 97%;
 
     --border: 240 5% 33%;
     --input: 240 5% 33%;
-    --ring: 255 91% 76%;
+    --ring: var(--tenant-primary-dark, 255 91% 76%);
 
     --sidebar-background: var(--tenant-sidebar-bg, 220 60% 20%);
     --sidebar-foreground: 220 20% 95%;
