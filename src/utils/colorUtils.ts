@@ -127,3 +127,92 @@ export function deriveTenantPaletteVars(
   }
   return out;
 }
+
+/** Luminancia relativa WCAG 2.x (0–1). Hex inválido => 0. */
+export function relativeLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b);
+}
+
+/** Relación de contraste WCAG 2.x entre dos colores (1–21). */
+export function contrastRatio(hexA: string, hexB: string): number {
+  const a = relativeLuminance(hexA);
+  const b = relativeLuminance(hexB);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+const FG_WHITE = "0 0% 100%";
+const FG_DARK = "0 0% 7%";
+const FG_DARK_HEX = "#121212"; // hsl(0 0% 7%)
+
+/** Tripleta HSL del texto legible sobre el color dado (blanco o casi negro). */
+export function foregroundFor(hex: string): string {
+  return contrastRatio(hex, "#ffffff") >= contrastRatio(hex, FG_DARK_HEX) ? FG_WHITE : FG_DARK;
+}
+
+function hslToHex({ h, s, l }: HSL): string {
+  const sn = s / 100;
+  const ln = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sn * Math.min(ln, 1 - ln);
+  const f = (n: number) => ln - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return rgbToHex(f(0) * 255, f(8) * 255, f(4) * 255);
+}
+
+/** Variables del tema global que puede fijar deriveTenantThemeVars. */
+export const TENANT_THEME_VARS = [
+  "--tenant-primary",
+  "--tenant-primary-fg",
+  "--tenant-primary-hover",
+  "--tenant-primary-dark",
+  "--tenant-primary-fg-dark",
+  "--tenant-accent",
+  "--tenant-accent-fg",
+  "--tenant-accent-dark",
+  "--tenant-accent-fg-dark",
+] as const;
+
+function customHsl(hex: string | null | undefined, fallback: string): { hex: string; hsl: HSL } | null {
+  if (!hex) return null;
+  const normalized = normalizeHex(hex);
+  if (!normalized || normalized === normalizeHex(fallback)) return null;
+  const hsl = hexToHsl(normalized);
+  return hsl ? { hex: normalized, hsl } : null;
+}
+
+/**
+ * Variables del tema global (primario y acento) derivadas de los colores del tenant.
+ * Solo incluye colores válidos y distintos de su valor por defecto.
+ */
+export function deriveTenantThemeVars(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const p = customHsl(primary, DEFAULT_TENANT_PRIMARY);
+  const s = customHsl(secondary, DEFAULT_TENANT_SECONDARY);
+  if (p) {
+    const { hsl } = p;
+    out["--tenant-primary"] = hslToCssTriplet(hsl);
+    out["--tenant-primary-fg"] = foregroundFor(p.hex);
+    out["--tenant-primary-hover"] = hslToCssTriplet({ ...hsl, l: hsl.l < 20 ? hsl.l + 8 : hsl.l - 8 });
+    const dark: HSL = { h: hsl.h, s: Math.min(85, hsl.s), l: Math.max(62, Math.min(78, hsl.l)) };
+    out["--tenant-primary-dark"] = hslToCssTriplet(dark);
+    out["--tenant-primary-fg-dark"] = foregroundFor(hslToHex(dark));
+  }
+  const base = s ?? p;
+  if (base) {
+    const { h, s: sat } = base.hsl;
+    const sc = sat < 10 ? sat : Math.max(25, Math.min(70, sat));
+    out["--tenant-accent"] = `${h} ${sc}% 94%`;
+    out["--tenant-accent-fg"] = `${h} ${sc}% 28%`;
+    out["--tenant-accent-dark"] = `${h} ${sc}% 20%`;
+    out["--tenant-accent-fg-dark"] = `${h} ${sc}% 82%`;
+  }
+  return out;
+}

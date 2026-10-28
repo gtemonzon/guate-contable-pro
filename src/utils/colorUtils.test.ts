@@ -24,3 +24,38 @@ describe("deriveTenantPaletteVars", () => {
     expect(deriveTenantPaletteVars("#abc", null)["--tenant-h"]).toBe("210");
   });
 });
+
+import { deriveTenantThemeVars, contrastRatio } from "./colorUtils";
+
+describe("deriveTenantThemeVars", () => {
+  it("colores por defecto => {}", () => {
+    expect(deriveTenantThemeVars(DEFAULT_TENANT_PRIMARY, DEFAULT_TENANT_SECONDARY)).toEqual({});
+  });
+  it("verde oscuro: texto blanco y oscuro con L 62–78", () => {
+    const v = deriveTenantThemeVars("#33721d", DEFAULT_TENANT_SECONDARY);
+    expect(v["--tenant-primary-fg"]).toBe("0 0% 100%");
+    const l = Number(v["--tenant-primary-dark"].split(" ")[2].replace("%", ""));
+    expect(l).toBeGreaterThanOrEqual(62);
+    expect(l).toBeLessThanOrEqual(78);
+  });
+  it("primario claro => texto casi negro", () => {
+    expect(deriveTenantThemeVars("#8dde8c", null)["--tenant-primary-fg"]).toBe("0 0% 7%");
+  });
+  it("contraste", () => {
+    expect(Math.round(contrastRatio("#000000", "#ffffff"))).toBe(21);
+    expect(contrastRatio("#33721d", "#33721d")).toBe(1);
+  });
+  it("acento del secundario o del primario", () => {
+    expect(deriveTenantThemeVars("#33721d", "#ff0000")["--tenant-accent"]).toBe("0 70% 94%");
+    const onlyP = deriveTenantThemeVars("#33721d", DEFAULT_TENANT_SECONDARY);
+    expect(onlyP["--tenant-accent"].split(" ")[0]).toBe("104");
+  });
+  it("hex inválido => {}", () => {
+    expect(deriveTenantThemeVars("#zzzzzz", "nope")).toEqual({});
+  });
+  it("gris conserva saturación baja", () => {
+    const v = deriveTenantThemeVars("#808080", null);
+    expect(v["--tenant-accent"]).toBe("0 0% 94%");
+    expect(v["--tenant-accent-fg-dark"]).toBe("0 0% 82%");
+  });
+});
