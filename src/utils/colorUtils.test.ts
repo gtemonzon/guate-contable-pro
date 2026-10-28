@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveTenantPaletteVars, DEFAULT_TENANT_PRIMARY, DEFAULT_TENANT_SECONDARY } from "./colorUtils";
+import { normalizeHex, deriveTenantPaletteVars, DEFAULT_TENANT_PRIMARY, DEFAULT_TENANT_SECONDARY } from "./colorUtils";
 
 describe("deriveTenantPaletteVars", () => {
   it("colores por defecto => {}", () => {
@@ -57,5 +57,17 @@ describe("deriveTenantThemeVars", () => {
     const v = deriveTenantThemeVars("#808080", null);
     expect(v["--tenant-accent"]).toBe("0 0% 94%");
     expect(v["--tenant-accent-fg-dark"]).toBe("0 0% 82%");
+  });
+});
+
+describe("normalizeHex (validación de colores del tenant)", () => {
+  it("expande #abc y acepta hex sin #", () => {
+    expect(normalizeHex("#abc")).toBe("#aabbcc");
+    expect(normalizeHex("1e40af")).toBe("#1e40af");
+  });
+  it("rechaza valores inválidos", () => {
+    expect(normalizeHex("#12345")).toBeNull();
+    expect(normalizeHex("verde")).toBeNull();
+    expect(normalizeHex("")).toBeNull();
   });
 });

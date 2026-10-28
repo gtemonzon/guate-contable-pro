@@ -32,6 +32,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Upload, X, ImageIcon } from "lucide-react";
+import { TenantColorFields } from "./TenantColorFields";
+import { useTenant } from "@/contexts/TenantContext";
+import { normalizeHex } from "@/utils/colorUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Tenant {
@@ -47,14 +50,18 @@ interface Tenant {
   is_active: boolean;
 }
 
+const hexField = z
+  .string()
+  .refine((v) => normalizeHex(v) !== null, "Color inválido (ejemplo: #1e40af)");
+
 const formSchema = z.object({
   tenant_code: z.string().min(1, "Código es requerido").max(20, "Máximo 20 caracteres"),
   tenant_name: z.string().min(1, "Nombre es requerido"),
   subdomain: z.string().optional(),
   contact_email: z.string().email("Email inválido").optional().or(z.literal("")),
   contact_phone: z.string().optional(),
-  primary_color: z.string().default("#1e40af"),
-  secondary_color: z.string().default("#3b82f6"),
+  primary_color: hexField.default("#1e40af"),
+  secondary_color: hexField.default("#3b82f6"),
   is_active: z.boolean().default(true),
 });
 
@@ -83,6 +90,8 @@ export function TenantDialog({
     inventario: false,
     tax_avanzada: false,
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const { currentTenant, refreshTenants } = useTenant();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!tenant;
 
@@ -114,6 +123,7 @@ export function TenantDialog({
       });
       setLogoUrl(tenant.logo_url);
       setLogoPreview(tenant.logo_url);
+      setLogoFile(null);
       // Load modules for this tenant
       (async () => {
         const { data } = await supabase
@@ -139,6 +149,7 @@ export function TenantDialog({
       });
       setLogoUrl(null);
       setLogoPreview(null);
+      setLogoFile(null);
       setModules({ cxc: false, cxp: false, inventario: false, tax_avanzada: false });
     }
   }, [tenant, form]);
@@ -161,6 +172,7 @@ export function TenantDialog({
       return;
     }
 
+    setLogoFile(file);
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -194,6 +206,7 @@ export function TenantDialog({
         description: error instanceof Error ? error.message : String(error),
       });
       setLogoPreview(logoUrl); // Revert preview
+      setLogoFile(null);
     } finally {
       setUploading(false);
     }
@@ -202,6 +215,7 @@ export function TenantDialog({
   const handleRemoveLogo = () => {
     setLogoUrl(null);
     setLogoPreview(null);
+    setLogoFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -217,8 +231,8 @@ export function TenantDialog({
         subdomain: values.subdomain || null,
         contact_email: values.contact_email || null,
         contact_phone: values.contact_phone || null,
-        primary_color: values.primary_color,
-        secondary_color: values.secondary_color,
+        primary_color: normalizeHex(values.primary_color) ?? values.primary_color,
+        secondary_color: normalizeHex(values.secondary_color) ?? values.secondary_color,
         is_active: values.is_active,
         logo_url: logoUrl,
       };
@@ -259,6 +273,11 @@ export function TenantDialog({
           .from("tab_tenant_modules")
           .upsert(rows, { onConflict: "tenant_id,module_key" });
         if (modErr) console.error("Error saving tenant modules:", modErr);
+      }
+
+      // Aplica el tema al instante si se editó el tenant de la sesión.
+      if (isEditing && currentTenant?.id === tenant.id) {
+        await refreshTenants();
       }
 
       onClose();
@@ -427,42 +446,17 @@ export function TenantDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="primary_color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Color primario</FormLabel>
-                    <FormControl>
-                      <div className="flex gap-2">
-                        <Input type="color" {...field} className="w-12 h-10 p-1" />
-                        <Input {...field} className="flex-1" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="secondary_color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Color secundario</FormLabel>
-                    <FormControl>
-                      <div className="flex gap-2">
-                        <Input type="color" {...field} className="w-12 h-10 p-1" />
-                        <Input {...field} className="flex-1" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
+            <TenantColorFields
+              primary={form.watch("primary_color")}
+              secondary={form.watch("secondary_color")}
+              onChange={(p, sc) => {
+                form.setValue("primary_color", p, { shouldValidate: true, shouldDirty: true });
+                form.setValue("secondary_color", sc, { shouldValidate: true, shouldDirty: true });
+              }}
+              logoSource={{ file: logoFile, url: logoUrl }}
+              primaryError={form.formState.errors.primary_color?.message}
+              secondaryError={form.formState.errors.secondary_color?.message}
+            />
 
             {/* Módulos habilitados */}
             <div className="space-y-2 rounded-lg border p-4">
