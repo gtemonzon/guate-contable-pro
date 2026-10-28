@@ -15,6 +15,16 @@ export default {
   	},
   	extend: {
   		colors: {
+  			tenant: {
+  				'tint-1': 'hsl(var(--tenant-tint-1) / <alpha-value>)',
+  				'tint-2': 'hsl(var(--tenant-tint-2) / <alpha-value>)',
+  				'tint-3': 'hsl(var(--tenant-tint-3) / <alpha-value>)',
+  				'tint-4': 'hsl(var(--tenant-tint-4) / <alpha-value>)',
+  				'solid-1': 'hsl(var(--tenant-solid-1) / <alpha-value>)',
+  				'solid-1-foreground': 'hsl(var(--tenant-solid-1-foreground) / <alpha-value>)',
+  				'solid-2': 'hsl(var(--tenant-solid-2) / <alpha-value>)',
+  				'solid-2-foreground': 'hsl(var(--tenant-solid-2-foreground) / <alpha-value>)'
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

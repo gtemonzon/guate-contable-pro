@@ -50,6 +50,20 @@ All colors MUST be HSL.
 
     --radius: 0.5rem;
 
+    /* Paleta del tenant (H/S por defecto = #1e40af y #3b82f6) */
+    --tenant-h: 224;
+    --tenant-s: 64%;
+    --tenant-2-h: 217;
+    --tenant-2-s: 70%;
+    --tenant-tint-1: var(--tenant-h) var(--tenant-s) 88%;
+    --tenant-tint-2: var(--tenant-2-h) var(--tenant-2-s) 92%;
+    --tenant-tint-3: var(--tenant-2-h) var(--tenant-2-s) 95%;
+    --tenant-tint-4: var(--tenant-2-h) var(--tenant-2-s) 97.5%;
+    --tenant-solid-1: var(--tenant-h) var(--tenant-s) 22%;
+    --tenant-solid-1-foreground: 0 0% 100%;
+    --tenant-solid-2: var(--tenant-2-h) var(--tenant-2-s) 42%;
+    --tenant-solid-2-foreground: 0 0% 100%;
+
     /* Sidebar colors - Azul Marino Corporativo */
     --sidebar-background: var(--tenant-sidebar-bg, 220 60% 20%);
     --sidebar-foreground: 220 20% 95%;
@@ -91,6 +105,15 @@ All colors MUST be HSL.
   }
 
   .dark {
+
+    --tenant-tint-1: var(--tenant-h) var(--tenant-s) 24%;
+    --tenant-tint-2: var(--tenant-2-h) var(--tenant-2-s) 20%;
+    --tenant-tint-3: var(--tenant-2-h) var(--tenant-2-s) 17%;
+    --tenant-tint-4: var(--tenant-2-h) var(--tenant-2-s) 14%;
+    --tenant-solid-1: var(--tenant-h) var(--tenant-s) 88%;
+    --tenant-solid-1-foreground: var(--tenant-h) var(--tenant-s) 15%;
+    --tenant-solid-2: var(--tenant-2-h) var(--tenant-2-s) 55%;
+    --tenant-solid-2-foreground: 0 0% 100%;
     --background: 240 5% 10%;
     --foreground: 0 0% 98%;
 

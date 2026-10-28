@@ -11,6 +11,9 @@ export interface HSL {
 /** Color primario por defecto del sistema (no se considera personalización). */
 export const DEFAULT_TENANT_PRIMARY = "#1e40af";
 
+/** Color secundario por defecto del sistema. */
+export const DEFAULT_TENANT_SECONDARY = "#3b82f6";
+
 /** Normaliza un hex (#abc, #aabbcc) a "#aabbcc" en minúsculas, o null si es inválido. */
 export function normalizeHex(hex: string): string | null {
   const raw = hex.trim().replace(/^#/, "");
@@ -87,4 +90,40 @@ export function hexToCssHsl(hex: string, overrideLightness?: number): string | n
   if (!hsl) return null;
   const l = overrideLightness === undefined ? hsl.l : Math.max(0, Math.min(100, overrideLightness));
   return hslToCssTriplet({ ...hsl, l });
+}
+
+/** Variables de paleta del tenant que puede fijar deriveTenantPaletteVars. */
+export const TENANT_PALETTE_VARS = ["--tenant-h", "--tenant-s", "--tenant-2-h", "--tenant-2-s"] as const;
+
+function paletteHS(hex: string | null | undefined, fallback: string): { h: string; s: string } | null {
+  if (!hex) return null;
+  const normalized = normalizeHex(hex);
+  if (!normalized || normalized === normalizeHex(fallback)) return null;
+  const hsl = hexToHsl(normalized);
+  if (!hsl) return null;
+  // Grises (< 10) se conservan; el resto se limita a 25–70 para fondos sobrios.
+  const s = hsl.s < 10 ? hsl.s : Math.max(25, Math.min(70, hsl.s));
+  return { h: String(hsl.h), s: `${s}%` };
+}
+
+/**
+ * Variables CSS (matiz y saturación) de los colores personalizados del tenant.
+ * Solo incluye colores válidos y distintos de su valor por defecto.
+ */
+export function deriveTenantPaletteVars(
+  primary: string | null | undefined,
+  secondary: string | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const p = paletteHS(primary, DEFAULT_TENANT_PRIMARY);
+  if (p) {
+    out["--tenant-h"] = p.h;
+    out["--tenant-s"] = p.s;
+  }
+  const s = paletteHS(secondary, DEFAULT_TENANT_SECONDARY);
+  if (s) {
+    out["--tenant-2-h"] = s.h;
+    out["--tenant-2-s"] = s.s;
+  }
+  return out;
 }
