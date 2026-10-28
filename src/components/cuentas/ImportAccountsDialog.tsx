@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
+import { downloadAccountsTemplate } from "@/utils/accountsTemplate";
 import { cn } from "@/lib/utils";
 
 interface ImportAccountsDialogProps {
@@ -54,17 +55,50 @@ export function ImportAccountsDialog({
     setImporting(false);
   };
 
+  const handleDownloadTemplate = () => {
+    downloadAccountsTemplate();
+    toast({
+      title: "Plantilla descargada",
+      description: "Usa esta plantilla para importar tu catálogo de cuentas",
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Importar Catálogo de Cuentas</DialogTitle>
           <DialogDescription>
-            Carga un archivo CSV con las cuentas contables
+            Descarga la plantilla, llénala y súbela en formato CSV
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">1. Descarga la plantilla</h3>
+            <p className="text-sm text-muted-foreground">
+              Descarga la plantilla, llénala con tu catálogo y guárdala como CSV.
+            </p>
+            <Button variant="outline" onClick={handleDownloadTemplate}>
+              <Download className="mr-2 h-4 w-4" />
+              Descargar plantilla
+            </Button>
+          <div className="text-sm text-muted-foreground">
+            <p className="font-medium mb-2">Formato del archivo CSV:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>codigo_cuenta</li>
+              <li>nombre_cuenta</li>
+              <li>tipo_cuenta (activo, pasivo, capital, ingreso, gasto, costo)</li>
+              <li>cuenta_padre (código de la cuenta padre)</li>
+              <li>nivel (1-10)</li>
+              <li>permite_movimiento (true/false)</li>
+              <li>requiere_centro_costo (true/false)</li>
+            </ul>
+          </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">2. Sube tu archivo</h3>
           <div
             {...dragProps}
             className={cn(
@@ -91,19 +125,8 @@ export function ImportAccountsDialog({
               </Button>
             </label>
           </div>
+          </section>
 
-          <div className="text-sm text-muted-foreground">
-            <p className="font-medium mb-2">Formato del archivo CSV:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>codigo_cuenta</li>
-              <li>nombre_cuenta</li>
-              <li>tipo_cuenta (activo, pasivo, capital, ingreso, gasto, costo)</li>
-              <li>cuenta_padre (código de la cuenta padre)</li>
-              <li>nivel (1-10)</li>
-              <li>permite_movimiento (true/false)</li>
-              <li>requiere_centro_costo (true/false)</li>
-            </ul>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
