@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { DEFAULT_TENANT_PRIMARY, hexToHsl, hslToCssTriplet, normalizeHex } from "@/utils/colorUtils";
+import { DEFAULT_TENANT_PRIMARY, TENANT_PALETTE_VARS, deriveTenantPaletteVars, hexToHsl, hslToCssTriplet, normalizeHex } from "@/utils/colorUtils";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Tenant {
@@ -177,6 +177,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--tenant-sidebar-bg", hslToCssTriplet({ ...hsl, l: 22 }));
     root.style.setProperty("--tenant-sidebar-accent", hslToCssTriplet({ ...hsl, l: 32 }));
 
+    return clear;
+  }, [currentTenant]);
+
+  // Paleta del tenant (matiz/saturación) para tokens --tenant-tint-* / --tenant-solid-*
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = deriveTenantPaletteVars(currentTenant?.primary_color, currentTenant?.secondary_color);
+    const clear = () => {
+      for (const name of TENANT_PALETTE_VARS) root.style.removeProperty(name);
+    };
+    clear();
+    for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
     return clear;
   }, [currentTenant]);
 

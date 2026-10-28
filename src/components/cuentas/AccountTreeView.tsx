@@ -55,16 +55,16 @@ const ROW_GRID =
 const HOVER_REVEAL = "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity";
 
 function groupRowClass(level: number): string {
-  if (level <= 1) return "bg-slate-200/70 dark:bg-slate-800/60 border-l-slate-700 dark:border-l-slate-300";
-  if (level === 2) return "bg-teal-100/70 dark:bg-teal-900/30 border-l-teal-600";
-  if (level === 3) return "bg-teal-50/70 dark:bg-teal-900/20 border-l-teal-400";
-  return "bg-teal-50/40 dark:bg-teal-900/10 border-l-teal-200 dark:border-l-teal-800";
+  if (level <= 1) return "bg-tenant-tint-1 border-l-tenant-solid-1";
+  if (level === 2) return "bg-tenant-tint-2 border-l-tenant-solid-2";
+  if (level === 3) return "bg-tenant-tint-3 border-l-tenant-solid-2/60";
+  return "bg-tenant-tint-4 border-l-tenant-solid-2/30";
 }
 
 function levelBadgeClass(level: number): string {
-  if (level <= 1) return "bg-slate-900 text-white hover:bg-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-100";
-  if (level === 2) return "bg-teal-600 text-white hover:bg-teal-600";
-  return "bg-transparent border border-teal-600 text-teal-700 dark:text-teal-300 hover:bg-transparent";
+  if (level <= 1) return "bg-tenant-solid-1 text-tenant-solid-1-foreground hover:bg-tenant-solid-1";
+  if (level === 2) return "bg-tenant-solid-2 text-tenant-solid-2-foreground hover:bg-tenant-solid-2";
+  return "bg-transparent border border-tenant-solid-2 text-tenant-solid-2 hover:bg-transparent";
 }
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {

@@ -16,7 +16,7 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 import { filterCatalog, getRootChips } from "@/utils/accountCatalogView";
 
 const PILL_CLASS =
-  "rounded-full border px-3 h-8 data-[state=on]:bg-foreground data-[state=on]:text-background data-[state=on]:border-foreground";
+  "rounded-full border px-3 h-8 data-[state=on]:bg-tenant-solid-1 data-[state=on]:text-tenant-solid-1-foreground data-[state=on]:border-tenant-solid-1";
 
 type Account = Database['public']['Tables']['tab_accounts']['Row'];
 
@@ -459,13 +459,13 @@ const Cuentas = () => {
                   onClick={() => setRootId(chip.id)}
                   aria-pressed={active}
                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
-                    active ? "bg-foreground text-background border-foreground" : "bg-card hover:bg-muted"
+                    active ? "bg-tenant-solid-1 text-tenant-solid-1-foreground border-tenant-solid-1" : "bg-card hover:bg-muted"
                   }`}
                 >
                   {chip.code && (
                     <span
                       className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
-                        active ? "bg-background text-foreground" : "bg-muted text-foreground"
+                        active ? "bg-tenant-solid-1-foreground text-tenant-solid-1" : "bg-muted text-foreground"
                       }`}
                     >
                       {chip.code}
