@@ -31,6 +31,7 @@ import {
 } from "@/utils/declarationCalculations";
 import type { TaxFormType } from "@/hooks/useDeclaracionCalculo";
 import * as pdfjsLib from "pdfjs-dist";
+import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 // Configure pdf.js worker (bundled via Vite)
@@ -422,7 +423,8 @@ export default function TaxFormDialog({
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
       const pageText = textContent.items
-        .map((item: any) => item.str)
+        // Los TextMarkedContent no traen str (quedan undefined, igual que antes).
+        .map((item) => (item as TextItem).str)
         .join(" ");
       fullText += pageText + "\n";
     }

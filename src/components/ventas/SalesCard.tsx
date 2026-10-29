@@ -61,7 +61,7 @@ interface SalesCardProps {
   showSmallTaxpayerTax?: boolean;
   /** Configured Pequeño Contribuyente rate (e.g. 5 for 5%) */
   smallTaxpayerRate?: number;
-  onUpdate: (rowId: string, field: keyof SaleEntry, value: any) => void;
+  onUpdate: (rowId: string, field: keyof SaleEntry, value: SaleEntry[keyof SaleEntry]) => void;
   /** Guarda la fila; false = no se guardó (la tarjeta no se cierra). */
   onSave: (rowId: string, opts?: LedgerSaveOptions) => LedgerSaveResult | Promise<LedgerSaveResult>;
   onDelete: (rowId: string) => void;
@@ -145,7 +145,7 @@ export const SalesCard = forwardRef<SalesCardRef, SalesCardProps>(({
   }));
 
 
-  const handleFieldChange = (field: keyof SaleEntry, value: any) => {
+  const handleFieldChange = (field: keyof SaleEntry, value: SaleEntry[keyof SaleEntry]) => {
     markChanged();
     setTouchedFields(prev => new Set(prev).add(field));
     onUpdate(rowId, field, value);

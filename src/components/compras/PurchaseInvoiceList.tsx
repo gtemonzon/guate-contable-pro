@@ -15,7 +15,7 @@ interface PurchaseInvoiceListProps {
   bankAccounts: { id: number; account_code: string; account_name: string }[];
   editingIndex: number | null;
   onEditingIndexChange: (index: number | null) => void;
-  onUpdate: (index: number, field: keyof PurchaseEntry, value: any) => void;
+  onUpdate: (index: number, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => void;
   onSave: (index: number) => boolean | void | Promise<boolean | void>;
   onDelete: (index: number) => void;
   onAdd: () => void;

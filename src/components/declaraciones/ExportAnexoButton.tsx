@@ -18,7 +18,7 @@ const MONTHS = [
 
 export function ExportAnexoButton({ type, data, month, year, enterpriseName }: ExportAnexoButtonProps) {
   const handleExport = () => {
-    let worksheetData: Record<string, any>[];
+    let worksheetData: Record<string, string | number>[];
     let filename: string;
 
     if (type === 'compras') {
