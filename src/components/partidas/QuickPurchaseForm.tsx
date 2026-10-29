@@ -20,7 +20,6 @@ import { calculatePurchaseAccounting, TAX_CATEGORIES } from "@/utils/purchaseAcc
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 import { resolveExemption, exemptionBadgeLabel, exemptionTooltip } from "@/utils/taxExemption";
 import { Badge } from "@/components/ui/badge";
-import { persistedTaxCategory } from "@/utils/purchaseTaxCalculation";
 
 function extractErrorMessage(err: unknown): string {
   if (!err) return "Error desconocido";
@@ -436,7 +435,7 @@ export function QuickPurchaseForm({
           net_amount: baseFunctional,
           vat_amount: vatFunctional,
           exempt_amount: Math.round((effectiveExempt || 0) * r * 100) / 100,
-          tax_category: (effectiveExempt || 0) > 0 ? persistedTaxCategory(accounting.taxCategory ?? (isFuelOperation ? 'IDP' : 'OTHER')) : null,
+          tax_category: (effectiveExempt || 0) > 0 ? (accounting.taxCategory ?? (isFuelOperation ? 'IDP' : 'OTHER')) : null,
           // Sellos de exención (el trigger trg_purchase_apply_tax_exemption los verifica).
           vat_rate_applied: exemption ? exemption.vatRate : null,
           exemption_rule_code: exemption ? exemption.code : null,
