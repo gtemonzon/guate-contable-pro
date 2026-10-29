@@ -5347,6 +5347,10 @@ export type Database = {
         Args: { _enterprise_id: number; _user_id: string }
         Returns: boolean
       }
+      can_manage_tenant_logo: {
+        Args: { p_object_name: string }
+        Returns: boolean
+      }
       can_manage_user_enterprise_link: {
         Args: {
           actor_user_id: string
@@ -5829,6 +5833,42 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      update_tenant_identity: {
+        Args: {
+          p_contact_email: string
+          p_contact_phone: string
+          p_logo_url: string
+          p_pdf_font_family: string
+          p_pdf_font_size: number
+          p_primary_color: string
+          p_secondary_color: string
+          p_tenant_id: number
+          p_tenant_name: string
+        }
+        Returns: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string | null
+          id: number
+          is_active: boolean | null
+          logo_url: string | null
+          pdf_font_family: string
+          pdf_font_size: number
+          plan_expires_at: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          subdomain: string | null
+          tenant_code: string
+          tenant_name: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tab_tenants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       user_is_linked_to_enterprise: {
         Args: { _enterprise_id: number; _user_id: string }
