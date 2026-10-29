@@ -160,9 +160,9 @@ export function PurchaseInvoiceWizard({
   });
 
   // ── Forms per step ───────────────────────────────────────────────────────
-  const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) });
-  const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
-  const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+  const form1 = useForm<z.input<typeof step1Schema>, unknown, Step1Data>({ resolver: zodResolver(step1Schema) });
+  const form2 = useForm<z.input<typeof step2Schema>, unknown, Step2Data>({ resolver: zodResolver(step2Schema) });
+  const form3 = useForm<z.input<typeof step3Schema>, unknown, Step3Data>({ resolver: zodResolver(step3Schema) });
 
   const handleCurrencyChange = (code: string) => {
     setCurrencyCode(code);

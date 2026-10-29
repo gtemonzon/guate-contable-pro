@@ -63,7 +63,7 @@ export function CustomReminderDialog({ enterpriseId, onSuccess, trigger }: Custo
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof formSchema>, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',

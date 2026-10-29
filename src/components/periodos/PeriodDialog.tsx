@@ -56,7 +56,7 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
   const [endMonth, setEndMonth] = useState<Date>(new Date());
   const isEditing = !!period;
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<z.input<typeof formSchema>, unknown, z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       start_date: undefined,
