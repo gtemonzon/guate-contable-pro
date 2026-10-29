@@ -58,14 +58,14 @@ const step1Schema = z.object({
 });
 
 const step2Schema = z.object({
-  net_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).positive("El monto debe ser mayor a 0"),
-  vat_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).min(0),
-  total_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).positive(),
+  net_amount: z.number({ error: "Ingrese un monto válido" }).positive("El monto debe ser mayor a 0"),
+  vat_amount: z.number({ error: "Ingrese un monto válido" }).min(0),
+  total_amount: z.number({ error: "Ingrese un monto válido" }).positive(),
   purchase_type: z.string().min(1, "Seleccione el tipo de compra"),
 });
 
 const step3Schema = z.object({
-  expense_account_id: z.number({ invalid_type_error: "Seleccione una cuenta" }).positive("Seleccione una cuenta de gasto"),
+  expense_account_id: z.number({ error: "Seleccione una cuenta" }).positive("Seleccione una cuenta de gasto"),
   notes: z.string().optional(),
 });
 

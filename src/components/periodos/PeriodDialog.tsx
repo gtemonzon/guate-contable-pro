@@ -31,10 +31,10 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 const formSchema = z.object({
   start_date: z.date({
-    required_error: "La fecha de inicio es requerida",
+    error: "La fecha de inicio es requerida",
   }),
   end_date: z.date({
-    required_error: "La fecha de fin es requerida",
+    error: "La fecha de fin es requerida",
   }),
   notes: z.string().optional(),
 }).refine((data) => data.end_date > data.start_date, {
