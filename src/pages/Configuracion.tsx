@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { OperationTypesManager } from "@/components/configuracion/OperationTypesManager";
@@ -13,7 +13,6 @@ import { PermissionsMatrix } from "@/components/configuracion/PermissionsMatrix"
 import { AlertConfigManager } from "@/components/configuracion/AlertConfigManager";
 import { TaxDueDateConfig } from "@/components/configuracion/TaxDueDateConfig";
 import { HolidaysManager } from "@/components/configuracion/HolidaysManager";
-import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
 import { BackupRestoreManager } from "@/components/configuracion/BackupRestoreManager";
 import { IntegrityValidationPanel } from "@/components/configuracion/IntegrityValidationPanel";
 import { SystemHealthCheck } from "@/components/configuracion/SystemHealthCheck";
@@ -43,6 +42,11 @@ type Category = {
 export default function Configuracion() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isSuperAdmin, hasModule } = useTenant();
+  const navigate = useNavigate();
+  const legacyTypography = searchParams.get("tab") === "pdf-typography";
+  useEffect(() => {
+    if (legacyTypography) navigate("/tenant-settings#tipografia", { replace: true });
+  }, [legacyTypography, navigate]);
 
   const categories: Category[] = useMemo(
     () => [
@@ -152,7 +156,6 @@ export default function Configuracion() {
         icon: SettingsIcon,
         tabs: [
           { value: "exchange-rates", label: "Tipos de Cambio", render: () => <ExchangeRatesManager /> },
-          { value: "pdf-typography", label: "Tipografía PDFs", render: () => <PdfTypographyManager /> },
           { value: "backup", label: "Respaldo", render: () => <BackupRestoreManager /> },
           { value: "integrity", label: "Integridad", render: () => <IntegrityValidationPanel /> },
           { value: "health", label: "Estado del Sistema", render: () => <SystemHealthCheck /> },
