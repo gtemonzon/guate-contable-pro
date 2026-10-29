@@ -4,7 +4,7 @@ import {
   Search, Home, Building2, Users, Settings, BookOpen, FileText, ShoppingCart, Receipt,
   Calculator, FileBarChart, HelpCircle, ChevronRight, ExternalLink, Lightbulb, AlertCircle,
   FileDown, Bell, Banknote, CalendarDays, ClipboardList, Building, Keyboard, Download,
-  MessageCircle, Package, Inbox, Wand2, Key, Wrench, Lock, HandCoins, Boxes,
+  MessageCircle, Package, Wand2, Key, Wrench, Lock, HandCoins, Boxes,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from "jspdf";
