@@ -190,15 +190,15 @@ export function PurchaseInvoiceWizard({
     if (currentStep === 1) {
       const valid = await form1.trigger();
       if (!valid) return;
-      setStep1Data(form1.getValues());
+      setStep1Data(step1Schema.parse(form1.getValues()));
     } else if (currentStep === 2) {
       const valid = await form2.trigger();
       if (!valid) return;
-      setStep2Data(form2.getValues());
+      setStep2Data(step2Schema.parse(form2.getValues()));
     } else if (currentStep === 3) {
       const valid = await form3.trigger();
       if (!valid) return;
-      setStep3Data(form3.getValues());
+      setStep3Data(step3Schema.parse(form3.getValues()));
     }
     setCurrentStep((s) => Math.min(s + 1, 4));
   };

@@ -167,7 +167,7 @@ export function BookAuthorizationDialog({ open, onOpenChange, enterpriseId, auth
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Folios autorizados</FormLabel>
-                  <FormControl><Input type="number" min={1} {...field} /></FormControl>
+                  <FormControl><Input type="number" min={1} {...field} value={field.value as number | string | undefined ?? ""} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
