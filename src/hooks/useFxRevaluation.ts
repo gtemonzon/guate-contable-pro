@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json, TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
 export interface MonetaryAccountBalance {
@@ -19,6 +20,17 @@ export interface MonetaryAccountBalance {
   revalued_functional_balance: number;
   /** Diferencia: positivo = ganancia, negativo = pérdida */
   delta: number;
+}
+
+/** Línea de partida de una cuenta monetaria, como la trae la consulta de buildPreview. */
+interface FxDetailRow {
+  account_id: number;
+  debit_amount: number | null;
+  credit_amount: number | null;
+  original_debit: number | null;
+  original_credit: number | null;
+  currency_code: string | null;
+  tab_journal_entries: { currency_code: string | null } | null;
 }
 
 export interface FxRevaluationPreview {
@@ -109,7 +121,7 @@ export function useFxRevaluation() {
       type Bucket = { fxBal: number; funcBal: number };
       const buckets = new Map<string, Bucket>();
 
-      for (const d of (details || []) as any[]) {
+      for (const d of (details || []) as unknown as FxDetailRow[]) {
         const headerCcy = d.tab_journal_entries?.currency_code || baseCurrency;
         const ccy = d.currency_code || headerCcy;
         if (!ccy || ccy === baseCurrency) continue;
@@ -257,7 +269,7 @@ export function useFxRevaluation() {
       const entryId = entry.id as number;
 
       // Construir líneas (line_number es NOT NULL)
-      const lines: any[] = [];
+      const lines: TablesInsert<"tab_journal_entry_details">[] = [];
       let lineNo = 0;
       for (const r of preview.rows) {
         if (r.delta > 0) {
@@ -334,7 +346,7 @@ export function useFxRevaluation() {
         journal_entry_id: entryId,
         total_gain: preview.total_gain,
         total_loss: preview.total_loss,
-        details_json: { rows: preview.rows } as any,
+        details_json: { rows: preview.rows } as unknown as Json,
         status: "POSTED",
       }]);
 

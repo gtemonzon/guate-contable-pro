@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
 import type { PayrollPeriod, PayrollEntry } from './usePayrollPeriods';
 
@@ -149,7 +150,7 @@ export async function postPayroll(period: PayrollPeriod, entries: PayrollEntry[]
       currency_code: 'GTQ',
       exchange_rate: 1,
       created_by: userResp.user.id,
-    } as any).select().single();
+    } as TablesInsert<'tab_journal_entries'>).select().single();
     if (hErr) throw hErr;
 
     // Lines con line_number
