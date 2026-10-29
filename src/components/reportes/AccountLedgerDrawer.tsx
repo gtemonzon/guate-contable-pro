@@ -7,7 +7,9 @@ import { getFiscalFloorDate, applyFiscalFloor } from "@/utils/fiscalFloor";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ledgerEntryNotice } from "@/utils/ledgerEntryNotice";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -58,6 +60,8 @@ interface AccountLedgerDrawerProps {
   showFullReportLink?: boolean;
   /** Scroll to and temporarily highlight the rows of this journal entry */
   highlightEntryId?: number | null;
+  /** Estado de la partida de origen: muestra un aviso si no está contabilizada */
+  highlightEntryStatus?: string | null;
   /** Date of the originating entry, enables the month toggle */
   entryDate?: string;
   /** Show the "Mes de la partida" / "Período completo" toggle (default false) */
@@ -79,9 +83,11 @@ export default function AccountLedgerDrawer({
   endDate,
   showFullReportLink = false,
   highlightEntryId,
+  highlightEntryStatus,
   entryDate,
   allowMonthToggle = false,
 }: AccountLedgerDrawerProps) {
+  const entryNotice = ledgerEntryNotice(highlightEntryStatus);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<LedgerRow[]>([]);
@@ -387,6 +393,12 @@ export default function AccountLedgerDrawer({
             onScroll={handleScroll}
             className="flex-1 overflow-y-auto px-6 pb-6"
           >
+            {entryNotice && (
+              <Alert className="mb-4 border-warning/40 bg-warning/10">
+                <AlertTriangle className="h-4 w-4 !text-warning" />
+                <AlertDescription>{entryNotice}</AlertDescription>
+              </Alert>
+            )}
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

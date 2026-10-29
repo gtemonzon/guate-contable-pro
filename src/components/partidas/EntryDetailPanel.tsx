@@ -682,6 +682,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         open={!!ledgerDrawerAccount}
         onOpenChange={(o) => !o && setLedgerDrawerAccount(null)}
         accountId={ledgerDrawerAccount?.id ?? null}
+        highlightEntryStatus={entry.status}
         accountCode={ledgerDrawerAccount?.code ?? ""}
         accountName={ledgerDrawerAccount?.name ?? ""}
         enterpriseId={selectedEnterpriseId}
