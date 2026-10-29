@@ -630,7 +630,7 @@ export default function LinkedPurchasesModal({
           if (user) {
             // Remove old links for this entry first (idempotent)
             await supabase
-              .from("tab_purchase_journal_links" as any)
+              .from("tab_purchase_journal_links")
               .delete()
               .eq("enterprise_id", enterpriseId)
               .eq("journal_entry_id", journalEntryId);
@@ -644,7 +644,7 @@ export default function LinkedPurchasesModal({
               linked_at: new Date().toISOString(),
             }));
             await supabase
-              .from("tab_purchase_journal_links" as any)
+              .from("tab_purchase_journal_links")
               .insert(linkRows);
           }
         } catch (linkError) {

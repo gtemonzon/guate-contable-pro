@@ -141,7 +141,7 @@ export default function JournalEntryViewDialog({
 
         if (details && details.length > 0) {
           const invoiceNumbers = new Set<string>();
-          details.forEach((d: any) => {
+          details.forEach((d) => {
             if (d.source_ref) {
               d.source_ref.split(",").forEach((ref: string) => {
                 const cleaned = ref.trim().replace(/^FACT\s+/i, "");
@@ -213,7 +213,7 @@ export default function JournalEntryViewDialog({
         ...entryData,
         created_by_name: entryData.creator?.full_name,
         updated_by_name: entryData.modifier?.full_name,
-        details: (details || []).map((d: any) => ({
+        details: (details || []).map((d) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
           account_name: d.tab_accounts.account_name,

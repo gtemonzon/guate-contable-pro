@@ -55,7 +55,7 @@ export function JournalEntryBankSection({
       const seen = new Set<string>();
       const unique: string[] = [];
       for (const row of data) {
-        const name = (row as any).beneficiary_name?.trim();
+        const name = row.beneficiary_name?.trim();
         if (!name) continue;
         const key = name.toUpperCase();
         if (seen.has(key)) continue;
