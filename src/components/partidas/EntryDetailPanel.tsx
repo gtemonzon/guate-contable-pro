@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, BookOpenCheck, Link2, FileEdit, AlertTriangle, CheckCircle, Trash2, Unlock, Ban, Undo2,
+  ShoppingCart, Edit, RotateCcw, X, BookOpen, Landmark, Link2, FileEdit, AlertTriangle, CheckCircle, Trash2, Unlock, Ban, Undo2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReferenceBadges } from "./ReferenceBadges";
@@ -308,14 +308,6 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
     toast({ title: "Enlace copiado" });
   };
 
-  const handleOpenMayorDrawer = () => {
-    if (!entry) return;
-    const uniqueAccounts = [...new Map(entry.details.map(d => [d.account_id, d])).values()];
-    if (uniqueAccounts.length === 0) return;
-    const a = uniqueAccounts[0];
-    setLedgerDrawerAccount({ id: a.account_id, code: a.account_code, name: a.account_name });
-  };
-
   const handleNavigateToBancos = () => {
     if (!entry) return;
     let url = `/reportes?tab=bancos&bankAccountId=${entry.bank_account_id}`;
@@ -512,7 +504,6 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(val) => {
-        if (val === "mayor") { handleOpenMayorDrawer(); return; }
         if (val === "bancos") { handleNavigateToBancos(); return; }
         setActiveTab(val);
       }} className="flex-1 flex flex-col min-h-0">
@@ -525,10 +516,6 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
                 Compras ({linkedPurchases.length})
               </TabsTrigger>
             )}
-            <TabsTrigger value="mayor" className="text-xs gap-1">
-              <BookOpenCheck className="h-3 w-3" />
-              Mayor
-            </TabsTrigger>
             {entry.bank_account_id && (
               <TabsTrigger value="bancos" className="text-xs gap-1">
                 <Landmark className="h-3 w-3" />
