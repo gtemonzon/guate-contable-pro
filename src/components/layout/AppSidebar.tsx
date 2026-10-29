@@ -1,4 +1,4 @@
-import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, Inbox, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck, Boxes, Store } from "lucide-react";
+import { Home, Building2, BookOpen, FileText, ShoppingCart, Receipt, Banknote, FileBarChart, Settings, Users, Calculator, HelpCircle, Building, ClipboardList, Package, LifeBuoy, GraduationCap, UserCog, ChevronDown, Network, ShieldCheck, Boxes, Store } from "lucide-react";
 import { useOpenTicketsCount } from "@/hooks/useTickets";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -47,7 +47,6 @@ const STORAGE_SUBGROUP_KEY = "sidebar-active-subgroup";
 
 const allMenuItems: MenuItemOrSection[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Bandeja", url: "/inbox", icon: Inbox },
   {
     title: "Contabilidad",
     icon: BookOpen,
