@@ -55,6 +55,27 @@ describe("filterCatalog", () => {
   });
 });
 
+describe("filterCatalog con onlyIds", () => {
+  it("solo esas cuentas y sus ancestros", () => {
+    expect(ids(filterCatalog(catalog, { query: "", rootId: null, onlyIds: new Set([111, 622]) }).visible)).toEqual([1, 6, 11, 62, 111, 622]);
+  });
+  it("combinado con rootId y búsqueda", () => {
+    const only = new Set([111, 621, 622]);
+    expect(ids(filterCatalog(catalog, { query: "", rootId: 6, onlyIds: only }).visible)).toEqual([6, 62, 621, 622]);
+    expect(ids(filterCatalog(catalog, { query: "energia", rootId: null, onlyIds: only }).visible)).toEqual([6, 62, 622]);
+    expect(filterCatalog(catalog, { query: "caja", rootId: 6, onlyIds: only }).visible).toEqual([]);
+  });
+  it("conjunto vacío => ninguna coincidencia", () => {
+    const r = filterCatalog(catalog, { query: "", rootId: null, onlyIds: new Set() });
+    expect(r.visible).toEqual([]);
+    expect(r.matchedDetail).toBe(0);
+  });
+  it("sin la opción no cambia", () => {
+    expect(filterCatalog(catalog, { query: "", rootId: null, onlyIds: null }).visible).toEqual(catalog);
+    expect(filterCatalog(catalog, { query: "", rootId: null }).visible).toEqual(catalog);
+  });
+});
+
 describe("getRootChips", () => {
   it("solo raíces, ordenadas por código", () => {
     expect(getRootChips(catalog)).toEqual([
