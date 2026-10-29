@@ -13,6 +13,7 @@ import {
 import { Bell, Search, CheckCheck, RefreshCw, Plus, Calendar } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAlertGenerator } from '@/hooks/useAlertGenerator';
+import { useEnterprise } from '@/contexts/EnterpriseContext';
 import { NotificationItem } from '@/components/notifications/NotificationItem';
 import { CustomReminderDialog } from '@/components/notifications/CustomReminderDialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,11 +43,11 @@ export default function Notificaciones() {
   const [loadingReminders, setLoadingReminders] = useState(true);
   const { toast } = useToast();
 
-  const enterpriseId = localStorage.getItem('currentEnterpriseId');
-  const parsedEnterpriseId = enterpriseId ? parseInt(enterpriseId) : null;
+  const { selectedEnterpriseId, isLoading: enterpriseLoading } = useEnterprise();
 
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, refetch } = useNotifications(parsedEnterpriseId);
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, refetch } = useNotifications(selectedEnterpriseId);
   const { generateAlerts, generating } = useAlertGenerator();
+  const showNotificationsSkeleton = enterpriseLoading || loading;
 
   const fetchReminders = async () => {
     try {
@@ -68,8 +69,8 @@ export default function Notificaciones() {
   }, []);
 
   const handleRefresh = async () => {
-    if (parsedEnterpriseId) {
-      await generateAlerts(parsedEnterpriseId);
+    if (selectedEnterpriseId) {
+      await generateAlerts(selectedEnterpriseId);
       await refetch();
     }
   };
@@ -145,7 +146,7 @@ export default function Notificaciones() {
             Verificar Alertas
           </Button>
           <CustomReminderDialog
-            enterpriseId={parsedEnterpriseId}
+            enterpriseId={selectedEnterpriseId}
             onSuccess={fetchReminders}
           />
         </div>
@@ -238,7 +239,7 @@ export default function Notificaciones() {
               </div>
 
               {/* Notifications list */}
-              {loading ? (
+              {showNotificationsSkeleton ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map(i => (
                     <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
