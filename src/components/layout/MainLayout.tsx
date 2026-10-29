@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { User, Session } from "@supabase/supabase-js";
-import { LogOut, ChevronDown, Building2, Search, Check, Inbox } from "lucide-react";
+import { LogOut, ChevronDown, Building2, Search, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,8 +28,6 @@ import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 import { KeyboardShortcutsDialog } from "@/components/shortcuts/KeyboardShortcutsDialog";
 import { EnterpriseOption } from "@/contexts/EnterpriseContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { useInboxItems } from "@/hooks/useInboxItems";
 import { OfflineBanner } from "./OfflineBanner";
 
 function EnterpriseSearchSelector({
@@ -109,35 +107,8 @@ function EnterpriseSearchSelector({
   );
 }
 
-// Se renderiza dentro de DropdownMenuContent: solo se monta (y solo consulta)
-// cuando el menú del usuario se abre.
-function InboxMenuItem({ enterpriseId }: { enterpriseId: number | null }) {
-  const { data } = useInboxItems(enterpriseId);
-  const items = data ?? [];
-  const total = items.length;
-  const hasError = items.some((item) => item.status === "error");
-
-  return (
-    <>
-      <Inbox className="mr-2 h-4 w-4" />
-      <span>Bandeja</span>
-      {data && total > 0 && (
-        <Badge
-          variant={hasError ? "destructive" : "secondary"}
-          className="ml-auto"
-        >
-          {total}
-        </Badge>
-      )}
-    </>
-  );
-}
-
 const MainLayout = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const isInboxActive =
-    location.pathname === "/inbox" || location.pathname.startsWith("/inbox/");
   const { toast } = useToast();
   const { currentTenant, isTenantActive, isSuperAdmin } = useTenant();
   const {
@@ -313,14 +284,6 @@ const MainLayout = () => {
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => navigate("/inbox")}
-                    aria-current={isInboxActive ? "page" : undefined}
-                    className={isInboxActive ? "bg-accent text-accent-foreground" : undefined}
-                  >
-                    <InboxMenuItem enterpriseId={selectedEnterpriseId} />
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />

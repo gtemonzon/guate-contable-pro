@@ -54,7 +54,6 @@ const Tenants = lazyRetry(() => import("./pages/Tenants"));
 const TenantSettings = lazyRetry(() => import("./pages/TenantSettings"));
 const Bitacora = lazyRetry(() => import("./pages/Bitacora"));
 const ActivosFijos = lazyRetry(() => import("./pages/ActivosFijos"));
-const Inbox = lazyRetry(() => import("./pages/Inbox"));
 const Soporte = lazyRetry(() => import("./pages/Soporte"));
 const Capacitacion = lazyRetry(() => import("./pages/Capacitacion"));
 const Nomina = lazyRetry(() => import("./pages/Nomina"));
@@ -125,7 +124,7 @@ const App = () => (
               <Route path="/configuracion" element={<Suspense fallback={<PageLoader />}><Configuracion /></Suspense>} />
               <Route path="/bitacora" element={<Suspense fallback={<PageLoader />}><Bitacora /></Suspense>} />
               <Route path="/activos-fijos" element={<Suspense fallback={<PageLoader />}><ActivosFijos /></Suspense>} />
-              <Route path="/inbox" element={<Suspense fallback={<PageLoader />}><Inbox /></Suspense>} />
+              <Route path="/inbox" element={<Navigate to="/notificaciones" replace />} />
               <Route path="/soporte" element={<Suspense fallback={<PageLoader />}><Soporte /></Suspense>} />
               <Route path="/importar" element={<div>Importación (próximamente)</div>} />
               <Route path="/notificaciones" element={<Suspense fallback={<PageLoader />}><Notificaciones /></Suspense>} />

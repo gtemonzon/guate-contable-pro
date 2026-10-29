@@ -348,13 +348,13 @@ export const TRAINING_PHASES: Phase[] = [
       },
       {
         id: "4.4-inbox-notif",
-        title: "Bandeja y Notificaciones",
+        title: "Notificaciones",
         description: "Tareas pendientes y alertas.",
         icon: Inbox,
-        route: "/inbox",
+        route: "/notificaciones",
         content: [
-          "Bandeja: muestra partidas en borrador, conciliaciones pendientes, declaraciones por presentar y recordatorios personales.",
-          "Notificaciones: alertas configurables (vencimientos fiscales, folios bajos en libros autorizados, etc.).",
+          "Notificaciones: un solo lugar para lo que requiere atención: partidas en borrador, conciliaciones pendientes, vencimientos fiscales, períodos, cobros/pagos y recordatorios.",
+          "Use el filtro \"Tipo\" para agrupar por tema; los umbrales se configuran en Configuración > Alertas.",
         ],
       },
       {
