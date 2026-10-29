@@ -18,6 +18,11 @@ import { CustomReminderDialog } from '@/components/notifications/CustomReminderD
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  notificationCategory,
+  NOTIFICATION_CATEGORY_LABELS,
+  NOTIFICATION_CATEGORIES,
+} from '@/utils/notificationCategories';
 
 interface CustomReminder {
   id: number;
@@ -32,6 +37,7 @@ export default function Notificaciones() {
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [reminders, setReminders] = useState<CustomReminder[]>([]);
   const [loadingReminders, setLoadingReminders] = useState(true);
   const { toast } = useToast();
@@ -108,8 +114,9 @@ export default function Notificaciones() {
     const matchesStatus = statusFilter === 'all' ||
       (statusFilter === 'unread' && !n.is_read) ||
       (statusFilter === 'read' && n.is_read);
+    const matchesType = typeFilter === 'all' || notificationCategory(n.notification_type) === typeFilter;
 
-    return matchesSearch && matchesPriority && matchesStatus;
+    return matchesSearch && matchesPriority && matchesStatus && matchesType;
   });
 
   // Filter reminders
@@ -213,6 +220,19 @@ export default function Notificaciones() {
                     <SelectItem value="all">Todas</SelectItem>
                     <SelectItem value="unread">No leídas</SelectItem>
                     <SelectItem value="read">Leídas</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-[180px]" aria-label="Tipo">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {NOTIFICATION_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {NOTIFICATION_CATEGORY_LABELS[category]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
