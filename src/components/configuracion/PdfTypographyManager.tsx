@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/contexts/TenantContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useSaveTenantIdentity } from "@/hooks/useSaveTenantIdentity";
 import { toast } from "sonner";
 import { Save, FileText } from "lucide-react";
 
@@ -17,7 +17,8 @@ const FONT_OPTIONS = [
 const FONT_SIZES = [6, 7, 8, 9, 10, 11, 12];
 
 export function PdfTypographyManager() {
-  const { currentTenant, isTenantAdmin, isSuperAdmin, refreshTenants } = useTenant();
+  const { currentTenant, isTenantAdmin, isSuperAdmin } = useTenant();
+  const { save } = useSaveTenantIdentity();
   const [fontFamily, setFontFamily] = useState<string>("helvetica");
   const [fontSize, setFontSize] = useState<number>(8);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,22 +49,12 @@ export function PdfTypographyManager() {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from("tab_tenants")
-        .update({
-          pdf_font_family: fontFamily,
-          pdf_font_size: fontSize,
-        })
-        .eq("id", currentTenant.id);
-
-      if (error) throw error;
-
+      await save({ pdf_font_family: fontFamily, pdf_font_size: fontSize });
       toast.success("Configuración de tipografía guardada");
       setHasChanges(false);
-      await refreshTenants();
     } catch (error) {
       console.error("Error saving PDF config:", error);
-      toast.error("Error al guardar la configuración");
+      toast.error(error instanceof Error ? error.message : "Error al guardar la configuración");
     } finally {
       setIsSaving(false);
     }
@@ -81,7 +72,7 @@ export function PdfTypographyManager() {
   };
 
   return (
-    <Card>
+    <Card id="tipografia" className="scroll-mt-20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileText className="h-5 w-5" />

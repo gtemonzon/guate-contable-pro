@@ -13,52 +13,15 @@ import { Separator } from "@/components/ui/separator";
 import { PdfTypographyManager } from "@/components/configuracion/PdfTypographyManager";
 import { Building2, Upload, X, ImageIcon, Loader2, Save, Lock, Info } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { rgbToHex } from "@/utils/colorUtils";
-
-/**
- * Extrae el color dominante "vibrante" de una imagen usando Canvas API.
- * Ignora píxeles casi blancos, casi negros y transparentes.
- * Retorna null si no hay suficientes píxeles válidos.
- */
-async function detectDominantColor(dataUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onerror = () => resolve(null);
-    img.onload = () => {
-      try {
-        const size = 50;
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(null);
-        ctx.drawImage(img, 0, 0, size, size);
-        const { data } = ctx.getImageData(0, 0, size, size);
-
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          const alpha = data[i + 3];
-          if (alpha < 128) continue;
-          const pr = data[i], pg = data[i + 1], pb = data[i + 2];
-          if (pr > 240 && pg > 240 && pb > 240) continue; // casi blanco
-          if (pr < 15 && pg < 15 && pb < 15) continue; // casi negro
-          r += pr; g += pg; b += pb; count++;
-        }
-
-        const minPixels = Math.round(size * size * 0.02);
-        if (count < Math.max(20, minPixels)) return resolve(null);
-        resolve(rgbToHex(r / count, g / count, b / count));
-      } catch {
-        resolve(null);
-      }
-    };
-    img.src = dataUrl;
-  });
-}
+import { normalizeHex } from "@/utils/colorUtils";
+import { TenantColorFields } from "@/components/tenants/TenantColorFields";
+import { useSaveTenantIdentity } from "@/hooks/useSaveTenantIdentity";
+import { mapIdentityError } from "@/utils/tenantIdentity";
+import { ALLOWED_LOGO_TYPES, buildLogoPath, validateLogoFile } from "@/utils/logoFile";
 
 export default function TenantSettings() {
-  const { currentTenant, isSuperAdmin, isTenantAdmin, refreshTenants } = useTenant();
+  const { currentTenant, isSuperAdmin, isTenantAdmin } = useTenant();
+  const { save, saving } = useSaveTenantIdentity();
   const permissions = useUserPermissions();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,9 +33,8 @@ export default function TenantSettings() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [detectedColor, setDetectedColor] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!currentTenant) return;
@@ -83,8 +45,18 @@ export default function TenantSettings() {
     setSecondaryColor(currentTenant.secondary_color);
     setLogoUrl(currentTenant.logo_url);
     setLogoPreview(currentTenant.logo_url);
+    setLogoFile(null);
     setDirty(false);
   }, [currentTenant]);
+
+  const tenantLoaded = !!currentTenant;
+  useEffect(() => {
+    if (!tenantLoaded || window.location.hash !== "#tipografia") return;
+    const t = window.setTimeout(() => {
+      document.getElementById("tipografia")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [tenantLoaded]);
 
   const canAccess = isTenantAdmin || isSuperAdmin;
 
@@ -125,44 +97,38 @@ export default function TenantSettings() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Solo se permiten archivos de imagen");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("El archivo es muy grande", { description: "Máximo 2MB" });
+    const invalid = validateLogoFile(file);
+    if (invalid) {
+      toast.error(invalid);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    setDetectedColor(null);
+    const previousPreview = logoPreview;
+    setLogoFile(file);
     const reader = new FileReader();
     reader.onloadend = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : null;
-      setLogoPreview(dataUrl);
-      if (dataUrl) {
-        detectDominantColor(dataUrl).then((color) => setDetectedColor(color));
-      }
+      setLogoPreview(typeof reader.result === "string" ? reader.result : null);
     };
     reader.readAsDataURL(file);
 
     try {
       setUploading(true);
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${currentTenant.tenant_code.toLowerCase()}-${Date.now()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
+      const filePath = buildLogoPath(currentTenant.tenant_code, file);
       const { error: uploadError } = await supabase.storage
         .from("tenant-logos")
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, { upsert: false, contentType: file.type });
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from("tenant-logos").getPublicUrl(filePath);
       setLogoUrl(data.publicUrl);
       setDirty(true);
       toast.success("Logo cargado");
     } catch (err: unknown) {
-      toast.error("Error al subir logo", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-      setLogoPreview(logoUrl);
+      const e = err as { code?: string; message?: string } | null;
+      toast.error("Error al subir logo", { description: mapIdentityError(e) });
+      setLogoPreview(previousPreview);
+      setLogoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } finally {
       setUploading(false);
     }
@@ -171,36 +137,30 @@ export default function TenantSettings() {
   const handleRemoveLogo = () => {
     setLogoUrl(null);
     setLogoPreview(null);
-    setDetectedColor(null);
+    setLogoFile(null);
     setDirty(true);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const colorsValid = normalizeHex(primaryColor) !== null && normalizeHex(secondaryColor) !== null;
+  const canSave = dirty && !saving && !uploading && tenantName.trim() !== "" && colorsValid;
+
   const handleSave = async () => {
-    if (!currentTenant) return;
-    setSaving(true);
     try {
-      const { error } = await supabase
-        .from("tab_tenants")
-        .update({
-          tenant_name: tenantName,
-          contact_email: contactEmail || null,
-          contact_phone: contactPhone || null,
-          primary_color: primaryColor,
-          secondary_color: secondaryColor,
-          logo_url: logoUrl,
-        })
-        .eq("id", currentTenant.id);
-      if (error) throw error;
+      await save({
+        tenant_name: tenantName,
+        contact_email: contactEmail,
+        contact_phone: contactPhone,
+        primary_color: primaryColor,
+        secondary_color: secondaryColor,
+        logo_url: logoUrl,
+      });
       toast.success("Datos de la oficina actualizados");
       setDirty(false);
-      await refreshTenants();
     } catch (err: unknown) {
       toast.error("Error al guardar", {
         description: err instanceof Error ? err.message : String(err),
       });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -248,7 +208,7 @@ export default function TenantSettings() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={ALLOWED_LOGO_TYPES.join(",")}
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -280,7 +240,7 @@ export default function TenantSettings() {
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">PNG, JPG o SVG. Máximo 2MB.</p>
+                <p className="text-xs text-muted-foreground">PNG, JPG, WEBP o SVG. Máximo 2 MB.</p>
               </div>
             </div>
           </div>
@@ -297,78 +257,16 @@ export default function TenantSettings() {
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="primary_color">Color primario</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="primary_color"
-                  type="color"
-                  value={primaryColor}
-                  onChange={(e) => {
-                    setPrimaryColor(e.target.value);
-                    setDirty(true);
-                  }}
-                  className="w-12 h-10 p-1"
-                />
-                <Input
-                  value={primaryColor}
-                  onChange={(e) => {
-                    setPrimaryColor(e.target.value);
-                    setDirty(true);
-                  }}
-                  className="flex-1"
-                />
-              </div>
-              {detectedColor && (
-                <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-                  <span
-                    className="h-5 w-5 rounded border"
-                    style={{ backgroundColor: detectedColor }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Color detectado del logo ({detectedColor})
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto h-7 text-xs"
-                    onClick={() => {
-                      setPrimaryColor(detectedColor);
-                      setDirty(true);
-                    }}
-                  >
-                    Usar este color
-                  </Button>
-                </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="secondary_color">Color secundario</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="secondary_color"
-                  type="color"
-                  value={secondaryColor}
-                  onChange={(e) => {
-                    setSecondaryColor(e.target.value);
-                    setDirty(true);
-                  }}
-                  className="w-12 h-10 p-1"
-                />
-                <Input
-                  value={secondaryColor}
-                  onChange={(e) => {
-                    setSecondaryColor(e.target.value);
-                    setDirty(true);
-                  }}
-                  className="flex-1"
-                />
-              </div>
-            </div>
-          </div>
+          <TenantColorFields
+            primary={primaryColor}
+            secondary={secondaryColor}
+            onChange={(p, sc) => {
+              setPrimaryColor(p);
+              setSecondaryColor(sc);
+              setDirty(true);
+            }}
+            logoSource={{ file: logoFile, url: logoUrl }}
+          />
         </CardContent>
       </Card>
 
@@ -409,7 +307,7 @@ export default function TenantSettings() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving || !dirty}>
+        <Button onClick={handleSave} disabled={!canSave}>
           <Save className="mr-2 h-4 w-4" />
           {saving ? "Guardando..." : "Guardar cambios"}
         </Button>
