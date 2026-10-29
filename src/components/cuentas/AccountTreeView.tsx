@@ -1,6 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus, Loader2, CheckCircle2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Pencil, Trash2, Circle, Plus, Users, FolderPlus, Loader2, CheckCircle2, Settings2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { findBlockingSystemAccounts } from "@/utils/systemAccountRoles";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -46,7 +49,14 @@ interface AccountTreeViewProps {
   levelLimit: number | null;
   /** Expande todos los grupos (búsqueda o rubro activos). */
   autoExpandAll: boolean;
+  /** Cuentas usadas por el sistema y sus roles. */
+  systemRoles?: Map<number, string[]>;
+  /** Catálogo completo (sin filtros) para evaluar descendientes al eliminar. */
+  allAccounts?: Account[];
 }
+
+const EMPTY_ROLES = new Map<number, string[]>();
+const MAX_BLOCKING_LISTED = 8;
 
 /** Columnas: Código | Nombre | Tipo | Saldo | Movimiento | Acciones (Saldo y Movimiento ocultas < md). */
 const ROW_GRID =
@@ -176,6 +186,9 @@ interface AccountRowProps {
   onQuickCreate?: AccountTreeViewProps['onQuickCreate'];
   onInlineUpdate?: AccountTreeViewProps['onInlineUpdate'];
   index: TreeIndex;
+  fullIndex: TreeIndex;
+  accountsById: Map<number, Account>;
+  systemRoles: Map<number, string[]>;
 }
 
 function AccountRowBase({
@@ -187,7 +200,13 @@ function AccountRowBase({
   onQuickCreate,
   onInlineUpdate,
   index,
+  fullIndex,
+  accountsById,
+  systemRoles,
 }: AccountRowProps) {
+  const navigate = useNavigate();
+  const [blockingIds, setBlockingIds] = useState<number[]>([]);
+  const ownRoles = systemRoles.get(node.account.id);
   const { account, level, hasChildren, descendantCount, detailCount } = node;
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -215,6 +234,20 @@ function AccountRowBase({
   }, [index]);
 
   const handleDeleteClick = () => {
+    const ids = [account.id];
+    const stack = [account.id];
+    while (stack.length) {
+      const cur = stack.pop() as number;
+      for (const k of fullIndex.childrenByParent.get(cur) ?? []) {
+        ids.push(k.id);
+        stack.push(k.id);
+      }
+    }
+    const blocking = findBlockingSystemAccounts(ids, systemRoles);
+    if (blocking.length > 0) {
+      setBlockingIds(blocking);
+      return;
+    }
     setDeleteError(null);
     setDeleteSuccess(null);
     setDeleteProgress({ current: 0, total: 0, currentName: "" });
@@ -331,6 +364,20 @@ function AccountRowBase({
             </Badge>
           )}
           <span className={`truncate ${isGroup ? "font-semibold uppercase" : "font-normal"}`}>{account.account_name}</span>
+          {ownRoles && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  role="img"
+                  aria-label={`Usada por el sistema como: ${ownRoles.join(" · ")}`}
+                  className="inline-flex shrink-0"
+                >
+                  <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">Usada por el sistema como: {ownRoles.join(" · ")}</TooltipContent>
+            </Tooltip>
+          )}
           {isGroup && <span className="text-xs text-muted-foreground shrink-0">{detailLabel}</span>}
           {!account.is_active && <Badge data-row-action variant="secondary" className="text-xs shrink-0">Inactiva</Badge>}
         </div>
@@ -510,6 +557,41 @@ function AccountRowBase({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={blockingIds.length > 0} onOpenChange={(o) => !o && setBlockingIds([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No se puede eliminar</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  {blockingIds.length === 1 ? "Esta cuenta la usa" : "Estas cuentas las usa"} el sistema:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-foreground">
+                  {blockingIds.slice(0, MAX_BLOCKING_LISTED).map((id) => {
+                    const a = accountsById.get(id);
+                    return (
+                      <li key={id}>
+                        <strong>{a?.account_code} - {a?.account_name}</strong>: {(systemRoles.get(id) ?? []).join(" · ")}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {blockingIds.length > MAX_BLOCKING_LISTED && (
+                  <p>y {blockingIds.length - MAX_BLOCKING_LISTED} más</p>
+                )}
+                <p>Cambia esa configuración en Configuración &gt; Cuentas Contables y vuelve a intentarlo.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cerrar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate("/configuracion?tab=enterprise-accounts")}>
+              Ir a Configuración
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -526,7 +608,10 @@ const AccountRow = memo(AccountRowBase, (prev, next) =>
   prev.onDelete === next.onDelete &&
   prev.onQuickCreate === next.onQuickCreate &&
   prev.onInlineUpdate === next.onInlineUpdate &&
-  prev.index === next.index
+  prev.index === next.index &&
+  prev.fullIndex === next.fullIndex &&
+  prev.accountsById === next.accountsById &&
+  prev.systemRoles === next.systemRoles
 );
 
 // ---------------------------------------------------------------------------
@@ -543,8 +628,13 @@ export function AccountTreeView({
   onInlineUpdate,
   levelLimit,
   autoExpandAll,
+  systemRoles = EMPTY_ROLES,
+  allAccounts,
 }: AccountTreeViewProps) {
   const index = useMemo(() => buildTreeIndex(accounts), [accounts]);
+  const fullAccounts = allAccounts ?? accounts;
+  const fullIndex = useMemo(() => buildTreeIndex(fullAccounts), [fullAccounts]);
+  const accountsById = useMemo(() => new Map(fullAccounts.map((a) => [a.id, a])), [fullAccounts]);
 
   const derivedExpanded = useMemo(
     () => new Set(groupsToExpand(accounts, autoExpandAll ? null : levelLimit)),
@@ -594,6 +684,9 @@ export function AccountTreeView({
       onQuickCreate={onQuickCreate}
       onInlineUpdate={onInlineUpdate}
       index={index}
+      fullIndex={fullIndex}
+      accountsById={accountsById}
+      systemRoles={systemRoles}
     />
   );
 
