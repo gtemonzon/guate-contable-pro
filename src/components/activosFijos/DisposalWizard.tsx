@@ -52,7 +52,7 @@ export default function DisposalWizard({ asset, onDone }: Props) {
     try {
       // Mark asset disposed/sold
       const newStatus = isSale ? "SOLD" : "DISPOSED";
-      const { error: assetErr } = await (supabase as any)
+      const { error: assetErr } = await supabase
         .from("fixed_assets")
         .update({
           status: newStatus,
@@ -64,7 +64,7 @@ export default function DisposalWizard({ asset, onDone }: Props) {
       if (assetErr) throw assetErr;
 
       // Mark remaining PLANNED rows as SKIPPED
-      const { error: skipErr } = await (supabase as any)
+      const { error: skipErr } = await supabase
         .from("fixed_asset_depreciation_schedule")
         .update({ status: "SKIPPED" })
         .eq("asset_id", asset.id)
@@ -72,7 +72,7 @@ export default function DisposalWizard({ asset, onDone }: Props) {
       if (skipErr) throw skipErr;
 
       // Log event
-      await (supabase as any).from("fixed_asset_event_log").insert({
+      await supabase.from("fixed_asset_event_log").insert({
         asset_id: asset.id,
         enterprise_id: asset.enterprise_id,
         event_type: isSale ? "SELL" : "DISPOSE",

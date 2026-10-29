@@ -5,6 +5,7 @@ import * as z from "zod";
 import { format, parseISO } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -45,7 +46,7 @@ const formSchema = z.object({
 interface PeriodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  period?: any;
+  period?: Tables<"tab_accounting_periods"> | null;
   onSuccess: () => void;
 }
 

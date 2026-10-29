@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileEdit, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
 
@@ -99,7 +100,10 @@ export function MetadataEditDialog({
         p_entry_type: entryType !== (currentValues.entry_type || "diario") ? entryType : undefined,
       };
 
-      const { error } = await supabase.rpc("update_posted_entry_metadata", rpcParams as any);
+      const { error } = await supabase.rpc(
+        "update_posted_entry_metadata",
+        rpcParams as Database["public"]["Functions"]["update_posted_entry_metadata"]["Args"],
+      );
       if (error) throw error;
 
       toast({ title: "Metadatos actualizados", description: `Partida ${entryNumber} actualizada exitosamente` });

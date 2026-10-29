@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Lock, LockOpen, Edit, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import type { Tables } from "@/integrations/supabase/types";
 
 interface PeriodCardProps {
-  period: any;
+  period: Tables<"tab_accounting_periods">;
   onEdit: () => void;
   onClose: () => void;
   onReopen: () => void;

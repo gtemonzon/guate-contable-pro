@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import type { TaxCertificate } from "@/hooks/useTaxCertificates";
 
 interface EnterpriseAccountsForCert {
@@ -155,7 +156,7 @@ export async function generateJournalEntryFromCertificate(
       currency_code: "GTQ",
       exchange_rate: 1,
       created_by: u.user.id,
-    } as any)
+    } as TablesInsert<"tab_journal_entries">)
     .select("id")
     .single();
   if (hErr) throw hErr;

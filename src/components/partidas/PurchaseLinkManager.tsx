@@ -85,12 +85,12 @@ export function PurchaseLinkManager({
     setLoading(true);
     try {
       const { data: links } = await supabase
-        .from("tab_purchase_journal_links" as any)
+        .from("tab_purchase_journal_links")
         .select("purchase_id")
         .eq("journal_entry_id", journalEntryId)
         .eq("enterprise_id", enterpriseId);
 
-      const linkedIds = (links || []).map((l: any) => l.purchase_id);
+      const linkedIds = (links || []).map((l) => l.purchase_id);
 
       const { data: legacyLinked } = await supabase
         .from("tab_purchase_ledger")
@@ -220,7 +220,7 @@ export function PurchaseLinkManager({
         try {
           const [{ error: linkError }, { error: legacyError }] = await Promise.all([
             supabase
-              .from("tab_purchase_journal_links" as any)
+              .from("tab_purchase_journal_links")
               .upsert({
                 enterprise_id: enterpriseId,
                 purchase_id: p.id,
@@ -301,7 +301,7 @@ export function PurchaseLinkManager({
         try {
           const [{ error: linkError }, { error: legacyError }] = await Promise.all([
             supabase
-              .from("tab_purchase_journal_links" as any)
+              .from("tab_purchase_journal_links")
               .delete()
               .eq("enterprise_id", enterpriseId)
               .eq("purchase_id", p.id),

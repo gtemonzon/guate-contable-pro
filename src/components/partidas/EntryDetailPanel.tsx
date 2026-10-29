@@ -167,7 +167,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         accounting_period_id: entryData.accounting_period_id,
         reversal_entry_id: entryData.reversal_entry_id,
         reversed_by_entry_id: entryData.reversed_by_entry_id,
-        details: (details || []).map((d: any) => ({
+        details: (details || []).map((d) => ({
           line_number: d.line_number,
           account_code: d.tab_accounts.account_code,
           account_name: d.tab_accounts.account_name,

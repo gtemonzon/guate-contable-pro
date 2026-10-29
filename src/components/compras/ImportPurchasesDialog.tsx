@@ -98,6 +98,9 @@ interface ValidPurchase {
  */
 type ValidPurchaseWithSourceRow = ValidPurchase & ImportedPurchaseInternal & { __sourceRow: number };
 
+/** Registro leído del archivo antes de asignarle empresa y libro de compras. */
+type PeriodPurchaseRecord = Omit<ValidPurchaseWithSourceRow, "enterprise_id" | "purchase_book_id">;
+
 function DerivedExemptBadge({ finalized }: { finalized?: FinalizedImport<ValidPurchaseWithSourceRow> }) {
   if (finalized?.derivedExempt == null) return null;
   return (
@@ -574,7 +577,7 @@ export function ImportPurchasesDialog({
       }
 
       // Process rows for validation - group by period
-      const recordsByPeriod = new Map<string, { month: number; year: number; records: any[] }>();
+      const recordsByPeriod = new Map<string, { month: number; year: number; records: PeriodPurchaseRecord[] }>();
       const errors: ValidationError[] = [];
       let skippedAnuladas = 0;
       
@@ -868,7 +871,7 @@ export function ImportPurchasesDialog({
       }
       
       // Filter out anuladas and build records by period
-      const recordsByPeriod = new Map<string, { month: number; year: number; records: any[] }>();
+      const recordsByPeriod = new Map<string, { month: number; year: number; records: PeriodPurchaseRecord[] }>();
       const errors: ValidationError[] = [];
       let skippedAnuladas = 0;
       
