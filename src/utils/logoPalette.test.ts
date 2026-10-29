@@ -45,6 +45,20 @@ describe("extractPaletteFromPixels", () => {
     expect(pal).toHaveLength(1);
     expect(near(pal[0], "#808080")).toBe(true);
   });
+
+  it("80% blanco y 20% #333333 => #333333, no blanco", () => {
+    const img = makeImage([{ hex: "#ffffff", ratio: 0.8 }, { hex: "#333333", ratio: 0.2 }]);
+    const pal = extractPaletteFromPixels(img.data, img.width, img.height);
+    expect(pal).toHaveLength(1);
+    expect(near(pal[0], "#333333")).toBe(true);
+  });
+
+  it("100% blanco => blanco", () => {
+    const img = makeImage([{ hex: "#ffffff", ratio: 1 }]);
+    const pal = extractPaletteFromPixels(img.data, img.width, img.height);
+    expect(pal).toHaveLength(1);
+    expect(near(pal[0], "#ffffff")).toBe(true);
+  });
 });
 
 describe("suggestTenantColors", () => {

@@ -33,6 +33,9 @@ All colors MUST be HSL.
 
     --accent: var(--tenant-accent, 269 100% 98%);
     --accent-foreground: var(--tenant-accent-fg, 270 91% 65%);
+    --tab-active: var(--tenant-primary, 199 89% 48%);
+    --tab-active-foreground: var(--tenant-primary-fg, 0 0% 100%);
+    --tab-hover: var(--tenant-accent, 204 100% 97%);
 
     /* Alert colors */
     --success: 142 76% 36%;
@@ -134,6 +137,10 @@ All colors MUST be HSL.
 
     --accent: var(--tenant-accent-dark, 273 86% 20%);
     --accent-foreground: var(--tenant-accent-fg-dark, 270 95% 75%);
+    --tab-active: var(--tenant-primary-dark, 200 98% 39%);
+    --tab-active-foreground: var(--tenant-primary-fg-dark, 0 0% 100%);
+    --tab-hover: var(--tenant-accent-dark, 201 90% 16%);
+    --tab-hover-foreground: var(--tenant-accent-fg-dark, 201 94% 86%);
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 85% 97%;

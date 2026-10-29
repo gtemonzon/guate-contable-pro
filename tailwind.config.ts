@@ -15,6 +15,12 @@ export default {
   	},
   	extend: {
   		colors: {
+  			tab: {
+  				active: 'hsl(var(--tab-active) / <alpha-value>)',
+  				'active-foreground': 'hsl(var(--tab-active-foreground) / <alpha-value>)',
+  				hover: 'hsl(var(--tab-hover) / <alpha-value>)',
+  				'hover-foreground': 'hsl(var(--tab-hover-foreground) / <alpha-value>)'
+  			},
   			tenant: {
   				'tint-1': 'hsl(var(--tenant-tint-1) / <alpha-value>)',
   				'tint-2': 'hsl(var(--tenant-tint-2) / <alpha-value>)',
