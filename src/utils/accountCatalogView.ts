@@ -22,6 +22,8 @@ export function normalizeText(value: string): string {
 export interface CatalogFilter {
   query: string;
   rootId: number | null;
+  /** Si viene, solo coinciden las cuentas con id en el conjunto (más sus ancestros). */
+  onlyIds?: ReadonlySet<number> | null;
 }
 
 export interface CatalogFilterResult<T extends CatalogAccount> {
@@ -52,14 +54,14 @@ function subtreeIds<T extends CatalogAccount>(accounts: T[], rootId: number): Se
 
 export function filterCatalog<T extends CatalogAccount>(
   accounts: T[],
-  { query, rootId }: CatalogFilter,
+  { query, rootId, onlyIds }: CatalogFilter,
 ): CatalogFilterResult<T> {
   const totalDetail = accounts.filter((a) => a.allows_movement === true).length;
   const q = normalizeText(query);
   const rootScope = rootId != null ? subtreeIds(accounts, rootId) : null;
   const scope = rootScope ? accounts.filter((a) => rootScope.has(a.id)) : accounts;
 
-  if (!q) {
+  if (!q && !onlyIds) {
     return {
       visible: scope,
       matchedDetail: scope.filter((a) => a.allows_movement === true).length,
@@ -72,7 +74,9 @@ export function filterCatalog<T extends CatalogAccount>(
   const scopeIds = rootScope ?? new Set(accounts.map((a) => a.id));
 
   const matches = scope.filter(
-    (a) => normalizeText(a.account_code).includes(q) || normalizeText(a.account_name).includes(q),
+    (a) =>
+      (!onlyIds || onlyIds.has(a.id)) &&
+      (!q || normalizeText(a.account_code).includes(q) || normalizeText(a.account_name).includes(q)),
   );
   const show = new Set<number>();
   for (const m of matches) {

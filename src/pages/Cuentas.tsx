@@ -6,7 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Plus, Search, Upload, BookOpen, Copy, X } from "lucide-react";
+import { Plus, Search, Upload, BookOpen, Copy, X, Settings2 } from "lucide-react";
+import { useSystemAccountRoles } from "@/hooks/useSystemAccountRoles";
 import { AccountDialog } from "@/components/cuentas/AccountDialog";
 import { AccountTreeView } from "@/components/cuentas/AccountTreeView";
 import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog";
@@ -330,14 +331,22 @@ const Cuentas = () => {
     }
   };
 
+  const systemRoles = useSystemAccountRoles(selectedEnterprise);
+  const [onlySystem, setOnlySystem] = useState(false);
+  const systemIds = useMemo(
+    () => new Set(accounts.filter((a) => systemRoles.has(a.id)).map((a) => a.id)),
+    [accounts, systemRoles],
+  );
+  const systemCount = systemIds.size;
+  const systemActive = onlySystem && systemCount > 0;
   const filtered = useMemo(
-    () => filterCatalog(accounts, { query: searchQuery, rootId }),
-    [accounts, searchQuery, rootId],
+    () => filterCatalog(accounts, { query: searchQuery, rootId, onlyIds: systemActive ? systemIds : null }),
+    [accounts, searchQuery, rootId, systemActive, systemIds],
   );
   const rootChips = useMemo(() => getRootChips(accounts), [accounts]);
   const maxLevel = Math.min(6, accounts.reduce((m, a) => Math.max(m, a.level), 0));
   const levelOptions = Array.from({ length: maxLevel }, (_, i) => i + 1);
-  const autoExpandAll = searchQuery.trim() !== "" || rootId !== null;
+  const autoExpandAll = searchQuery.trim() !== "" || rootId !== null || systemActive;
 
   if (loading) {
     return (
@@ -451,6 +460,26 @@ const Cuentas = () => {
                 </button>
               );
             })}
+            <span aria-hidden className="mx-1 w-px self-stretch bg-border" />
+            <button
+              type="button"
+              onClick={() => setOnlySystem((v) => !v)}
+              aria-pressed={systemActive}
+              disabled={systemCount === 0}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none ${
+                systemActive ? "bg-tenant-solid-1 text-tenant-solid-1-foreground border-tenant-solid-1" : "bg-card hover:bg-muted"
+              }`}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              Usadas por el sistema
+              <span
+                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
+                  systemActive ? "bg-tenant-solid-1-foreground text-tenant-solid-1" : "bg-muted text-foreground"
+                }`}
+              >
+                {systemCount}
+              </span>
+            </button>
           </div>
           <p className="text-xs text-muted-foreground">
             {filtered.matchedDetail} de {filtered.totalDetail} cuentas de detalle
@@ -493,6 +522,8 @@ const Cuentas = () => {
               onInlineUpdate={handleInlineUpdate}
               levelLimit={levelValue === "all" ? null : Number(levelValue)}
               autoExpandAll={autoExpandAll}
+              systemRoles={systemRoles}
+              allAccounts={accounts}
             />
           )}
         </Card>

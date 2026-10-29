@@ -28,7 +28,7 @@ import { formatCurrency } from "@/lib/utils";
 import { LedgerStatsModal } from "@/components/estadisticas/LedgerStatsModal";
 import { useEnterpriseTaxRegime } from "@/hooks/useEnterpriseTaxRegime";
 import { useSmallTaxpayerRate } from "@/hooks/useSmallTaxpayerRate";
-import { applyMixedTaxToRow, calculateMixedTax, rowNeedsRecalc, persistedTaxCategory } from "@/utils/purchaseTaxCalculation";
+import { applyMixedTaxToRow, calculateMixedTax, rowNeedsRecalc } from "@/utils/purchaseTaxCalculation";
 import { resolveRowExemption } from "@/utils/taxExemption";
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
 import { LedgerSortControls, type LedgerSortField, type LedgerSortDir } from "@/components/libros/LedgerSortControls";
@@ -1958,7 +1958,7 @@ export default function LibrosFiscales() {
         vat_amount: entry.vat_amount,
         
         exempt_amount: entry.exempt_amount || 0,
-        tax_category: persistedTaxCategory(entry.tax_category || null),
+        tax_category: entry.tax_category || null,
         net_amount: entry.base_amount,
         batch_reference: entry.batch_reference || null,
         expense_account_id: entry.expense_account_id,

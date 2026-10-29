@@ -168,10 +168,6 @@ export function getTaxCategoryLabel(code: string | null | undefined): string {
   return TAX_CATEGORIES.find((c) => c.code === code)?.label ?? code;
 }
 
-/** La restricción vigente solo admite OTHER: EXEMPT conserva su cálculo, no su código al guardar. */
-export function persistedTaxCategory(code: string | null | undefined): string | null {
-  return code === "EXEMPT" ? "OTHER" : (code ?? null);
-}
 
 /**
  * Recompute base_amount / vat_amount / exempt_amount on a purchase-like row.
