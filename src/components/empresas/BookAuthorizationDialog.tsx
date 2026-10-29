@@ -54,7 +54,7 @@ interface Props {
 
 export function BookAuthorizationDialog({ open, onOpenChange, enterpriseId, authorization, onSubmit }: Props) {
   const { toast } = useToast();
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof schema>, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       book_type: "libro_compras",
@@ -167,7 +167,7 @@ export function BookAuthorizationDialog({ open, onOpenChange, enterpriseId, auth
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Folios autorizados</FormLabel>
-                  <FormControl><Input type="number" min={1} {...field} /></FormControl>
+                  <FormControl><Input type="number" min={1} {...field} value={field.value as number | string | undefined ?? ""} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}

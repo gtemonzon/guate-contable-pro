@@ -95,7 +95,7 @@ export function TenantDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditing = !!tenant;
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof formSchema>, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       tenant_code: "",

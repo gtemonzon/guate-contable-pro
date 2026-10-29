@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 const formSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
   description: z.string().optional(),
-  reminder_date: z.date({ required_error: 'La fecha es requerida' }),
+  reminder_date: z.date({ error: 'La fecha es requerida' }),
   priority: z.enum(['urgente', 'importante', 'informativa']),
 });
 
@@ -63,7 +63,7 @@ export function CustomReminderDialog({ enterpriseId, onSuccess, trigger }: Custo
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof formSchema>, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: '',

@@ -86,7 +86,7 @@ export function AccountDialog({
   presetConfig,
 }: AccountDialogProps) {
   const { toast } = useToast();
-  const form = useForm<FormValues>({
+  const form = useForm<z.input<typeof formSchema>, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       account_code: "",

@@ -58,14 +58,14 @@ const step1Schema = z.object({
 });
 
 const step2Schema = z.object({
-  net_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).positive("El monto debe ser mayor a 0"),
-  vat_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).min(0),
-  total_amount: z.number({ invalid_type_error: "Ingrese un monto válido" }).positive(),
+  net_amount: z.number({ error: "Ingrese un monto válido" }).positive("El monto debe ser mayor a 0"),
+  vat_amount: z.number({ error: "Ingrese un monto válido" }).min(0),
+  total_amount: z.number({ error: "Ingrese un monto válido" }).positive(),
   purchase_type: z.string().min(1, "Seleccione el tipo de compra"),
 });
 
 const step3Schema = z.object({
-  expense_account_id: z.number({ invalid_type_error: "Seleccione una cuenta" }).positive("Seleccione una cuenta de gasto"),
+  expense_account_id: z.number({ error: "Seleccione una cuenta" }).positive("Seleccione una cuenta de gasto"),
   notes: z.string().optional(),
 });
 
@@ -160,9 +160,9 @@ export function PurchaseInvoiceWizard({
   });
 
   // ── Forms per step ───────────────────────────────────────────────────────
-  const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) });
-  const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) });
-  const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) });
+  const form1 = useForm<z.input<typeof step1Schema>, unknown, Step1Data>({ resolver: zodResolver(step1Schema) });
+  const form2 = useForm<z.input<typeof step2Schema>, unknown, Step2Data>({ resolver: zodResolver(step2Schema) });
+  const form3 = useForm<z.input<typeof step3Schema>, unknown, Step3Data>({ resolver: zodResolver(step3Schema) });
 
   const handleCurrencyChange = (code: string) => {
     setCurrencyCode(code);
@@ -190,15 +190,15 @@ export function PurchaseInvoiceWizard({
     if (currentStep === 1) {
       const valid = await form1.trigger();
       if (!valid) return;
-      setStep1Data(form1.getValues());
+      setStep1Data(step1Schema.parse(form1.getValues()));
     } else if (currentStep === 2) {
       const valid = await form2.trigger();
       if (!valid) return;
-      setStep2Data(form2.getValues());
+      setStep2Data(step2Schema.parse(form2.getValues()));
     } else if (currentStep === 3) {
       const valid = await form3.trigger();
       if (!valid) return;
-      setStep3Data(form3.getValues());
+      setStep3Data(step3Schema.parse(form3.getValues()));
     }
     setCurrentStep((s) => Math.min(s + 1, 4));
   };

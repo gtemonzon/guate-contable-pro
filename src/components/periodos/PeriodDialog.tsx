@@ -31,10 +31,10 @@ import { getSafeErrorMessage } from "@/utils/errorMessages";
 
 const formSchema = z.object({
   start_date: z.date({
-    required_error: "La fecha de inicio es requerida",
+    error: "La fecha de inicio es requerida",
   }),
   end_date: z.date({
-    required_error: "La fecha de fin es requerida",
+    error: "La fecha de fin es requerida",
   }),
   notes: z.string().optional(),
 }).refine((data) => data.end_date > data.start_date, {
@@ -56,7 +56,7 @@ const PeriodDialog = ({ open, onOpenChange, period, onSuccess }: PeriodDialogPro
   const [endMonth, setEndMonth] = useState<Date>(new Date());
   const isEditing = !!period;
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<z.input<typeof formSchema>, unknown, z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       start_date: undefined,
