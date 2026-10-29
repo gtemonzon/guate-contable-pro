@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, DollarSign, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Settings, Inbox } from "lucide-react";
+import { TrendingUp, DollarSign, Calendar, ShoppingCart, Receipt, Scale, Wallet, ChevronDown, Settings } from "lucide-react";
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, DefaultTooltipContent } from "recharts";
@@ -30,7 +30,6 @@ import { useBookSummaries } from "@/hooks/dashboard/useBookSummaries";
 import { useYearlyCharts, fetchAvailableChartYears } from "@/hooks/dashboard/useYearlyCharts";
 import { useRecentEntries } from "@/hooks/dashboard/useRecentEntries";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useDashboardProgress } from "@/hooks/dashboard/useDashboardProgress";
 import type { BookSummary } from "@/hooks/dashboard/useBookSummaries";
 

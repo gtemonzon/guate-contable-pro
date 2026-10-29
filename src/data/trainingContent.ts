@@ -1,4 +1,4 @@
-import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Inbox, CalendarDays, Wallet, Scale, ShieldCheck, Boxes, LucideIcon } from "lucide-react";
+import { Building2, BookOpen, FileText, Receipt, Calculator, Banknote, Package, ShoppingCart, FileBarChart, Settings, Users, ClipboardList, Bell, CalendarDays, Wallet, Scale, ShieldCheck, Boxes, LucideIcon } from "lucide-react";
 
 export interface Lesson {
   id: string;
@@ -350,7 +350,7 @@ export const TRAINING_PHASES: Phase[] = [
         id: "4.4-inbox-notif",
         title: "Notificaciones",
         description: "Tareas pendientes y alertas.",
-        icon: Inbox,
+        icon: Bell,
         route: "/notificaciones",
         content: [
           "Notificaciones: un solo lugar para lo que requiere atención: partidas en borrador, conciliaciones pendientes, vencimientos fiscales, períodos, cobros/pagos y recordatorios.",
