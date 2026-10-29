@@ -35,9 +35,14 @@ export default function TenantSettings() {
   const [uploading, setUploading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  // Valor actual de dirty para el efecto de abajo: un refresco de currentTenant
+  // (p. ej. al guardar la tipografía) no debe borrar cambios de identidad sin guardar.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
     if (!currentTenant) return;
+    if (dirtyRef.current) return;
     setTenantName(currentTenant.tenant_name);
     setContactEmail(currentTenant.contact_email ?? "");
     setContactPhone(currentTenant.contact_phone ?? "");

@@ -4,7 +4,7 @@ import {
   Search, Home, Building2, Users, Settings, BookOpen, FileText, ShoppingCart, Receipt,
   Calculator, FileBarChart, HelpCircle, ChevronRight, ExternalLink, Lightbulb, AlertCircle,
   FileDown, Bell, Banknote, CalendarDays, ClipboardList, Building, Keyboard, Download,
-  MessageCircle, Package, Inbox, Wand2, Key, Wrench, Lock, HandCoins, Boxes,
+  MessageCircle, Package, Wand2, Key, Wrench, Lock, HandCoins, Boxes,
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import jsPDF from "jspdf";
@@ -129,12 +129,11 @@ const helpSections: HelpSection[] = [
       { title: "Iniciar Sesión", description: "Ingrese su correo electrónico y contraseña. Si olvidó su contraseña, use el enlace 'Olvidé mi contraseña' para recuperarla." },
       { title: "Seleccionar Empresa", description: "La empresa activa se muestra en el selector de la barra superior. Haga clic para cambiar entre empresas." },
       { title: "Navegar el Sistema", description: "Use el menú lateral izquierdo para acceder a las diferentes secciones. El menú se puede colapsar con el ícono de hamburguesa." },
-      { title: "Bandeja de Tareas Pendientes", description: "Acceda a /bandeja para ver una cola unificada de acciones pendientes: partidas en borrador, movimientos bancarios sin conciliar, vencimientos próximos y más." },
-      { title: "Centro de Notificaciones", description: "El ícono de campana en la barra superior muestra las notificaciones y alertas pendientes del sistema." },
+      { title: "Centro de Notificaciones", description: "El ícono de campana en la barra superior muestra lo que requiere atención: partidas en borrador, movimientos sin conciliar, vencimientos y más. Use 'Ver todas las notificaciones' para abrir /notificaciones." },
     ],
     tips: [
       "La empresa activa se guarda automáticamente y persistirá entre sesiones y dispositivos.",
-      "Use la Bandeja (/bandeja) como punto de partida diario: agrupa todo lo que necesita atención.",
+      "Use Notificaciones (/notificaciones) como punto de partida diario: agrupa todo lo que necesita atención.",
     ],
   },
   {
@@ -146,33 +145,11 @@ const helpSections: HelpSection[] = [
     steps: [
       { title: "Indicadores Financieros (KPIs)", description: "Visualice Total Activos, Total Pasivos, Utilidad del Mes y Liquidez con variación respecto al mes anterior." },
       { title: "Gráficas Anuales", description: "Gráficas de líneas con las tendencias de Ventas y Compras mensuales del año en curso." },
-      { title: "Alerta de Bandeja", description: "Si hay tareas pendientes, el Dashboard muestra un banner de acceso rápido a la Bandeja de Acciones." },
       { title: "Alertas del Dashboard", description: "Alertas de vencimientos próximos de impuestos, períodos sin cerrar y tareas pendientes." },
     ],
     tips: [
       "Los datos se actualizan automáticamente al seleccionar una empresa diferente.",
       "Las alertas en rojo indican vencimientos inmediatos.",
-    ],
-  },
-  {
-    id: "bandeja",
-    title: "Bandeja de Acciones",
-    icon: Inbox,
-    description: "Cola unificada de tareas contables pendientes que requieren atención.",
-    route: "/bandeja",
-    isNew: true,
-    steps: [
-      { title: "Qué muestra la Bandeja", description: "Agrupa automáticamente: partidas en borrador, movimientos bancarios sin conciliar y vencimientos de impuestos próximos." },
-      { title: "Prioridad Visual", description: "Cada elemento muestra su prioridad: Urgente (rojo), Importante (amarillo) o Informativa (azul), con ícono del tipo de tarea." },
-      { title: "Botón de Acción Rápida", description: "Cada ítem tiene un botón 'Acción' que lleva directamente a la pantalla correspondiente para resolver la tarea." },
-      { title: "Panel de Vista Previa", description: "Al hacer clic en un ítem, el panel derecho muestra un resumen: montos, fechas, número de partida, o descripción." },
-      { title: "Filtros por Tipo", description: "Filtre por tipo de tarea: Todos, Partidas, Banca, Vencimientos. Los contadores muestran cuántos hay en cada categoría." },
-      { title: "Asistente de Compras desde Bandeja", description: "Desde la Bandeja puede acceder al Asistente de Registro de Facturas de Compra con un flujo guiado de 4 pasos." },
-    ],
-    tips: [
-      "La bandeja se recarga automáticamente cuando cambia la empresa activa.",
-      "Las partidas en borrador deben revisarse antes de cerrar el período.",
-      "Un vencimiento 'urgente' es aquel que vence en menos de 3 días.",
     ],
   },
   {
@@ -308,7 +285,7 @@ const helpSections: HelpSection[] = [
         ],
         tips: [
           "Use Ctrl+Enter en el diálogo para contabilizar sin hacer clic en el botón.",
-          "Los borradores aparecen en la Bandeja de Acciones para facilitar su seguimiento.",
+          "Los borradores generan un aviso en Notificaciones según el umbral de días configurado en Configuración > Alertas.",
           "El correlativo se reinicia mensualmente por empresa y prefijo (PD, PA, PC, REV, VENT, COMP, DEP, BAJA).",
         ],
       },
@@ -340,10 +317,9 @@ const helpSections: HelpSection[] = [
         id: "asistente-compras",
         title: "Asistente de Registro de Compras",
         description: "Flujo guiado de 4 pasos para registrar facturas de compra con vista previa del asiento contable.",
-        route: "/bandeja",
         isNew: true,
         steps: [
-          { title: "Acceder al Asistente", description: "Desde la Bandeja de Acciones, haga clic en 'Nueva Compra' para abrir el asistente de 4 pasos." },
+          { title: "Acceder al Asistente", description: "Abra el asistente de registro de compras para iniciar el flujo guiado de 4 pasos." },
           { title: "Paso 1 — Datos del Proveedor", description: "Ingrese NIT, nombre del proveedor, serie y número de factura, y fecha de emisión." },
           { title: "Paso 2 — Montos e IVA", description: "Ingrese el monto total. El sistema calcula automáticamente la base imponible y el IVA (12%). Ajuste si aplica IDP u otro régimen." },
           { title: "Paso 3 — Cuenta Contable", description: "Seleccione la cuenta de gasto o costo. El sistema sugiere la cuenta usada previamente." },
@@ -364,7 +340,7 @@ const helpSections: HelpSection[] = [
           { title: "Vincular Manualmente y Conciliar", description: "Cuando no hay match automático, asocie cada movimiento bancario con la partida correspondiente y márquelo como conciliado." },
           { title: "Registrar Ajustes", description: "Capture cargos/abonos del banco no contabilizados o viceversa para explicar diferencias entre saldos." },
         ],
-        tips: ["Los movimientos sin conciliar aparecen en la Bandeja de Acciones.", "Los movimientos conciliados no pueden ser modificados."],
+        tips: ["Los movimientos sin conciliar generan un aviso en Notificaciones según el umbral configurado en Configuración > Alertas.", "Los movimientos conciliados no pueden ser modificados."],
       },
       {
         id: "conciliacion-cuadratica",
@@ -616,8 +592,8 @@ const faqItems: FaqItem[] = [
     answer: "Haga clic en el selector de empresa en la barra superior. El sistema valida automáticamente que tenga acceso y persiste la selección entre sesiones y dispositivos.",
   },
   {
-    question: "¿Qué es la Bandeja de Acciones?",
-    answer: "Es una cola unificada en /bandeja que agrupa todo lo que necesita atención: partidas en borrador, movimientos bancarios sin conciliar y vencimientos de impuestos próximos. Es el punto de partida diario recomendado.",
+    question: "¿Dónde veo lo que requiere atención?",
+    answer: "En Notificaciones (campana de la barra superior o /notificaciones): agrupa partidas en borrador, movimientos bancarios sin conciliar, vencimientos fiscales, períodos pendientes y cobros/pagos. Use el filtro 'Tipo' para ver cada tema.",
   },
   {
     question: "¿Cómo uso el atajo Alt+N para ingreso rápido?",
@@ -645,7 +621,7 @@ const faqItems: FaqItem[] = [
   },
   {
     question: "¿Qué es el Asistente de Registro de Compras?",
-    answer: "Es un flujo guiado de 4 pasos accesible desde la Bandeja de Acciones para registrar facturas de compra. Incluye vista previa del asiento contable en tiempo real antes de confirmar.",
+    answer: "Es un flujo guiado de 4 pasos para registrar facturas de compra. Incluye vista previa del asiento contable en tiempo real antes de confirmar.",
   },
   {
     question: "¿Cómo registro y deprecio un Activo Fijo?",
@@ -1050,7 +1026,7 @@ const Ayuda = () => {
         <div className={`relative transition-all duration-300 ${scrolled ? "mb-2" : "mb-4"}`}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar en el manual... (ej: activos fijos, bandeja, alt+n, partidas)"
+            placeholder="Buscar en el manual... (ej: activos fijos, notificaciones, alt+n, partidas)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
