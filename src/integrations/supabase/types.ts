@@ -5836,9 +5836,9 @@ export type Database = {
       }
       update_tenant_identity: {
         Args: {
-          p_contact_email: string
-          p_contact_phone: string
-          p_logo_url: string
+          p_contact_email: string | null
+          p_contact_phone: string | null
+          p_logo_url: string | null
           p_pdf_font_family: string
           p_pdf_font_size: number
           p_primary_color: string
