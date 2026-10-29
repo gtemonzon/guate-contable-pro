@@ -49,7 +49,7 @@ function hslToHex(h: number, s: number, l: number): string {
 /**
  * Extrae los colores protagonistas de un bitmap RGBA (p. ej. getImageData de un logo).
  * Ignora transparentes, casi blancos, casi negros y grises; si no queda nada,
- * devuelve el color opaco más frecuente.
+ * devuelve el opaco no casi blanco más frecuente (o blanco si todo es casi blanco).
  */
 export function extractPaletteFromPixels(
   data: Uint8ClampedArray,
@@ -60,6 +60,7 @@ export function extractPaletteFromPixels(
   const total = Math.min(width * height, Math.floor(data.length / 4));
   const buckets = new Map<number, Bucket>();
   const raw = new Map<number, Bucket>();
+  const rawNonWhite = new Map<number, Bucket>();
 
   for (let i = 0; i < total; i++) {
     const o = i * 4;
@@ -71,6 +72,11 @@ export function extractPaletteFromPixels(
     raw.set(key, rb);
 
     const { s, l } = rgbToHslRaw(r, g, b);
+    if (l <= 94) {
+      const nw = rawNonWhite.get(key) ?? { r: 0, g: 0, b: 0, w: 0 };
+      nw.r += r; nw.g += g; nw.b += b; nw.w += 1;
+      rawNonWhite.set(key, nw);
+    }
     if (l > 94 || l < 8 || s < 15) continue;
     const w = 1 + 2 * (s / 100);
     const bk = buckets.get(key) ?? { r: 0, g: 0, b: 0, w: 0 };
@@ -82,7 +88,8 @@ export function extractPaletteFromPixels(
 
   if (buckets.size === 0) {
     let best: Bucket | null = null;
-    for (const bk of raw.values()) if (!best || bk.w > best.w) best = bk;
+    const pool = rawNonWhite.size > 0 ? rawNonWhite : raw;
+    for (const bk of pool.values()) if (!best || bk.w > best.w) best = bk;
     if (!best) return [];
     return [rgbToHex(best.r / best.w, best.g / best.w, best.b / best.w)];
   }
