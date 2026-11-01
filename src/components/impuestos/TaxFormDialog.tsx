@@ -15,7 +15,7 @@ import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
-import { taxFormDuplicateMessage } from "@/utils/taxFormSaveValidation";
+import { taxFormDuplicateMessage, staleInactiveTaxForm } from "@/utils/taxFormSaveValidation";
 import {
   Dialog,
   DialogContent,
@@ -590,10 +590,10 @@ export default function TaxFormDialog({
     setLoading(true);
 
     try {
-      // El número es único por empresa, también para formularios eliminados.
+      // El número es único por empresa (la restricción incluye inactivos heredados).
       const { data: existing, error: checkError } = await supabase
         .from("tab_tax_forms")
-        .select("id, is_active")
+        .select("id, is_active, file_path")
         .eq("enterprise_id", enterpriseId)
         .eq("form_number", formNumber.trim())
         .maybeSingle();
@@ -609,6 +609,19 @@ export default function TaxFormDialog({
         });
         setLoading(false);
         return;
+      }
+
+      // Formulario eliminado con el método anterior: se borra por completo para liberar el número.
+      const stale = staleInactiveTaxForm(existing, editingForm?.id);
+      if (stale) {
+        const { error: purgeError } = await supabase
+          .from("tab_tax_forms")
+          .delete()
+          .eq("id", stale.id);
+        if (purgeError) throw purgeError;
+        if (stale.file_path) {
+          await supabase.storage.from("tax-forms").remove([stale.file_path]);
+        }
       }
 
       let filePath = editingForm?.file_path || null;

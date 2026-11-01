@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { taxFormDuplicateMessage } from "./taxFormSaveValidation";
+import { taxFormDuplicateMessage, staleInactiveTaxForm } from "./taxFormSaveValidation";
 
 describe("taxFormDuplicateMessage", () => {
-  it("bloquea el número reservado por un formulario eliminado", () => {
-    expect(taxFormDuplicateMessage({ id: 181, is_active: false })).not.toBeNull();
+  it("permite reutilizar el número de un formulario eliminado", () => {
+    expect(taxFormDuplicateMessage({ id: 181, is_active: false })).toBeNull();
   });
 
   it("bloquea el número de otro formulario activo", () => {
@@ -16,5 +16,15 @@ describe("taxFormDuplicateMessage", () => {
 
   it("permite un número que no existe", () => {
     expect(taxFormDuplicateMessage(null)).toBeNull();
+  });
+});
+
+describe("staleInactiveTaxForm", () => {
+  it("devuelve el formulario inactivo que debe purgarse", () => {
+    expect(staleInactiveTaxForm({ id: 181, is_active: false })?.id).toBe(181);
+  });
+
+  it("no purga formularios activos", () => {
+    expect(staleInactiveTaxForm({ id: 181, is_active: true })).toBeNull();
   });
 });
