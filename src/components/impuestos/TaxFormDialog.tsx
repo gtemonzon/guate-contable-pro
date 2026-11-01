@@ -14,6 +14,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { taxFormDuplicateMessage } from "@/utils/taxFormSaveValidation";
 import {
   Dialog,
   DialogContent,
@@ -544,7 +546,7 @@ export default function TaxFormDialog({
       verifyNit(undefined, undefined);
       toast({
         title: "Error al analizar",
-        description: error instanceof Error ? error.message : String(error) || "No se pudo procesar el PDF. Completa los campos manualmente.",
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
@@ -588,21 +590,21 @@ export default function TaxFormDialog({
     setLoading(true);
 
     try {
-      // Check for duplicate form number
+      // El número es único por empresa, también para formularios eliminados.
       const { data: existing, error: checkError } = await supabase
         .from("tab_tax_forms")
-        .select("id")
+        .select("id, is_active")
         .eq("enterprise_id", enterpriseId)
         .eq("form_number", formNumber.trim())
-        .eq("is_active", true)
         .maybeSingle();
 
       if (checkError) throw checkError;
 
-      if (existing && (!editingForm || existing.id !== editingForm.id)) {
+      const duplicateMessage = taxFormDuplicateMessage(existing, editingForm?.id);
+      if (duplicateMessage) {
         toast({
           title: "Error",
-          description: "Ya existe un formulario con ese número",
+          description: duplicateMessage,
           variant: "destructive",
         });
         setLoading(false);
@@ -678,7 +680,7 @@ export default function TaxFormDialog({
     } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : String(error) || "No se pudo guardar el formulario",
+        description: getSafeErrorMessage(error),
         variant: "destructive",
       });
     } finally {
