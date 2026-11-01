@@ -4,7 +4,7 @@
 - Inventory catalog and current-balance sorting share the pure inventorySort utility; historical balances continue to use inventoryBalanceAsOf so UI ordering cannot alter valuation or exports.
 - SAT purchase exemption derivation is centralized in finalizeImportedPurchase and gated by the stripped CSV/XLS source marker; EXEMPT uses the existing OTHER account mapping to preserve shared non-VAT accounting behavior.
 - Purchase write boundaries persist tax_category EXEMPT unchanged (the database constraint accepts it); accounting still maps EXEMPT to the OTHER non-VAT account.
-- Tax form duplicate checks include inactive records and use taxFormSaveValidation before uploading files because soft deletion does not release the enterprise/form-number unique key.
+- Tax forms are hard-deleted (row + PDF) so the enterprise/form-number unique key is released; on save, legacy inactive rows with the same number are purged first via taxFormSaveValidation, and only active forms block duplicates.
 
 ## Convenciones de interfaz
 - Toda tabla de registros editables abre su editor al hacer clic en la fila (usar getClickableRowProps de src/utils/clickableRow.ts; las acciones de la fila llevan data-row-action). Si una tabla nueva no tiene una acción por defecto evidente (por ejemplo, registros inmutables como un kardex), proponerla o preguntarle al usuario antes de implementar.
