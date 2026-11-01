@@ -167,12 +167,17 @@ export default function FormulariosImpuestos() {
     if (!formToDelete) return;
 
     try {
+      // Borrado completo: libera el número para volver a subir el formulario o su corrección.
       const { error } = await supabase
         .from("tab_tax_forms")
-        .update({ is_active: false })
+        .delete()
         .eq("id", formToDelete.id);
 
       if (error) throw error;
+
+      if (formToDelete.file_path) {
+        await supabase.storage.from("tax-forms").remove([formToDelete.file_path]);
+      }
 
       toast({
         title: "Formulario eliminado",

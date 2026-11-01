@@ -1,15 +1,23 @@
 interface ExistingTaxForm {
   id: number;
   is_active: boolean;
+  file_path?: string | null;
 }
 
-/** Los números siguen reservados aunque el formulario se haya eliminado. */
+/** Solo un formulario activo bloquea el número; los inactivos (legado) se purgan. */
 export function taxFormDuplicateMessage(
   existing: ExistingTaxForm | null,
   editingId?: number,
 ): string | null {
-  if (!existing || existing.id === editingId) return null;
-  return existing.is_active
-    ? "Ya existe un formulario con ese número"
-    : "Este número pertenece a un formulario eliminado. No se puede registrar de nuevo mientras ese número siga reservado. No se guardaron cambios.";
+  if (!existing || existing.id === editingId || !existing.is_active) return null;
+  return "Ya existe un formulario con ese número";
+}
+
+/** Formulario inactivo heredado del borrado anterior que debe eliminarse para liberar el número. */
+export function staleInactiveTaxForm(
+  existing: ExistingTaxForm | null,
+  editingId?: number,
+): ExistingTaxForm | null {
+  if (!existing || existing.id === editingId || existing.is_active) return null;
+  return existing;
 }
