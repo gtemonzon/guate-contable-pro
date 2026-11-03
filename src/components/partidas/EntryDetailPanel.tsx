@@ -22,6 +22,7 @@ import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { sortLinkedPurchases } from "@/utils/linkedPurchasesSort";
 
 // --- Types ---
 interface EntryLine {
@@ -240,7 +241,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         .select("id, invoice_series, invoice_number, invoice_date, supplier_nit, supplier_name, total_amount")
         .eq("journal_entry_id", id)
         .is("deleted_at", null);
-      setLinkedPurchases(data || []);
+      setLinkedPurchases(sortLinkedPurchases(data || []));
     } catch {
       // ignore - non-critical lookup
     }
