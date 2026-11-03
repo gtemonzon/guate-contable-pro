@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import { TruncatedText } from "@/components/ui/truncated-text";
 import EntityAuditLog from "@/components/audit/EntityAuditLog";
 import { type DateContext } from "@/components/ui/entity-link";
 import AccountLedgerDrawer from "@/components/reportes/AccountLedgerDrawer";
+import BankLedgerDrawer from "@/components/reportes/BankLedgerDrawer";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useToast } from "@/hooks/use-toast";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
@@ -120,8 +120,9 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
   const [voidDoc, setVoidDoc] = useState<VoidDocInfo | null>(null);
   const [undoingVoid, setUndoingVoid] = useState(false);
   const [ledgerDrawerAccount, setLedgerDrawerAccount] = useState<{ id: number; code: string; name: string } | null>(null);
+  const [bankDrawerOpen, setBankDrawerOpen] = useState(false);
+  const [bankDrawerAccount, setBankDrawerAccount] = useState<{ code: string; name: string } | null>(null);
   const { selectedEnterpriseId } = useEnterprise();
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -309,11 +310,22 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
     toast({ title: "Enlace copiado" });
   };
 
-  const handleNavigateToBancos = () => {
-    if (!entry) return;
-    let url = `/reportes?tab=bancos&bankAccountId=${entry.bank_account_id}`;
-    if (dateContext) url += `&dateFrom=${dateContext.dateFrom}&dateTo=${dateContext.dateTo}`;
-    navigate(url);
+  /** Abre el libro de bancos en un cajón; el código y nombre salen de la línea del banco o de tab_accounts. */
+  const handleOpenBankDrawer = async () => {
+    if (!entry?.bank_account_id) return;
+    const bankLine = entry.details.find((d) => d.account_id === entry.bank_account_id);
+    if (bankLine) {
+      setBankDrawerAccount({ code: bankLine.account_code, name: bankLine.account_name });
+    } else {
+      setBankDrawerAccount(null);
+      const { data } = await supabase
+        .from("tab_accounts")
+        .select("account_code, account_name")
+        .eq("id", entry.bank_account_id)
+        .maybeSingle();
+      setBankDrawerAccount(data ? { code: data.account_code, name: data.account_name } : null);
+    }
+    setBankDrawerOpen(true);
   };
 
   return (
@@ -505,7 +517,7 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(val) => {
-        if (val === "bancos") { handleNavigateToBancos(); return; }
+        if (val === "bancos") { handleOpenBankDrawer(); return; }
         setActiveTab(val);
       }} className="flex-1 flex flex-col min-h-0">
         <div className="mx-4 mt-2 shrink-0 flex items-center gap-1">
@@ -694,6 +706,22 @@ export default function EntryDetailPanel({ entryId, onClose, onEdit, onVoid, onD
         entryDate={entry.entry_date}
         allowMonthToggle
 
+      />
+
+      <BankLedgerDrawer
+        open={bankDrawerOpen}
+        onOpenChange={setBankDrawerOpen}
+        bankAccountId={entry.bank_account_id ?? null}
+        accountCode={bankDrawerAccount?.code ?? ""}
+        accountName={bankDrawerAccount?.name ?? ""}
+        enterpriseId={selectedEnterpriseId}
+        startDate={dateContext?.dateFrom}
+        endDate={dateContext?.dateTo ?? entry.entry_date}
+        showFullReportLink
+        highlightEntryId={entry.id}
+        highlightEntryStatus={entry.status}
+        entryDate={entry.entry_date}
+        allowMonthToggle
       />
     </div>
   );
