@@ -58,14 +58,17 @@ const Cuentas = () => {
     }
   }, []);
 
+  // El catálogo solo se vuelve a consultar cuando cambia la empresa, no cuando el
+  // contexto se refresca (isLoading pasa a true y vuelve a false con la misma empresa).
   useEffect(() => {
-    if (enterpriseLoading) return;
-    if (selectedEnterprise == null) {
+    if (selectedEnterprise != null) void fetchAccounts(selectedEnterprise);
+  }, [selectedEnterprise]);
+
+  useEffect(() => {
+    if (!enterpriseLoading && selectedEnterprise == null) {
       setAccounts([]);
       setLoading(false);
-      return;
     }
-    void fetchAccounts(selectedEnterprise);
   }, [enterpriseLoading, selectedEnterprise]);
 
   const fetchAccounts = async (enterpriseId: number) => {
@@ -326,7 +329,9 @@ const Cuentas = () => {
   const levelOptions = Array.from({ length: maxLevel }, (_, i) => i + 1);
   const autoExpandAll = searchQuery.trim() !== "" || rootId !== null || systemActive;
 
-  if (loading || enterpriseLoading) {
+  // Spinner de página solo mientras aún no hay empresa: un refresco del contexto no
+  // desmonta la pantalla ni sus diálogos abiertos.
+  if (loading || (enterpriseLoading && selectedEnterprise == null)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
