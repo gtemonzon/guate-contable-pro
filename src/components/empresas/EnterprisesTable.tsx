@@ -51,21 +51,14 @@ interface EnterprisesTableProps {
 export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, activeEnterpriseId: activeEnterpriseIdProp }: EnterprisesTableProps) => {
   const { toast } = useToast();
   const { exportEnterpriseData, isExporting } = useEnterpriseBackup();
-  const { switchEnterprise } = useEnterprise();
+  const { switchEnterprise, selectedEnterpriseId, refreshEnterprises } = useEnterprise();
   const [sortField, setSortField] = useState<SortField>("business_name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [activeEnterpriseIdLocal, setActiveEnterpriseIdLocal] = useState<number | null>(null);
-  const activeEnterpriseId = activeEnterpriseIdProp ?? activeEnterpriseIdLocal;
+  // Empresa activa: la que pasa el padre o, si no, la del contexto (fuente única).
+  const activeEnterpriseId = activeEnterpriseIdProp ?? selectedEnterpriseId;
   const [activePeriods, setActivePeriods] = useState<Record<number, string>>({});
   const [lastTaxForms, setLastTaxForms] = useState<Record<number, LastTaxFormInfo>>({});
   const [exportingId, setExportingId] = useState<number | null>(null);
-  useEffect(() => {
-    const storedId = localStorage.getItem("currentEnterpriseId");
-    if (storedId) {
-      setActiveEnterpriseIdLocal(parseInt(storedId));
-    }
-  }, []);
-
   useEffect(() => {
     const fetchActivePeriods = async () => {
       const enterpriseIds = enterprises.map(e => e.id);
@@ -181,7 +174,6 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
   }, [enterprises, sortField, sortDirection, activePeriods, lastTaxForms, activeEnterpriseId]);
 
   const handleSelect = async (enterprise: Enterprise) => {
-    setActiveEnterpriseIdLocal(enterprise.id);
     await switchEnterprise(enterprise.id);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -212,8 +204,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
       if (error) throw error;
 
       if (activeEnterpriseId === enterprise.id) {
-        localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseIdLocal(null);
+        // El contexto vuelve a elegir una empresa válida y actualiza su pista.
+        await refreshEnterprises();
       }
 
       toast({
@@ -241,8 +233,8 @@ export const EnterprisesTable = ({ enterprises, onEdit, onDelete, onOpenWizard, 
       if (error) throw error;
 
       if (activeEnterpriseId === enterprise.id) {
-        localStorage.removeItem("currentEnterpriseId");
-        setActiveEnterpriseIdLocal(null);
+        // El contexto vuelve a elegir una empresa válida y actualiza su pista.
+        await refreshEnterprises();
       }
 
       toast({
