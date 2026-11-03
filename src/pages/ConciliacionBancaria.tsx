@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,10 @@ const ConciliacionBancaria = () => {
   const [bankBalance, setBankBalance] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedMovements, setSelectedMovements] = useState<Set<number>>(new Set());
-  const [selectedEnterprise, setSelectedEnterprise] = useState<string | null>(null);
+  // Empresa activa: del contexto (fuente única). Se conserva como texto porque el resto
+  // de la pantalla y sus diálogos la usan así.
+  const { selectedEnterpriseId, isLoading: enterpriseLoading } = useEnterprise();
+  const selectedEnterprise = selectedEnterpriseId != null ? String(selectedEnterpriseId) : null;
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [movementSearch, setMovementSearch] = useState("");
   type SortKey = 'movement_date' | 'description' | 'bank_reference' | 'beneficiary_name' | 'type' | 'amount';
@@ -191,12 +195,12 @@ const ConciliacionBancaria = () => {
   };
 
   useEffect(() => {
-    const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
-    if (currentEnterpriseId) {
-      setSelectedEnterprise(currentEnterpriseId);
-      fetchBankAccounts(currentEnterpriseId);
+    if (selectedEnterpriseId == null) {
+      setBankAccounts([]);
+      return;
     }
-  }, []);
+    void fetchBankAccounts(String(selectedEnterpriseId));
+  }, [selectedEnterpriseId]);
 
   useEffect(() => {
     if (selectedAccount) {
@@ -852,6 +856,13 @@ const ConciliacionBancaria = () => {
   const balances = calculateBalances();
 
   if (!selectedEnterprise) {
+    if (enterpriseLoading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      );
+    }
     return (
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-12">
