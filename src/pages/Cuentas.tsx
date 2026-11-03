@@ -14,6 +14,7 @@ import { ImportAccountsDialog } from "@/components/cuentas/ImportAccountsDialog"
 import { CopyAccountsCatalogDialog } from "@/components/cuentas/CopyAccountsCatalogDialog";
 import type { Database, TablesUpdate } from "@/integrations/supabase/types";
 import { getSafeErrorMessage } from "@/utils/errorMessages";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { filterCatalog, getRootChips } from "@/utils/accountCatalogView";
 
 const PILL_CLASS =
@@ -41,7 +42,9 @@ const Cuentas = () => {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [selectedEnterprise, setSelectedEnterprise] = useState<number | null>(null);
+  // Empresa activa: del contexto (fuente única); localStorage solo es una pista que el
+  // contexto escribe al terminar de cargar.
+  const { selectedEnterpriseId: selectedEnterprise, isLoading: enterpriseLoading } = useEnterprise();
   const [presetConfig, setPresetConfig] = useState<PresetConfig | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -56,39 +59,14 @@ const Cuentas = () => {
   }, []);
 
   useEffect(() => {
-    fetchEnterprises();
-    
-    // Listen for enterprise changes
-    const handleStorageChange = () => {
-      fetchEnterprises();
-    };
-    
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
-
-  const fetchEnterprises = async () => {
-    try {
-      // Get the selected enterprise from localStorage
-      const currentEnterpriseId = localStorage.getItem("currentEnterpriseId");
-      
-      if (!currentEnterpriseId) {
-        setLoading(false);
-        return;
-      }
-
-      const enterpriseId = parseInt(currentEnterpriseId);
-      setSelectedEnterprise(enterpriseId);
-      fetchAccounts(enterpriseId);
-    } catch (error: unknown) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: getSafeErrorMessage(error),
-      });
+    if (enterpriseLoading) return;
+    if (selectedEnterprise == null) {
+      setAccounts([]);
       setLoading(false);
+      return;
     }
-  };
+    void fetchAccounts(selectedEnterprise);
+  }, [enterpriseLoading, selectedEnterprise]);
 
   const fetchAccounts = async (enterpriseId: number) => {
     try {
@@ -348,7 +326,7 @@ const Cuentas = () => {
   const levelOptions = Array.from({ length: maxLevel }, (_, i) => i + 1);
   const autoExpandAll = searchQuery.trim() !== "" || rootId !== null || systemActive;
 
-  if (loading) {
+  if (loading || enterpriseLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>

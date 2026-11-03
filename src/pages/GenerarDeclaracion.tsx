@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
 import type { Json } from "@/integrations/supabase/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,8 +61,9 @@ const MONTHS = [
 const currentYear = new Date().getFullYear();
 
 export default function GenerarDeclaracion() {
-  const [enterpriseId, setEnterpriseId] = useState<number | null>(null);
-  const [enterpriseName, setEnterpriseName] = useState("");
+  // Empresa activa: del contexto (fuente única), no de localStorage.
+  const { selectedEnterprise, selectedEnterpriseId: enterpriseId, isLoading: enterpriseLoading } = useEnterprise();
+  const enterpriseName = selectedEnterprise?.business_name ?? "";
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedFormType, setSelectedFormType] = useState<TaxFormType | null>(null);
@@ -128,16 +130,6 @@ export default function GenerarDeclaracion() {
   // pantalla se ve el sugerido).
   const inventarioPrellenadoPendiente =
     !inventarioFinalTocado && inventarioFinalEstimado !== inventarioFinalSugerido;
-
-  // Load active enterprise
-  useEffect(() => {
-    const stored = localStorage.getItem("currentEnterpriseId");
-    const storedName = localStorage.getItem("currentEnterpriseName");
-    if (stored) {
-      setEnterpriseId(parseInt(stored, 10));
-      setEnterpriseName(storedName || "");
-    }
-  }, []);
 
   // Load available years from accounting periods
   useEffect(() => {
@@ -430,6 +422,15 @@ export default function GenerarDeclaracion() {
   };
 
   if (!enterpriseId) {
+    if (enterpriseLoading) {
+      return (
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="container mx-auto p-6">
         <Alert>
