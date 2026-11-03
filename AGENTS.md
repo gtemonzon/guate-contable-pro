@@ -8,3 +8,4 @@
 
 ## Convenciones de interfaz
 - Toda tabla de registros editables abre su editor al hacer clic en la fila (usar getClickableRowProps de src/utils/clickableRow.ts; las acciones de la fila llevan data-row-action). Si una tabla nueva no tiene una acción por defecto evidente (por ejemplo, registros inmutables como un kardex), proponerla o preguntarle al usuario antes de implementar.
+- Los paneles de detalle de partida abren cajones laterales (mayor y bancos) en lugar de navegar a los reportes; el reporte completo queda como botón opcional del cajón.
