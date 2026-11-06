@@ -13,7 +13,8 @@
  */
 import { NO_VAT_DOCUMENT_TYPES, calculateMixedTax } from "./purchaseTaxCalculation";
 import {
-  resolveExemption, findActiveExemptionWindow, exemptionBadgeLabel, type TaxExemptionRule,
+  resolveExemption, findActiveExemptionWindow, exemptionBadgeLabel,
+  type ResolvedTaxExemption, type TaxExemptionRule,
 } from "./taxExemption";
 
 /** Campos internos del importador (se eliminan antes del insert, como __sourceRow). */
@@ -55,6 +56,8 @@ export interface FinalizedImport<T> {
   record: T;
   /** Exención aplicada (caso b). */
   exempted: boolean;
+  /** Regla resuelta en el caso b (para la insignia y su texto); null en el resto. */
+  exemption: ResolvedTaxExemption | null;
   /** Advertencia del caso c. */
   warning: string | null;
   /** Diferencia del caso d (|IVA SAT − IVA final| > 0.05). */
@@ -162,7 +165,7 @@ export function finalizeImportedPurchase<T extends ImportedPurchaseLike>(
     }
   }
 
-  return { record: next, exempted: !!exemption, warning, satDifference, derivedExempt };
+  return { record: next, exempted: !!exemption, exemption: exemption ?? null, warning, satDifference, derivedExempt };
 }
 
 /** Quita los campos internos del importador antes del insert. */

@@ -47,6 +47,12 @@ function inRange(date: string, from: string, to: string | null): boolean {
   return t === null || date <= t;
 }
 
+/** Orden determinista: valid_from más reciente primero y, en empate, id mayor. */
+function byValidFromThenIdDesc(a: TaxExemptionRule, b: TaxExemptionRule): number {
+  if (a.valid_from !== b.valid_from) return a.valid_from < b.valid_from ? 1 : -1;
+  return b.id - a.id;
+}
+
 function toResolved(rule: TaxExemptionRule): ResolvedTaxExemption {
   return {
     code: rule.code,
@@ -61,7 +67,7 @@ function toResolved(rule: TaxExemptionRule): ResolvedTaxExemption {
 
 /**
  * Regla activa para (código del tipo de operación, fecha de factura). Misma lógica
- * que get_active_tax_exemption: la de valid_from más reciente.
+ * que get_active_tax_exemption: la de valid_from más reciente (en empate, id mayor).
  */
 export function resolveExemption(
   rules: TaxExemptionRule[] | null | undefined,
@@ -78,18 +84,36 @@ export function resolveExemption(
       (r.operation_type_code || "").trim().toUpperCase() === code &&
       inRange(date, r.valid_from, r.valid_to),
     )
-    .sort((a, b) => (a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0))[0];
+    .sort(byValidFromThenIdDesc)[0];
   return match ? toResolved(match) : null;
 }
 
-/** ¿La fecha cae dentro de la vigencia de alguna regla activa (de cualquier tipo)? */
+/**
+ * ¿La fecha cae dentro de la vigencia de una exención que también exonera el IDP
+ * (blocks_idp = true, p. ej. el Decreto 22-2026 de combustibles)?
+ *
+ * Solo esas reglas cuentan: la ventana existe para proteger facturas de combustible
+ * con IVA 0 en el archivo SAT a las que aún no se les asignó el tipo de operación
+ * (caso c de finalizeImportedPurchase). Reglas como EXENTAS_SIN_IVA (sin fecha de fin,
+ * sin IDP) no abren ventana: si contaran, todo documento con IVA 0 quedaría con la
+ * advertencia del combustible para siempre.
+ *
+ * Entre varias, la de valid_from más reciente y, en empate, la de id mayor.
+ */
 export function findActiveExemptionWindow(
   rules: TaxExemptionRule[] | null | undefined,
   invoiceDate: string | null | undefined,
 ): TaxExemptionRule | null {
   const date = toIsoDate(invoiceDate);
   if (!rules?.length || !date) return null;
-  return rules.find((r) => r.is_active && r.applies_to === "PURCHASE" && inRange(date, r.valid_from, r.valid_to)) ?? null;
+  return rules
+    .filter((r) =>
+      r.is_active &&
+      r.applies_to === "PURCHASE" &&
+      r.blocks_idp === true &&
+      inRange(date, r.valid_from, r.valid_to),
+    )
+    .sort(byValidFromThenIdDesc)[0] ?? null;
 }
 
 /**

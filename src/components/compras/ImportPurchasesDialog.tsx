@@ -45,6 +45,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
+import { exemptionBadgeLabel, exemptionTooltip } from "@/utils/taxExemption";
 import {
   finalizeImportedPurchase, stripImportInternals, type FinalizedImport, type SatVatDifference, type ImportedPurchaseInternal,
 } from "@/utils/purchaseImportTax";
@@ -370,9 +371,23 @@ export function ImportPurchasesDialog({
     const warnings = toImport.filter((f) => f.warning);
     const differences = toImport.map((f) => f.satDifference).filter(Boolean) as SatVatDifference[];
     const derivedExemptInvoices = toImport.filter(f => f.derivedExempt !== null);
+    // Exenciones aplicadas, una línea por regla (con su propio texto).
+    const exemptedByRuleMap = new Map<string, { code: string; label: string; tooltip: string; count: number }>();
+    for (const f of toImport) {
+      if (!f.exempted || !f.exemption) continue;
+      const current = exemptedByRuleMap.get(f.exemption.code);
+      if (current) current.count += 1;
+      else exemptedByRuleMap.set(f.exemption.code, {
+        code: f.exemption.code,
+        label: exemptionBadgeLabel(f.exemption),
+        tooltip: exemptionTooltip(f.exemption),
+        count: 1,
+      });
+    }
     return {
       validFinal,
       exemptedCount: toImport.filter((f) => f.exempted).length,
+      exemptedByRule: [...exemptedByRuleMap.values()],
       warnings,
       derivedExemptInvoices,
       derivedExemptCount: derivedExemptInvoices.length,
@@ -1689,13 +1704,16 @@ export function ImportPurchasesDialog({
               </div>
 
               {/* Exenciones temporales (Decreto 22-2026) y control del IVA del archivo SAT */}
-              {taxReview && taxReview.exemptedCount > 0 && (
+              {taxReview && taxReview.exemptedByRule.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    <strong>{taxReview.exemptedCount}</strong> factura(s) exonerada(s) por tipo de operación y fecha
-                    (IVA 0, base = total, sin IDP).
-                  </span>
+                  <div className="space-y-0.5 min-w-0">
+                    {taxReview.exemptedByRule.map((rule) => (
+                      <p key={rule.code} title={rule.tooltip}>
+                        <strong>{rule.count}</strong> factura(s) con IVA 0 por «{rule.label}»
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -2005,8 +2023,8 @@ export function ImportPurchasesDialog({
                                 )}
                                 <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
                                 {taxReview?.validFinal[idx]?.exempted && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 shrink-0 border-emerald-500/50 text-emerald-700 dark:text-emerald-400" title="IVA 0, base = total, sin IDP">
-                                    Exonerado
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 shrink-0 border-emerald-500/50 text-emerald-700 dark:text-emerald-400" title={exemptionTooltip(taxReview.validFinal[idx].exemption)}>
+                                    {exemptionBadgeLabel(taxReview.validFinal[idx].exemption)}
                                   </Badge>
                                 )}
                                 {taxReview?.validFinal[idx]?.warning && (
