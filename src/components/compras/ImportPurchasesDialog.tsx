@@ -30,7 +30,6 @@ import {
   computeNonVatTaxes,
 } from "@/utils/satImportMapping";
 import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -1252,7 +1251,7 @@ export function ImportPurchasesDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
@@ -1263,7 +1262,7 @@ export function ImportPurchasesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {/* Initial State - File Upload */}
           {dialogState === "initial" && (
             <div className="space-y-4">
@@ -1348,7 +1347,8 @@ export function ImportPurchasesDialog({
 
           {/* Options State - Account and Operation Type Selection */}
           {dialogState === "options" && validationResult && (
-            <ScrollArea className="h-[60vh] pr-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
             <div className="space-y-6 pr-2">
               {/* Summary of records found */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
@@ -1582,7 +1582,7 @@ export function ImportPurchasesDialog({
                           />
                         </div>
                       </div>
-                      <ScrollArea className="h-[200px]">
+                      <div className="max-h-[200px] overflow-auto">
                         <div className="divide-y">
                           {validationResult.validRecords.map((record, idx) => {
                             if (recordSearchFilter) {
@@ -1603,7 +1603,7 @@ export function ImportPurchasesDialog({
                               <div
                                 key={idx}
                                 className={cn(
-                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer",
+                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer min-w-0",
                                   !selectedIndices.has(idx) && "opacity-50"
                                 )}
                                 onClick={() => toggleIndex(idx)}
@@ -1621,7 +1621,7 @@ export function ImportPurchasesDialog({
                                 <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
                                   {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
                                 </span>
-                                <span className="flex-1 truncate" title={record.supplier_name}>
+                                <span className="flex-1 min-w-0 truncate" title={record.supplier_name}>
                                   {record.supplier_name}
                                 </span>
                                 <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
@@ -1629,13 +1629,15 @@ export function ImportPurchasesDialog({
                             );
                           })}
                         </div>
-                      </ScrollArea>
+                      </div>
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
               )}
 
-              <div className="flex gap-3 pt-2">
+            </div>
+            </div>
+            <div className="shrink-0 border-t pt-3 mt-3 flex gap-3">
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Cancelar
                 </Button>
@@ -1646,17 +1648,17 @@ export function ImportPurchasesDialog({
                 >
                   Continuar
                 </Button>
-              </div>
             </div>
-            </ScrollArea>
+            </>
           )}
 
           {/* Summary State - Validation Results */}
           {dialogState === "summary" && validationResult && (
-            <ScrollArea className="h-[60vh] pr-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
             <div className="space-y-4">
               {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -1735,12 +1737,12 @@ export function ImportPurchasesDialog({
                       </p>
                       <div className="max-h-[200px] overflow-auto divide-y">
                         {taxReview.warnings.map((f, i) => (
-                          <div key={i} className="flex items-center gap-3 px-4 py-1.5 text-xs">
+                          <div key={i} className="flex items-center gap-3 px-4 py-1.5 text-xs min-w-0">
                             <span className="w-[78px] font-mono shrink-0">{f.record.invoice_date}</span>
                             <span className="w-[110px] font-mono shrink-0 truncate">
                               {f.record.invoice_series ? `${f.record.invoice_series}-` : ""}{f.record.invoice_number}
                             </span>
-                            <span className="flex-1 truncate" title={f.record.supplier_name}>{f.record.supplier_name}</span>
+                            <span className="flex-1 min-w-0 truncate" title={f.record.supplier_name}>{f.record.supplier_name}</span>
                             <span className="w-[90px] text-right font-mono shrink-0">Q{formatCurrency(f.record.total_amount)}</span>
                           </div>
                         ))}
@@ -1841,7 +1843,7 @@ export function ImportPurchasesDialog({
               {validationResult.duplicateRecords.length > 0 && (
                 <div className="border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
                   <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-b border-blue-200 dark:border-blue-900">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -1865,7 +1867,7 @@ export function ImportPurchasesDialog({
                       </p>
                     )}
                   </div>
-                  <ScrollArea className="h-[120px]">
+                  <div className="max-h-[120px] overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1893,7 +1895,7 @@ export function ImportPurchasesDialog({
                         ))}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
                 </div>
               )}
 
@@ -1969,7 +1971,7 @@ export function ImportPurchasesDialog({
                           />
                         </div>
                       </div>
-                      <ScrollArea className="h-[250px]">
+                      <div className="max-h-[250px] overflow-auto">
                         <div className="divide-y">
                           {validationResult.validRecords.map((record, idx) => {
                             if (recordSearchFilter) {
@@ -1990,7 +1992,7 @@ export function ImportPurchasesDialog({
                               <div
                                 key={idx}
                                 className={cn(
-                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer",
+                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer min-w-0",
                                   !selectedIndices.has(idx) && "opacity-50"
                                 )}
                                 onClick={() => toggleIndex(idx)}
@@ -2008,7 +2010,7 @@ export function ImportPurchasesDialog({
                                 <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
                                   {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
                                 </span>
-                                <span className="flex-1 truncate" title={record.supplier_name}>
+                                <span className="flex-1 min-w-0 truncate" title={record.supplier_name}>
                                   {record.supplier_name}
                                 </span>
                                 {record.expense_account_id && (
@@ -2036,7 +2038,7 @@ export function ImportPurchasesDialog({
                             );
                           })}
                         </div>
-                      </ScrollArea>
+                      </div>
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
@@ -2054,7 +2056,7 @@ export function ImportPurchasesDialog({
                       <span className="text-xs text-muted-foreground">Click para expandir/colapsar</span>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <ScrollArea className="h-[150px]">
+                      <div className="max-h-[150px] overflow-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -2077,7 +2079,7 @@ export function ImportPurchasesDialog({
                             ))}
                           </TableBody>
                         </Table>
-                      </ScrollArea>
+                      </div>
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
@@ -2105,8 +2107,10 @@ export function ImportPurchasesDialog({
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
+            </div>
+            </div>
+            {/* Action Buttons */}
+            <div className="shrink-0 border-t pt-3 mt-3 flex gap-3">
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Seleccionar Otro Archivo
                 </Button>
@@ -2127,9 +2131,8 @@ export function ImportPurchasesDialog({
                     </>
                   )}
                 </Button>
-              </div>
             </div>
-            </ScrollArea>
+            </>
           )}
         </div>
       </DialogContent>
