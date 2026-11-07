@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown, Search } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, AlertTriangle, Loader2, FileWarning, Copy, FileText, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSafeErrorMessage, sanitizeCSVField } from "@/utils/errorMessages";
@@ -30,7 +30,6 @@ import {
   computeNonVatTaxes,
 } from "@/utils/satImportMapping";
 import { calculateMixedTax } from "@/utils/purchaseTaxCalculation";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -43,8 +42,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useTaxExemptionRules } from "@/hooks/useTaxExemptionRules";
+import { exemptionBadgeLabel, exemptionTooltip } from "@/utils/taxExemption";
+import {
+  buildImportListRows, computeSelectedPeriodSummary, initialSelection, summarizeImportSelection,
+} from "@/utils/purchaseImportSelection";
+import { DerivedExemptBadge, ImportRecordList } from "./ImportRecordList";
+import { ImportSelectionBar } from "./ImportSelectionBar";
 import {
   finalizeImportedPurchase, stripImportInternals, type FinalizedImport, type SatVatDifference, type ImportedPurchaseInternal,
 } from "@/utils/purchaseImportTax";
@@ -101,14 +105,6 @@ type ValidPurchaseWithSourceRow = ValidPurchase & ImportedPurchaseInternal & { _
 /** Registro leído del archivo antes de asignarle empresa y libro de compras. */
 type PeriodPurchaseRecord = Omit<ValidPurchaseWithSourceRow, "enterprise_id" | "purchase_book_id">;
 
-function DerivedExemptBadge({ finalized }: { finalized?: FinalizedImport<ValidPurchaseWithSourceRow> }) {
-  if (finalized?.derivedExempt == null) return null;
-  return (
-    <Badge variant="outline" className="text-[9px] h-auto px-1 shrink-0 border-primary/40 text-primary" title="Exento deducido del IVA del archivo SAT">
-      {Math.abs(finalized.record.base_amount) <= 0.005 && Math.abs(finalized.record.vat_amount) <= 0.005 ? "Exento" : "Exento parcial"}
-    </Badge>
-  );
-}
 
 interface PurchaseDuplicateRecord {
   id: number;
@@ -140,32 +136,6 @@ interface ValidationResult {
 }
 
 type DialogState = "initial" | "validating" | "options" | "summary";
-
-/** Document types that subtract from totals (affects_total = -1) */
-const NEGATIVE_DOC_TYPES = new Set(["NCRE", "NABN"]);
-
-function computeSelectedTotal(records: ValidPurchaseWithSourceRow[], selectedIndices: Set<number>): number {
-  let total = 0;
-  records.forEach((r, i) => {
-    if (!selectedIndices.has(i)) return;
-    const sign = NEGATIVE_DOC_TYPES.has(r.fel_document_type) ? -1 : 1;
-    total += r.total_amount * sign;
-  });
-  return total;
-}
-
-const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
-function computeSelectedPeriodSummary(records: ValidPurchaseWithSourceRow[], selectedIndices: Set<number>): { period: string; count: number }[] {
-  const map = new Map<string, number>();
-  records.forEach((r, i) => {
-    if (!selectedIndices.has(i)) return;
-    const d = new Date(r.invoice_date + "T00:00:00");
-    const key = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-    map.set(key, (map.get(key) || 0) + 1);
-  });
-  return Array.from(map.entries()).map(([period, count]) => ({ period, count }));
-}
 
 // Helper function to find or create purchase book for a given month/year
 async function findOrCreatePurchaseBook(
@@ -370,9 +340,23 @@ export function ImportPurchasesDialog({
     const warnings = toImport.filter((f) => f.warning);
     const differences = toImport.map((f) => f.satDifference).filter(Boolean) as SatVatDifference[];
     const derivedExemptInvoices = toImport.filter(f => f.derivedExempt !== null);
+    // Exenciones aplicadas, una línea por regla (con su propio texto).
+    const exemptedByRuleMap = new Map<string, { code: string; label: string; tooltip: string; count: number }>();
+    for (const f of toImport) {
+      if (!f.exempted || !f.exemption) continue;
+      const current = exemptedByRuleMap.get(f.exemption.code);
+      if (current) current.count += 1;
+      else exemptedByRuleMap.set(f.exemption.code, {
+        code: f.exemption.code,
+        label: exemptionBadgeLabel(f.exemption),
+        tooltip: exemptionTooltip(f.exemption),
+        count: 1,
+      });
+    }
     return {
       validFinal,
       exemptedCount: toImport.filter((f) => f.exempted).length,
+      exemptedByRule: [...exemptedByRuleMap.values()],
       warnings,
       derivedExemptInvoices,
       derivedExemptCount: derivedExemptInvoices.length,
@@ -380,6 +364,30 @@ export function ImportPurchasesDialog({
       differencesWithZeroSatVat: differences.filter((d) => Math.abs(d.satVat) <= 0.005).length,
     };
   }, [validationResult, exemptionRules, operationTypes, selectedIndices, overwriteDuplicates]);
+
+  // Lista de selección (nuevas, ya cargadas, repetidas) y resumen en vivo.
+  const listRows = useMemo(
+    () => (validationResult ? buildImportListRows(validationResult) : []),
+    [validationResult],
+  );
+  const selectionSummary = useMemo(
+    () => validationResult
+      ? summarizeImportSelection({
+        records: validationResult.validRecords,
+        selectedIndices,
+        duplicateCount: validationResult.duplicateRecords.length,
+        loadedCount: listRows.filter((row) => row.status === "loaded").length,
+        overwriteDuplicates,
+      })
+      : null,
+    [validationResult, selectedIndices, listRows, overwriteDuplicates],
+  );
+  const toggleSelected = (validIndex: number) => {
+    const next = new Set(selectedIndices);
+    if (next.has(validIndex)) next.delete(validIndex);
+    else next.add(validIndex);
+    setSelectedIndices(next);
+  };
 
   const { isDragging, dragProps } = useFileDrop({
     accept: [
@@ -819,8 +827,8 @@ export function ImportPurchasesDialog({
         periodSummary
       });
       
-      // Select all valid records by default
-      setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+      // Primera importación: todas las nuevas; reimportación (ya hay cargadas): ninguna.
+      setSelectedIndices(initialSelection(validRecords.length, existingDuplicates.length));
 
       // Fetch supplier mappings for auto-suggest
       const allValidAndDup = [...validRecords, ...duplicateRecords];
@@ -1068,8 +1076,8 @@ export function ImportPurchasesDialog({
         periodSummary
       });
       
-      // Select all valid records by default
-      setSelectedIndices(new Set(validRecords.map((_, i) => i)));
+      // Primera importación: todas las nuevas; reimportación (ya hay cargadas): ninguna.
+      setSelectedIndices(initialSelection(validRecords.length, existingDuplicates.length));
 
       // Fetch supplier mappings for auto-suggest
       const allValidAndDup = [...validRecords, ...duplicateRecords];
@@ -1237,7 +1245,7 @@ export function ImportPurchasesDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Importar Facturas de Compras</DialogTitle>
           <DialogDescription>
@@ -1248,7 +1256,7 @@ export function ImportPurchasesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {/* Initial State - File Upload */}
           {dialogState === "initial" && (
             <div className="space-y-4">
@@ -1333,7 +1341,11 @@ export function ImportPurchasesDialog({
 
           {/* Options State - Account and Operation Type Selection */}
           {dialogState === "options" && validationResult && (
-            <ScrollArea className="h-[60vh] pr-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
+            {selectionSummary && (
+              <ImportSelectionBar summary={selectionSummary} overwriteDuplicates={overwriteDuplicates} />
+            )}
             <div className="space-y-6 pr-2">
               {/* Summary of records found */}
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
@@ -1513,114 +1525,26 @@ export function ImportPurchasesDialog({
               </div>
 
               {/* Collapsible Valid Records List in options step */}
-              {validationResult.validRecords.length > 0 && (
-                <Collapsible>
-                  <div className="border rounded-lg">
-                    <CollapsibleTrigger className="w-full px-4 py-2 border-b flex items-center justify-between hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        <span className="text-sm font-medium">
-                          {selectedIndices.size} registros seleccionados a importar
-                        </span>
-                        <span className="text-sm font-semibold font-mono text-primary">
-                          Q{formatCurrency(computeSelectedTotal(validationResult.validRecords, selectedIndices))}
-                        </span>
-                        {validationResult.validRecords.length - selectedIndices.size > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            · {validationResult.validRecords.length - selectedIndices.size} no seleccionados
-                          </span>
-                        )}
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => {
-                            if (selectedIndices.size === validationResult.validRecords.length) {
-                              setSelectedIndices(new Set());
-                            } else {
-                              setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)));
-                            }
-                          }}
-                        >
-                          {selectedIndices.size === validationResult.validRecords.length
-                            ? "Desmarcar todos"
-                            : "Seleccionar todos"}
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          {selectedIndices.size} de {validationResult.validRecords.length}
-                        </span>
-                      </div>
-                      <div className="px-4 py-2 border-b">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            placeholder="Buscar por proveedor o serie-factura..."
-                            value={recordSearchFilter}
-                            onChange={(e) => setRecordSearchFilter(e.target.value)}
-                            className="w-full h-8 pl-7 pr-3 text-xs rounded-md border border-input bg-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        </div>
-                      </div>
-                      <ScrollArea className="h-[200px]">
-                        <div className="divide-y">
-                          {validationResult.validRecords.map((record, idx) => {
-                            if (recordSearchFilter) {
-                              const q = recordSearchFilter.toLowerCase();
-                              const serieNum = `${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`.toLowerCase();
-                              if (!record.supplier_name.toLowerCase().includes(q) && !serieNum.includes(q)) return null;
-                            }
-                            const toggleIndex = (idx: number) => {
-                              const next = new Set(selectedIndices);
-                              if (next.has(idx)) {
-                                next.delete(idx);
-                              } else {
-                                next.add(idx);
-                              }
-                              setSelectedIndices(next);
-                            };
-                            return (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer",
-                                  !selectedIndices.has(idx) && "opacity-50"
-                                )}
-                                onClick={() => toggleIndex(idx)}
-                              >
-                                <div onClick={(e) => e.stopPropagation()}>
-                                  <Checkbox
-                                    checked={selectedIndices.has(idx)}
-                                    onCheckedChange={() => toggleIndex(idx)}
-                                  />
-                                </div>
-                                <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
-                                <span className="w-[90px] text-right font-mono shrink-0">
-                                  Q{formatCurrency(record.total_amount)}
-                                </span>
-                                <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
-                                  {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
-                                </span>
-                                <span className="flex-1 truncate" title={record.supplier_name}>
-                                  {record.supplier_name}
-                                </span>
-                                <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
+              {listRows.length > 0 && selectionSummary && (
+                <ImportRecordList
+                  rows={listRows}
+                  summary={selectionSummary}
+                  selectedIndices={selectedIndices}
+                  onToggle={toggleSelected}
+                  onSelectAllNew={() => setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)))}
+                  onClearAll={() => setSelectedIndices(new Set())}
+                  search={recordSearchFilter}
+                  onSearch={setRecordSearchFilter}
+                  showMappingBadges={false}
+                  taxReview={taxReview}
+                  expenseAccounts={expenseAccounts}
+                  operationTypes={operationTypes}
+                />
               )}
 
-              <div className="flex gap-3 pt-2">
+            </div>
+            </div>
+            <div className="shrink-0 border-t pt-3 mt-3 flex gap-3">
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Cancelar
                 </Button>
@@ -1631,17 +1555,20 @@ export function ImportPurchasesDialog({
                 >
                   Continuar
                 </Button>
-              </div>
             </div>
-            </ScrollArea>
+            </>
           )}
 
           {/* Summary State - Validation Results */}
           {dialogState === "summary" && validationResult && (
-            <ScrollArea className="h-[60vh] pr-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
+            {selectionSummary && (
+              <ImportSelectionBar summary={selectionSummary} overwriteDuplicates={overwriteDuplicates} />
+            )}
             <div className="space-y-4">
               {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -1689,13 +1616,16 @@ export function ImportPurchasesDialog({
               </div>
 
               {/* Exenciones temporales (Decreto 22-2026) y control del IVA del archivo SAT */}
-              {taxReview && taxReview.exemptedCount > 0 && (
+              {taxReview && taxReview.exemptedByRule.length > 0 && (
                 <div className="flex items-start gap-2 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    <strong>{taxReview.exemptedCount}</strong> factura(s) exonerada(s) por tipo de operación y fecha
-                    (IVA 0, base = total, sin IDP).
-                  </span>
+                  <div className="space-y-0.5 min-w-0">
+                    {taxReview.exemptedByRule.map((rule) => (
+                      <p key={rule.code} title={rule.tooltip}>
+                        <strong>{rule.count}</strong> factura(s) con IVA 0 por «{rule.label}»
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1717,12 +1647,12 @@ export function ImportPurchasesDialog({
                       </p>
                       <div className="max-h-[200px] overflow-auto divide-y">
                         {taxReview.warnings.map((f, i) => (
-                          <div key={i} className="flex items-center gap-3 px-4 py-1.5 text-xs">
+                          <div key={i} className="flex items-center gap-3 px-4 py-1.5 text-xs min-w-0">
                             <span className="w-[78px] font-mono shrink-0">{f.record.invoice_date}</span>
                             <span className="w-[110px] font-mono shrink-0 truncate">
                               {f.record.invoice_series ? `${f.record.invoice_series}-` : ""}{f.record.invoice_number}
                             </span>
-                            <span className="flex-1 truncate" title={f.record.supplier_name}>{f.record.supplier_name}</span>
+                            <span className="flex-1 min-w-0 truncate" title={f.record.supplier_name}>{f.record.supplier_name}</span>
                             <span className="w-[90px] text-right font-mono shrink-0">Q{formatCurrency(f.record.total_amount)}</span>
                           </div>
                         ))}
@@ -1823,7 +1753,7 @@ export function ImportPurchasesDialog({
               {validationResult.duplicateRecords.length > 0 && (
                 <div className="border border-blue-200 dark:border-blue-900 rounded-lg overflow-hidden">
                   <div className="bg-blue-50 dark:bg-blue-950/30 px-4 py-3 border-b border-blue-200 dark:border-blue-900">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -1847,7 +1777,7 @@ export function ImportPurchasesDialog({
                       </p>
                     )}
                   </div>
-                  <ScrollArea className="h-[120px]">
+                  <div className="max-h-[120px] overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1875,7 +1805,7 @@ export function ImportPurchasesDialog({
                         ))}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
                 </div>
               )}
 
@@ -1897,131 +1827,21 @@ export function ImportPurchasesDialog({
               })()}
 
               {/* Collapsible Valid Records List */}
-              {validationResult.validRecords.length > 0 && (
-                <Collapsible>
-                  <div className="border rounded-lg">
-                    <CollapsibleTrigger className="w-full px-4 py-2 border-b flex items-center justify-between hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        <span className="text-sm font-medium">
-                          {selectedIndices.size} registros seleccionados a importar
-                        </span>
-                        <span className="text-sm font-semibold font-mono text-primary">
-                          Q{formatCurrency(computeSelectedTotal(validationResult.validRecords, selectedIndices))}
-                        </span>
-                        {validationResult.validRecords.length - selectedIndices.size > 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            · {validationResult.validRecords.length - selectedIndices.size} no seleccionados
-                          </span>
-                        )}
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => {
-                            if (selectedIndices.size === validationResult.validRecords.length) {
-                              setSelectedIndices(new Set());
-                            } else {
-                              setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)));
-                            }
-                          }}
-                        >
-                          {selectedIndices.size === validationResult.validRecords.length
-                            ? "Desmarcar todos"
-                            : "Seleccionar todos"}
-                        </Button>
-                        <span className="text-xs text-muted-foreground">
-                          {selectedIndices.size} de {validationResult.validRecords.length}
-                        </span>
-                      </div>
-                      <div className="px-4 py-2 border-b">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                          <input
-                            type="text"
-                            placeholder="Buscar por proveedor o serie-factura..."
-                            value={recordSearchFilter}
-                            onChange={(e) => setRecordSearchFilter(e.target.value)}
-                            className="w-full h-8 pl-7 pr-3 text-xs rounded-md border border-input bg-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        </div>
-                      </div>
-                      <ScrollArea className="h-[250px]">
-                        <div className="divide-y">
-                          {validationResult.validRecords.map((record, idx) => {
-                            if (recordSearchFilter) {
-                              const q = recordSearchFilter.toLowerCase();
-                              const serieNum = `${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`.toLowerCase();
-                              if (!record.supplier_name.toLowerCase().includes(q) && !serieNum.includes(q)) return null;
-                            }
-                            const toggleIndex = (idx: number) => {
-                              const next = new Set(selectedIndices);
-                              if (next.has(idx)) {
-                                next.delete(idx);
-                              } else {
-                                next.add(idx);
-                              }
-                              setSelectedIndices(next);
-                            };
-                            return (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  "flex items-center gap-3 px-4 py-2 text-xs hover:bg-muted/30 transition-colors cursor-pointer",
-                                  !selectedIndices.has(idx) && "opacity-50"
-                                )}
-                                onClick={() => toggleIndex(idx)}
-                              >
-                                <div onClick={(e) => e.stopPropagation()}>
-                                  <Checkbox
-                                    checked={selectedIndices.has(idx)}
-                                    onCheckedChange={() => toggleIndex(idx)}
-                                  />
-                                </div>
-                                <span className="w-[78px] font-mono shrink-0">{record.invoice_date}</span>
-                                <span className="w-[90px] text-right font-mono shrink-0">
-                                  Q{formatCurrency(record.total_amount)}
-                                </span>
-                                <span className="w-[100px] shrink-0 truncate font-mono" title={`${record.invoice_series || ""}${record.invoice_series ? "-" : ""}${record.invoice_number}`}>
-                                  {record.invoice_series || ""}{record.invoice_series ? "-" : ""}{record.invoice_number}
-                                </span>
-                                <span className="flex-1 truncate" title={record.supplier_name}>
-                                  {record.supplier_name}
-                                </span>
-                                {record.expense_account_id && (
-                                  <span className="text-[10px] text-primary/70 shrink-0" title="Cuenta asignada">
-                                    {expenseAccounts.find(a => a.id === record.expense_account_id)?.account_code || ""}
-                                  </span>
-                                )}
-                                {record.operation_type_id && (
-                                  <Badge variant="secondary" className="text-[9px] h-3.5 px-1 shrink-0">
-                                    {operationTypes.find(o => o.id === record.operation_type_id)?.code || ""}
-                                  </Badge>
-                                )}
-                                <DerivedExemptBadge finalized={taxReview?.validFinal[idx]} />
-                                {taxReview?.validFinal[idx]?.exempted && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 shrink-0 border-emerald-500/50 text-emerald-700 dark:text-emerald-400" title="IVA 0, base = total, sin IDP">
-                                    Exonerado
-                                  </Badge>
-                                )}
-                                {taxReview?.validFinal[idx]?.warning && (
-                                  <span title={taxReview.validFinal[idx].warning ?? ""} className="shrink-0">
-                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                    </CollapsibleContent>
-                  </div>
-                </Collapsible>
+              {listRows.length > 0 && selectionSummary && (
+                <ImportRecordList
+                  rows={listRows}
+                  summary={selectionSummary}
+                  selectedIndices={selectedIndices}
+                  onToggle={toggleSelected}
+                  onSelectAllNew={() => setSelectedIndices(new Set(validationResult.validRecords.map((_, i) => i)))}
+                  onClearAll={() => setSelectedIndices(new Set())}
+                  search={recordSearchFilter}
+                  onSearch={setRecordSearchFilter}
+                  showMappingBadges={true}
+                  taxReview={taxReview}
+                  expenseAccounts={expenseAccounts}
+                  operationTypes={operationTypes}
+                />
               )}
 
               {/* Error Details Table */}
@@ -2036,7 +1856,7 @@ export function ImportPurchasesDialog({
                       <span className="text-xs text-muted-foreground">Click para expandir/colapsar</span>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <ScrollArea className="h-[150px]">
+                      <div className="max-h-[150px] overflow-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -2059,7 +1879,7 @@ export function ImportPurchasesDialog({
                             ))}
                           </TableBody>
                         </Table>
-                      </ScrollArea>
+                      </div>
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
@@ -2087,8 +1907,10 @@ export function ImportPurchasesDialog({
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
+            </div>
+            </div>
+            {/* Action Buttons */}
+            <div className="shrink-0 border-t pt-3 mt-3 flex gap-3">
                 <Button variant="outline" onClick={resetDialog} className="flex-1">
                   Seleccionar Otro Archivo
                 </Button>
@@ -2109,9 +1931,8 @@ export function ImportPurchasesDialog({
                     </>
                   )}
                 </Button>
-              </div>
             </div>
-            </ScrollArea>
+            </>
           )}
         </div>
       </DialogContent>

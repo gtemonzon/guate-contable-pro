@@ -119,3 +119,43 @@ describe("EXEMPT como porción no afecta equivalente a OTHER", () => {
     expect(lines).toContainEqual({ account_id: 42, amount: 195.30, role: "NON_VAT" });
   });
 });
+
+describe("finalizeImportedPurchase con COMBUSTIBLE y EXENTAS_SIN_IVA", () => {
+  const exentasRule: TaxExemptionRule = {
+    id: 2, code: "EXENTAS_SIN_IVA", name: "Exenta",
+    legal_reference: "Operación exenta de IVA (sin crédito fiscal)", operation_type_code: "EXENTAS",
+    applies_to: "PURCHASE", valid_from: "2026-10-01", valid_to: null, vat_rate: 0, blocks_idp: false, is_active: true,
+  };
+  const OP_TYPES: Record<number, string> = { 10: "COMBUSTIBLE", 20: "EXENTAS" };
+  const ctx = {
+    rules: [exentasRule, fuelRule],
+    operationTypeCode: (id: number | null | undefined) => (id != null ? OP_TYPES[id] ?? null : null),
+  };
+
+  it("FACT con IVA SAT 0 fuera del decreto: sin advertencia c, sigue su camino normal", () => {
+    const result = finalizeImportedPurchase(purchase(500, 0, { invoice_date: "2027-02-01", __satIdp: 0 }), ctx);
+    expect(result.warning).toBeNull();
+    expect(result.exempted).toBe(false);
+    expect(result.exemption).toBeNull();
+    // Caso e: todo el total queda como exento deducido del IVA 0 del archivo.
+    expect(result.derivedExempt).toBe(500);
+    expect(result.record).toMatchObject({ vat_amount: 0, exempt_amount: 500, tax_category: "EXEMPT" });
+  });
+
+  it("la misma factura dentro del decreto: advertencia c del Decreto 22-2026", () => {
+    const result = finalizeImportedPurchase(purchase(500, 0, { invoice_date: "2026-11-05", __satIdp: 0 }), ctx);
+    expect(result.warning).toMatch(/Decreto 22-2026/);
+    expect(result.exempted).toBe(false);
+    expect(result.record).toMatchObject({ vat_amount: 0, base_amount: 500, exempt_amount: 0 });
+  });
+
+  it("FPEQ con tipo EXENTAS dentro de la vigencia: exonerada por EXENTAS_SIN_IVA", () => {
+    const result = finalizeImportedPurchase(
+      purchase(150, 0, { invoice_date: "2026-11-05", fel_document_type: "FPEQ", operation_type_id: 20 }),
+      ctx,
+    );
+    expect(result.exempted).toBe(true);
+    expect(result.exemption?.code).toBe("EXENTAS_SIN_IVA");
+    expect(result.record).toMatchObject({ vat_amount: 0, base_amount: 150, exemption_rule_code: "EXENTAS_SIN_IVA" });
+  });
+});

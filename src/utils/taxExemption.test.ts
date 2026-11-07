@@ -163,3 +163,40 @@ describe("finalizeImportedPurchase", () => {
     expect(f.warning).toBeNull();
   });
 });
+
+describe("findActiveExemptionWindow con COMBUSTIBLE y EXENTAS_SIN_IVA", () => {
+  const fuel = {
+    id: 1, code: "COMBUSTIBLE_DEC_22_2026", name: "Exención temporal IVA/IDP combustibles",
+    legal_reference: "Decreto 22-2026", operation_type_code: "COMBUSTIBLE", applies_to: "PURCHASE",
+    valid_from: "2026-10-01", valid_to: "2026-12-31", vat_rate: 0, blocks_idp: true, is_active: true,
+  };
+  const exentas = {
+    id: 2, code: "EXENTAS_SIN_IVA", name: "Exenta",
+    legal_reference: "Operación exenta de IVA (sin crédito fiscal)", operation_type_code: "EXENTAS",
+    applies_to: "PURCHASE", valid_from: "2026-10-01", valid_to: null, vat_rate: 0, blocks_idp: false, is_active: true,
+  };
+
+  it.each([
+    ["combustible primero", [fuel, exentas]],
+    ["exentas primero", [exentas, fuel]],
+  ])("%s: dentro del decreto devuelve la del combustible", (_label, rules) => {
+    expect(findActiveExemptionWindow(rules, "2026-11-05")?.code).toBe("COMBUSTIBLE_DEC_22_2026");
+  });
+
+  it("fuera del decreto no abre ventana (EXENTAS no cuenta)", () => {
+    expect(findActiveExemptionWindow([exentas, fuel], "2027-02-01")).toBeNull();
+    expect(findActiveExemptionWindow([exentas], "2026-11-05")).toBeNull();
+  });
+
+  it("antes de la vigencia no hay ventana", () => {
+    expect(findActiveExemptionWindow([fuel, exentas], "2026-09-30")).toBeNull();
+  });
+
+  it("empate de valid_from: gana el id mayor (en cualquier orden)", () => {
+    const fuel2 = { ...fuel, id: 7, code: "COMBUSTIBLE_B" };
+    expect(findActiveExemptionWindow([fuel2, fuel], "2026-11-05")?.code).toBe("COMBUSTIBLE_B");
+    expect(findActiveExemptionWindow([fuel, fuel2], "2026-11-05")?.code).toBe("COMBUSTIBLE_B");
+    expect(resolveExemption([fuel2, fuel], "COMBUSTIBLE", "2026-11-05")?.code).toBe("COMBUSTIBLE_B");
+    expect(resolveExemption([fuel, fuel2], "COMBUSTIBLE", "2026-11-05")?.code).toBe("COMBUSTIBLE_B");
+  });
+});
