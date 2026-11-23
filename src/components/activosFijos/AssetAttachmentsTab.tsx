@@ -154,9 +154,22 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   };
 
   const removeAttachment = async (attachment: AssetAttachment) => {
+    // 1) Primero el archivo: una vez marcado inactivo, la base de datos lo oculta y ya
+    //    no se podría borrar. Si ya no existía, remove() devuelve vacío y no es error.
+    const { error: storageError } = await supabase.storage.from("fixed-asset-attachments").remove([attachment.file_path]);
+    if (storageError) {
+      toast({ title: "Error al eliminar adjunto", description: friendlyFixedAssetError(storageError), variant: "destructive" });
+      return;
+    }
+    // 2) Después el registro. Si falla, el reintento funciona: borrar un archivo
+    //    inexistente no es error.
     const { error } = await attachmentTable().update({ is_active: false }).eq("id", attachment.id);
     if (error) {
-      toast({ title: "Error al eliminar adjunto", description: friendlyFixedAssetError(error), variant: "destructive" });
+      toast({
+        title: "Error al eliminar adjunto",
+        description: "El archivo se borró pero no se pudo quitar el registro; vuelve a pulsar Eliminar",
+        variant: "destructive",
+      });
       return;
     }
     setAttachments((current) => current.filter((item) => item.id !== attachment.id));
