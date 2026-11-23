@@ -11,6 +11,7 @@ import { showImagePreview } from "@/components/ui/image-preview-host";
 import { File, FileImage, FileSpreadsheet, FileText, FileType, Download, Eye, Trash2, Upload } from "lucide-react";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { friendlyFixedAssetError } from "@/utils/fixedAssetErrors";
 import { cn } from "@/lib/utils";
 import { PermissionNotice } from "./PermissionNotice";
 import { PERMISSION_TEXTS } from "./permissionTexts";
@@ -60,7 +61,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
       .eq("is_active", true)
       .order("uploaded_at", { ascending: false });
     if (error) {
-      toast({ title: "Error al cargar adjuntos", description: error.message, variant: "destructive" });
+      toast({ title: "Error al cargar adjuntos", description: friendlyFixedAssetError(error), variant: "destructive" });
     } else {
       setAttachments((data ?? []) as unknown as AssetAttachment[]);
     }
@@ -119,7 +120,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
       toast({ title: "Adjunto subido", description: result.compressed ? `${formatBytes(result.originalSize)} → ${formatBytes(result.compressedSize)} (${Math.round((1 - result.compressedSize / result.originalSize) * 100)}% menos)` : result.file.name });
       await loadAttachments();
     } catch (error) {
-      toast({ title: "Error al subir adjunto", description: error instanceof Error ? error.message : "No se pudo completar la carga.", variant: "destructive" });
+      toast({ title: "Error al subir adjunto", description: friendlyFixedAssetError(error), variant: "destructive" });
     } finally {
       setUploading(false);
       setProgress(0);
@@ -135,7 +136,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
     };
     const { data, error } = await supabase.storage.from("fixed-asset-attachments").createSignedUrl(attachment.file_path, 60);
     if (error || !data?.signedUrl) {
-      toast({ title: "No se pudo abrir el archivo", description: error?.message, variant: "destructive" });
+      toast({ title: "No se pudo abrir el archivo", description: error ? friendlyFixedAssetError(error) : undefined, variant: "destructive" });
       return;
     }
     if (attachment.file_type === "application/pdf") {
@@ -155,7 +156,7 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   const removeAttachment = async (attachment: AssetAttachment) => {
     const { error } = await attachmentTable().update({ is_active: false }).eq("id", attachment.id);
     if (error) {
-      toast({ title: "Error al eliminar adjunto", description: error.message, variant: "destructive" });
+      toast({ title: "Error al eliminar adjunto", description: friendlyFixedAssetError(error), variant: "destructive" });
       return;
     }
     setAttachments((current) => current.filter((item) => item.id !== attachment.id));

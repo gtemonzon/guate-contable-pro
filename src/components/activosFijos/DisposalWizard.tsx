@@ -10,6 +10,7 @@ import { useDepreciationSchedule } from "@/hooks/useFixedAssets";
 import { computeDisposalGainLoss } from "@/domain/fixedAssets/calculations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { friendlyFixedAssetError } from "@/utils/fixedAssetErrors";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
@@ -97,7 +98,7 @@ export default function DisposalWizard({ asset, onDone }: Props) {
       toast.success(`Activo ${isSale ? "vendido" : "dado de baja"} correctamente`);
       onDone();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error al procesar la baja");
+      toast.error(friendlyFixedAssetError(e));
     } finally {
       setSaving(false);
     }

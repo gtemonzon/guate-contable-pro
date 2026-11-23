@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
 import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { friendlyFixedAssetError } from "@/utils/fixedAssetErrors";
 import { PermissionNotice } from "./PermissionNotice";
 import { PERMISSION_TEXTS } from "./permissionTexts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -257,7 +258,7 @@ export default function DepreciationPostingPage() {
           generatedCount += 1;
           generatedTotal += row.amountPlanned;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Error al crear la partida";
+          const message = friendlyFixedAssetError(error);
           processingErrors.push(`${row.asset.asset_name}: ${message}`);
           toast.error(`No se pudo contabilizar ${row.asset.asset_name}: ${message}`);
         }
@@ -274,7 +275,7 @@ export default function DepreciationPostingPage() {
       }
       setPreviewRows(new Map());
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al contabilizar");
+      toast.error(friendlyFixedAssetError(error));
     } finally {
       setPosting(false);
     }
@@ -351,7 +352,7 @@ export default function DepreciationPostingPage() {
           assetsSkipped += 1;
           monthsSkippedTotal += rowIds.length;
         } catch (error) {
-          const message = error instanceof Error ? error.message : "Error al procesar el activo";
+          const message = friendlyFixedAssetError(error);
           errors.push(`${item.asset_name}: ${message}`);
         }
       }
@@ -370,7 +371,7 @@ export default function DepreciationPostingPage() {
       }
       setBulkSkipDialogOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Error al procesar la depreciación histórica");
+      toast.error(friendlyFixedAssetError(error));
     } finally {
       setBulkSkipping(false);
     }

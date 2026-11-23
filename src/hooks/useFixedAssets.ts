@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { friendlyFixedAssetError } from "@/utils/fixedAssetErrors";
 import { generateDepreciationSchedule } from "@/domain/fixedAssets/calculations";
 import { fetchAllRecords } from "@/utils/supabaseHelpers";
 
@@ -116,7 +117,7 @@ export interface DepreciationScheduleRow {
 // ─── Helper ─────────────────────────────────────────────────────────────────
 
 function onErr(e: unknown) {
-  toast.error(e instanceof Error ? e.message : String(e));
+  toast.error(friendlyFixedAssetError(e));
 }
 
 // Typed wrapper so TS stops complaining about new tables not in generated types
