@@ -12,6 +12,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "./PermissionNotice";
+import { PERMISSION_TEXTS } from "./permissionTexts";
 
 interface Props {
   asset: FixedAsset;
@@ -29,6 +33,9 @@ export default function DisposalWizard({ asset, onDone }: Props) {
   const [disposalDate, setDisposalDate] = useState(new Date().toISOString().split("T")[0]);
   const [proceeds, setProceeds] = useState(0);
   const [saving, setSaving] = useState(false);
+  // Dar de baja o vender es parte de la valoración.
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
 
   const selectedReason = reasons.find((r) => r.id === reasonId);
   const isSale = selectedReason?.code === "SALE";
@@ -98,6 +105,7 @@ export default function DisposalWizard({ asset, onDone }: Props) {
 
   return (
     <div className="space-y-6">
+      {!permLoading && !canManageValuation && <PermissionNotice kind="valuation" />}
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
@@ -160,7 +168,8 @@ export default function DisposalWizard({ asset, onDone }: Props) {
         <Button
           variant="destructive"
           onClick={handleDispose}
-          disabled={!canDispose || saving}
+          disabled={!canDispose || saving || !canManageValuation}
+          title={!canManageValuation ? PERMISSION_TEXTS.valuation : undefined}
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           {isSale ? "Registrar venta" : "Dar de baja"}

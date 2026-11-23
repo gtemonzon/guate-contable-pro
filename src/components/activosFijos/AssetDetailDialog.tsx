@@ -33,6 +33,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import DisposalWizard from "./DisposalWizard";
 import AssetAttachmentsTab from "./AssetAttachmentsTab";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "./PermissionNotice";
+import { PERMISSION_TEXTS } from "./permissionTexts";
 
 interface Props {
   asset: FixedAsset;
@@ -110,6 +114,12 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
   const assignCustodian = useAssignCustodian();
   const returnCustodian = useReturnCustodian();
   const { lookupNit } = useNitLookup();
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canWrite, canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  // Activo ya activado: costo, residual, vida útil, fechas y categoría son valoración.
+  const valuationLocked = asset.status !== "DRAFT" && !canManageValuation;
+  const writeTitle = !canWrite ? PERMISSION_TEXTS.write : undefined;
+  const valuationTitle = !canManageValuation ? PERMISSION_TEXTS.valuation : undefined;
   const queryClient = useQueryClient();
   const [form, setForm] = useState<AssetForm>(() => formFromAsset(asset));
   const [saving, setSaving] = useState(false);
@@ -423,10 +433,12 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
             </TabsContent>
 
             <TabsContent value="data" className="mt-4 space-y-4">
+              {!permLoading && !canWrite && <PermissionNotice kind="write" />}
+              {!permLoading && canWrite && valuationLocked && <PermissionNotice kind="valuation" />}
               <div className="grid gap-4 md:grid-cols-2">
                 <div><Label>Código *</Label><Input value={form.asset_code} onChange={(event) => updateForm("asset_code", event.target.value)} /></div>
                 <div><Label>Nombre *</Label><Input value={form.asset_name} onChange={(event) => updateForm("asset_name", event.target.value)} /></div>
-                <div><Label>Categoría</Label><Select value={String(form.category_id)} onValueChange={(value) => updateForm("category_id", Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.code} — {category.name}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label>Categoría</Label><Select disabled={valuationLocked} value={String(form.category_id)} onValueChange={(value) => updateForm("category_id", Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.code} — {category.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>Ubicación</Label><Select value={form.location_id ? String(form.location_id) : "none"} onValueChange={(value) => updateForm("location_id", value === "none" ? null : Number(value))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Ninguna</SelectItem>{locations.map((location) => <SelectItem key={location.id} value={String(location.id)}>{location.name}</SelectItem>)}</SelectContent></Select></div>
                 <div>
                   <Label>NIT del proveedor</Label>
@@ -460,21 +472,21 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                 <div><Label>Serie</Label><Input value={form.serial_number} onChange={(event) => updateForm("serial_number", event.target.value)} /></div>
                 <div><Label>Modelo</Label><Input value={form.model} onChange={(event) => updateForm("model", event.target.value)} /></div>
                 <div><Label>Año</Label><Input type="number" min="1900" value={form.manufacture_year ?? ""} onChange={(event) => updateForm("manufacture_year", event.target.value ? Number(event.target.value) : null)} /></div>
-                <div><Label>Fecha de adquisición</Label><Input type="date" value={form.acquisition_date} onChange={(event) => updateForm("acquisition_date", event.target.value)} /></div>
-                <div><Label>Fecha de puesta en servicio</Label><Input type="date" value={form.in_service_date} onChange={(event) => updateForm("in_service_date", event.target.value)} /></div>
-                <div><Label>Costo de adquisición</Label><Input type="number" min="0" step="0.01" value={form.acquisition_cost} disabled={hasPostedRows} onChange={(event) => updateForm("acquisition_cost", Number(event.target.value))} /><p className="mt-1 text-xs text-muted-foreground">{hasPostedRows ? "No editable: ya existe depreciación contabilizada." : "Editable mientras no exista depreciación contabilizada."}</p></div>
-                <div><Label>Valor residual</Label><Input type="number" min="0" step="0.01" value={form.residual_value} disabled={hasPostedRows} onChange={(event) => updateForm("residual_value", Number(event.target.value))} /></div>
-                <div><Label>Vida útil (meses)</Label><Input type="number" min="1" value={form.useful_life_months} disabled={hasPostedRows} onChange={(event) => updateForm("useful_life_months", Number(event.target.value))} /></div>
+                <div><Label>Fecha de adquisición</Label><Input type="date" value={form.acquisition_date} disabled={valuationLocked} onChange={(event) => updateForm("acquisition_date", event.target.value)} /></div>
+                <div><Label>Fecha de puesta en servicio</Label><Input type="date" value={form.in_service_date} disabled={valuationLocked} onChange={(event) => updateForm("in_service_date", event.target.value)} /></div>
+                <div><Label>Costo de adquisición</Label><Input type="number" min="0" step="0.01" value={form.acquisition_cost} disabled={hasPostedRows || valuationLocked} onChange={(event) => updateForm("acquisition_cost", Number(event.target.value))} /><p className="mt-1 text-xs text-muted-foreground">{hasPostedRows ? "No editable: ya existe depreciación contabilizada." : "Editable mientras no exista depreciación contabilizada."}</p></div>
+                <div><Label>Valor residual</Label><Input type="number" min="0" step="0.01" value={form.residual_value} disabled={hasPostedRows || valuationLocked} onChange={(event) => updateForm("residual_value", Number(event.target.value))} /></div>
+                <div><Label>Vida útil (meses)</Label><Input type="number" min="1" value={form.useful_life_months} disabled={hasPostedRows || valuationLocked} onChange={(event) => updateForm("useful_life_months", Number(event.target.value))} /></div>
                 <div className="md:col-span-2"><Label>Notas</Label><Textarea value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} /></div>
               </div>
-              <div className="flex justify-end"><Button onClick={handleSaveClick} disabled={saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Guardar cambios</Button></div>
+              <div className="flex justify-end"><Button onClick={handleSaveClick} disabled={saving || !canWrite} title={writeTitle} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Guardar cambios</Button></div>
             </TabsContent>
 
             <TabsContent value="attachments" className="mt-4"><AssetAttachmentsTab assetId={asset.id} enterpriseId={asset.enterprise_id} /></TabsContent>
 
             <TabsContent value="schedule" className="mt-4 space-y-4">
               {schedLoading ? <div className="flex items-center gap-2 p-4 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando calendario...</div> : schedule.length === 0 ? <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">{asset.status === "DRAFT" ? "Activa el activo para generar el calendario de depreciación." : "Sin calendario de depreciación."}</div> : <div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead>Período</TableHead><TableHead className="text-right">Depreciación</TableHead><TableHead className="text-right">Acumulada</TableHead><TableHead className="text-right">Valor neto</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{schedule.map((row) => <TableRow key={row.id} className={row.status === "POSTED" ? "bg-green-50/50 dark:bg-green-950/20" : ""}><TableCell className="font-mono text-sm">{MONTH_NAMES[row.month]} {row.year}</TableCell><TableCell className="text-right font-mono">{fmt(row.planned_depreciation_amount)}</TableCell><TableCell className="text-right font-mono">{fmt(row.accumulated_depreciation)}</TableCell><TableCell className="text-right font-mono">{fmt(row.net_book_value)}</TableCell><TableCell><Badge variant={STATUS_BADGE[row.status]} className="text-xs">{STATUS_LABEL[row.status]}</Badge></TableCell></TableRow>)}</TableBody></Table></div>}
-              {historicalPlannedRows.length > 0 && <div className="flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Depreciación histórica pendiente</p><p className="text-sm text-muted-foreground">Puedes marcar meses ya transcurridos como aplicados sin generar una partida contable.</p></div><Button variant="outline" onClick={() => setSkipDialogOpen(true)}>Marcar depreciación histórica como aplicada (sin partida)</Button></div>}
+              {historicalPlannedRows.length > 0 && <div className="flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">Depreciación histórica pendiente</p><p className="text-sm text-muted-foreground">Puedes marcar meses ya transcurridos como aplicados sin generar una partida contable.</p></div><Button variant="outline" disabled={!canManageValuation} title={valuationTitle} onClick={() => setSkipDialogOpen(true)}>Marcar depreciación histórica como aplicada (sin partida)</Button></div>}
             </TabsContent>
 
             <TabsContent value="custodians" className="mt-4 space-y-4">
@@ -482,9 +494,10 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                 <div className="flex items-center gap-2 p-4 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando custodios...</div>
               ) : (
                 <>
+                  {!permLoading && !canWrite && <PermissionNotice kind="write" />}
                   <div className="flex justify-end">
                     {!openAssignment && (
-                      <Button size="sm" onClick={() => { setAssignForm({ custodian_id: null, assigned_date: todayDateInput(), notes: "" }); setAssignDialogOpen(true); }}>
+                      <Button size="sm" disabled={!canWrite} title={writeTitle} onClick={() => { setAssignForm({ custodian_id: null, assigned_date: todayDateInput(), notes: "" }); setAssignDialogOpen(true); }}>
                         <Plus className="mr-1 h-4 w-4" /> Asignar custodio
                       </Button>
                     )}
@@ -519,7 +532,8 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
                                 {!a.returned_date && (
                                   <Button
                                     variant="ghost" size="icon" className="text-destructive hover:text-destructive"
-                                    title="Registrar entrega"
+                                    title={writeTitle ?? "Registrar entrega"}
+                                    disabled={!canWrite}
                                     onClick={() => { setReturningAssignment({ id: a.id, custodian_id: a.custodian_id, assigned_date: a.assigned_date }); setReturnForm({ returned_date: todayDateInput(), notes: "" }); setReturnDialogOpen(true); }}
                                   >
                                     <UserMinus className="h-4 w-4" />
@@ -587,7 +601,7 @@ export default function AssetDetailDialog({ asset, open, onClose }: Props) {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={skipping}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction disabled={skipping} onClick={(event) => { event.preventDefault(); void skipHistoricalDepreciation(); }}>{skipping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Confirmar</AlertDialogAction>
+            <AlertDialogAction disabled={skipping || !canManageValuation} onClick={(event) => { event.preventDefault(); void skipHistoricalDepreciation(); }}>{skipping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

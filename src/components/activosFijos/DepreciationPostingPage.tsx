@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "./PermissionNotice";
+import { PERMISSION_TEXTS } from "./permissionTexts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -110,6 +113,9 @@ function AssetScheduleFetcher({
 
 export default function DepreciationPostingPage() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
+  // Contabilizar u omitir depreciación es valoración; la vista previa sigue abierta a todos.
+  const { canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(enterpriseId);
+  const valuationTitle = !canManageValuation ? PERMISSION_TEXTS.valuation : undefined;
   const qc = useQueryClient();
   const { data: policy } = useAssetPolicy(enterpriseId);
   const { data: assets = [] } = useFixedAssets(enterpriseId);
@@ -378,6 +384,7 @@ export default function DepreciationPostingPage() {
 
   return (
     <div className="space-y-6">
+      {!permLoading && !canManageValuation && <PermissionNotice kind="valuation" />}
       <Card>
         <CardHeader>
           <CardTitle>Contabilizar Depreciación</CardTitle>
@@ -418,7 +425,7 @@ export default function DepreciationPostingPage() {
               ))}
             </ul>
             <div className="flex justify-end">
-              <Button variant="outline" onClick={() => setBulkSkipDialogOpen(true)}>
+              <Button variant="outline" disabled={!canManageValuation} title={valuationTitle} onClick={() => setBulkSkipDialogOpen(true)}>
                 Correr depreciación histórica (sin partida)
               </Button>
             </div>
@@ -434,7 +441,7 @@ export default function DepreciationPostingPage() {
 
       {activeAssets.length === 0 && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>No hay activos activos. Activa activos primero para poder contabilizar depreciación.</AlertDescription></Alert>}
 
-      {rows.length > 0 && <div className="flex items-center justify-end gap-3">{pendingRows.length === 0 && <Alert className="flex-1"><CheckCircle className="h-4 w-4 text-green-600" /><AlertDescription>Este período ya fue contabilizado completamente. No hay nada pendiente.</AlertDescription></Alert>}<Button onClick={handlePost} disabled={posting || pendingRows.length === 0} size="lg">{posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{pendingRows.length === 0 ? "Período contabilizado" : `Contabilizar Q ${fmt(totalPending)}`}</Button></div>}
+      {rows.length > 0 && <div className="flex items-center justify-end gap-3">{pendingRows.length === 0 && <Alert className="flex-1"><CheckCircle className="h-4 w-4 text-green-600" /><AlertDescription>Este período ya fue contabilizado completamente. No hay nada pendiente.</AlertDescription></Alert>}<Button onClick={handlePost} disabled={posting || pendingRows.length === 0 || !canManageValuation} title={valuationTitle} size="lg">{posting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{pendingRows.length === 0 ? "Período contabilizado" : `Contabilizar Q ${fmt(totalPending)}`}</Button></div>}
 
       <DepreciationHistoryCard enterpriseId={enterpriseId} />
 
@@ -461,7 +468,7 @@ export default function DepreciationPostingPage() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={bulkSkipping}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={bulkSkipping}
+              disabled={bulkSkipping || !canManageValuation}
               onClick={(e) => {
                 e.preventDefault();
                 void handleBulkSkipHistorical();

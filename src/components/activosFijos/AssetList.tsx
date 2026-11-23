@@ -5,6 +5,9 @@ import {
   type FixedAsset,
 } from "@/hooks/useFixedAssets";
 import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "./PermissionNotice";
+import { PERMISSION_TEXTS } from "./permissionTexts";
 import { useTenant } from "@/contexts/TenantContext";
 import { useEnterpriseBaseCurrency } from "@/hooks/useEnterpriseBaseCurrency";
 import { useEnterpriseCurrencies } from "@/hooks/useEnterpriseCurrencies";
@@ -46,6 +49,8 @@ const EMPTY_ASSET: Partial<FixedAsset> = {
 
 export default function AssetList() {
   const { selectedEnterpriseId: enterpriseId } = useEnterprise();
+  const { canWrite, canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(enterpriseId);
+  const writeTitle = !canWrite ? PERMISSION_TEXTS.write : undefined;
   const { currentTenant } = useTenant();
   const tenantId = currentTenant?.id ?? null;
   const baseCurrency = useEnterpriseBaseCurrency(enterpriseId);
@@ -67,6 +72,8 @@ export default function AssetList() {
   const [formOpen, setFormOpen] = useState(false);
   const [detailAsset, setDetailAsset] = useState<FixedAsset | null>(null);
   const [form, setForm] = useState<Partial<FixedAsset>>(EMPTY_ASSET);
+  // Un activo ya activado: costo, residual, vida útil, fechas, moneda y categoría son valoración.
+  const valuationLocked = !!form.id && form.status !== "DRAFT" && !canManageValuation;
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(1);
 
@@ -166,7 +173,7 @@ export default function AssetList() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={openNew} disabled={!canWrite} title={writeTitle}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo activo
         </Button>
       </div>
@@ -220,9 +227,9 @@ export default function AssetList() {
                       {asset.status === "DRAFT" && (
 <Button
                           variant="ghost" size="icon"
-                          title="Activar activo"
+                          title={writeTitle ?? "Activar activo"}
                           onClick={(e) => { e.stopPropagation(); handleActivate(asset); }}
-                          disabled={activate.isPending}
+                          disabled={activate.isPending || !canWrite}
                         >
                           {activate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 text-amber-500" />}
                         </Button>
@@ -284,6 +291,7 @@ export default function AssetList() {
           <DialogHeader>
             <DialogTitle>{form.id ? "Editar activo" : "Nuevo activo fijo"}</DialogTitle>
           </DialogHeader>
+          {valuationLocked && !permLoading && <PermissionNotice kind="valuation" />}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Código *</Label>
@@ -295,7 +303,7 @@ export default function AssetList() {
             </div>
             <div>
               <Label>Categoría *</Label>
-              <Select value={form.category_id ? String(form.category_id) : ""} onValueChange={(v) => {
+              <Select disabled={valuationLocked} value={form.category_id ? String(form.category_id) : ""} onValueChange={(v) => {
                 const cat = categories.find((c) => c.id === Number(v));
                 setForm((f) => ({
                   ...f,
@@ -362,12 +370,12 @@ export default function AssetList() {
             </div>
             <div>
               <Label>Fecha de adquisición *</Label>
-              <Input type="date" value={form.acquisition_date || ""}
+              <Input type="date" value={form.acquisition_date || ""} disabled={valuationLocked}
                 onChange={(e) => setForm((f) => ({ ...f, acquisition_date: e.target.value }))} />
             </div>
             <div>
               <Label>Fecha de puesta en servicio</Label>
-              <Input type="date" value={form.in_service_date || ""}
+              <Input type="date" value={form.in_service_date || ""} disabled={valuationLocked}
                 onChange={(e) => setForm((f) => ({ ...f, in_service_date: e.target.value || null }))} />
             </div>
             <div className={isMultiCurrency ? "col-span-2" : ""}>
@@ -379,6 +387,7 @@ export default function AssetList() {
                 currencyCode={form.currency || baseCurrency}
                 exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
                 label="Costo de adquisición *"
+                disabled={valuationLocked}
                 onChange={(next) => setForm((f) => ({
                   ...f,
                   original_acquisition_cost: next.amount,
@@ -398,6 +407,7 @@ export default function AssetList() {
                 currencyCode={form.currency || baseCurrency}
                 exchangeRate={Number(form.exchange_rate_at_acquisition ?? 1)}
                 label="Valor residual"
+                disabled={valuationLocked}
                 onChange={(next) => setForm((f) => ({
                   ...f,
                   original_residual_value: next.amount,
@@ -410,7 +420,7 @@ export default function AssetList() {
             </div>
             <div>
               <Label>Vida útil (meses) *</Label>
-              <Input type="number" min={1} value={form.useful_life_months || 60}
+              <Input type="number" min={1} value={form.useful_life_months || 60} disabled={valuationLocked}
                 onChange={(e) => setForm((f) => ({ ...f, useful_life_months: parseInt(e.target.value) }))} />
             </div>
             {/* Moneda integrada en CurrencyAmountInput de Costo y Valor residual */}

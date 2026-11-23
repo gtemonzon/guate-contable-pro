@@ -9,6 +9,11 @@ import { compressImage } from "@/lib/imageCompression";
 import { showPdfPreview } from "@/lib/pdfPreview";
 import { showImagePreview } from "@/components/ui/image-preview-host";
 import { File, FileImage, FileSpreadsheet, FileText, FileType, Download, Eye, Trash2, Upload } from "lucide-react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { cn } from "@/lib/utils";
+import { PermissionNotice } from "./PermissionNotice";
+import { PERMISSION_TEXTS } from "./permissionTexts";
 
 interface AssetAttachment {
   id: number;
@@ -41,6 +46,11 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [compressionLabel, setCompressionLabel] = useState("");
+  // Subir y eliminar requieren permiso de operar; abrir y descargar no.
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canWrite, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  const locked = !canWrite;
+  const lockTitle = locked ? PERMISSION_TEXTS.write : undefined;
 
   const loadAttachments = async () => {
     setLoading(true);
@@ -162,20 +172,26 @@ export default function AssetAttachmentsTab({ assetId, enterpriseId }: Props) {
 
   return (
     <div className="space-y-4">
+      {!permLoading && locked && <PermissionNotice kind="write" />}
       <div
-        className={`rounded-lg border-2 border-dashed p-6 text-center transition-colors ${dragging ? "border-primary bg-primary/5" : "border-border"}`}
-        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        className={cn(
+          "rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+          dragging ? "border-primary bg-primary/5" : "border-border",
+          locked && "opacity-60",
+        )}
+        aria-disabled={locked}
+        onDragOver={(event) => { event.preventDefault(); if (!locked) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(event) => { event.preventDefault(); setDragging(false); const file = event.dataTransfer.files[0]; if (file) void processFile(file); }}
+        onDrop={(event) => { event.preventDefault(); setDragging(false); if (locked) return; const file = event.dataTransfer.files[0]; if (file) void processFile(file); }}
       >
         <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
         <p className="font-medium">Arrastra un archivo aquí</p>
         <p className="mb-3 text-sm text-muted-foreground">PDF, imágenes, Word, Excel y otros archivos · máximo 50 MB</p>
-        <Button type="button" variant="outline" disabled={uploading} onClick={() => inputRef.current?.click()}>Seleccionar archivo</Button>
+        <Button type="button" variant="outline" disabled={uploading || locked} title={lockTitle} onClick={() => inputRef.current?.click()}>Seleccionar archivo</Button>
         <input ref={inputRef} type="file" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void processFile(file); event.target.value = ""; }} />
       </div>
       {uploading && <div className="space-y-1"><Progress value={progress} /><p className="text-xs text-muted-foreground">{compressionLabel}</p></div>}
-      {loading ? <p className="text-sm text-muted-foreground">Cargando adjuntos...</p> : attachments.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No hay documentos adjuntos.</p> : <div className="divide-y rounded-lg border">{attachments.map((attachment) => { const Icon = iconFor(attachment.file_type); const saved = attachment.original_size && attachment.file_size && attachment.file_size < attachment.original_size; return <div key={attachment.id} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => void openAttachment(attachment)}><Icon className="h-5 w-5 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{attachment.file_name}</p><p className="text-xs text-muted-foreground">{formatBytes(attachment.file_size ?? 0)} · {new Date(attachment.uploaded_at).toLocaleDateString("es-GT")}{saved ? ` · ${formatBytes(attachment.original_size ?? 0)} → ${formatBytes(attachment.file_size ?? 0)} (${Math.round((1 - (attachment.file_size ?? 0) / (attachment.original_size ?? 1)) * 100)}% menos)` : ""}</p></div><Button variant="ghost" size="icon" aria-label="Abrir adjunto" onClick={(e) => { e.stopPropagation(); void openAttachment(attachment); }}>{attachment.file_type === "application/pdf" || attachment.file_type?.startsWith("image/") ? <Eye className="h-4 w-4" /> : <Download className="h-4 w-4" />}</Button><Button variant="ghost" size="icon" aria-label="Eliminar adjunto" onClick={(e) => { e.stopPropagation(); void removeAttachment(attachment); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>; })}</div>}
+      {loading ? <p className="text-sm text-muted-foreground">Cargando adjuntos...</p> : attachments.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No hay documentos adjuntos.</p> : <div className="divide-y rounded-lg border">{attachments.map((attachment) => { const Icon = iconFor(attachment.file_type); const saved = attachment.original_size && attachment.file_size && attachment.file_size < attachment.original_size; return <div key={attachment.id} className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => void openAttachment(attachment)}><Icon className="h-5 w-5 shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{attachment.file_name}</p><p className="text-xs text-muted-foreground">{formatBytes(attachment.file_size ?? 0)} · {new Date(attachment.uploaded_at).toLocaleDateString("es-GT")}{saved ? ` · ${formatBytes(attachment.original_size ?? 0)} → ${formatBytes(attachment.file_size ?? 0)} (${Math.round((1 - (attachment.file_size ?? 0) / (attachment.original_size ?? 1)) * 100)}% menos)` : ""}</p></div><Button variant="ghost" size="icon" aria-label="Abrir adjunto" onClick={(e) => { e.stopPropagation(); void openAttachment(attachment); }}>{attachment.file_type === "application/pdf" || attachment.file_type?.startsWith("image/") ? <Eye className="h-4 w-4" /> : <Download className="h-4 w-4" />}</Button><Button variant="ghost" size="icon" aria-label="Eliminar adjunto" disabled={locked} title={lockTitle} onClick={(e) => { e.stopPropagation(); void removeAttachment(attachment); }}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>; })}</div>}
     </div>
   );
 }
