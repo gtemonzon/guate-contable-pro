@@ -9,6 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAssetCustodians, useUpsertAssetCustodian, useDeleteAssetCustodian, type FixedAssetCustodian } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "../PermissionNotice";
+import { PERMISSION_TEXTS } from "../permissionTexts";
 
 interface Props { enterpriseId: number; }
 const EMPTY: Partial<FixedAssetCustodian> = { name: "", identifier: "", contact: "", notes: "", is_active: true };
@@ -17,6 +21,12 @@ export default function AssetCustodiansManager({ enterpriseId }: Props) {
   const { data: items = [], isLoading } = useAssetCustodians(enterpriseId);
   const upsert = useUpsertAssetCustodian();
   const del = useDeleteAssetCustodian();
+
+  // Ubicaciones y custodios: operar (permiso de escritura en activos fijos).
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canWrite, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  const locked = !canWrite;
+  const lockTitle = locked ? PERMISSION_TEXTS.write : undefined;
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<FixedAssetCustodian>>(EMPTY);
@@ -29,11 +39,12 @@ export default function AssetCustodiansManager({ enterpriseId }: Props) {
             <CardTitle>Custodios</CardTitle>
             <CardDescription>Personas o departamentos responsables de los activos.</CardDescription>
           </div>
-          <Button size="sm" onClick={() => { setForm(EMPTY); setOpen(true); }}>
+          <Button size="sm" disabled={locked} title={lockTitle} onClick={() => { setForm(EMPTY); setOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nuevo
           </Button>
         </CardHeader>
         <CardContent>
+          {!permLoading && locked && <PermissionNotice kind="write" className="mb-4" />}
           {isLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> Cargando...</div>
           ) : (
@@ -56,7 +67,7 @@ export default function AssetCustodiansManager({ enterpriseId }: Props) {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setForm(item); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(item.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" disabled={locked} title={lockTitle} onClick={(e) => { e.stopPropagation(); setDeleteId(item.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -70,15 +81,16 @@ export default function AssetCustodiansManager({ enterpriseId }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{form.id ? "Editar custodio" : "Nuevo custodio"}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+          {!permLoading && locked && <PermissionNotice kind="write" />}
+          <fieldset disabled={locked} className="min-w-0 space-y-3">
             <div><Label>Nombre *</Label><Input value={form.name || ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
             <div><Label>Identificador (opcional)</Label><Input value={form.identifier || ""} onChange={(e) => setForm((f) => ({ ...f, identifier: e.target.value }))} placeholder="Cédula, código empleado..." /></div>
             <div><Label>Contacto (opcional)</Label><Input value={form.contact || ""} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} placeholder="Email o teléfono" /></div>
             <div><Label>Notas</Label><Textarea value={form.notes || ""} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
-          </div>
+          </fieldset>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as Partial<FixedAssetCustodian> & { enterprise_id: number }, { onSuccess: () => setOpen(false) })} disabled={!form.name || upsert.isPending}>
+            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as Partial<FixedAssetCustodian> & { enterprise_id: number }, { onSuccess: () => setOpen(false) })} disabled={locked || !form.name || upsert.isPending}>
               {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Guardar
             </Button>
           </DialogFooter>

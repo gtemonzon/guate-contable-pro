@@ -7,10 +7,17 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useAssetPolicy, useUpsertAssetPolicy, type FixedAssetPolicy } from "@/hooks/useFixedAssets";
 import { Loader2, Save } from "lucide-react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "../PermissionNotice";
 
 export default function DepreciationPolicyForm({ enterpriseId }: { enterpriseId: number }) {
   const { data: policy, isLoading } = useAssetPolicy(enterpriseId);
   const upsert = useUpsertAssetPolicy();
+  // La política es parte de la valoración: solo lectura sin ese permiso.
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  const locked = !canManageValuation;
 
   const form = useForm<FixedAssetPolicy>({
     defaultValues: {
@@ -50,8 +57,10 @@ export default function DepreciationPolicyForm({ enterpriseId }: { enterpriseId:
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {!permLoading && locked && <PermissionNotice kind="valuation" className="mb-6" />}
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <fieldset disabled={locked} className="min-w-0 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -172,6 +181,7 @@ export default function DepreciationPolicyForm({ enterpriseId }: { enterpriseId:
                 Guardar política
               </Button>
             </div>
+            </fieldset>
           </form>
         </Form>
       </CardContent>

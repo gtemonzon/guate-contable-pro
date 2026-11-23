@@ -12,6 +12,10 @@ import { useAssetCategories, useUpsertAssetCategory, useDeleteAssetCategory, typ
 import { Plus, Pencil, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "../PermissionNotice";
+import { PERMISSION_TEXTS } from "../permissionTexts";
 
 interface Props { enterpriseId: number; }
 
@@ -44,6 +48,11 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
   const { data: accounts = [] } = useEnterpriseAccounts(enterpriseId);
   const upsert = useUpsertAssetCategory();
   const del = useDeleteAssetCategory();
+  // Categorías: valoración y contabilidad (la base de datos lo exige).
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canManageValuation, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  const locked = !canManageValuation;
+  const showNotice = !permLoading && locked;
 
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -75,11 +84,12 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
               Define las categorías con su vida útil predeterminada y cuentas contables requeridas.
             </CardDescription>
           </div>
-          <Button onClick={openNew} size="sm">
+          <Button onClick={openNew} size="sm" disabled={locked} title={locked ? PERMISSION_TEXTS.valuation : undefined}>
             <Plus className="h-4 w-4 mr-1" /> Nueva categoría
           </Button>
         </CardHeader>
         <CardContent>
+          {showNotice && <PermissionNotice kind="valuation" className="mb-4" />}
           {isLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground p-4">
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
@@ -130,7 +140,11 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(cat); }}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(cat.id); }}>
+                          <Button
+                            variant="ghost" size="icon" disabled={locked}
+                            title={locked ? PERMISSION_TEXTS.valuation : undefined}
+                            onClick={(e) => { e.stopPropagation(); setDeleteId(cat.id); }}
+                          >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
@@ -151,6 +165,9 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
             <DialogTitle>{form.id ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
           </DialogHeader>
 
+          {showNotice && <PermissionNotice kind="valuation" />}
+          {/* Sin permiso de valoración la categoría queda de solo lectura. */}
+          <fieldset disabled={locked} className="min-w-0 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Código *</Label>
@@ -199,10 +216,11 @@ export default function AssetCategoriesManager({ enterpriseId }: Props) {
               </p>
             )}
           </div>
+          </fieldset>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={!form.code || !form.name || upsert.isPending}>
+            <Button onClick={save} disabled={locked || !form.code || !form.name || upsert.isPending}>
               {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Guardar
             </Button>

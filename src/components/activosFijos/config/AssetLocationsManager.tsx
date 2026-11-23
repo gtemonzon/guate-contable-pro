@@ -10,6 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useAssetLocations, useUpsertAssetLocation, useDeleteAssetLocation, type FixedAssetLocation } from "@/hooks/useFixedAssets";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { useEnterprise } from "@/contexts/EnterpriseContext";
+import { useFixedAssetPermissions } from "@/hooks/useFixedAssetPermissions";
+import { PermissionNotice } from "../PermissionNotice";
+import { PERMISSION_TEXTS } from "../permissionTexts";
 
 interface Props { enterpriseId: number; }
 const EMPTY: Partial<FixedAssetLocation> = { code: "", name: "", description: "", is_active: true };
@@ -18,6 +22,12 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
   const { data: locations = [], isLoading } = useAssetLocations(enterpriseId);
   const upsert = useUpsertAssetLocation();
   const del = useDeleteAssetLocation();
+
+  // Ubicaciones y custodios: operar (permiso de escritura en activos fijos).
+  const { selectedEnterpriseId } = useEnterprise();
+  const { canWrite, isLoading: permLoading } = useFixedAssetPermissions(selectedEnterpriseId);
+  const locked = !canWrite;
+  const lockTitle = locked ? PERMISSION_TEXTS.write : undefined;
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<FixedAssetLocation>>(EMPTY);
@@ -30,11 +40,12 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
             <CardTitle>Ubicaciones</CardTitle>
             <CardDescription>Catálogo de ubicaciones físicas donde se encuentran los activos.</CardDescription>
           </div>
-          <Button size="sm" onClick={() => { setForm(EMPTY); setOpen(true); }}>
+          <Button size="sm" disabled={locked} title={lockTitle} onClick={() => { setForm(EMPTY); setOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nueva
           </Button>
         </CardHeader>
         <CardContent>
+          {!permLoading && locked && <PermissionNotice kind="write" className="mb-4" />}
           {isLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground p-4"><Loader2 className="h-4 w-4 animate-spin" /> Cargando...</div>
           ) : (
@@ -59,7 +70,7 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setForm(loc); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteId(loc.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="icon" disabled={locked} title={lockTitle} onClick={(e) => { e.stopPropagation(); setDeleteId(loc.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -73,16 +84,17 @@ export default function AssetLocationsManager({ enterpriseId }: Props) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{form.id ? "Editar ubicación" : "Nueva ubicación"}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+          {!permLoading && locked && <PermissionNotice kind="write" />}
+          <fieldset disabled={locked} className="min-w-0 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Código *</Label><Input value={form.code || ""} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} /></div>
               <div><Label>Nombre *</Label><Input value={form.name || ""} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
             </div>
             <div><Label>Descripción</Label><Textarea value={form.description || ""} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></div>
-          </div>
+          </fieldset>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as Partial<FixedAssetLocation> & { enterprise_id: number }, { onSuccess: () => setOpen(false) })} disabled={!form.code || !form.name || upsert.isPending}>
+            <Button onClick={() => upsert.mutate({ ...form, enterprise_id: enterpriseId } as Partial<FixedAssetLocation> & { enterprise_id: number }, { onSuccess: () => setOpen(false) })} disabled={locked || !form.code || !form.name || upsert.isPending}>
               {upsert.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Guardar
             </Button>
           </DialogFooter>
