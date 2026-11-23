@@ -1,3 +1,4 @@
+import { getPurchaseAccountOptions, getAccountLookup } from "@/utils/purchaseAccountOptions";
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useLedgerCardAutoSave, type LedgerSaveOptions, type LedgerSaveResult } from "@/hooks/useLedgerCardAutoSave";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,6 +61,7 @@ export interface PurchaseCardProps {
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
+  assetAccounts?: { id: number; account_code: string; account_name: string }[];
   bankAccounts: { id: number; account_code: string; account_name: string }[];
   onUpdate: (rowKey: string, field: keyof PurchaseEntry, value: PurchaseEntry[keyof PurchaseEntry]) => void;
   /** Guarda la fila; false = no se guardó (la tarjeta no se cierra). */
@@ -130,6 +132,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   felDocTypes, 
   operationTypes, 
   expenseAccounts, 
+  assetAccounts = [],
   bankAccounts, 
   onUpdate, 
   onSave, 
@@ -162,6 +165,13 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
   // Check if operation type is COMBUSTIBLE (fuel) to show IDP field
   const operationTypeCode = operationTypes.find(t => t.id === purchase.operation_type_id)?.code ?? null;
   const isFuelOperation = operationTypeCode === "COMBUSTIBLE";
+  const accountOptions = getPurchaseAccountOptions({
+    operationTypeCode,
+    expenseAccounts,
+    assetAccounts,
+    selectedAccountId: purchase.expense_account_id,
+  });
+  const accountLookup = getAccountLookup(expenseAccounts, assetAccounts);
 
   // Exención vigente (Decreto 22-2026: combustible oct–dic 2026): IVA 0, base = total,
   // sin IDP. Los montos los recalcula el padre; aquí solo cambia lo que se muestra.
@@ -426,8 +436,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 {appliesVat ? formatCurrency(purchase.vat_amount) : ""}
                 {exemption && <ExemptionBadge exemption={exemption} className="ml-1 px-1 py-0 text-[9px]" />}
               </div>
-              <div className="col-span-2 text-xs truncate flex items-center gap-1" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
-                {getAccountName(purchase.expense_account_id, expenseAccounts)}
+              <div className="col-span-2 text-xs truncate flex items-center gap-1" title={getAccountName(purchase.expense_account_id, accountLookup)}>
+                {getAccountName(purchase.expense_account_id, accountLookup)}
                 {purchase.journal_entry_id && (
                   <Badge variant="secondary" className="text-[10px] shrink-0">{journalEntryLabel || "Póliza"}</Badge>
                 )}
@@ -489,8 +499,8 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
             <div className="col-span-1 text-center">
               {getOperationTypeName(purchase.operation_type_id)}
             </div>
-            <div className="col-span-1 text-xs truncate" title={getAccountName(purchase.expense_account_id, expenseAccounts)}>
-              {getAccountName(purchase.expense_account_id, expenseAccounts)}
+            <div className="col-span-1 text-xs truncate" title={getAccountName(purchase.expense_account_id, accountLookup)}>
+              {getAccountName(purchase.expense_account_id, accountLookup)}
             </div>
             <div className="col-span-1 flex items-center justify-end gap-1">
               {purchase.journal_entry_id && (
@@ -710,7 +720,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
               <div className={cn(isFuelOperation ? "col-span-2" : "col-span-3", "min-w-0")}>
                 <label className="text-xs text-muted-foreground">Cuenta Gasto</label>
                 <AccountCombobox
-                  accounts={expenseAccounts}
+                  accounts={accountOptions}
                   value={purchase.expense_account_id}
                   onValueChange={(val) => handleFieldChange("expense_account_id", val)}
                   placeholder="Seleccionar cuenta..."
@@ -985,7 +995,7 @@ export const PurchaseCard = forwardRef<PurchaseCardRef, PurchaseCardProps>(({
                 Cuenta
               </label>
               <AccountCombobox
-                accounts={expenseAccounts}
+                accounts={accountOptions}
                 value={purchase.expense_account_id}
                 onValueChange={(val) => handleFieldChange("expense_account_id", val)}
                 placeholder="Cuenta de gasto..."

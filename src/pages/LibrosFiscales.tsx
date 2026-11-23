@@ -1,3 +1,4 @@
+import { buildAssetAccountOptions, type AccountOption } from "@/utils/purchaseAccountOptions";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -309,6 +310,7 @@ export default function LibrosFiscales() {
   const [existingPurchasesJournalEntry, setExistingPurchasesJournalEntry] = useState<{ exists: boolean; id?: number }>({ exists: false });
   
   // Estados para listas de cuentas
+  const [assetAccounts, setAssetAccounts] = useState<AccountOption[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<Array<{
     id: number;
     account_code: string;
@@ -1346,6 +1348,25 @@ export default function LibrosFiscales() {
 
       setExpenseAccounts(expenses);
       setIncomeAccounts(incomes);
+
+      // Cuentas de activo fijo (para compras con tipo ACTIVOS_FIJOS)
+      let categoryAssetAccountIds: number[] = [];
+      const { data: categories, error: categoriesError } = await supabase
+        .from("fixed_asset_categories")
+        .select("asset_account_id")
+        .eq("enterprise_id", parseInt(enterpriseId))
+        .eq("is_active", true);
+      if (categoriesError) {
+        console.warn("No se pudieron cargar las categorías de activo fijo:", categoriesError);
+      } else {
+        categoryAssetAccountIds = (categories ?? [])
+          .map((c) => c.asset_account_id)
+          .filter((v): v is number => typeof v === "number");
+      }
+      setAssetAccounts(buildAssetAccountOptions({
+        movementAccounts: movementAccounts ?? [],
+        categoryAssetAccountIds,
+      }));
 
       // Cuentas bancarias (is_bank_account = true)
       const { data: banks, error: banksError } = await supabase
@@ -2953,6 +2974,7 @@ export default function LibrosFiscales() {
                       felDocTypes={felDocTypes}
                       operationTypes={operationTypes}
                       expenseAccounts={expenseAccounts}
+          assetAccounts={assetAccounts}
                       bankAccounts={bankAccounts}
                       appliesVat={appliesVat}
                       journalEntryLabel={purchase.journal_entry_id ? formatShortEntryLabel(journalEntryNumbers[purchase.journal_entry_id]) : undefined}
@@ -3817,6 +3839,7 @@ export default function LibrosFiscales() {
             if (currentEnterpriseId) fetchOrCreateBook(currentEnterpriseId, selectedMonth, selectedYear);
           }}
           expenseAccounts={expenseAccounts}
+          assetAccounts={assetAccounts}
           operationTypes={operationTypes}
         />
       )}

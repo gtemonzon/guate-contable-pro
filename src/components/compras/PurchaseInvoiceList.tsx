@@ -12,6 +12,7 @@ interface PurchaseInvoiceListProps {
   felDocTypes: { code: string; name: string }[];
   operationTypes: { id: number; code: string; name: string }[];
   expenseAccounts: { id: number; account_code: string; account_name: string }[];
+  assetAccounts?: { id: number; account_code: string; account_name: string }[];
   bankAccounts: { id: number; account_code: string; account_name: string }[];
   editingIndex: number | null;
   onEditingIndexChange: (index: number | null) => void;
@@ -53,6 +54,7 @@ export function PurchaseInvoiceList({
   felDocTypes,
   operationTypes,
   expenseAccounts,
+  assetAccounts = [],
   bankAccounts,
   editingIndex,
   onEditingIndexChange,
@@ -144,6 +146,7 @@ export function PurchaseInvoiceList({
           felDocTypes={felDocTypes}
           operationTypes={operationTypes}
           expenseAccounts={expenseAccounts}
+          assetAccounts={assetAccounts}
           bankAccounts={bankAccounts}
           onUpdate={withIndex(onUpdate)}
           onSave={(key) => {

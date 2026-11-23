@@ -1,3 +1,4 @@
+import { getPurchaseAccountOptions, getAccountLookup } from "@/utils/purchaseAccountOptions";
 import { useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useFileDrop } from "@/hooks/use-file-drop";
@@ -63,6 +64,7 @@ interface ImportPurchasesDialogProps {
   enterpriseNit?: string;
   onSuccess: () => void;
   expenseAccounts?: Array<{ id: number; account_code: string; account_name: string }>;
+  assetAccounts?: Array<{ id: number; account_code: string; account_name: string }>;
   operationTypes?: Array<{ id: number; code: string; name: string }>;
 }
 
@@ -289,6 +291,7 @@ export function ImportPurchasesDialog({
   enterpriseNit = "",
   onSuccess,
   expenseAccounts = [],
+  assetAccounts = [],
   operationTypes = [],
 }: ImportPurchasesDialogProps) {
   const { toast } = useToast();
@@ -304,6 +307,15 @@ export function ImportPurchasesDialog({
   const [applyBulkOptions, setApplyBulkOptions] = useState(false);
   const [selectedExpenseAccount, setSelectedExpenseAccount] = useState<number | null>(null);
   const [selectedOperationType, setSelectedOperationType] = useState<number | null>(null);
+  const selectedOperationTypeCode = operationTypes.find((o) => o.id === selectedOperationType)?.code ?? null;
+  const isFixedAssetOperation = selectedOperationTypeCode?.toUpperCase() === "ACTIVOS_FIJOS";
+  const bulkAccountOptions = getPurchaseAccountOptions({
+    operationTypeCode: selectedOperationTypeCode,
+    expenseAccounts,
+    assetAccounts,
+    selectedAccountId: selectedExpenseAccount,
+  });
+  const accountLookup = getAccountLookup(expenseAccounts, assetAccounts);
   
   // Supplier mapping suggestions
   const [supplierMappings, setSupplierMappings] = useState<Map<string, SupplierMapping>>(new Map());
@@ -1424,7 +1436,7 @@ export function ImportPurchasesDialog({
                     return (
                       <div className="space-y-1 text-xs">
                         {filteredEntries.map(([nit, mapping]) => {
-                          const acct = expenseAccounts.find(a => a.id === mapping.expense_account_id);
+                          const acct = accountLookup.find(a => a.id === mapping.expense_account_id);
                           const opType = operationTypes.find(o => o.id === mapping.operation_type_id);
                           const dateStr = mapping.source_date
                             ? new Date(mapping.source_date + "T00:00:00").toLocaleDateString("es-GT", { month: "short", year: "numeric" })
@@ -1481,7 +1493,7 @@ export function ImportPurchasesDialog({
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
                     {expenseAccounts.length > 0 && (
                       <div className="space-y-2">
-                        <Label>Cuenta de Gasto</Label>
+                        <Label>{isFixedAssetOperation ? "Cuenta" : "Cuenta de Gasto"}</Label>
                         <Select
                           value={selectedExpenseAccount?.toString() || ""}
                           onValueChange={(val) => setSelectedExpenseAccount(val ? parseInt(val) : null)}
@@ -1490,7 +1502,7 @@ export function ImportPurchasesDialog({
                             <SelectValue placeholder="Seleccionar cuenta..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {expenseAccounts.map((acc) => (
+                            {bulkAccountOptions.map((acc) => (
                               <SelectItem key={acc.id} value={acc.id.toString()}>
                                 {acc.account_code} - {acc.account_name}
                               </SelectItem>
@@ -1537,7 +1549,7 @@ export function ImportPurchasesDialog({
                   onSearch={setRecordSearchFilter}
                   showMappingBadges={false}
                   taxReview={taxReview}
-                  expenseAccounts={expenseAccounts}
+                  expenseAccounts={accountLookup}
                   operationTypes={operationTypes}
                 />
               )}
@@ -1839,7 +1851,7 @@ export function ImportPurchasesDialog({
                   onSearch={setRecordSearchFilter}
                   showMappingBadges={true}
                   taxReview={taxReview}
-                  expenseAccounts={expenseAccounts}
+                  expenseAccounts={accountLookup}
                   operationTypes={operationTypes}
                 />
               )}
